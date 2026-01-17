@@ -5,7 +5,7 @@ import {
   STButton,
   STTextarea,
   PresetItem,
-} from 'sillytavern-utils-lib/components';
+} from 'sillytavern-utils-lib/components/react';
 import { ExtensionSettingsManager } from 'sillytavern-utils-lib';
 import {
   ExtensionSettings,
