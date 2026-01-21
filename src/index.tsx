@@ -17,6 +17,7 @@ import {
   CHAT_METADATA_SCHEMA_PRESET_KEY,
   CHAT_MESSAGE_SCHEMA_VALUE_KEY,
   CHAT_MESSAGE_SCHEMA_HTML_KEY,
+  applyTrackerUpdateAndRender,
 } from './tracker.js';
 
 // --- Constants and Globals ---
@@ -232,14 +233,12 @@ async function generateTracker(id: number) {
 
     if (!response || Object.keys(response as any).length === 0) throw new Error('Empty response from zTracker.');
 
-    // Tentatively update message and try to render
-    message.extra = message.extra || {};
-    message.extra[EXTENSION_KEY] = message.extra[EXTENSION_KEY] || {};
-    message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_VALUE_KEY] = response;
-    message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_HTML_KEY] = chatHtmlValue;
-
     try {
-      renderTrackerWithDeps(id);
+      applyTrackerUpdateAndRender(message as any, {
+        trackerData: response,
+        trackerHtml: chatHtmlValue,
+        render: () => renderTrackerWithDeps(id),
+      });
 
       if (detailsState.length > 0) {
         const newTracker = messageBlock?.querySelector('.mes_ztracker');
@@ -257,11 +256,8 @@ async function generateTracker(id: number) {
       // If render succeeds, save the chat
       await saveChat();
     } catch (renderError) {
-      // If render fails, remove the tracker data we just added
-      delete message.extra[EXTENSION_KEY];
-      // Re-render to clear the failed attempt from the DOM
+      // Ensure DOM reflects rolled-back message state
       renderTrackerWithDeps(id);
-      // Let the outer catch block show the error to the user
       throw new Error(`Generated data failed to render with the current template. Not saved.`);
     }
   } catch (error: any) {
