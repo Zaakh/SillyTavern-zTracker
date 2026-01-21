@@ -1,29 +1,29 @@
-.wtracker-settings .wtracker-container {
+.ztracker-settings .ztracker-container {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-.wtracker-settings .setting-row {
+.ztracker-settings .setting-row {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.wtracker-settings .setting-row:last-child {
+.ztracker-settings .setting-row:last-child {
   margin-top: 10px;
 }
-.wtracker-settings .setting-row button {
+.ztracker-settings .setting-row button {
   align-self: flex-start;
 }
 
-.mes_wtracker_button.spinning,
-.wtracker-regenerate-button.spinning {
+.mes_ztracker_button.spinning,
+.ztracker-regenerate-button.spinning {
   animation: spin 2s linear infinite;
 }
 
-.mes_wtracker {
+.mes_ztracker {
   position: relative;
 }
-.mes_wtracker .wtracker-controls {
+.mes_ztracker .ztracker-controls {
   position: absolute;
   top: 8px;
   right: 8px;
@@ -31,39 +31,39 @@
   gap: 12px;
   z-index: 1;
 }
-.mes_wtracker .wtracker-controls .wtracker-regenerate-button,
-.mes_wtracker .wtracker-controls .wtracker-edit-button,
-.mes_wtracker .wtracker-controls .wtracker-delete-button {
+.mes_ztracker .ztracker-controls .ztracker-regenerate-button,
+.mes_ztracker .ztracker-controls .ztracker-edit-button,
+.mes_ztracker .ztracker-controls .ztracker-delete-button {
   cursor: pointer;
   color: var(--text_color);
   opacity: 0.3;
   transition: opacity 0.2s ease-in-out;
 }
-.mes_wtracker .wtracker-controls .wtracker-regenerate-button:hover,
-.mes_wtracker .wtracker-controls .wtracker-edit-button:hover,
-.mes_wtracker .wtracker-controls .wtracker-delete-button:hover {
+.mes_ztracker .ztracker-controls .ztracker-regenerate-button:hover,
+.mes_ztracker .ztracker-controls .ztracker-edit-button:hover,
+.mes_ztracker .ztracker-controls .ztracker-delete-button:hover {
   opacity: 1;
 }
-.mes_wtracker .wtracker_default_mes_template {
+.mes_ztracker .ztracker_default_mes_template {
   font-size: smaller;
 }
-.mes_wtracker .wtracker_default_mes_template tr td {
+.mes_ztracker .ztracker_default_mes_template tr td {
   vertical-align: top;
 }
-.mes_wtracker .wtracker_default_mes_template tr td:first-child {
+.mes_ztracker .ztracker_default_mes_template tr td:first-child {
   text-align: right;
   font-weight: bold;
   width: 60px;
 }
-.mes_wtracker .wtracker_default_mes_template details summary {
+.mes_ztracker .ztracker_default_mes_template details summary {
   font-weight: bold;
 }
-.mes_wtracker .wtracker_default_mes_template details summary span {
+.mes_ztracker .ztracker_default_mes_template details summary span {
   left: -3.25px;
   position: relative;
   display: inline-block;
 }
-.mes_wtracker .wtracker_default_mes_template details table,
-.mes_wtracker .wtracker_default_mes_template details .mes_wtracker_characters {
+.mes_ztracker .ztracker_default_mes_template details table,
+.mes_ztracker .ztracker_default_mes_template details .mes_ztracker_characters {
   padding-left: 20px;
 }

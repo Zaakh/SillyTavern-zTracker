@@ -22,13 +22,13 @@ export interface ExtensionSettings {
   schemaPresets: Record<string, Schema>;
   prompt: string;
   includeLastXMessages: number; // 0 means all messages
-  includeLastXWTrackerMessages: number; // 0 means none
+  includeLastXZTrackerMessages: number; // 0 means none
   promptEngineeringMode: PromptEngineeringMode;
   promptJson: string;
   promptXml: string;
 }
 
-export const extensionName = 'SillyTavern-WTracker';
+export const extensionName = 'SillyTavern-zTracker';
 
 export const DEFAULT_PROMPT = `You are a Scene Tracker Assistant, tasked with providing clear, consistent, and structured updates to a scene tracker for a roleplay. Use the latest message, previous tracker details, and context from recent messages to accurately update the tracker. Your response must ensuring that each field is filled and complete. If specific information is not provided, make reasonable assumptions based on prior descriptions, logical inferences, or default character details.
 
@@ -173,7 +173,7 @@ export const DEFAULT_SCHEMA_VALUE: object = {
   required: ['time', 'location', 'weather', 'topics', 'charactersPresent', 'characters'],
 };
 
-export const DEFAULT_SCHEMA_HTML = `<div class="wtracker_default_mes_template">
+export const DEFAULT_SCHEMA_HTML = `<div class="ztracker_default_mes_template">
     <!-- Main Scene Information -->
     <table>
         <tbody>
@@ -215,7 +215,7 @@ export const DEFAULT_SCHEMA_HTML = `<div class="wtracker_default_mes_template">
         </table>
 
         <!-- Character Details Section -->
-        <div class="mes_wtracker_characters">
+        <div class="mes_ztracker_characters">
             <!-- Looping through the array of character objects -->
             {{#each data.characters as |character|}}
             <hr>
@@ -252,7 +252,7 @@ export const DEFAULT_SCHEMA_HTML = `<div class="wtracker_default_mes_template">
 
 const VERSION = '0.1.0';
 const FORMAT_VERSION = 'F_1.0';
-export const EXTENSION_KEY = 'WTracker';
+export const EXTENSION_KEY = 'zTracker';
 
 export const defaultSettings: ExtensionSettings = {
   version: VERSION,
@@ -270,7 +270,7 @@ export const defaultSettings: ExtensionSettings = {
   },
   prompt: DEFAULT_PROMPT,
   includeLastXMessages: 0,
-  includeLastXWTrackerMessages: 1,
+  includeLastXZTrackerMessages: 1,
   promptEngineeringMode: PromptEngineeringMode.NATIVE,
   promptJson: DEFAULT_PROMPT_JSON,
   promptXml: DEFAULT_PROMPT_XML,
