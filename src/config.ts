@@ -1,4 +1,5 @@
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
+export { extensionName, EXTENSION_KEY } from './extension-metadata.js';
 
 export enum PromptEngineeringMode {
   NATIVE = 'native',
@@ -27,8 +28,6 @@ export interface ExtensionSettings {
   promptJson: string;
   promptXml: string;
 }
-
-export const extensionName = 'SillyTavern-zTracker';
 
 export const DEFAULT_PROMPT = `You are a Scene Tracker Assistant, tasked with providing clear, consistent, and structured updates to a scene tracker for a roleplay. Use the latest message, previous tracker details, and context from recent messages to accurately update the tracker. Your response must ensuring that each field is filled and complete. If specific information is not provided, make reasonable assumptions based on prior descriptions, logical inferences, or default character details.
 
@@ -252,7 +251,6 @@ export const DEFAULT_SCHEMA_HTML = `<div class="ztracker_default_mes_template">
 
 const VERSION = '0.1.0';
 const FORMAT_VERSION = 'F_1.0';
-export const EXTENSION_KEY = 'zTracker';
 
 export const defaultSettings: ExtensionSettings = {
   version: VERSION,
