@@ -8,11 +8,11 @@ Add a `CHANGELOG.md` and keep it updated as zTracker evolves.
 
 ## Open questions to clarify first
 1. Format preference:
-   - Keep a Changelog format? (recommended)
+   - Keep a Changelog format? (recommended) -> yes
 2. Where should it live?
-   - Root-level `CHANGELOG.md` is conventional.
+   - Root-level `CHANGELOG.md` is conventional. -> yes
 3. Release cadence:
-   - Update changelog on every PR/merge, or only when cutting releases?
+   - Update changelog on every PR/merge, or only when cutting releases? -> on every version bump
 
 ## Proposed approach
 - Create root-level `CHANGELOG.md` using “Keep a Changelog” style.
