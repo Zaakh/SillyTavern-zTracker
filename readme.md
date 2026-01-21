@@ -49,6 +49,14 @@ Most importantly, it works. This is a minimalistic version of the original track
 - No "Generation Mode" option. Since this extension doesn't summarize the chat, no need for it. (I'm not planning to add a summarize feature.)
 - There are some templates in the original, but I don't need them since I don't have those features.
 
+## Versioning
+
+- Canonical version lives in `package.json`; `manifest.json` is derived. Do not edit manifest version manually.
+- `npm run sync-version` updates derived files; it runs automatically before dev/build/test and during `npm version`.
+- CI can run `npm run check-version` (strict mode) to fail fast on drift without rewriting files.
+- Bump versions with `npm version <patch|minor|major>` to keep SemVer tags and changelog aligned.
+- See [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## Development & testing
 
 Working on the extension locally?

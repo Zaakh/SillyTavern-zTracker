@@ -5,9 +5,15 @@
     "type": "module",
     "main": "src/scripts/main.js",
     "scripts": {
+        "sync-version": "node scripts/sync-version.mjs",
+        "predev": "npm run sync-version",
         "dev": "cross-env NODE_ENV=development sass src/styles/main.scss dist/style.css --source-map & cross-env NODE_ENV=development webpack --mode development --config webpack.config.cjs --watch",
+        "prebuild": "npm run sync-version",
         "build": "cross-env NODE_ENV=production sass src/styles/main.scss dist/style.css --no-source-map && cross-env NODE_ENV=production webpack --mode production --config webpack.config.cjs",
+        "pretest": "npm run sync-version",
         "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+        "check-version": "npm run sync-version -- --check",
+        "version": "npm run sync-version",
         "prettify": "prettier --write \"src/**/*.ts\" \"templates/**/*.html\" \"src/**/*.tsx\""
     },
     "keywords": [],
