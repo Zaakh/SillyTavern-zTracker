@@ -25,7 +25,7 @@ import { useForceUpdate } from '../hooks/useForceUpdate.js';
 // Initialize the settings manager once, outside the component
 export const settingsManager = new ExtensionSettingsManager<ExtensionSettings>(EXTENSION_KEY, defaultSettings);
 
-export const WTrackerSettings: FC = () => {
+export const ZTrackerSettings: FC = () => {
   const forceUpdate = useForceUpdate();
   const settings = settingsManager.getSettings();
   const [schemaText, setSchemaText] = useState(
@@ -136,14 +136,14 @@ export const WTrackerSettings: FC = () => {
   };
 
   return (
-    <div className="wtracker-settings">
+    <div className="ztracker-settings">
       <div className="inline-drawer">
         <div className="inline-drawer-toggle inline-drawer-header">
-          <b>WTracker</b>
+          <b>zTracker</b>
           <div className="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
         </div>
         <div className="inline-drawer-content">
-          <div className="wtracker-container">
+          <div className="ztracker-container">
             <div className="setting-row">
               <label>Connection Profile</label>
               <STConnectionProfileSelect
@@ -323,17 +323,17 @@ export const WTrackerSettings: FC = () => {
               />
             </div>
             <div className="setting-row">
-              <label>Include Last X WTracker Messages</label>
+              <label>Include Last X zTracker Messages</label>
               <input
                 type="number"
                 className="text_pole"
                 min="0"
                 step="1"
                 title="0 means none."
-                value={settings.includeLastXWTrackerMessages}
+                value={settings.includeLastXZTrackerMessages}
                 onChange={(e) =>
                   updateAndRefresh((s) => {
-                    s.includeLastXWTrackerMessages = parseInt(e.target.value) || 0;
+                    s.includeLastXZTrackerMessages = parseInt(e.target.value) || 0;
                   })
                 }
               />

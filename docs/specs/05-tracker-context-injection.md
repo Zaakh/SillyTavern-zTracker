@@ -10,7 +10,7 @@ Ensure existing tracker data is reliably added to the prompt context for LLM cal
 - Tracker snapshots are injected by:
   - the tracker generation flow, and
   - a `generate_interceptor` that modifies outgoing generation chat arrays.
-- There is already a setting similar to `includeLastXWTrackerMessages`.
+- There is already a setting similar to `includeLastXzTrackerMessages`.
 
 ## Open questions to clarify first
 1. Scope: which generations should receive tracker injection?
@@ -44,3 +44,4 @@ Ensure existing tracker data is reliably added to the prompt context for LLM cal
 - [ ] Implement setting + UI
 - [ ] Ensure interceptor uses latest settings at runtime
 - [ ] Add tests for snapshot insertion logic
+
