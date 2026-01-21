@@ -1,6 +1,6 @@
 # Spec: Rename extension to zTracker
 
-Status: Open
+Status: Completed
 Last updated: 2026-01-21
 
 ## Goal

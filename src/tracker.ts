@@ -114,3 +114,46 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
   }
   return copyMessages;
 }
+
+export interface ApplyTrackerUpdateOptions {
+  trackerData: unknown;
+  trackerHtml: string;
+  render: () => void;
+}
+
+/**
+ * Applies a tracker update to a message and attempts to render it.
+ *
+ * If rendering throws, the message is rolled back to the prior state (if any).
+ * This is used to enforce "fail fast" behavior for strict templates.
+ */
+export function applyTrackerUpdateAndRender(
+  message: { extra?: Record<string, any> } | undefined,
+  options: ApplyTrackerUpdateOptions,
+): void {
+  if (!message) {
+    throw new Error('applyTrackerUpdateAndRender: message is required');
+  }
+  if (!options?.render) {
+    throw new Error('applyTrackerUpdateAndRender: render callback is required');
+  }
+
+  const hadExisting = !!message.extra?.[EXTENSION_KEY];
+  const previousValue = hadExisting ? structuredClone(message.extra?.[EXTENSION_KEY]) : undefined;
+
+  message.extra = message.extra || {};
+  message.extra[EXTENSION_KEY] = message.extra[EXTENSION_KEY] || {};
+  message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_VALUE_KEY] = options.trackerData;
+  message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_HTML_KEY] = options.trackerHtml;
+
+  try {
+    options.render();
+  } catch (error) {
+    if (hadExisting) {
+      message.extra[EXTENSION_KEY] = previousValue;
+    } else {
+      delete message.extra[EXTENSION_KEY];
+    }
+    throw error;
+  }
+}

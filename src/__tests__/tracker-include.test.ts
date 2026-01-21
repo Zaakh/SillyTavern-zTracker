@@ -39,4 +39,25 @@ describe('includeZTrackerMessages', () => {
     expect(result).toHaveLength(messages.length);
     expect(result).not.toBe(messages);
   });
+
+  it('injects up to N distinct tracker snapshots without duplicating the same message', () => {
+    const messages = [
+      buildMessageWithTracker({ id: 1 }),
+      { content: 'middle', role: 'assistant' },
+      buildMessageWithTracker({ id: 2 }),
+      { content: 'current', role: 'user' },
+    ];
+
+    const result = includeZTrackerMessages(messages as any, makeSettings(2));
+
+    // Original 4 + 2 injected
+    expect(result).toHaveLength(6);
+
+    const injected = result.filter((m: any) => typeof m.content === 'string' && m.content.startsWith('Tracker:\n```json'));
+    expect(injected).toHaveLength(2);
+      // The implementation inserts each found snapshot immediately after the message it was found on.
+      // So after inserting snapshot #2, snapshot #1 will appear earlier in the final list.
+      expect(injected[0].content).toContain('"id": 1');
+      expect(injected[1].content).toContain('"id": 2');
+  });
 });
