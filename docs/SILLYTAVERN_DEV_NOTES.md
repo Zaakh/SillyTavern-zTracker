@@ -104,6 +104,30 @@ Sources:
 - Prefer `getContext()` APIs over direct imports.
 - Use a unique extension key/module name to avoid conflicts.
 
+## Testing workflow
+
+### Prereqs
+- Node 18+ and npm installed locally.
+- Run `npm install` once after pulling new dependencies.
+
+### Running the suite
+- `npm test` — executes all Jest suites (Node + jsdom) once. This is what CI will run.
+- `npm test -- --watch` — optional for TDD; reruns on file changes.
+
+### What’s being exercised
+- Pure logic lives in import-safe modules (`parser.ts`, `schema-to-example.ts`, `tracker.ts`) so Jest can load them without booting SillyTavern.
+- DOM behaviors (`renderTracker`) run under the `@jest-environment jsdom` annotation so we get a browser-like document.
+
+### Mocks & stubs
+- `SillyTavern.getContext()` is **not** mocked globally. Tests instead pass a lightweight `TrackerContext` object (just the `chat` array) directly into helpers.
+- DOM tests manually inject the `.mes` markup snippet that the extension normally renders; no real SillyTavern UI is required.
+- Handlebars is the real dependency (imported from npm). The helper registration from `index.tsx` isn’t executed during tests, so if a test needs custom helpers it must register them explicitly.
+- Network/API calls (`Generator`, `buildPrompt`) are not part of current tests; we focus on deterministic logic only. Add explicit mocks if future tests cover them.
+
+### Tips
+- Avoid importing `src/index.tsx` inside tests; it has SillyTavern-side effects. Import from the helper modules instead.
+- When adding new DOM helpers, keep their dependencies injectable (document/context/Handlebars) so they remain testable.
+
 ## Quick checklist for this repo (zTracker)
 - UI extension with `manifest.json` + bundled assets (`dist/index.js`, `dist/style.css`).
 - Uses `getContext()` + events + a `generate_interceptor`.
