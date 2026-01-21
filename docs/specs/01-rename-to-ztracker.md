@@ -4,7 +4,7 @@ Status: Open
 Last updated: 2026-01-21
 
 ## Goal
-Rename the extension from **WTracker** to **zTracker** in a way that is clear to users and does not accidentally break existing stored tracker data.
+Rename the extension to **zTracker** in a way that is clear to users and does not accidentally break existing stored tracker data.
 
 ## Scope
 - Rename user-facing extension name in UI and metadata.
@@ -17,7 +17,7 @@ Rename the extension from **WTracker** to **zTracker** in a way that is clear to
 
 ## Open questions to clarify first
 1. Migration policy:
-   - Do we want a non-breaking migration from old keys (`WTracker`) to new keys (`zTracker`), or is this a breaking fork?
+   - Do we want a non-breaking migration from the legacy keys to new keys (`zTracker`), or is this a breaking fork?
 2. Folder name / install path:
    - What will the extension folder be named in SillyTavern after installation? (This affects template paths like `third-party/<folder>`.)
 3. Branding:
@@ -25,30 +25,43 @@ Rename the extension from **WTracker** to **zTracker** in a way that is clear to
 4. Backward compatibility window:
    - If we migrate, do we keep reading the legacy key for a while, or do a one-time copy and then drop support?
 
-## Decisions (record once chosen)
-- Chosen display name:
-- Chosen internal key:
-- Migration approach:
+## Decisions (chosen)
+- Chosen display name: `zTracker`
+- Chosen internal key (settings/extras/metadata): `zTracker`
+- Chosen extension folder name (for templates): `SillyTavern-zTracker`
+- Migration approach: none (fresh start)
+- Legacy read-compat window: none (no backward compatibility before first zTracker release)
+
+## Clarifications checklist (answer these before coding)
+- [x] Confirm display name: `zTracker`
+- [x] Confirm internal key: `zTracker`
+- [x] Confirm template folder name used by ST installer: `SillyTavern-zTracker`
+- [x] Confirm migration: no
+- [x] Confirm legacy read-compat window: none
 
 ## Implementation plan (high level)
 - Update `manifest.json` fields (`display_name`, `version`, `homePage`, `generate_interceptor`).
 - Update internal constants (extension key, extension name).
 - Update any hard-coded template base paths.
-- Add a startup migration routine (if chosen).
+- Do not include any migration/back-compat logic for legacy tracker data.
 
 ## Acceptance criteria
 - Shows as `zTracker` in Manage Extensions.
 - Tracker generation, rendering, edit/delete/regenerate still works.
-- Existing chats keep tracker data (if migration is chosen).
+- Existing chats created before the rename are not supported (fresh start).
 - No console errors related to template loading or missing interceptor.
 
 ## Tasks checklist
 - [ ] Decide display name and internal key
 - [ ] Decide migration approach
 - [ ] Implement rename
-- [ ] Implement migration (if chosen)
+- [ ] Ensure no migration/back-compat code remains
 - [ ] Update docs (README + screenshots if needed)
 - [ ] Add/update tests covering migration behavior
+ 
+## Notes / consequences
+- Old stored data (message extras / settings / chat metadata) created under the previous name will be ignored by zTracker.
+- This simplifies the code but is a breaking change for existing users of the legacy tracker build.
 
 ## Notes
 - `generate_interceptor` must be a global function name (assigned to `globalThis`).

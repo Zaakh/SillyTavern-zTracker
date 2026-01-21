@@ -1,12 +1,12 @@
 {
-    "display_name": "WTracker",
+    "display_name": "zTracker",
     "loading_order": 300,
     "requires": [],
     "optional": [],
     "js": "dist/index.js",
     "css": "dist/style.css",
-    "author": "bmen25124",
+    "author": "Zaakh",
     "version": "0.1.1",
-    "homePage": "https://github.com/bmen25124/SillyTavern-WTracker",
-    "generate_interceptor": "wtrackerGenerateInterceptor"
+    "homePage": "https://github.com/Zaakh/SillyTavern-zTracker",
+    "generate_interceptor": "ztrackerGenerateInterceptor"
 }

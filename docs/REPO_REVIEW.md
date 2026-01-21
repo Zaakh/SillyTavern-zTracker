@@ -1,7 +1,7 @@
-# Repo review: SillyTavern-WTracker
+# Repo review: SillyTavern-zTracker
 
 ## What this repo is
-This repository builds a **SillyTavern extension** named **WTracker**. The extension generates and renders a structured “tracker” object (e.g., scene state) for chat messages using an LLM connection profile, and stores that tracker data inside the chat history so it persists with the conversation.
+This repository builds a **SillyTavern extension** named **zTracker**. The extension generates and renders a structured “tracker” object (e.g., scene state) for chat messages using an LLM connection profile, and stores that tracker data inside the chat history so it persists with the conversation.
 
 Primary user-facing features (per the code and README):
 - One-click **Generate tracker** button on each message
@@ -11,14 +11,14 @@ Primary user-facing features (per the code and README):
 - A menu action to pick a schema preset for the current chat (metadata)
 
 ## How it works (data flow)
-1. A user clicks the WTracker message button (or Auto Mode triggers).
+1. A user clicks the zTracker message button (or Auto Mode triggers).
 2. The extension builds a prompt using SillyTavern context and a selected connection profile.
 3. It requests structured output from the LLM:
    - **Native mode**: asks the API for structured output using a `json_schema` payload.
    - **Prompt-engineered mode (JSON/XML)**: injects a schema + example into a prompt template, then parses a fenced code block.
 4. The parsed tracker is stored in the message object:
-   - `message.extra.WTracker.value` → the tracker JSON object
-   - `message.extra.WTracker.html` → the Handlebars template used to render it
+   - `message.extra.zTracker.value` → the tracker JSON object
+   - `message.extra.zTracker.html` → the Handlebars template used to render it
 5. The tracker is rendered into the chat DOM above the message text with edit/regenerate/delete controls.
 
 The extension also injects previous tracker snapshots into prompts to keep the model consistent across turns.
@@ -30,7 +30,7 @@ The extension also injects previous tracker snapshots into prompts to keep the m
   - `message.extra[EXTENSION_KEY].value`
   - `message.extra[EXTENSION_KEY].html`
 - **Per-chat selection** is stored in chat metadata:
-  - `chatMetadata.WTracker.schemaKey`
+  - `chatMetadata.zTracker.schemaKey`
 
 Notable behavior: the UI allows selecting a schema preset for the current chat (metadata), but generation currently uses the global settings preset (see “Potential gaps / gotchas”).
 
@@ -59,10 +59,10 @@ Notable behavior: the UI allows selecting a schema preset for the current chat (
 
 - [src/index.tsx](src/index.tsx)
   - Main entry point (bootstraps settings UI + non-React DOM hooks)
-  - Adds the per-message WTracker button
+  - Adds the per-message zTracker button
   - Handles generate/edit/delete/regenerate
   - Registers Auto Mode event handlers
-  - Registers global `wtrackerGenerateInterceptor`
+  - Registers global `ztrackerGenerateInterceptor`
 
 - [src/components/Settings.tsx](src/components/Settings.tsx)
   - React settings UI
@@ -82,7 +82,7 @@ Notable behavior: the UI allows selecting a schema preset for the current chat (
   - Can output either JSON or a simple XML representation
 
 - [templates/buttons.html](templates/buttons.html)
-  - Adds an Extensions menu item (“Modify WTracker schema”)
+  - Adds an Extensions menu item (“Modify zTracker schema”)
 
 - [templates/modify_schema_popup.html](templates/modify_schema_popup.html)
   - Popup UI for selecting schema preset for the active chat
@@ -117,11 +117,11 @@ SillyTavern loads these via [manifest.json](manifest.json).
 - [manifest.json](manifest.json) declares:
   - `js: dist/index.js`
   - `css: dist/style.css`
-  - `generate_interceptor: wtrackerGenerateInterceptor`
+  - `generate_interceptor: ztrackerGenerateInterceptor`
 - Runtime expects a global `SillyTavern` object and uses `SillyTavern.getContext()`.
 
 ## Potential gaps / gotchas (worth knowing)
-- **Per-chat schema preset appears not to be used for generation**: the chat metadata key is written/updated, but `generateTracker(...)` uses `settings.schemaPreset` when choosing schema/html. If per-chat presets are intended, generation should read from `chatMetadata.WTracker.schemaKey`.
+- **Per-chat schema preset appears not to be used for generation**: the chat metadata key is written/updated, but `generateTracker(...)` uses `settings.schemaPreset` when choosing schema/html. If per-chat presets are intended, generation should read from `chatMetadata.zTracker.schemaKey`.
 - **Version fields don’t currently line up**: `manifest.json` (0.1.1), `src/config.ts` default settings version (0.1.0), and `package.json` (1.0.0) all differ.
 - **`npm run dev` does not watch SCSS**: it compiles once, then only webpack stays watching. If you’re iterating on styles, you may want `sass --watch ...`.
 - **Template rendering is strict**: if you add fields to the schema but don’t update the HTML template (or vice versa), trackers can fail to render and be removed.
@@ -141,10 +141,10 @@ Minor cleanup notes (non-blocking):
 - Behavior + integration: [src/index.tsx](src/index.tsx)
 - Defaults + settings schema: [src/config.ts](src/config.ts)
 - Settings UI: [src/components/Settings.tsx](src/components/Settings.tsx)
-# Repo review: SillyTavern-WTracker
+# Repo review: SillyTavern-zTracker
 
 ## What this repo is
-This repository builds a **SillyTavern extension** named **WTracker**. The extension generates and renders a structured “tracker” object (e.g., scene state) for chat messages using an LLM connection profile, and stores that tracker data inside the chat history so it persists with the conversation.
+This repository builds a **SillyTavern extension** named **zTracker**. The extension generates and renders a structured “tracker” object (e.g., scene state) for chat messages using an LLM connection profile, and stores that tracker data inside the chat history so it persists with the conversation.
 
 Primary user-facing features (per the code and README):
 - One-click **Generate tracker** button on each message
@@ -154,14 +154,14 @@ Primary user-facing features (per the code and README):
 - A menu action to pick a schema preset for the current chat (metadata)
 
 ## How it works (data flow)
-1. A user clicks the WTracker message button (or Auto Mode triggers).
+1. A user clicks the zTracker message button (or Auto Mode triggers).
 2. The extension builds a prompt using SillyTavern context and a selected connection profile.
 3. It requests structured output from the LLM:
    - **Native mode**: asks the API for structured output using a `json_schema` payload.
    - **Prompt-engineered mode (JSON/XML)**: injects a schema + example into a prompt template, then parses a fenced code block.
 4. The parsed tracker is stored in the message object:
-   - `message.extra.WTracker.value` → the tracker JSON object
-   - `message.extra.WTracker.html` → the Handlebars template used to render it
+   - `message.extra.zTracker.value` → the tracker JSON object
+   - `message.extra.zTracker.html` → the Handlebars template used to render it
 5. The tracker is rendered into the chat DOM above the message text with edit/regenerate/delete controls.
 
 The extension also injects previous tracker snapshots into prompts to keep the model consistent across turns.
@@ -173,7 +173,7 @@ The extension also injects previous tracker snapshots into prompts to keep the m
   - `message.extra[EXTENSION_KEY].value`
   - `message.extra[EXTENSION_KEY].html`
 - **Per-chat selection** is stored in chat metadata:
-  - `chatMetadata.WTracker.schemaKey`
+  - `chatMetadata.zTracker.schemaKey`
 
 Notable behavior: the UI allows selecting a schema preset for the current chat (metadata), but generation currently uses the global settings preset (see “Potential gaps / gotchas”).
 
@@ -202,10 +202,10 @@ Notable behavior: the UI allows selecting a schema preset for the current chat (
 
 - [src/index.tsx](src/index.tsx)
   - Main entry point (bootstraps settings UI + non-React DOM hooks)
-  - Adds the per-message WTracker button
+  - Adds the per-message zTracker button
   - Handles generate/edit/delete/regenerate
   - Registers Auto Mode event handlers
-  - Registers global `wtrackerGenerateInterceptor`
+  - Registers global `ztrackerGenerateInterceptor`
 
 - [src/components/Settings.tsx](src/components/Settings.tsx)
   - React settings UI
@@ -225,7 +225,7 @@ Notable behavior: the UI allows selecting a schema preset for the current chat (
   - Can output either JSON or a simple XML representation
 
 - [templates/buttons.html](templates/buttons.html)
-  - Adds an Extensions menu item (“Modify WTracker schema”)
+  - Adds an Extensions menu item (“Modify zTracker schema”)
 
 - [templates/modify_schema_popup.html](templates/modify_schema_popup.html)
   - Popup UI for selecting schema preset for the active chat
@@ -260,11 +260,11 @@ SillyTavern loads these via [manifest.json](manifest.json).
 - [manifest.json](manifest.json) declares:
   - `js: dist/index.js`
   - `css: dist/style.css`
-  - `generate_interceptor: wtrackerGenerateInterceptor`
+  - `generate_interceptor: ztrackerGenerateInterceptor`
 - Runtime expects a global `SillyTavern` object and uses `SillyTavern.getContext()`.
 
 ## Potential gaps / gotchas (worth knowing)
-- **Per-chat schema preset appears not to be used for generation**: the chat metadata key is written/updated, but `generateTracker(...)` uses `settings.schemaPreset` when choosing schema/html. If per-chat presets are intended, generation should read from `chatMetadata.WTracker.schemaKey`.
+- **Per-chat schema preset appears not to be used for generation**: the chat metadata key is written/updated, but `generateTracker(...)` uses `settings.schemaPreset` when choosing schema/html. If per-chat presets are intended, generation should read from `chatMetadata.zTracker.schemaKey`.
 - **Version fields don’t currently line up**: `manifest.json` (0.1.1), `src/config.ts` default settings version (0.1.0), and `package.json` (1.0.0) all differ.
 - **`npm run dev` does not watch SCSS**: it compiles once, then only webpack stays watching. If you’re iterating on styles, you may want `sass --watch ...`.
 - **Template rendering is strict**: if you add fields to the schema but don’t update the HTML template (or vice versa), trackers can fail to render and be removed.
@@ -284,3 +284,4 @@ Minor cleanup notes (non-blocking):
 - Behavior + integration: [src/index.tsx](src/index.tsx)
 - Defaults + settings schema: [src/config.ts](src/config.ts)
 - Settings UI: [src/components/Settings.tsx](src/components/Settings.tsx)
+

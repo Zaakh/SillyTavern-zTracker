@@ -104,8 +104,9 @@ Sources:
 - Prefer `getContext()` APIs over direct imports.
 - Use a unique extension key/module name to avoid conflicts.
 
-## Quick checklist for this repo (WTracker)
+## Quick checklist for this repo (zTracker)
 - UI extension with `manifest.json` + bundled assets (`dist/index.js`, `dist/style.css`).
 - Uses `getContext()` + events + a `generate_interceptor`.
 - Stores persistent settings and also uses per-chat metadata.
 - Uses structured outputs when possible; otherwise prompt-engineers JSON/XML and parses fenced blocks.
+

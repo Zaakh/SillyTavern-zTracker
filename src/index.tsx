@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { settingsManager, WTrackerSettings } from './components/Settings.js';
+import { settingsManager, ZTrackerSettings } from './components/Settings.js';
 
 import { buildPrompt, Message, Generator } from 'sillytavern-utils-lib';
 import { ChatMessage, EventNames, ExtractedData } from 'sillytavern-utils-lib/types';
@@ -38,7 +38,7 @@ if (!Handlebars.helpers['join']) {
 function renderTracker(messageId: number) {
   const message = globalContext.chat[messageId];
   const messageBlock = document.querySelector(`.mes[mesid="${messageId}"]`);
-  messageBlock?.querySelector('.mes_wtracker')?.remove();
+  messageBlock?.querySelector('.mes_ztracker')?.remove();
 
   if (!message?.extra?.[EXTENSION_KEY]) return;
 
@@ -51,26 +51,26 @@ function renderTracker(messageId: number) {
   const template = Handlebars.compile(trackerHtmlSchema, { noEscape: true, strict: true });
   const renderedHtml = template({ data: trackerData });
   const container = document.createElement('div');
-  container.className = 'mes_wtracker';
+  container.className = 'mes_ztracker';
   container.innerHTML = renderedHtml;
 
   // Add controls
   const controls = document.createElement('div');
-  controls.className = 'wtracker-controls';
+  controls.className = 'ztracker-controls';
   controls.innerHTML = `
-    <div class="wtracker-regenerate-button fa-solid fa-arrows-rotate" title="Regenerate Tracker"></div>
-    <div class="wtracker-edit-button fa-solid fa-code" title="Edit Tracker Data"></div>
-    <div class="wtracker-delete-button fa-solid fa-trash-can" title="Delete Tracker"></div>
+    <div class="ztracker-regenerate-button fa-solid fa-arrows-rotate" title="Regenerate Tracker"></div>
+    <div class="ztracker-edit-button fa-solid fa-code" title="Edit Tracker Data"></div>
+    <div class="ztracker-delete-button fa-solid fa-trash-can" title="Delete Tracker"></div>
   `;
   container.prepend(controls);
 
   messageBlock.querySelector('.mes_text')?.before(container);
 }
 
-function includeWTrackerMessages<T extends Message | ChatMessage>(messages: T[], settings: ExtensionSettings): T[] {
+function includeZTrackerMessages<T extends Message | ChatMessage>(messages: T[], settings: ExtensionSettings): T[] {
   let copyMessages = structuredClone(messages);
-  if (settings.includeLastXWTrackerMessages > 0) {
-    for (let i = 0; i < settings.includeLastXWTrackerMessages; i++) {
+  if (settings.includeLastXZTrackerMessages > 0) {
+    for (let i = 0; i < settings.includeLastXZTrackerMessages; i++) {
       let foundMessage: T | null = null;
       let foundIndex = -1;
       for (let j = copyMessages.length - 2; j >= 0; j--) {
@@ -78,9 +78,9 @@ function includeWTrackerMessages<T extends Message | ChatMessage>(messages: T[],
         const message = copyMessages[j];
         const extra = 'source' in message ? (message as Message).source?.extra : (message as ChatMessage).extra;
         // @ts-ignore
-        if (!message.wTrackerFound && extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY]) {
+        if (!message.zTrackerFound && extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY]) {
           // @ts-ignore
-          message.wTrackerFound = true;
+          message.zTrackerFound = true;
           foundMessage = message;
           foundIndex = j;
           break;
@@ -129,8 +129,8 @@ async function editTracker(messageId: number) {
 
   const popupContent = `
         <div style="display: flex; flex-direction: column; gap: 8px;">
-            <label for="wtracker-edit-textarea">Edit Tracker JSON:</label>
-            <textarea id="wtracker-edit-textarea" class="text_pole" rows="15" style="width: 100%; resize: vertical;"></textarea>
+            <label for="ztracker-edit-textarea">Edit Tracker JSON:</label>
+            <textarea id="ztracker-edit-textarea" class="text_pole" rows="15" style="width: 100%; resize: vertical;"></textarea>
         </div>
     `;
 
@@ -138,7 +138,7 @@ async function editTracker(messageId: number) {
     okButton: 'Save',
     onClose: async (popup) => {
       if (popup.result === POPUP_RESULT.AFFIRMATIVE) {
-        const textarea = popup.content.querySelector('#wtracker-edit-textarea') as HTMLTextAreaElement;
+        const textarea = popup.content.querySelector('#ztracker-edit-textarea') as HTMLTextAreaElement;
         if (textarea) {
           try {
             const newData = JSON.parse(textarea.value);
@@ -147,14 +147,14 @@ async function editTracker(messageId: number) {
             await globalContext.saveChat();
             let detailsState: boolean[] = [];
             const messageBlock = document.querySelector(`.mes[mesid="${messageId}"]`);
-            const existingTracker = messageBlock?.querySelector('.mes_wtracker');
+            const existingTracker = messageBlock?.querySelector('.mes_ztracker');
             if (existingTracker) {
               const detailsElements = existingTracker.querySelectorAll('details');
               detailsState = Array.from(detailsElements).map((detail) => detail.open);
             }
             renderTracker(messageId);
             if (detailsState.length > 0) {
-              const newTracker = messageBlock?.querySelector('.mes_wtracker');
+              const newTracker = messageBlock?.querySelector('.mes_ztracker');
               if (newTracker) {
                 const newDetailsElements = newTracker.querySelectorAll('details');
                 newDetailsElements.forEach((detail, index) => {
@@ -174,7 +174,7 @@ async function editTracker(messageId: number) {
       }
     },
   });
-  const textarea = document.querySelector('#wtracker-edit-textarea') as HTMLTextAreaElement;
+  const textarea = document.querySelector('#ztracker-edit-textarea') as HTMLTextAreaElement;
   if (textarea) {
     textarea.value = JSON.stringify(currentData, null, 2);
   }
@@ -210,11 +210,11 @@ async function generateTracker(id: number) {
   characterId = characterId !== -1 ? characterId : undefined;
 
   const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
-  const mainButton = messageBlock?.querySelector('.mes_wtracker_button');
-  const regenerateButton = messageBlock?.querySelector('.wtracker-regenerate-button');
+  const mainButton = messageBlock?.querySelector('.mes_ztracker_button');
+  const regenerateButton = messageBlock?.querySelector('.ztracker-regenerate-button');
 
   let detailsState: boolean[] = [];
-  const existingTracker = messageBlock?.querySelector('.mes_wtracker');
+  const existingTracker = messageBlock?.querySelector('.mes_ztracker');
   if (existingTracker) {
     const detailsElements = existingTracker.querySelectorAll('details');
     detailsState = Array.from(detailsElements).map((detail) => detail.open);
@@ -235,7 +235,7 @@ async function generateTracker(id: number) {
       syspromptName: profile?.sysprompt,
       includeNames: !!selected_group,
     });
-    let messages = includeWTrackerMessages(promptResult.result, settings);
+    let messages = includeZTrackerMessages(promptResult.result, settings);
     let response: ExtractedData['content'];
 
     const makeRequest = (requestMessages: Message[], overideParams?: any): Promise<ExtractedData | undefined> => {
@@ -294,7 +294,7 @@ async function generateTracker(id: number) {
       response = parseResponse(rest.content, format, { schema: chatJsonValue });
     }
 
-    if (!response || Object.keys(response as any).length === 0) throw new Error('Empty response from WTracker.');
+    if (!response || Object.keys(response as any).length === 0) throw new Error('Empty response from zTracker.');
 
     // Tentatively update message and try to render
     message.extra = message.extra || {};
@@ -306,7 +306,7 @@ async function generateTracker(id: number) {
       renderTracker(id);
 
       if (detailsState.length > 0) {
-        const newTracker = messageBlock?.querySelector('.mes_wtracker');
+        const newTracker = messageBlock?.querySelector('.mes_ztracker');
         if (newTracker) {
           const newDetailsElements = newTracker.querySelectorAll('details');
           newDetailsElements.forEach((detail, index) => {
@@ -342,12 +342,12 @@ async function generateTracker(id: number) {
 // --- UI Initialization (Non-React parts) ---
 
 async function initializeGlobalUI() {
-  // Add WTracker icon to message buttons
-  const wTrackerIcon = document.createElement('div');
-  wTrackerIcon.title = 'WTracker';
-  wTrackerIcon.className = 'mes_button mes_wtracker_button fa-solid fa-truck-moving interactable';
-  wTrackerIcon.tabIndex = 0;
-  document.querySelector('#message_template .mes_buttons .extraMesButtons')?.prepend(wTrackerIcon);
+  // Add zTracker icon to message buttons
+  const zTrackerIcon = document.createElement('div');
+  zTrackerIcon.title = 'zTracker';
+  zTrackerIcon.className = 'mes_button mes_ztracker_button fa-solid fa-truck-moving interactable';
+  zTrackerIcon.tabIndex = 0;
+  document.querySelector('#message_template .mes_buttons .extraMesButtons')?.prepend(zTrackerIcon);
 
   // Add global click listener for various tracker-related buttons on messages
   document.addEventListener('click', (event) => {
@@ -358,20 +358,20 @@ async function initializeGlobalUI() {
     const messageId = Number(messageEl.getAttribute('mesid'));
     if (isNaN(messageId)) return;
 
-    if (target.classList.contains('mes_wtracker_button')) {
+    if (target.classList.contains('mes_ztracker_button')) {
       generateTracker(messageId);
-    } else if (target.classList.contains('wtracker-edit-button')) {
+    } else if (target.classList.contains('ztracker-edit-button')) {
       editTracker(messageId);
-    } else if (target.classList.contains('wtracker-regenerate-button')) {
+    } else if (target.classList.contains('ztracker-regenerate-button')) {
       generateTracker(messageId);
-    } else if (target.classList.contains('wtracker-delete-button')) {
+    } else if (target.classList.contains('ztracker-delete-button')) {
       deleteTracker(messageId);
     }
   });
 
   const extensionsMenu = document.querySelector('#extensionsMenu');
   const buttonContainer = document.createElement('div');
-  buttonContainer.id = 'wtracker_menu_buttons';
+  buttonContainer.id = 'ztracker_menu_buttons';
   buttonContainer.className = 'extension_container';
   extensionsMenu?.appendChild(buttonContainer);
   const buttonHtml = await globalContext.renderExtensionTemplateAsync(
@@ -379,7 +379,7 @@ async function initializeGlobalUI() {
     'templates/buttons',
   );
   buttonContainer.insertAdjacentHTML('beforeend', buttonHtml);
-  extensionsMenu?.querySelector('#wtracker_modify_schema_preset')?.addEventListener('click', async () => {
+  extensionsMenu?.querySelector('#ztracker_modify_schema_preset')?.addEventListener('click', async () => {
     await modifyChatMetadata();
   });
 
@@ -400,8 +400,8 @@ async function initializeGlobalUI() {
       try {
         renderTracker(i);
       } catch (error) {
-        console.error(`Error rendering WTracker on message ${i}, removing data:`, error);
-        st_echo('error', 'A WTracker template failed to render. Removing tracker from the message.');
+        console.error(`Error rendering zTracker on message ${i}, removing data:`, error);
+        st_echo('error', 'A zTracker template failed to render. Removing tracker from the message.');
         if (message?.extra?.[EXTENSION_KEY]) {
           delete message.extra[EXTENSION_KEY];
           chatModified = true;
@@ -414,8 +414,8 @@ async function initializeGlobalUI() {
   });
 
   // Register the global generation interceptor
-  (globalThis as any).wtrackerGenerateInterceptor = (chat: ChatMessage[]) => {
-    const newChat = includeWTrackerMessages(chat, settingsManager.getSettings());
+  (globalThis as any).ztrackerGenerateInterceptor = (chat: ChatMessage[]) => {
+    const newChat = includeZTrackerMessages(chat, settingsManager.getSettings());
     chat.length = 0;
     chat.push(...newChat);
   };
@@ -445,7 +445,7 @@ async function modifyChatMetadata() {
 
   // Render the popup content from the template file
   const popupContent = await globalContext.renderExtensionTemplateAsync(
-    'third-party/SillyTavern-WTracker',
+    `third-party/${extensionName}`,
     'templates/modify_schema_popup',
     templateData,
   );
@@ -454,7 +454,7 @@ async function modifyChatMetadata() {
     okButton: 'Save',
     onClose(popup) {
       if (popup.result === POPUP_RESULT.AFFIRMATIVE) {
-        const selectElement = document.getElementById('wtracker-chat-schema-select') as HTMLSelectElement;
+        const selectElement = document.getElementById('ztracker-chat-schema-select') as HTMLSelectElement;
         if (selectElement) {
           const newPresetKey = selectElement.value;
           if (newPresetKey !== currentPresetKey) {
@@ -473,21 +473,21 @@ async function modifyChatMetadata() {
 function renderReactSettings() {
   const settingsContainer = document.getElementById('extensions_settings');
   if (!settingsContainer) {
-    console.error('WTracker: Extension settings container not found.');
+    console.error('zTracker: Extension settings container not found.');
     return;
   }
 
-  let reactRootEl = document.getElementById('wtracker-react-settings-root');
+  let reactRootEl = document.getElementById('ztracker-react-settings-root');
   if (!reactRootEl) {
     reactRootEl = document.createElement('div');
-    reactRootEl.id = 'wtracker-react-settings-root';
+    reactRootEl.id = 'ztracker-react-settings-root';
     settingsContainer.appendChild(reactRootEl);
   }
 
   const root = createRoot(reactRootEl);
   root.render(
     <React.StrictMode>
-      <WTrackerSettings />
+      <ZTrackerSettings />
     </React.StrictMode>,
   );
 }
@@ -502,5 +502,6 @@ settingsManager
   .then(main)
   .catch((error) => {
     console.error(error);
-    st_echo('error', 'WTracker data migration failed. Check console for details.');
+    st_echo('error', 'zTracker data migration failed. Check console for details.');
   });
+
