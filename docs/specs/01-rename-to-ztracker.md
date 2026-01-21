@@ -52,12 +52,12 @@ Rename the extension to **zTracker** in a way that is clear to users and does no
 - No console errors related to template loading or missing interceptor.
 
 ## Tasks checklist
-- [ ] Decide display name and internal key
-- [ ] Decide migration approach
-- [ ] Implement rename
-- [ ] Ensure no migration/back-compat code remains
-- [ ] Update docs (README + screenshots if needed)
-- [ ] Add/update tests covering migration behavior
+- [x] Decide display name and internal key
+- [x] Decide migration approach
+- [x] Implement rename
+- [x] Ensure no migration/back-compat code remains
+- [x] Update docs (README + screenshots if needed)
+- [skippped] Add/update tests covering migration behavior *(explicitly deferred; test coverage will be added in a later spec)*
  
 ## Notes / consequences
 - Old stored data (message extras / settings / chat metadata) created under the previous name will be ignored by zTracker.
