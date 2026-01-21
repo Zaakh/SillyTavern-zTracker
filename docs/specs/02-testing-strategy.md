@@ -21,7 +21,25 @@ Add unit and integration tests that catch regressions while remaining realistic 
 4. Should we validate tracker outputs against schema?
    - If yes, which library (Ajv, Zod, etc.)?
 
+## Clarified decisions
+
+### Phase 1 (baseline)
+- Automation: Unit + jsdom only. Defer Playwright until basics are stable.
+- CI: Windows-only (for now).
+- Refactor: Yes — isolate testable logic away from `src/index.tsx` import-time side effects.
+- Schema validation: Defer (no Ajv/Zod in baseline).
+
+### Phase 2 (advanced / optional)
+- Add Playwright E2E harness once unit/jsdom tests are reliable.
+- Consider JSON Schema validation (Ajv) if we want stricter guarantees.
+
 ## Proposed approach
+
+### Phase 1 (baseline)
+- ✅ Refactor entrypoint: move pure/pure-ish logic into import-safe modules (`src/tracker.ts`, `src/extension-metadata.ts`).
+- ✅ Unit tests in Node for pure logic (`parser`, `schema-to-example`, tracker injection helpers).
+- ✅ Integration-ish tests in jsdom for DOM rendering behavior (`renderTracker`).
+- ☐ Add docs for how to run tests + describe mock/stub expectations.
 
 ### Unit tests (Node)
 Test pure or near-pure modules:
@@ -48,12 +66,18 @@ Test pure or near-pure modules:
   - schema-to-example tests
   - snapshot injection tests
   - at least one jsdom render test
-- Document how to run tests locally and what is being mocked.
+- Document how to run tests locally and what is being mocked. ➜ **Pending:** add README/docs blurb summarizing `npm test`, SillyTavern stubs, and what jsdom covers.
+- Document how to run tests locally and what is being mocked. (See `docs/SILLYTAVERN_DEV_NOTES.md` → "Testing workflow".)
+
+## Notes
+- `src/index.tsx` has import-time side effects (SillyTavern context access, generator creation, UI boot). Tests should avoid importing the entrypoint.
+- jsdom tests should exercise isolated DOM helpers rather than the full extension boot.
 
 ## Tasks checklist
-- [ ] Decide unit vs E2E scope
-- [ ] Add test folder structure and helpers
-- [ ] Add unit tests (parser/schema/injection)
-- [ ] Add jsdom tests (render)
-- [ ] Decide on schema validation library (optional)
-- [ ] Add CI workflow (optional)
+- [x] Decide unit vs E2E scope (Phase 1: unit + jsdom only; defer Playwright)
+- [x] Add test folder structure and helpers
+- [x] Add unit tests (parser/schema/injection)
+- [x] Add jsdom tests (render)
+- [x] Decide on schema validation library (optional) (defer)
+- [ ] Add CI workflow (optional, Windows-only)
+- [x] Document local test workflow + mocking approach

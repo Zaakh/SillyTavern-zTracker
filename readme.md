@@ -48,3 +48,11 @@ Most importantly, it works. This is a minimalistic version of the original track
 - No "Generation Target" option. (Could be added in the future)
 - No "Generation Mode" option. Since this extension doesn't summarize the chat, no need for it. (I'm not planning to add a summarize feature.)
 - There are some templates in the original, but I don't need them since I don't have those features.
+
+## Development & testing
+
+Working on the extension locally?
+
+- Install dependencies once with `npm install`.
+- Run `npm test` to execute the Jest suite (parser/schema helpers + jsdom render tests).
+- For detailed guidance (module structure, mocks, watch mode), see [docs/SILLYTAVERN_DEV_NOTES.md](docs/SILLYTAVERN_DEV_NOTES.md#testing-workflow).

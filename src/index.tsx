@@ -4,24 +4,29 @@ import { settingsManager, ZTrackerSettings } from './components/Settings.js';
 
 import { buildPrompt, Message, Generator } from 'sillytavern-utils-lib';
 import { ChatMessage, EventNames, ExtractedData } from 'sillytavern-utils-lib/types';
-import { characters, name1, selected_group, st_echo } from 'sillytavern-utils-lib/config';
+import { characters, selected_group, st_echo } from 'sillytavern-utils-lib/config';
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import { ExtensionSettings, PromptEngineeringMode, EXTENSION_KEY, extensionName } from './config.js';
 import { parseResponse } from './parser.js';
 import { schemaToExample } from './schema-to-example.js';
-import * as Handlebars from 'handlebars';
+import Handlebars from 'handlebars';
 import { POPUP_RESULT, POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
+import {
+  renderTracker,
+  includeZTrackerMessages,
+  CHAT_METADATA_SCHEMA_PRESET_KEY,
+  CHAT_MESSAGE_SCHEMA_VALUE_KEY,
+  CHAT_MESSAGE_SCHEMA_HTML_KEY,
+} from './tracker.js';
 
 // --- Constants and Globals ---
-const CHAT_METADATA_SCHEMA_PRESET_KEY = 'schemaKey';
-const CHAT_MESSAGE_SCHEMA_VALUE_KEY = 'value';
-const CHAT_MESSAGE_SCHEMA_HTML_KEY = 'html';
-
 const globalContext = SillyTavern.getContext();
 const generator = new Generator();
 const pendingRequests = new Map<number, string>();
 const incomingTypes = [AutoModeOptions.RESPONSES, AutoModeOptions.BOTH];
 const outgoingTypes = [AutoModeOptions.INPUT, AutoModeOptions.BOTH];
+const renderTrackerWithDeps = (messageId: number) =>
+  renderTracker(messageId, { context: globalContext, document, handlebars: Handlebars });
 
 // --- Handlebars Helper ---
 if (!Handlebars.helpers['join']) {
@@ -35,75 +40,6 @@ if (!Handlebars.helpers['join']) {
 
 // --- Core Logic Functions (ported from original index.ts) ---
 
-function renderTracker(messageId: number) {
-  const message = globalContext.chat[messageId];
-  const messageBlock = document.querySelector(`.mes[mesid="${messageId}"]`);
-  messageBlock?.querySelector('.mes_ztracker')?.remove();
-
-  if (!message?.extra?.[EXTENSION_KEY]) return;
-
-  const trackerData = message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_VALUE_KEY];
-  const trackerHtmlSchema = message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_HTML_KEY];
-  if (!trackerData || !trackerHtmlSchema) return;
-
-  if (!messageBlock) return;
-
-  const template = Handlebars.compile(trackerHtmlSchema, { noEscape: true, strict: true });
-  const renderedHtml = template({ data: trackerData });
-  const container = document.createElement('div');
-  container.className = 'mes_ztracker';
-  container.innerHTML = renderedHtml;
-
-  // Add controls
-  const controls = document.createElement('div');
-  controls.className = 'ztracker-controls';
-  controls.innerHTML = `
-    <div class="ztracker-regenerate-button fa-solid fa-arrows-rotate" title="Regenerate Tracker"></div>
-    <div class="ztracker-edit-button fa-solid fa-code" title="Edit Tracker Data"></div>
-    <div class="ztracker-delete-button fa-solid fa-trash-can" title="Delete Tracker"></div>
-  `;
-  container.prepend(controls);
-
-  messageBlock.querySelector('.mes_text')?.before(container);
-}
-
-function includeZTrackerMessages<T extends Message | ChatMessage>(messages: T[], settings: ExtensionSettings): T[] {
-  let copyMessages = structuredClone(messages);
-  if (settings.includeLastXZTrackerMessages > 0) {
-    for (let i = 0; i < settings.includeLastXZTrackerMessages; i++) {
-      let foundMessage: T | null = null;
-      let foundIndex = -1;
-      for (let j = copyMessages.length - 2; j >= 0; j--) {
-        // -2 to skip current message
-        const message = copyMessages[j];
-        const extra = 'source' in message ? (message as Message).source?.extra : (message as ChatMessage).extra;
-        // @ts-ignore
-        if (!message.zTrackerFound && extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY]) {
-          // @ts-ignore
-          message.zTrackerFound = true;
-          foundMessage = message;
-          foundIndex = j;
-          break;
-        }
-      }
-      if (foundMessage) {
-        const extra =
-          'source' in foundMessage ? (foundMessage as Message).source?.extra : (foundMessage as ChatMessage).extra;
-        const content = `Tracker:\n\`\`\`json\n${JSON.stringify(extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY] || '{}', null, 2)}\n\`\`\``;
-        copyMessages.splice(foundIndex + 1, 0, {
-          content,
-          role: 'user',
-          name: name1,
-          is_user: true,
-          mes: content,
-          is_system: false,
-        } as unknown as T);
-      }
-    }
-  }
-  return copyMessages;
-}
-
 async function deleteTracker(messageId: number) {
   const message = globalContext.chat[messageId];
   if (!message?.extra?.[EXTENSION_KEY]) return;
@@ -116,7 +52,7 @@ async function deleteTracker(messageId: number) {
   if (confirm) {
     delete message.extra[EXTENSION_KEY];
     await globalContext.saveChat();
-    renderTracker(messageId); // This will remove the rendered tracker
+    renderTrackerWithDeps(messageId); // This will remove the rendered tracker
     st_echo('success', 'Tracker data deleted.');
   }
 }
@@ -152,7 +88,7 @@ async function editTracker(messageId: number) {
               const detailsElements = existingTracker.querySelectorAll('details');
               detailsState = Array.from(detailsElements).map((detail) => detail.open);
             }
-            renderTracker(messageId);
+            renderTrackerWithDeps(messageId);
             if (detailsState.length > 0) {
               const newTracker = messageBlock?.querySelector('.mes_ztracker');
               if (newTracker) {
@@ -303,7 +239,7 @@ async function generateTracker(id: number) {
     message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_HTML_KEY] = chatHtmlValue;
 
     try {
-      renderTracker(id);
+      renderTrackerWithDeps(id);
 
       if (detailsState.length > 0) {
         const newTracker = messageBlock?.querySelector('.mes_ztracker');
@@ -324,7 +260,7 @@ async function generateTracker(id: number) {
       // If render fails, remove the tracker data we just added
       delete message.extra[EXTENSION_KEY];
       // Re-render to clear the failed attempt from the DOM
-      renderTracker(id);
+      renderTrackerWithDeps(id);
       // Let the outer catch block show the error to the user
       throw new Error(`Generated data failed to render with the current template. Not saved.`);
     }
@@ -398,7 +334,7 @@ async function initializeGlobalUI() {
     let chatModified = false;
     globalContext.chat.forEach((message, i) => {
       try {
-        renderTracker(i);
+        renderTrackerWithDeps(i);
       } catch (error) {
         console.error(`Error rendering zTracker on message ${i}, removing data:`, error);
         st_echo('error', 'A zTracker template failed to render. Removing tracker from the message.');
