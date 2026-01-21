@@ -1,8 +1,10 @@
-# SillyTavern WTracker
+# SillyTavern zTracker
 
 ## Overview
 
 A [SillyTavern](https://docs.sillytavern.app/) extension that helps you track your chat stats with LLMs using [connection profiles](https://docs.sillytavern.app/usage/core-concepts/connection-profiles/).
+
+Forked from [SillyTavern WTracker](https://github.com/bmen25124/SillyTavern-WTracker).
 
 ![popup](images/overview.png)
 
@@ -29,7 +31,7 @@ A [SillyTavern](https://docs.sillytavern.app/) extension that helps you track yo
 Install via the SillyTavern extension installer:
 
 ```txt
-https://github.com/bmen25124/SillyTavern-WTracker
+https://github.com/Zaakh/SillyTavern-zTracker
 ```
 
 ## FAQ
