@@ -55,6 +55,7 @@ Most importantly, it works. This is a minimalistic version of the original track
 - `npm run sync-version` updates derived files; it runs automatically before dev/build/test and during `npm version`.
 - CI can run `npm run check-version` (strict mode) to fail fast on drift without rewriting files.
 - Bump versions with `npm version <patch|minor|major>` to keep SemVer tags and changelog aligned.
+- When bumping versions, stage changes under the `Unreleased` section in `CHANGELOG.md`, then move them into a dated release section (e.g., `1.0.0 - YYYY-MM-DD`).
 - See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## Development & testing

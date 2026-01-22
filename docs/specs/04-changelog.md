@@ -1,10 +1,14 @@
 # Spec: Add CHANGELOG.md
 
-Status: Open
-Last updated: 2026-01-21
+Status: Completed
+Last updated: 2026-01-22
 
 ## Goal
 Add a `CHANGELOG.md` and keep it updated as zTracker evolves.
+
+## Current state
+- Root changelog lives at [CHANGELOG.md](CHANGELOG.md#L1-L12) using Keep a Changelog format with `Unreleased` and a dated `1.0.0` (2026-01-22) entry.
+- README links to the changelog and now includes a brief guideline for keeping it updated ([readme.md#L52-L59](readme.md#L52-L59)).
 
 ## Open questions to clarify first
 1. Format preference:
@@ -24,6 +28,8 @@ Add a `CHANGELOG.md` and keep it updated as zTracker evolves.
 - (Optional) Linked from README.
 
 ## Tasks checklist
-- [ ] Decide format
-- [ ] Create file + initial content
-- [ ] Add contributor guideline for updating it (optional)
+- [x] Decide format (Keep a Changelog)
+- [x] Create root-level `CHANGELOG.md`
+- [x] Add `1.0.0` release entry
+- [x] Link changelog from README (optional)
+- [x] Add contributor guideline for updating it (optional)
