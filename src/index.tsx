@@ -2,15 +2,22 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { settingsManager, ZTrackerSettings } from './components/Settings.js';
 
-import { buildPrompt, Message, Generator } from 'sillytavern-utils-lib';
+import { buildPrompt, Message, Generator, getWorldInfos } from 'sillytavern-utils-lib';
 import { ChatMessage, EventNames, ExtractedData } from 'sillytavern-utils-lib/types';
 import { characters, selected_group, st_echo } from 'sillytavern-utils-lib/config';
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
-import { ExtensionSettings, PromptEngineeringMode, EXTENSION_KEY, extensionName } from './config.js';
+import {
+  ExtensionSettings,
+  PromptEngineeringMode,
+  TrackerWorldInfoPolicyMode,
+  EXTENSION_KEY,
+  extensionName,
+} from './config.js';
 import { parseResponse } from './parser.js';
 import { schemaToExample } from './schema-to-example.js';
 import Handlebars from 'handlebars';
 import { POPUP_RESULT, POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
+import { formatAllowlistedWorldInfo, shouldIgnoreWorldInfoDuringTrackerBuild } from './world-info-policy.js';
 import {
   renderTracker,
   includeZTrackerMessages,
@@ -160,6 +167,10 @@ async function generateTracker(id: number) {
     mainButton?.classList.add('spinning');
     regenerateButton?.classList.add('spinning');
 
+    const trackerWorldInfoMode =
+      settings.trackerWorldInfoPolicyMode ?? TrackerWorldInfoPolicyMode.INCLUDE_ALL;
+    const ignoreWorldInfo = shouldIgnoreWorldInfoDuringTrackerBuild(trackerWorldInfoMode);
+
     const promptResult = await buildPrompt(apiMap?.selected!, {
       targetCharacterId: characterId,
       messageIndexesBetween: {
@@ -171,8 +182,32 @@ async function generateTracker(id: number) {
       instructName: profile?.instruct,
       syspromptName: profile?.sysprompt,
       includeNames: !!selected_group,
+      ignoreWorldInfo,
     });
     let messages = includeZTrackerMessages(promptResult.result, settings);
+
+    if (trackerWorldInfoMode === TrackerWorldInfoPolicyMode.ALLOWLIST) {
+      const allowlistBookNames =
+        settings.trackerWorldInfoAllowlistBookNames ?? settings.trackerWorldInfoAllowlist ?? [];
+      const allowlistEntryIds = settings.trackerWorldInfoAllowlistEntryIds ?? [];
+      if (allowlistBookNames.length > 0 || allowlistEntryIds.length > 0) {
+        try {
+          const worldInfos = await getWorldInfos(['global', 'chat', 'character', 'persona'], true, characterId);
+          const worldInfoText = formatAllowlistedWorldInfo({
+            allowlistBookNames,
+            allowlistEntryIds,
+            worldInfos,
+          });
+          if (worldInfoText) {
+            const firstNonSystem = messages.findIndex((m) => m.role !== 'system');
+            const insertAt = firstNonSystem === -1 ? messages.length : firstNonSystem;
+            messages.splice(insertAt, 0, { role: 'system', content: worldInfoText } as Message);
+          }
+        } catch (e) {
+          console.warn('zTracker: failed to load allowlisted World Info; proceeding without it.', e);
+        }
+      }
+    }
     let response: ExtractedData['content'];
 
     const makeRequest = (requestMessages: Message[], overideParams?: any): Promise<ExtractedData | undefined> => {
