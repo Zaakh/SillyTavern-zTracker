@@ -1,10 +1,17 @@
 # Spec: Multiple connection profiles support
 
-Status: Open
-Last updated: 2026-01-21
+Status: Completed
+Last updated: 2026-01-23
 
 ## Goal
 Support multiple connection profiles in zTracker.
+
+Note: Closed as "not needed" — current single-profile selection is sufficient.
+
+## Current behavior (today)
+- zTracker already supports selecting **one** connection profile in settings.
+- The selected profile is persisted as `profileId: string`.
+- If `profileId` is empty, generation fails with an actionable error (it does **not** silently reuse a default profile).
 
 ## Open questions to clarify first
 1. What does “support multiple profiles” mean?
@@ -24,7 +31,8 @@ Support multiple connection profiles in zTracker.
 
 ## Proposed initial design (fallback list)
 - Settings:
-  - Replace single `profileId` with ordered list `profileIds: string[]`.
+  - Extend existing `profileId` into ordered list `profileIds: string[]`.
+  - Migration: if legacy `profileId` is set and `profileIds` is empty, initialize `profileIds = [profileId]`.
 - UI:
   - Multi-select connection profiles + reorder.
 - Runtime:
@@ -40,9 +48,9 @@ Support multiple connection profiles in zTracker.
 - Abort/cancel works cleanly.
 
 ## Tasks checklist
-- [ ] Decide “multiple profiles” semantics
-- [ ] Define failure detection rules
-- [ ] Implement settings model + migration
-- [ ] Implement UI
-- [ ] Implement generation fallback logic
-- [ ] Add tests for selection/fallback behavior
+- [x] Decide “multiple profiles” semantics (no longer needed)
+- [x] Define failure detection rules (no longer needed)
+- [x] Implement settings model + migration (no longer needed)
+- [x] Implement UI (no longer needed)
+- [x] Implement generation fallback logic (no longer needed)
+- [x] Add tests for selection/fallback behavior (no longer needed)

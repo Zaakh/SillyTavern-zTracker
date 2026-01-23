@@ -49,11 +49,11 @@ Notable behavior: the UI allows selecting a schema preset for the current chat (
   - Builds a final prompt using Handlebars
   - Parses response from a markdown fenced code block via [src/parser.ts](src/parser.ts)
 
-### Prompt context injection
-- The extension can inject the last X previous trackers into prompts as user messages.
-- This is used both:
-  - internally during tracker generation, and
-  - globally via the `generate_interceptor` hook in `manifest.json`.
+### Prompt context injection (current behavior)
+- `includeZTrackerMessages` clones the chat and injects up to `includeLastXZTrackerMessages` tracker snapshots as user messages formatted as `Tracker:\n```json ...````, inserting each snapshot immediately after the message it came from.
+- Tracker generation calls this helper before requesting a new tracker, so LLM updates see prior trackers as context.
+- A global `ztrackerGenerateInterceptor` mutates every outgoing chat array with the latest settings, so all SillyTavern generations (not just zTracker flows) receive the same injected snapshots.
+- The setting defaults to `1`; `0` disables injection. There is no explicit “all snapshots” sentinel or token cap beyond choosing a large number.
 
 ## Code map
 
