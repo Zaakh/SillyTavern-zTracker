@@ -35,6 +35,12 @@ export interface ExtensionSettings {
   promptXml: string;
 
   /**
+   * Enables extra console logging and diagnostics helpers.
+   * Intended for troubleshooting; avoid enabling unless needed.
+   */
+  debugLogging: boolean;
+
+  /**
    * Controls what World Info is included in tracker-only generations.
    * - include_all: use normal SillyTavern prompt building (default)
    * - exclude_all: omit all World Info sources
@@ -296,6 +302,8 @@ export const defaultSettings: ExtensionSettings = {
   promptEngineeringMode: PromptEngineeringMode.NATIVE,
   promptJson: DEFAULT_PROMPT_JSON,
   promptXml: DEFAULT_PROMPT_XML,
+
+  debugLogging: false,
 
   trackerWorldInfoPolicyMode: TrackerWorldInfoPolicyMode.INCLUDE_ALL,
   trackerWorldInfoAllowlistBookNames: [],

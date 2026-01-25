@@ -19,6 +19,7 @@ import {
   TrackerWorldInfoPolicyMode,
   defaultSettings,
   EXTENSION_KEY,
+  extensionName,
 } from '../config.js';
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import { useForceUpdate } from '../hooks/useForceUpdate.js';
@@ -69,6 +70,8 @@ export const ZTrackerSettings: FC = () => {
   const forceUpdate = useForceUpdate();
   const settings = settingsManager.getSettings();
 
+  const [diagnosticsText, setDiagnosticsText] = useState<string>('');
+
   const [schemaText, setSchemaText] = useState(
     JSON.stringify(settings.schemaPresets[settings.schemaPreset]?.value, null, 2) ?? '',
   );
@@ -88,6 +91,43 @@ export const ZTrackerSettings: FC = () => {
     },
     [forceUpdate],
   );
+
+  const runDiagnostics = useCallback(async () => {
+    const basePath = `/scripts/extensions/third-party/${extensionName}`;
+    const templatePaths = ['dist/templates/buttons', 'dist/templates/modify_schema_popup'];
+
+    const results: Array<{ template: string; url: string; status: number | null; ok: boolean; error?: string }> = [];
+    for (const template of templatePaths) {
+      const url = new URL(`${basePath}/${template}.html`, window.location.origin).toString();
+      try {
+        const response = await fetch(url, { cache: 'no-store' });
+        results.push({ template, url, status: response.status, ok: response.ok });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        results.push({ template, url, status: null, ok: false, error: message });
+      }
+    }
+
+    const lines: string[] = [];
+    lines.push(`zTracker diagnostics`);
+    lines.push(`time: ${new Date().toISOString()}`);
+    lines.push(`origin: ${window.location.origin}`);
+    lines.push(`extensionName: ${extensionName}`);
+    lines.push(`basePath: ${basePath}`);
+    lines.push(`debugLogging: ${String(settingsManager.getSettings().debugLogging)}`);
+    lines.push('');
+    for (const r of results) {
+      lines.push(`template: ${r.template}`);
+      lines.push(`url: ${r.url}`);
+      lines.push(`ok: ${String(r.ok)}${r.status !== null ? ` (status ${r.status})` : ''}${r.error ? ` (error: ${r.error})` : ''}`);
+      lines.push('');
+    }
+
+    const text = lines.join('\n');
+    setDiagnosticsText(text);
+    // eslint-disable-next-line no-console
+    console.debug(text);
+  }, []);
 
   // Memoized data for the schema preset dropdown
   const schemaPresetItems = useMemo((): PresetItem[] => {
@@ -436,6 +476,34 @@ export const ZTrackerSettings: FC = () => {
                 />
               </div>
             )}
+
+            <div className="setting-row">
+              <label>Debug logging</label>
+              <input
+                type="checkbox"
+                checked={!!settings.debugLogging}
+                onChange={(e) =>
+                  updateAndRefresh((s) => {
+                    s.debugLogging = e.target.checked;
+                  })
+                }
+              />
+              <div className="notes">Enables extra console logging and a diagnostics helper. Avoid enabling unless troubleshooting.</div>
+            </div>
+
+            <div className="setting-row">
+              <div className="title_restorable">
+                <span>Diagnostics</span>
+                <STButton className="fa-solid fa-stethoscope" title="Run diagnostics" onClick={runDiagnostics} />
+              </div>
+              <textarea
+                className="text_pole"
+                readOnly
+                value={diagnosticsText}
+                rows={6}
+                placeholder="Click the stethoscope button to generate diagnostics (also prints to console.debug)."
+              />
+            </div>
           </div>
         </div>
       </div>
