@@ -52,12 +52,12 @@ describe('world info policy', () => {
       },
     });
 
-    expect(text).toContain('World Info (allowlisted)');
-    expect(text).toContain('# Book A');
     expect(text).toContain('A-content');
     expect(text).not.toContain('disabled');
-    expect(text).not.toContain('# Book B');
     expect(text).not.toContain('B-content');
+    expect(text).not.toContain('World Info (allowlisted)');
+    expect(text).not.toContain('# Book A');
+    expect(text).not.toContain('# Book B');
   });
 
   test('formatAllowlistedWorldInfo can allowlist by entry id across books', () => {
@@ -88,10 +88,10 @@ describe('world info policy', () => {
       },
     });
 
-    expect(text).toContain('# Book B');
     expect(text).toContain('B-content');
-    expect(text).not.toContain('# Book A');
     expect(text).not.toContain('A-content');
+    expect(text).not.toContain('# Book B');
+    expect(text).not.toContain('# Book A');
   });
 
   test('formatAllowlistedWorldInfo returns empty string when nothing matches', () => {
