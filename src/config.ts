@@ -51,9 +51,6 @@ export interface ExtensionSettings {
    * These are the numeric `uid` values on WI entries.
    */
   trackerWorldInfoAllowlistEntryIds: number[];
-
-  /** @deprecated Use `trackerWorldInfoAllowlistBookNames` instead. */
-  trackerWorldInfoAllowlist?: string[];
 }
 
 export const DEFAULT_PROMPT = `You are a Scene Tracker Assistant, tasked with providing clear, consistent, and structured updates to a scene tracker for a roleplay. Use the latest message, previous tracker details, and context from recent messages to accurately update the tracker. Your response must ensuring that each field is filled and complete. If specific information is not provided, make reasonable assumptions based on prior descriptions, logical inferences, or default character details.
@@ -303,5 +300,4 @@ export const defaultSettings: ExtensionSettings = {
   trackerWorldInfoPolicyMode: TrackerWorldInfoPolicyMode.INCLUDE_ALL,
   trackerWorldInfoAllowlistBookNames: [],
   trackerWorldInfoAllowlistEntryIds: [],
-  trackerWorldInfoAllowlist: [],
 };

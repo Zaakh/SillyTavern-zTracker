@@ -149,7 +149,20 @@ async function generateTracker(id: number) {
   const chatHtmlValue = settings.schemaPresets[settings.schemaPreset].html;
 
   const profile = extensionSettings.connectionManager?.profiles?.find((p) => p.id === settings.profileId);
-  const apiMap = profile?.api ? CONNECT_API_MAP[profile.api] : null;
+  if (!profile) {
+    st_echo('error', 'Selected connection profile not found. Please re-select a profile in zTracker settings.');
+    return;
+  }
+  if (!profile.api) {
+    st_echo('error', 'Selected connection profile is missing an API. Please edit the profile in SillyTavern settings.');
+    return;
+  }
+
+  const apiMap = CONNECT_API_MAP[profile.api];
+  if (!apiMap?.selected) {
+    st_echo('error', `Unsupported or unknown API for prompt building: ${String(profile.api)}`);
+    return;
+  }
   let characterId = characters.findIndex((char: any) => char.avatar === message.original_avatar);
   characterId = characterId !== -1 ? characterId : undefined;
 
@@ -171,7 +184,7 @@ async function generateTracker(id: number) {
       settings.trackerWorldInfoPolicyMode ?? TrackerWorldInfoPolicyMode.INCLUDE_ALL;
     const ignoreWorldInfo = shouldIgnoreWorldInfoDuringTrackerBuild(trackerWorldInfoMode);
 
-    const promptResult = await buildPrompt(apiMap?.selected!, {
+    const promptResult = await buildPrompt(apiMap.selected, {
       targetCharacterId: characterId,
       messageIndexesBetween: {
         end: id,
@@ -187,8 +200,7 @@ async function generateTracker(id: number) {
     let messages = includeZTrackerMessages(promptResult.result, settings);
 
     if (trackerWorldInfoMode === TrackerWorldInfoPolicyMode.ALLOWLIST) {
-      const allowlistBookNames =
-        settings.trackerWorldInfoAllowlistBookNames ?? settings.trackerWorldInfoAllowlist ?? [];
+      const allowlistBookNames = settings.trackerWorldInfoAllowlistBookNames ?? [];
       const allowlistEntryIds = settings.trackerWorldInfoAllowlistEntryIds ?? [];
       if (allowlistBookNames.length > 0 || allowlistEntryIds.length > 0) {
         try {
