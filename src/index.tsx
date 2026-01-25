@@ -36,6 +36,36 @@ const outgoingTypes = [AutoModeOptions.INPUT, AutoModeOptions.BOTH];
 const renderTrackerWithDeps = (messageId: number) =>
   renderTracker(messageId, { context: globalContext, document, handlebars: Handlebars });
 
+function isDebugLoggingEnabled(): boolean {
+  try {
+    return !!settingsManager.getSettings().debugLogging;
+  } catch {
+    return false;
+  }
+}
+
+function debugLog(...args: unknown[]) {
+  if (!isDebugLoggingEnabled()) return;
+  // eslint-disable-next-line no-console
+  console.debug('zTracker:', ...args);
+}
+
+function getTemplateUrl(templatePathNoExt: string): string {
+  const basePath = `/scripts/extensions/third-party/${extensionName}`;
+  return new URL(`${basePath}/${templatePathNoExt}.html`, window.location.origin).toString();
+}
+
+async function checkTemplateUrl(templatePathNoExt: string) {
+  const url = getTemplateUrl(templatePathNoExt);
+  try {
+    const response = await fetch(url, { cache: 'no-store' });
+    return { templatePathNoExt, url, ok: response.ok, status: response.status };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { templatePathNoExt, url, ok: false, status: null as number | null, error: message };
+  }
+}
+
 // --- Handlebars Helper ---
 if (!Handlebars.helpers['join']) {
   Handlebars.registerHelper('join', function (array: any, separator: any) {
@@ -353,11 +383,40 @@ async function initializeGlobalUI() {
   buttonContainer.id = 'ztracker_menu_buttons';
   buttonContainer.className = 'extension_container';
   extensionsMenu?.appendChild(buttonContainer);
-  const buttonHtml = await globalContext.renderExtensionTemplateAsync(
-    `third-party/${extensionName}`,
-    'templates/buttons',
-  );
-  buttonContainer.insertAdjacentHTML('beforeend', buttonHtml);
+  const extensionRoot = `third-party/${extensionName}`;
+  const buttonsTemplatePath = 'dist/templates/buttons';
+  debugLog('Initializing UI', {
+    extensionName,
+    extensionRoot,
+    buttonsTemplatePath,
+    buttonsTemplateUrl: getTemplateUrl(buttonsTemplatePath),
+  });
+
+  try {
+    const buttonHtml = await globalContext.renderExtensionTemplateAsync(extensionRoot, buttonsTemplatePath);
+    buttonContainer.insertAdjacentHTML('beforeend', buttonHtml);
+  } catch (error) {
+    console.error('zTracker: failed to render extension menu buttons template', {
+      extensionName,
+      extensionRoot,
+      templatePath: buttonsTemplatePath,
+      expectedUrl: getTemplateUrl(buttonsTemplatePath),
+      error,
+    });
+
+    if (isDebugLoggingEnabled()) {
+      const checks = await Promise.all([
+        checkTemplateUrl('templates/buttons'),
+        checkTemplateUrl('dist/templates/buttons'),
+        checkTemplateUrl('templates/modify_schema_popup'),
+        checkTemplateUrl('dist/templates/modify_schema_popup'),
+      ]);
+      debugLog('Template availability checks', checks);
+      (globalThis as any).zTrackerDiagnostics = { templateChecks: checks };
+    }
+
+    st_echo('error', 'zTracker failed to load one or more HTML templates. See console for diagnostics.');
+  }
   extensionsMenu?.querySelector('#ztracker_modify_schema_preset')?.addEventListener('click', async () => {
     await modifyChatMetadata();
   });
@@ -423,11 +482,30 @@ async function modifyChatMetadata() {
   };
 
   // Render the popup content from the template file
-  const popupContent = await globalContext.renderExtensionTemplateAsync(
-    `third-party/${extensionName}`,
-    'templates/modify_schema_popup',
-    templateData,
-  );
+  const extensionRoot = `third-party/${extensionName}`;
+  const popupTemplatePath = 'dist/templates/modify_schema_popup';
+  let popupContent: string;
+  try {
+    popupContent = await globalContext.renderExtensionTemplateAsync(extensionRoot, popupTemplatePath, templateData);
+  } catch (error) {
+    console.error('zTracker: failed to render modify schema popup template', {
+      extensionName,
+      extensionRoot,
+      templatePath: popupTemplatePath,
+      expectedUrl: getTemplateUrl(popupTemplatePath),
+      error,
+    });
+    if (isDebugLoggingEnabled()) {
+      const checks = await Promise.all([
+        checkTemplateUrl('templates/modify_schema_popup'),
+        checkTemplateUrl('dist/templates/modify_schema_popup'),
+      ]);
+      debugLog('Template availability checks', checks);
+      (globalThis as any).zTrackerDiagnostics = { templateChecks: checks };
+    }
+    st_echo('error', 'zTracker failed to load the Modify Schema popup template. See console for diagnostics.');
+    return;
+  }
 
   await globalContext.callGenericPopup(popupContent, POPUP_TYPE.CONFIRM, '', {
     okButton: 'Save',
