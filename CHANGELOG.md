@@ -6,8 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-01-22
+- (nothing yet)
+
+## [1.0.0] - Unreleased
 
 ### Added
-- Initial release of zTracker, forked from SillyTavern WTracker.
+- World Info policy for tracker generation: include all, exclude all, or allowlist by lorebook name / entry UID.
+- Allowlist picker UI (refresh + search + add/remove) to avoid manual entry.
+- Debug logging toggle and Diagnostics tool for quickly verifying extension template URLs.
+
+### Changed
+- Extension template bundling now uses `dist/templates` to match SillyTavern’s packaged artifact expectations.
+- Extension install folder is detected at runtime for template rendering (no hardcoded third-party folder name).
 

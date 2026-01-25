@@ -21,6 +21,8 @@ import {
 } from '../config.js';
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import { useForceUpdate } from '../hooks/useForceUpdate.js';
+import { DiagnosticsSection } from './settings/DiagnosticsSection.js';
+import { WorldInfoPolicySection } from './settings/WorldInfoPolicySection.js';
 
 // Initialize the settings manager once, outside the component
 export const settingsManager = new ExtensionSettingsManager<ExtensionSettings>(EXTENSION_KEY, defaultSettings);
@@ -28,6 +30,9 @@ export const settingsManager = new ExtensionSettingsManager<ExtensionSettings>(E
 export const ZTrackerSettings: FC = () => {
   const forceUpdate = useForceUpdate();
   const settings = settingsManager.getSettings();
+
+  const [diagnosticsText, setDiagnosticsText] = useState<string>('');
+
   const [schemaText, setSchemaText] = useState(
     JSON.stringify(settings.schemaPresets[settings.schemaPreset]?.value, null, 2) ?? '',
   );
@@ -338,6 +343,19 @@ export const ZTrackerSettings: FC = () => {
                 }
               />
             </div>
+
+            <WorldInfoPolicySection settings={settings} updateAndRefresh={updateAndRefresh} />
+
+            <DiagnosticsSection
+              debugLogging={!!settings.debugLogging}
+              setDebugLogging={(value) =>
+                updateAndRefresh((s) => {
+                  s.debugLogging = value;
+                })
+              }
+              diagnosticsText={diagnosticsText}
+              setDiagnosticsText={setDiagnosticsText}
+            />
           </div>
         </div>
       </div>

@@ -40,6 +40,18 @@ https://github.com/Zaakh/SillyTavern-zTracker
 
 Your API/model might not support structured output. Change `Prompt Engineering` mode from `Native API` to `JSON` or `XML`.
 
+> zTracker UI buttons / schema popup are broken (template 404).
+
+In **Extensions → zTracker**, enable **Debug logging** and use the **Diagnostics** panel (stethoscope button) to print template URL checks to the console. This helps confirm whether SillyTavern can access the extension’s HTML templates.
+
+## World Info (lorebooks)
+
+In **Extensions → zTracker**, you can control World Info during tracker generation: include all (default), exclude all, or allowlist specific lorebook **book names** (case-insensitive) and/or entry **UIDs** (numbers). This only affects zTracker tracker generation (button / Auto Mode), not normal SillyTavern generations.
+
+In allowlist mode, zTracker loads the allowlisted lorebooks by name and injects their matching entries into the tracker-generation prompt, even if those lorebooks are not currently active in SillyTavern.
+
+When using **Allow only specified books/UIDs**, you can click **Refresh book list** to detect available books, search/select them, and **Add** them to the allowlist (with quick remove buttons). A manual textarea is still available under “Advanced”.
+
 > What is the difference compared to [famous tracker](https://github.com/kaldigo/SillyTavern-Tracker)?
 
 Most importantly, it works. This is a minimalistic version of the original tracker.
