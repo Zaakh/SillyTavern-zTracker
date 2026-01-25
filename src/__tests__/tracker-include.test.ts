@@ -3,9 +3,10 @@ import { includeZTrackerMessages, CHAT_MESSAGE_SCHEMA_VALUE_KEY } from '../track
 import { EXTENSION_KEY } from '../extension-metadata.js';
 
 describe('includeZTrackerMessages', () => {
-  const makeSettings = (count: number) => {
+  const makeSettings = (count: number, role?: ExtensionSettings['embedZTrackerRole']) => {
     return {
       includeLastXZTrackerMessages: count,
+      embedZTrackerRole: role,
     } as ExtensionSettings;
   };
 
@@ -28,6 +29,26 @@ describe('includeZTrackerMessages', () => {
     expect(result).toHaveLength(3);
     expect(result[1].content).toContain('```json');
     expect(result[1].role).toBe('user');
+  });
+
+  it('can embed snapshots as system messages', () => {
+    const messages = [
+      buildMessageWithTracker({ id: 1 }),
+      { content: 'current', role: 'user' },
+    ];
+    const result = includeZTrackerMessages(messages as any, makeSettings(1, 'system'));
+    expect(result).toHaveLength(3);
+    expect(result[1].role).toBe('system');
+  });
+
+  it('can embed snapshots as assistant messages', () => {
+    const messages = [
+      buildMessageWithTracker({ id: 1 }),
+      { content: 'current', role: 'user' },
+    ];
+    const result = includeZTrackerMessages(messages as any, makeSettings(1, 'assistant'));
+    expect(result).toHaveLength(3);
+    expect(result[1].role).toBe('assistant');
   });
 
   it('leaves messages untouched when no trackers are found', () => {

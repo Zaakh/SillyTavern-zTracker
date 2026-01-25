@@ -344,6 +344,24 @@ export const ZTrackerSettings: FC = () => {
               />
             </div>
 
+            <div className="setting-row">
+              <label>Embed zTracker snapshots as</label>
+              <select
+                className="text_pole"
+                title="Only affects embedding into the generation chat array (generate_interceptor), not tracker generation."
+                value={settings.embedZTrackerRole ?? 'user'}
+                onChange={(e) =>
+                  updateAndRefresh((s) => {
+                    s.embedZTrackerRole = e.target.value as ExtensionSettings['embedZTrackerRole'];
+                  })
+                }
+              >
+                <option value="user">User</option>
+                <option value="system">System</option>
+                <option value="assistant">Assistant</option>
+              </select>
+            </div>
+
             <WorldInfoPolicySection settings={settings} updateAndRefresh={updateAndRefresh} />
 
             <DiagnosticsSection
