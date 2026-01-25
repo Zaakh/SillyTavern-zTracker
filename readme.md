@@ -40,6 +40,10 @@ https://github.com/Zaakh/SillyTavern-zTracker
 
 Your API/model might not support structured output. Change `Prompt Engineering` mode from `Native API` to `JSON` or `XML`.
 
+## World Info (lorebooks)
+
+In **Extensions → zTracker**, you can control World Info during tracker generation: include all (default), exclude all, or allowlist specific lorebook **book names** (one per line, case-insensitive) and/or entry **UIDs** (numbers). This only affects zTracker tracker generation (button / Auto Mode), not normal SillyTavern generations.
+
 > What is the difference compared to [famous tracker](https://github.com/kaldigo/SillyTavern-Tracker)?
 
 Most importantly, it works. This is a minimalistic version of the original tracker.

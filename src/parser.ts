@@ -60,7 +60,7 @@ export function parseResponse(content: string, format: 'xml' | 'json', options: 
     }
   } catch (error: any) {
     console.error(`Error parsing response in format '${format}':`, error);
-    console.error('Raw content received:', content);
+    console.error('Raw content length:', typeof content === 'string' ? content.length : 0);
 
     if (format === 'xml' && error.message.includes('Invalid XML')) {
       throw new Error('Model response is not valid XML.');

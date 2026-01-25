@@ -1,4 +1,5 @@
 import { parseResponse } from '../parser.js';
+import { jest } from '@jest/globals';
 
 describe('parseResponse', () => {
   it('parses JSON inside fenced code blocks', () => {
@@ -28,6 +29,11 @@ describe('parseResponse', () => {
 
   it('throws a descriptive error on invalid JSON', () => {
     const bad = '```json\n{ invalid }\n```';
-    expect(() => parseResponse(bad, 'json')).toThrow('Model response is not valid JSON.');
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(() => parseResponse(bad, 'json')).toThrow('Model response is not valid JSON.');
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 });

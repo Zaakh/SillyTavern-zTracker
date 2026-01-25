@@ -16,6 +16,7 @@ import {
   DEFAULT_SCHEMA_VALUE,
   DEFAULT_SCHEMA_HTML,
   PromptEngineeringMode,
+  TrackerWorldInfoPolicyMode,
   defaultSettings,
   EXTENSION_KEY,
 } from '../config.js';
@@ -25,11 +26,57 @@ import { useForceUpdate } from '../hooks/useForceUpdate.js';
 // Initialize the settings manager once, outside the component
 export const settingsManager = new ExtensionSettingsManager<ExtensionSettings>(EXTENSION_KEY, defaultSettings);
 
+function normalizeWorldInfoAllowlist(text: string): string[] {
+  const lines = text
+    .split(/\r?\n/g)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const line of lines) {
+    const key = line.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      deduped.push(line);
+    }
+  }
+  return deduped;
+}
+
+function normalizeWorldInfoEntryIdAllowlist(text: string): number[] {
+  const parts = text
+    .split(/[\s,]+/g)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const deduped: number[] = [];
+  const seen = new Set<number>();
+  for (const part of parts) {
+    const n = Number(part);
+    if (!Number.isFinite(n)) continue;
+    const id = Math.trunc(n);
+    if (id < 0) continue;
+    if (!seen.has(id)) {
+      seen.add(id);
+      deduped.push(id);
+    }
+  }
+  return deduped;
+}
+
 export const ZTrackerSettings: FC = () => {
   const forceUpdate = useForceUpdate();
   const settings = settingsManager.getSettings();
+
   const [schemaText, setSchemaText] = useState(
     JSON.stringify(settings.schemaPresets[settings.schemaPreset]?.value, null, 2) ?? '',
+  );
+  const [worldInfoAllowlistText, setWorldInfoAllowlistText] = useState(
+    (settings.trackerWorldInfoAllowlistBookNames ?? []).join('\n'),
+  );
+  const [worldInfoEntryIdAllowlistText, setWorldInfoEntryIdAllowlistText] = useState(
+    (settings.trackerWorldInfoAllowlistEntryIds ?? []).join('\n'),
   );
 
   const updateAndRefresh = useCallback(
@@ -338,6 +385,57 @@ export const ZTrackerSettings: FC = () => {
                 }
               />
             </div>
+
+            <div className="setting-row">
+              <label>World Info during tracker generation</label>
+              <select
+                className="text_pole"
+                value={settings.trackerWorldInfoPolicyMode}
+                onChange={(e) =>
+                  updateAndRefresh((s) => {
+                    s.trackerWorldInfoPolicyMode = e.target.value as TrackerWorldInfoPolicyMode;
+                  })
+                }
+              >
+                <option value={TrackerWorldInfoPolicyMode.INCLUDE_ALL}>Include all (default)</option>
+                <option value={TrackerWorldInfoPolicyMode.EXCLUDE_ALL}>Exclude all</option>
+                <option value={TrackerWorldInfoPolicyMode.ALLOWLIST}>Allow only specified books/UIDs</option>
+              </select>
+            </div>
+
+            {settings.trackerWorldInfoPolicyMode === TrackerWorldInfoPolicyMode.ALLOWLIST && (
+              <div className="setting-row">
+                <label>Allowed World Info book names (one per line)</label>
+                <STTextarea
+                  value={worldInfoAllowlistText}
+                  onChange={(e) => {
+                    const text = e.target.value;
+                    setWorldInfoAllowlistText(text);
+                    const allowlist = normalizeWorldInfoAllowlist(text);
+                    updateAndRefresh((s) => {
+                      s.trackerWorldInfoAllowlistBookNames = allowlist;
+                    });
+                  }}
+                  rows={4}
+                  placeholder="Example:\nMy Global Lorebook\nCharacter Lorebook"
+                />
+
+                <label>Allowed World Info entry IDs (UIDs; one per line or comma/space separated)</label>
+                <STTextarea
+                  value={worldInfoEntryIdAllowlistText}
+                  onChange={(e) => {
+                    const text = e.target.value;
+                    setWorldInfoEntryIdAllowlistText(text);
+                    const allowlist = normalizeWorldInfoEntryIdAllowlist(text);
+                    updateAndRefresh((s) => {
+                      s.trackerWorldInfoAllowlistEntryIds = allowlist;
+                    });
+                  }}
+                  rows={4}
+                  placeholder="Example:\n12\n42\n1337"
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
