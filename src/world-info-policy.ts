@@ -35,13 +35,10 @@ export function formatAllowlistedWorldInfo(options: {
     );
     if (entries.length === 0) continue;
 
-    lines.push(`# ${bookName}`);
     for (const entry of entries) {
-      const keys = Array.isArray(entry.key) ? entry.key.filter(Boolean).join(', ') : '';
-      const header = keys ? `- (${keys})` : '-';
       const content = (entry.content ?? '').trim();
       if (!content) continue;
-      lines.push(`${header} ${content}`);
+      lines.push(content);
     }
     lines.push('');
   }
@@ -49,5 +46,6 @@ export function formatAllowlistedWorldInfo(options: {
   const body = lines.join('\n').trim();
   if (!body) return '';
 
-  return `World Info (allowlisted)\n\n${body}`;
+  // Keep prompt injection minimal: only entry content.
+  return body;
 }

@@ -7,6 +7,7 @@ import {
   PresetItem,
 } from 'sillytavern-utils-lib/components/react';
 import { ExtensionSettingsManager } from 'sillytavern-utils-lib';
+import { getWorldInfos } from 'sillytavern-utils-lib';
 import {
   ExtensionSettings,
   Schema,
@@ -66,21 +67,48 @@ function normalizeWorldInfoEntryIdAllowlist(text: string): number[] {
   return deduped;
 }
 
+function getAllWorldInfoBookNamesFromDom(): string[] {
+  // SillyTavern exposes the full lorebook list in the World Info editor select.
+  // This is the most accurate “available books” source without importing ST internals.
+  const select =
+    (document.querySelector('select#world_editor_select') as HTMLSelectElement | null) ??
+    (document.querySelector('select#world_info') as HTMLSelectElement | null);
+
+  if (!select) return [];
+
+  const names = Array.from(select.options)
+    .map((o) => (o.textContent ?? '').trim())
+    .filter(Boolean)
+    .filter((t) => !/^---\s*pick\s*to\s*edit\s*---$/i.test(t));
+
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+  for (const n of names) {
+    const key = n.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(n);
+  }
+  return deduped;
+}
+
 export const ZTrackerSettings: FC = () => {
   const forceUpdate = useForceUpdate();
   const settings = settingsManager.getSettings();
 
   const [diagnosticsText, setDiagnosticsText] = useState<string>('');
 
+  const [availableWorldInfoBooks, setAvailableWorldInfoBooks] = useState<string[]>([]);
+  const [worldInfoBookSearch, setWorldInfoBookSearch] = useState<string>('');
+  const [selectedWorldInfoBookToAdd, setSelectedWorldInfoBookToAdd] = useState<string>('');
+  const [worldInfoBooksLoading, setWorldInfoBooksLoading] = useState<boolean>(false);
+  const [worldInfoBooksError, setWorldInfoBooksError] = useState<string>('');
+
   const [schemaText, setSchemaText] = useState(
     JSON.stringify(settings.schemaPresets[settings.schemaPreset]?.value, null, 2) ?? '',
   );
-  const [worldInfoAllowlistText, setWorldInfoAllowlistText] = useState(
-    (settings.trackerWorldInfoAllowlistBookNames ?? []).join('\n'),
-  );
-  const [worldInfoEntryIdAllowlistText, setWorldInfoEntryIdAllowlistText] = useState(
-    (settings.trackerWorldInfoAllowlistEntryIds ?? []).join('\n'),
-  );
+  const worldInfoAllowlistText = (settings.trackerWorldInfoAllowlistBookNames ?? []).join('\n');
+  const worldInfoEntryIdAllowlistText = (settings.trackerWorldInfoAllowlistEntryIds ?? []).join('\n');
 
   const updateAndRefresh = useCallback(
     (updater: (currentSettings: ExtensionSettings) => void) => {
@@ -90,6 +118,71 @@ export const ZTrackerSettings: FC = () => {
       forceUpdate();
     },
     [forceUpdate],
+  );
+
+  const refreshAvailableWorldInfoBooks = useCallback(async () => {
+    setWorldInfoBooksLoading(true);
+    setWorldInfoBooksError('');
+    try {
+      // Prefer the full list visible in ST's World Info editor.
+      const domBooks = getAllWorldInfoBookNamesFromDom();
+
+      // Fallback: public helper lists the books currently available from WI sources.
+      const fallbackBooks = async (): Promise<string[]> => {
+        const worldInfos = await getWorldInfos(['global', 'chat', 'character', 'persona'], true);
+        return Object.keys(worldInfos)
+          .map((b) => b.trim())
+          .filter(Boolean);
+      };
+
+      const books = (domBooks.length > 0 ? domBooks : await fallbackBooks()).sort((a, b) => a.localeCompare(b));
+
+      setAvailableWorldInfoBooks(books);
+      if (books.length > 0) {
+        const stillValid = books.includes(selectedWorldInfoBookToAdd);
+        if (!selectedWorldInfoBookToAdd || !stillValid) {
+          setSelectedWorldInfoBookToAdd(books[0]);
+        }
+      } else {
+        setSelectedWorldInfoBookToAdd('');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setWorldInfoBooksError(message);
+      setAvailableWorldInfoBooks([]);
+      setSelectedWorldInfoBookToAdd('');
+    } finally {
+      setWorldInfoBooksLoading(false);
+    }
+  }, [selectedWorldInfoBookToAdd]);
+
+  const filteredAvailableBooks = useMemo(() => {
+    const q = worldInfoBookSearch.trim().toLowerCase();
+    if (!q) return availableWorldInfoBooks;
+    return availableWorldInfoBooks.filter((b) => b.toLowerCase().includes(q));
+  }, [availableWorldInfoBooks, worldInfoBookSearch]);
+
+  const addWorldInfoBookName = useCallback(
+    (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      updateAndRefresh((s) => {
+        const current = s.trackerWorldInfoAllowlistBookNames ?? [];
+        s.trackerWorldInfoAllowlistBookNames = normalizeWorldInfoAllowlist([...current, trimmed].join('\n'));
+      });
+    },
+    [updateAndRefresh],
+  );
+
+  const removeWorldInfoBookName = useCallback(
+    (name: string) => {
+      const key = name.trim().toLowerCase();
+      updateAndRefresh((s) => {
+        const current = s.trackerWorldInfoAllowlistBookNames ?? [];
+        s.trackerWorldInfoAllowlistBookNames = current.filter((b) => b.trim().toLowerCase() !== key);
+      });
+    },
+    [updateAndRefresh],
   );
 
   const runDiagnostics = useCallback(async () => {
@@ -445,28 +538,103 @@ export const ZTrackerSettings: FC = () => {
 
             {settings.trackerWorldInfoPolicyMode === TrackerWorldInfoPolicyMode.ALLOWLIST && (
               <div className="setting-row">
-                <label>Allowed World Info book names (one per line)</label>
-                <STTextarea
-                  value={worldInfoAllowlistText}
-                  onChange={(e) => {
-                    const text = e.target.value;
-                    setWorldInfoAllowlistText(text);
-                    const allowlist = normalizeWorldInfoAllowlist(text);
-                    updateAndRefresh((s) => {
-                      s.trackerWorldInfoAllowlistBookNames = allowlist;
-                    });
-                  }}
-                  rows={4}
-                  placeholder="Example:\nMy Global Lorebook\nCharacter Lorebook"
-                />
+                <label>Allowed World Info book names</label>
+
+                <div className="notes">
+                  Use the picker to add detected books, then optionally fine-tune via the textarea.
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <STButton title="Refresh detected books" onClick={refreshAvailableWorldInfoBooks} disabled={worldInfoBooksLoading}>
+                      {worldInfoBooksLoading ? 'Refreshing…' : 'Refresh book list'}
+                    </STButton>
+
+                    <input
+                      className="text_pole"
+                      style={{ minWidth: 220 }}
+                      value={worldInfoBookSearch}
+                      onChange={(e) => setWorldInfoBookSearch(e.target.value)}
+                      placeholder="Search detected books…"
+                    />
+
+                    <select
+                      className="text_pole"
+                      style={{ minWidth: 260 }}
+                      value={selectedWorldInfoBookToAdd}
+                      onChange={(e) => setSelectedWorldInfoBookToAdd(e.target.value)}
+                      disabled={filteredAvailableBooks.length === 0}
+                    >
+                      {filteredAvailableBooks.length === 0 ? (
+                        <option value="">No books detected (click Refresh)</option>
+                      ) : (
+                        filteredAvailableBooks.map((b) => (
+                          <option key={b} value={b}>
+                            {b}
+                          </option>
+                        ))
+                      )}
+                    </select>
+
+                    <STButton title="Add selected book" onClick={() => addWorldInfoBookName(selectedWorldInfoBookToAdd)} disabled={!selectedWorldInfoBookToAdd}>
+                      Add
+                    </STButton>
+                  </div>
+
+                  {worldInfoBooksError && <div className="notes">Failed to load books: {worldInfoBooksError}</div>}
+
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {(settings.trackerWorldInfoAllowlistBookNames ?? []).length === 0 ? (
+                      <span className="notes">No allowlisted books yet.</span>
+                    ) : (
+                      (settings.trackerWorldInfoAllowlistBookNames ?? []).map((b) => (
+                        <span
+                          key={b}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '2px 8px',
+                            border: '1px solid var(--SmartThemeBorderColor)',
+                            borderRadius: 999,
+                          }}
+                        >
+                          <span>{b}</span>
+                          <button
+                            className="menu_button"
+                            type="button"
+                            title="Remove"
+                            onClick={() => removeWorldInfoBookName(b)}
+                            style={{ padding: '0 6px' }}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))
+                    )}
+                  </div>
+
+                  <details>
+                    <summary>Advanced: edit book names manually</summary>
+                    <STTextarea
+                      value={worldInfoAllowlistText}
+                      onChange={(e) => {
+                        const allowlist = normalizeWorldInfoAllowlist(e.target.value);
+                        updateAndRefresh((s) => {
+                          s.trackerWorldInfoAllowlistBookNames = allowlist;
+                        });
+                      }}
+                      rows={4}
+                      placeholder="Example:\nMy Global Lorebook\nCharacter Lorebook"
+                    />
+                  </details>
+                </div>
 
                 <label>Allowed World Info entry IDs (UIDs; one per line or comma/space separated)</label>
                 <STTextarea
                   value={worldInfoEntryIdAllowlistText}
                   onChange={(e) => {
-                    const text = e.target.value;
-                    setWorldInfoEntryIdAllowlistText(text);
-                    const allowlist = normalizeWorldInfoEntryIdAllowlist(text);
+                    const allowlist = normalizeWorldInfoEntryIdAllowlist(e.target.value);
                     updateAndRefresh((s) => {
                       s.trackerWorldInfoAllowlistEntryIds = allowlist;
                     });

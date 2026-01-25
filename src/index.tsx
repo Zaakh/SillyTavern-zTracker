@@ -17,7 +17,9 @@ import { parseResponse } from './parser.js';
 import { schemaToExample } from './schema-to-example.js';
 import Handlebars from 'handlebars';
 import { POPUP_RESULT, POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
-import { formatAllowlistedWorldInfo, shouldIgnoreWorldInfoDuringTrackerBuild } from './world-info-policy.js';
+import { shouldIgnoreWorldInfoDuringTrackerBuild } from './world-info-policy.js';
+import { buildAllowlistedWorldInfoText } from './world-info-allowlist.js';
+import { loadWorldInfoBookByName } from './sillytavern-world-info.js';
 import {
   renderTracker,
   includeZTrackerMessages,
@@ -193,6 +195,16 @@ async function generateTracker(id: number) {
     st_echo('error', `Unsupported or unknown API for prompt building: ${String(profile.api)}`);
     return;
   }
+
+  debugLog('generateTracker start', {
+    mesId: id,
+    profileId: settings.profileId,
+    api: profile.api,
+    mode: settings.promptEngineeringMode,
+    trackerWorldInfoPolicyMode: settings.trackerWorldInfoPolicyMode,
+    allowlistBookNames: settings.trackerWorldInfoAllowlistBookNames,
+    allowlistEntryIds: settings.trackerWorldInfoAllowlistEntryIds,
+  });
   let characterId = characters.findIndex((char: any) => char.avatar === message.original_avatar);
   characterId = characterId !== -1 ? characterId : undefined;
 
@@ -228,22 +240,46 @@ async function generateTracker(id: number) {
       ignoreWorldInfo,
     });
     let messages = includeZTrackerMessages(promptResult.result, settings);
+    debugLog('prompt built', {
+      ignoreWorldInfo,
+      messageCount: messages.length,
+      roles: messages.map((m) => m.role),
+    });
 
     if (trackerWorldInfoMode === TrackerWorldInfoPolicyMode.ALLOWLIST) {
       const allowlistBookNames = settings.trackerWorldInfoAllowlistBookNames ?? [];
       const allowlistEntryIds = settings.trackerWorldInfoAllowlistEntryIds ?? [];
       if (allowlistBookNames.length > 0 || allowlistEntryIds.length > 0) {
         try {
-          const worldInfos = await getWorldInfos(['global', 'chat', 'character', 'persona'], true, characterId);
-          const worldInfoText = formatAllowlistedWorldInfo({
+          debugLog('allowlist injection starting', {
             allowlistBookNames,
             allowlistEntryIds,
-            worldInfos,
+            characterId,
+          });
+          const worldInfoText = await buildAllowlistedWorldInfoText({
+            allowlistBookNames,
+            allowlistEntryIds,
+            debug: !!settings.debugLogging,
+            getActiveWorldInfos: () => getWorldInfos(['global', 'chat', 'character', 'persona'], true, characterId),
+            loadBookByName: (name) => loadWorldInfoBookByName(name, { debug: !!settings.debugLogging }),
           });
           if (worldInfoText) {
             const firstNonSystem = messages.findIndex((m) => m.role !== 'system');
             const insertAt = firstNonSystem === -1 ? messages.length : firstNonSystem;
             messages.splice(insertAt, 0, { role: 'system', content: worldInfoText } as Message);
+
+            debugLog('allowlist injected', {
+              insertAt,
+              systemCount: messages.filter((m) => m.role === 'system').length,
+              injectedLength: worldInfoText.length,
+              allowlistBookNames,
+              preview: worldInfoText.slice(0, 200),
+            });
+          } else {
+            debugLog('allowlist produced empty worldInfoText', {
+              allowlistBookNames,
+              allowlistEntryIds,
+            });
           }
         } catch (e) {
           console.warn('zTracker: failed to load allowlisted World Info; proceeding without it.', e);

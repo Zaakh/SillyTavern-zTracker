@@ -46,7 +46,11 @@ In **Extensions → zTracker**, enable **Debug logging** and use the **Diagnosti
 
 ## World Info (lorebooks)
 
-In **Extensions → zTracker**, you can control World Info during tracker generation: include all (default), exclude all, or allowlist specific lorebook **book names** (one per line, case-insensitive) and/or entry **UIDs** (numbers). This only affects zTracker tracker generation (button / Auto Mode), not normal SillyTavern generations.
+In **Extensions → zTracker**, you can control World Info during tracker generation: include all (default), exclude all, or allowlist specific lorebook **book names** (case-insensitive) and/or entry **UIDs** (numbers). This only affects zTracker tracker generation (button / Auto Mode), not normal SillyTavern generations.
+
+In allowlist mode, zTracker loads the allowlisted lorebooks by name and injects their matching entries into the tracker-generation prompt, even if those lorebooks are not currently active in SillyTavern.
+
+When using **Allow only specified books/UIDs**, you can click **Refresh book list** to detect available books, search/select them, and **Add** them to the allowlist (with quick remove buttons). A manual textarea is still available under “Advanced”.
 
 > What is the difference compared to [famous tracker](https://github.com/kaldigo/SillyTavern-Tracker)?
 
