@@ -30,6 +30,11 @@ export interface ExtensionSettings {
   prompt: string;
   includeLastXMessages: number; // 0 means all messages
   includeLastXZTrackerMessages: number; // 0 means none
+  /**
+   * Role to use when embedding zTracker snapshots into the generation chat array.
+   * This only affects the generate_interceptor embedding, not tracker generation.
+   */
+  embedZTrackerRole: 'user' | 'assistant' | 'system';
   promptEngineeringMode: PromptEngineeringMode;
   promptJson: string;
   promptXml: string;
@@ -299,6 +304,7 @@ export const defaultSettings: ExtensionSettings = {
   prompt: DEFAULT_PROMPT,
   includeLastXMessages: 0,
   includeLastXZTrackerMessages: 1,
+  embedZTrackerRole: 'user',
   promptEngineeringMode: PromptEngineeringMode.NATIVE,
   promptJson: DEFAULT_PROMPT_JSON,
   promptXml: DEFAULT_PROMPT_XML,

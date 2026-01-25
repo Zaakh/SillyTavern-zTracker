@@ -75,6 +75,7 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
   userName = 'You',
 ): T[] {
   const copyMessages = structuredClone(messages);
+  const embedRole = settings.embedZTrackerRole ?? 'user';
   if (settings.includeLastXZTrackerMessages > 0) {
     for (let i = 0; i < settings.includeLastXZTrackerMessages; i++) {
       let foundMessage: T | null = null;
@@ -101,14 +102,19 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
           null,
           2,
         )}\n\`\`\``;
-        copyMessages.splice(foundIndex + 1, 0, {
-          content,
-          role: 'user',
-          name: userName,
-          is_user: true,
-          mes: content,
-          is_system: false,
-        } as unknown as T);
+        copyMessages.splice(
+          foundIndex + 1,
+          0,
+          {
+            content,
+            role: embedRole,
+            ...(embedRole === 'user' ? { name: userName } : {}),
+            // These flags are used by SillyTavern Message objects; harmless for ChatMessage.
+            is_user: embedRole === 'user',
+            is_system: embedRole === 'system',
+            mes: content,
+          } as unknown as T,
+        );
       }
     }
   }

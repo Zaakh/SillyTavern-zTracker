@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-- (nothing yet)
+- Add setting to choose the role used when embedding zTracker snapshots into normal generations (user/system/assistant).
 
 ## [1.0.0] - Unreleased
 
