@@ -54,6 +54,7 @@ module.exports = {
                     {
                         loader: 'ts-loader',
                         options: {
+                            configFile: path.join(__dirname, 'tsconfig.build.json'),
                             transpileOnly: process.env.NODE_ENV !== 'production',
                         },
                     },

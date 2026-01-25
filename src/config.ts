@@ -7,6 +7,12 @@ export enum PromptEngineeringMode {
   XML = 'xml',
 }
 
+export enum TrackerWorldInfoPolicyMode {
+  INCLUDE_ALL = 'include_all',
+  EXCLUDE_ALL = 'exclude_all',
+  ALLOWLIST = 'allowlist',
+}
+
 export interface Schema {
   name: string;
   value: object;
@@ -27,6 +33,30 @@ export interface ExtensionSettings {
   promptEngineeringMode: PromptEngineeringMode;
   promptJson: string;
   promptXml: string;
+
+  /**
+   * Enables extra console logging and diagnostics helpers.
+   * Intended for troubleshooting; avoid enabling unless needed.
+   */
+  debugLogging: boolean;
+
+  /**
+   * Controls what World Info is included in tracker-only generations.
+   * - include_all: use normal SillyTavern prompt building (default)
+   * - exclude_all: omit all World Info sources
+   * - allowlist: omit World Info during prompt build, then inject only allowlisted World Info books
+   */
+  trackerWorldInfoPolicyMode: TrackerWorldInfoPolicyMode;
+  /**
+   * World Info (lorebook) names to allow during tracker generation when mode=allowlist.
+   * Matching is case-insensitive.
+   */
+  trackerWorldInfoAllowlistBookNames: string[];
+  /**
+   * World Info entry UIDs to allow during tracker generation when mode=allowlist.
+   * These are the numeric `uid` values on WI entries.
+   */
+  trackerWorldInfoAllowlistEntryIds: number[];
 }
 
 export const DEFAULT_PROMPT = `You are a Scene Tracker Assistant, tasked with providing clear, consistent, and structured updates to a scene tracker for a roleplay. Use the latest message, previous tracker details, and context from recent messages to accurately update the tracker. Your response must ensuring that each field is filled and complete. If specific information is not provided, make reasonable assumptions based on prior descriptions, logical inferences, or default character details.
@@ -272,4 +302,10 @@ export const defaultSettings: ExtensionSettings = {
   promptEngineeringMode: PromptEngineeringMode.NATIVE,
   promptJson: DEFAULT_PROMPT_JSON,
   promptXml: DEFAULT_PROMPT_XML,
+
+  debugLogging: false,
+
+  trackerWorldInfoPolicyMode: TrackerWorldInfoPolicyMode.INCLUDE_ALL,
+  trackerWorldInfoAllowlistBookNames: [],
+  trackerWorldInfoAllowlistEntryIds: [],
 };
