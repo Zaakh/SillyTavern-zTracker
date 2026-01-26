@@ -38,7 +38,7 @@ export interface EmbedSnapshotRegexTransformPreset {
   /** Markdown code fence language to use when embedding (e.g. json, text). */
   codeFenceLang: string;
   /** If false, embedding will not wrap output in a markdown code fence. */
-  wrapInCodeFence: boolean;
+  wrapInCodeFence?: boolean;
 }
 
 export interface ExtensionSettings {
