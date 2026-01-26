@@ -9,6 +9,27 @@ Use these instructions when debugging this repo’s UI extension (zTracker) agai
 - Base URL: `http://127.0.0.1:8000/`
 - zTracker settings location: **Extensions → zTracker**
 
+## Version verification (required)
+
+Always confirm you are debugging the intended zTracker build before interacting with the UI: **Extensions → Manage Extensions → zTracker** 
+
+### Record repo version
+- Run `git rev-parse HEAD` and keep the hash in your notes.
+- Record `package.json` version (example: `node -p "require('./package.json').version"`).
+- Get Version info from SillyTavern:
+	- Open Extensions panel/menu.
+	- Select "Manage Extensions".
+	- Find zTracker in the list and note its version and git hash (if shown).
+
+### Confirm built artifacts match the repo
+- Ensure `dist/index.js` and `dist/style.css` exist and were updated by the most recent build.
+- Prefer `npm run dev` (watch build) while debugging to avoid stale `dist/*` assets.
+
+### Confirm SillyTavern is loading the correct extension folder
+- Verify the extension is installed from the expected folder under SillyTavern’s extensions directory.
+- If you still see old behavior after rebuilding, hard refresh the tab and/or restart SillyTavern.
+- When in doubt, use browser devtools (Network tab) to confirm the loaded `dist/index.js` timestamp/size matches the current build.
+
 ## Build and load the extension
 
 ### Confirm extension artifacts
@@ -51,6 +72,10 @@ Use these instructions when debugging this repo’s UI extension (zTracker) agai
 
 ### Playwright quick script (tool-call sequence)
 Use this when you want a deterministic “click-through” run. Element `ref` values must be obtained from the latest `browser_snapshot`.
+
+0. Verify version (required)
+	- Confirm the git hash + `package.json` version you recorded match the code you expect.
+	- Confirm `dist/*` was rebuilt recently.
 
 1. Navigate and stabilize
 	- `mcp_playwright_browser_navigate({ url: "http://127.0.0.1:8000/" })`
