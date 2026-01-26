@@ -1,6 +1,6 @@
 {
     "name": "sillytavern-ztracker",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "SillyTavern zTracker extension.",
     "type": "module",
     "main": "src/scripts/main.js",
