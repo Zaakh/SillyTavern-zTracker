@@ -61,11 +61,12 @@ export const EmbedSnapshotTransformSection: FC<{
 
   return (
     <div className="setting-row">
-      <label>Embed snapshot header</label>
+      <label title="Header line to prepend before the embedded zTracker snapshot in normal generations.">Embed snapshot header</label>
       <input
         type="text"
         className="text_pole"
         placeholder="Tracker:"
+        title="Header line to prepend before the embedded zTracker snapshot in normal generations. Set empty to omit."
         value={settings.embedZTrackerSnapshotHeader ?? 'Tracker:'}
         onChange={(e) =>
           updateAndRefresh((s) => {
@@ -76,7 +77,9 @@ export const EmbedSnapshotTransformSection: FC<{
 
       <div className="notes">Set to empty to omit the header line.</div>
 
-      <label>Embed snapshot transform preset</label>
+      <label title="Choose how embedded snapshots are formatted (optional regex transform + code fence settings).">
+        Embed snapshot transform preset
+      </label>
       <STPresetSelect
         label="Embed snapshot transform preset"
         items={embedTransformItems}
@@ -92,7 +95,7 @@ export const EmbedSnapshotTransformSection: FC<{
       {!preset ? null : (
         <div style={{ marginTop: '0.5em' }}>
           <div className="setting-row">
-            <label>Transform input</label>
+            <label title="Controls what text the regex runs against (the raw snapshot).">Transform input</label>
             <select
               className="text_pole"
               title="Controls what text the regex runs against."
@@ -114,7 +117,7 @@ export const EmbedSnapshotTransformSection: FC<{
           </div>
 
           <div className="setting-row">
-            <label>Regex pattern (JS)</label>
+            <label title="Optional JavaScript regex pattern applied to the snapshot text.">Regex pattern (JS)</label>
             <STTextarea
               value={preset.pattern ?? ''}
               onChange={(e) =>
@@ -132,11 +135,12 @@ export const EmbedSnapshotTransformSection: FC<{
           </div>
 
           <div className="setting-row">
-            <label>Regex flags</label>
+            <label title="JavaScript regex flags (e.g. g, i, m).">Regex flags</label>
             <input
               type="text"
               className="text_pole"
               placeholder="gmi"
+              title="JavaScript regex flags (e.g. g, i, m)."
               value={preset.flags ?? ''}
               onChange={(e) =>
                 updateAndRefresh((s) => {
@@ -152,7 +156,7 @@ export const EmbedSnapshotTransformSection: FC<{
           </div>
 
           <div className="setting-row">
-            <label>Replacement</label>
+            <label title="Replacement string used with the regex (supports capture groups like $1).">Replacement</label>
             <STTextarea
               value={preset.replacement ?? ''}
               onChange={(e) =>
@@ -170,11 +174,14 @@ export const EmbedSnapshotTransformSection: FC<{
           </div>
 
           <div className="setting-row">
-            <label>Code fence language</label>
+            <label title="Language tag used for the Markdown code fence when wrapping is enabled (e.g. json, text). Ignored if wrapping is disabled.">
+              Code fence language
+            </label>
             <input
               type="text"
               className="text_pole"
               placeholder="json"
+              title="Language tag used for the Markdown code fence when wrapping is enabled (e.g. json, text). Ignored if wrapping is disabled."
               value={preset.codeFenceLang ?? ''}
               onChange={(e) =>
                 updateAndRefresh((s) => {
@@ -190,9 +197,12 @@ export const EmbedSnapshotTransformSection: FC<{
           </div>
 
           <div className="setting-row">
-            <label>Wrap in code fence</label>
+            <label title="When enabled, wraps the embedded snapshot in a Markdown code fence for readability (example: ```json ... ```).">
+              Wrap in code fence
+            </label>
             <input
               type="checkbox"
+              title="When enabled, wraps the embedded snapshot in a Markdown code fence for readability (example: ```json ... ```)."
               checked={preset.wrapInCodeFence !== false}
               onChange={(e) =>
                 updateAndRefresh((s) => {

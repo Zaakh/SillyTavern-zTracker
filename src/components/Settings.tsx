@@ -153,7 +153,7 @@ export const ZTrackerSettings: FC = () => {
         <div className="inline-drawer-content">
           <div className="ztracker-container">
             <div className="setting-row">
-              <label>Connection Profile</label>
+              <label title="Which SillyTavern Connection Profile zTracker uses when generating trackers.">Connection Profile</label>
               <STConnectionProfileSelect
                 initialSelectedProfileId={settings.profileId}
                 onChange={(profile) =>
@@ -165,9 +165,12 @@ export const ZTrackerSettings: FC = () => {
             </div>
 
             <div className="setting-row">
-              <label>Auto Mode</label>
+              <label title="Controls when zTracker automatically generates trackers: never, on incoming assistant messages, on your inputs, or both.">
+                Auto Mode
+              </label>
               <select
                 className="text_pole"
+                title="Controls when zTracker automatically generates trackers: never, on incoming assistant messages, on your inputs, or both."
                 value={settings.autoMode}
                 onChange={(e) =>
                   updateAndRefresh((s) => {
@@ -183,9 +186,12 @@ export const ZTrackerSettings: FC = () => {
             </div>
 
             <div className="setting-row">
-              <label>Prompt Engineering</label>
+              <label title="Chooses how zTracker asks the model for structured output: use the native API format, or use JSON/XML prompt-engineering templates.">
+                Prompt Engineering
+              </label>
               <select
                 className="text_pole"
+                title="Chooses how zTracker asks the model for structured output: use the native API format, or use JSON/XML prompt-engineering templates."
                 value={settings.promptEngineeringMode}
                 onChange={(e) =>
                   updateAndRefresh((s) => {
@@ -200,7 +206,9 @@ export const ZTrackerSettings: FC = () => {
             </div>
 
             <div className="setting-row">
-              <label>Schema Preset</label>
+              <label title="Selects the active schema preset used to parse and render trackers. You can create, rename, and delete presets.">
+                Schema Preset
+              </label>
               <STPresetSelect
                 label="Schema Preset"
                 items={schemaPresetItems}
@@ -214,7 +222,7 @@ export const ZTrackerSettings: FC = () => {
               />
 
               <div className="title_restorable">
-                <span>Schema</span>
+                <span title="The JSON schema and HTML template used for tracker generation and rendering.">Schema</span>
                 <STButton className="fa-solid fa-undo" title="Restore default" onClick={restoreSchemaToDefault} />
               </div>
 
@@ -229,7 +237,7 @@ export const ZTrackerSettings: FC = () => {
 
             <div className="setting-row">
               <div className="title_restorable">
-                <span>Prompt</span>
+                <span title="Main prompt template used during tracker generation.">Prompt</span>
                 <STButton
                   className="fa-solid fa-undo"
                   title="Restore main context template to default"
@@ -253,7 +261,7 @@ export const ZTrackerSettings: FC = () => {
 
             <div className="setting-row">
               <div className="title_restorable">
-                <span>Prompt (JSON)</span>
+                <span title="Prompt-engineering template used when Prompt Engineering is set to JSON.">Prompt (JSON)</span>
                 <STButton
                   className="fa-solid fa-undo"
                   title="Restore main context template to default"
@@ -277,7 +285,7 @@ export const ZTrackerSettings: FC = () => {
 
             <div className="setting-row">
               <div className="title_restorable">
-                <span>Prompt (XML)</span>
+                <span title="Prompt-engineering template used when Prompt Engineering is set to XML.">Prompt (XML)</span>
                 <STButton
                   className="fa-solid fa-undo"
                   title="Restore main context template to default"
@@ -300,12 +308,13 @@ export const ZTrackerSettings: FC = () => {
             </div>
 
             <div className="setting-row">
-              <label>Max Response Tokens</label>
+              <label title="Max tokens zTracker requests for the model response during tracker generation.">Max Response Tokens</label>
               <input
                 type="number"
                 className="text_pole"
                 min="1"
                 step="1"
+                title="Max tokens zTracker requests for the model response during tracker generation."
                 value={settings.maxResponseToken}
                 onChange={(e) =>
                   updateAndRefresh((s) => {
@@ -315,13 +324,15 @@ export const ZTrackerSettings: FC = () => {
               />
             </div>
             <div className="setting-row">
-              <label>Include Last X Messages (0 means all, 1 means last)</label>
+              <label title="How many recent chat messages to include when generating a tracker. 0 includes all messages; 1 includes only the last message.">
+                Include Last X Messages (0 means all, 1 means last)
+              </label>
               <input
                 type="number"
                 className="text_pole"
                 min="0"
                 step="1"
-                title="0 means all messages."
+                title="How many recent chat messages to include when generating a tracker. 0 includes all messages; 1 includes only the last message."
                 value={settings.includeLastXMessages}
                 onChange={(e) =>
                   updateAndRefresh((s) => {
@@ -331,13 +342,15 @@ export const ZTrackerSettings: FC = () => {
               />
             </div>
             <div className="setting-row">
-              <label>Include Last X zTracker Messages</label>
+              <label title="How many previous zTracker snapshots to embed into normal generations. 0 disables embedding.">
+                Include Last X zTracker Messages
+              </label>
               <input
                 type="number"
                 className="text_pole"
                 min="0"
                 step="1"
-                title="0 means none."
+                title="How many previous zTracker snapshots to embed into normal generations. 0 disables embedding."
                 value={settings.includeLastXZTrackerMessages}
                 onChange={(e) =>
                   updateAndRefresh((s) => {
@@ -348,7 +361,9 @@ export const ZTrackerSettings: FC = () => {
             </div>
 
             <div className="setting-row">
-              <label>Embed zTracker snapshots as</label>
+              <label title="Which role to use for embedded zTracker snapshots in normal generations. This affects generate_interceptor only, not tracker generation.">
+                Embed zTracker snapshots as
+              </label>
               <select
                 className="text_pole"
                 title="Only affects embedding into the generation chat array (generate_interceptor), not tracker generation."
