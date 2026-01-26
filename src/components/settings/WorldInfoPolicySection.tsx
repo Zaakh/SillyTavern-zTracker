@@ -156,7 +156,7 @@ export const WorldInfoPolicySection: FC<{
             })
           }
         >
-          <option value={TrackerWorldInfoPolicyMode.INCLUDE_ALL}>Include all (default)</option>
+            <option value={TrackerWorldInfoPolicyMode.INCLUDE_ALL}>Allow all (default)</option>
           <option value={TrackerWorldInfoPolicyMode.EXCLUDE_ALL}>Exclude all</option>
           <option value={TrackerWorldInfoPolicyMode.ALLOWLIST}>Allow only specified books/UIDs</option>
         </select>

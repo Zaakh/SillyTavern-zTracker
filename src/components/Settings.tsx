@@ -23,6 +23,7 @@ import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import { useForceUpdate } from '../hooks/useForceUpdate.js';
 import { DiagnosticsSection } from './settings/DiagnosticsSection.js';
 import { WorldInfoPolicySection } from './settings/WorldInfoPolicySection.js';
+import { EmbedSnapshotTransformSection } from './settings/EmbedSnapshotTransformSection.js';
 
 // Initialize the settings manager once, outside the component
 export const settingsManager = new ExtensionSettingsManager<ExtensionSettings>(EXTENSION_KEY, defaultSettings);
@@ -55,6 +56,7 @@ export const ZTrackerSettings: FC = () => {
     }));
   }, [settings.schemaPresets]);
 
+
   // Handler for when a new schema preset is selected
   const handleSchemaPresetChange = (newValue?: string) => {
     const newPresetKey = newValue ?? 'default';
@@ -80,6 +82,7 @@ export const ZTrackerSettings: FC = () => {
       s.schemaPresets = newPresets;
     });
   };
+
 
   // Handler for the schema JSON textarea
   const handleSchemaValueChange = (newSchemaText: string) => {
@@ -361,6 +364,8 @@ export const ZTrackerSettings: FC = () => {
                 <option value="assistant">Assistant</option>
               </select>
             </div>
+
+            <EmbedSnapshotTransformSection settings={settings} updateAndRefresh={updateAndRefresh} />
 
             <WorldInfoPolicySection settings={settings} updateAndRefresh={updateAndRefresh} />
 

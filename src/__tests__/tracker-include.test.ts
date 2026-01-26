@@ -7,6 +7,28 @@ describe('includeZTrackerMessages', () => {
     return {
       includeLastXZTrackerMessages: count,
       embedZTrackerRole: role,
+      embedZTrackerSnapshotHeader: 'Tracker:',
+      embedZTrackerSnapshotTransformPreset: 'default',
+      embedZTrackerSnapshotTransformPresets: {
+        default: {
+          name: 'Default (JSON)',
+          input: 'pretty_json',
+          pattern: '',
+          flags: 'g',
+          replacement: '',
+          codeFenceLang: 'json',
+          wrapInCodeFence: true,
+        },
+        minimal: {
+          name: 'Minimal',
+          input: 'top_level_lines',
+          pattern: '^[\\t ]*\"([^\"]+)\"[\\t ]*:[\\t ]*(.*?)(?:,)?[\\t ]*$',
+          flags: 'gm',
+          replacement: '$1: $2',
+          codeFenceLang: 'text',
+          wrapInCodeFence: false,
+        },
+      },
     } as ExtensionSettings;
   };
 
@@ -27,8 +49,29 @@ describe('includeZTrackerMessages', () => {
     ];
     const result = includeZTrackerMessages(messages as any, makeSettings(1));
     expect(result).toHaveLength(3);
+    expect(result[1].content).toContain('Tracker:');
     expect(result[1].content).toContain('```json');
     expect(result[1].role).toBe('user');
+  });
+
+  it('can apply a minimal formatting preset during embedding', () => {
+    const messages = [
+      buildMessageWithTracker({ time: '10:00', location: 'Mall', topics: { primaryTopic: 'Talk' } }),
+      { content: 'current', role: 'user' },
+    ];
+    const settings = makeSettings(1);
+    settings.embedZTrackerSnapshotTransformPreset = 'minimal';
+
+    const result = includeZTrackerMessages(messages as any, settings);
+    expect(result).toHaveLength(3);
+
+    const injected = result[1].content as string;
+    expect(injected).not.toContain('```');
+    expect(injected).toContain('Tracker:');
+    expect(injected).toContain('time: "10:00"');
+    expect(injected).toContain('location: "Mall"');
+    expect(injected).toContain('topics:\n');
+    expect(injected).toContain('  primaryTopic: "Talk"');
   });
 
   it('can embed snapshots as system messages', () => {
