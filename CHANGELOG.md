@@ -8,9 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+
 ### Changed
 
 ### Fixed
+
+## [1.0.2] - 2026-01-26
+
+### Added
+- Hover tooltips for zTracker settings to explain what options do.
 
 ## [1.0.1] - 2026-01-26
 
