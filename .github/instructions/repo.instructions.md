@@ -18,6 +18,20 @@ These instructions apply to all files in this repository.
 	- Use `npm version <patch|minor|major>` for releases.
 	- Use `npm run sync-version` when needed to update derived version fields.
 
+## Release checklist
+- Confirm working tree is clean: `git status`.
+- Update `CHANGELOG.md`: move items from `Unreleased` into a new version section.
+- Update `readme.md` for any user-visible feature change.
+- Run verification:
+	- `npm test`
+	- `npm run build`
+- Create the release (this bumps `package.json` and syncs derived versions like `manifest.json`): `npm version <patch|minor|major>`.
+- Sanity check release artifacts exist and are current:
+	- `dist/index.js`
+	- `dist/style.css`
+	- `dist/templates/*.html`
+- Push commit + tag: `git push --follow-tags`.
+
 ## Readme updates  
 - Any new feature must also have a concise explanation in `readme.md` under the appropriate section.
 - Keep formatting to a minimum; focus on clarity and usefulness.
