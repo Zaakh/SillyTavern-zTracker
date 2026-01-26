@@ -16,8 +16,10 @@ import {
   CHAT_METADATA_SCHEMA_PRESET_KEY,
   CHAT_MESSAGE_SCHEMA_HTML_KEY,
   CHAT_MESSAGE_SCHEMA_VALUE_KEY,
+  CHAT_MESSAGE_PARTS_ORDER_KEY,
   includeZTrackerMessages,
 } from '../tracker.js';
+import { buildTopLevelPartSchema, getTopLevelSchemaKeys, mergeTrackerPart } from '../tracker-parts.js';
 import { checkTemplateUrl, getExtensionRoot, getTemplateUrl } from './templates.js';
 import { debugLog, isDebugLoggingEnabled } from './debug.js';
 
@@ -30,6 +32,182 @@ export function createTrackerActions(options: {
   importMetaUrl: string;
 }) {
   const { globalContext, settingsManager, generator, pendingRequests, renderTrackerWithDeps, importMetaUrl } = options;
+  const pendingSequences = new Map<number, { cancelled: boolean }>();
+
+  function captureDetailsState(messageId: number): boolean[] {
+    const messageBlock = document.querySelector(`.mes[mesid="${messageId}"]`);
+    const existingTracker = messageBlock?.querySelector('.mes_ztracker');
+    if (!existingTracker) return [];
+    const detailsElements = existingTracker.querySelectorAll('details');
+    return Array.from(detailsElements).map((detail) => (detail as HTMLDetailsElement).open);
+  }
+
+  function restoreDetailsState(messageId: number, detailsState: boolean[]): void {
+    if (!detailsState.length) return;
+    const messageBlock = document.querySelector(`.mes[mesid="${messageId}"]`);
+    const newTracker = messageBlock?.querySelector('.mes_ztracker');
+    if (!newTracker) return;
+
+    const newDetailsElements = newTracker.querySelectorAll('details');
+    newDetailsElements.forEach((detail, index) => {
+      if (detailsState[index] !== undefined) {
+        (detail as HTMLDetailsElement).open = detailsState[index];
+      }
+    });
+  }
+
+  function cancelIfPending(messageId: number): boolean {
+    if (!pendingRequests.has(messageId)) return false;
+    const requestId = pendingRequests.get(messageId)!;
+    generator.abortRequest(requestId);
+    const token = pendingSequences.get(messageId);
+    if (token) token.cancelled = true;
+    st_echo('info', 'Tracker generation cancelled.');
+    return true;
+  }
+
+  function makeRequestFactory(messageId: number, settings: ExtensionSettings) {
+    return (requestMessages: Message[], overideParams?: any): Promise<ExtractedData | undefined> => {
+      return new Promise((resolve, reject) => {
+        const abortController = new AbortController();
+        generator.generateRequest(
+          {
+            profileId: settings.profileId,
+            prompt: requestMessages,
+            maxTokens: settings.maxResponseToken,
+            custom: { signal: abortController.signal },
+            overridePayload: {
+              ...overideParams,
+            },
+          },
+          {
+            abortController,
+            onStart: (requestId: string) => {
+              pendingRequests.set(messageId, requestId);
+            },
+            onFinish: (requestId: string, data: unknown, error: unknown) => {
+              pendingRequests.delete(messageId);
+              if (error) return reject(error);
+              if (!data) return reject(new DOMException('Request aborted by user', 'AbortError'));
+              resolve(data as ExtractedData | undefined);
+            },
+          },
+        );
+      });
+    };
+  }
+
+  async function prepareTrackerGeneration(messageId: number) {
+    const message = globalContext.chat[messageId];
+    if (!message) {
+      throw new Error(`Message with ID ${messageId} not found.`);
+    }
+
+    const settings = settingsManager.getSettings();
+    if (!settings.profileId) {
+      throw new Error('Please select a connection profile in settings.');
+    }
+
+    const context = SillyTavern.getContext();
+    const chatMetadata = context.chatMetadata;
+    const { extensionSettings, CONNECT_API_MAP } = globalContext;
+
+    chatMetadata[EXTENSION_KEY] = chatMetadata[EXTENSION_KEY] || {};
+    chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] =
+      chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] || settings.schemaPreset;
+
+    const chatJsonValue = settings.schemaPresets[settings.schemaPreset].value;
+    const chatHtmlValue = settings.schemaPresets[settings.schemaPreset].html;
+
+    const profile = extensionSettings.connectionManager?.profiles?.find((p: any) => p.id === settings.profileId);
+    if (!profile) {
+      throw new Error('Selected connection profile not found. Please re-select a profile in zTracker settings.');
+    }
+    if (!profile.api) {
+      throw new Error('Selected connection profile is missing an API. Please edit the profile in SillyTavern settings.');
+    }
+
+    const apiMap = CONNECT_API_MAP[profile.api];
+    if (!apiMap?.selected) {
+      throw new Error(`Unsupported or unknown API for prompt building: ${String(profile.api)}`);
+    }
+
+    let characterId = characters.findIndex((char: any) => char.avatar === message.original_avatar);
+    characterId = characterId !== -1 ? characterId : undefined;
+
+    const trackerWorldInfoMode = settings.trackerWorldInfoPolicyMode ?? TrackerWorldInfoPolicyMode.INCLUDE_ALL;
+    const ignoreWorldInfo = shouldIgnoreWorldInfoDuringTrackerBuild(trackerWorldInfoMode);
+
+    const promptResult = await buildPrompt(apiMap.selected, {
+      targetCharacterId: characterId,
+      messageIndexesBetween: {
+        end: messageId,
+        start: settings.includeLastXMessages > 0 ? Math.max(0, messageId - settings.includeLastXMessages) : 0,
+      },
+      presetName: profile?.preset,
+      contextName: profile?.context,
+      instructName: profile?.instruct,
+      syspromptName: profile?.sysprompt,
+      includeNames: !!selected_group,
+      ignoreWorldInfo,
+    });
+
+    let messages = includeZTrackerMessages(promptResult.result, settings);
+    debugLog(settingsManager, 'prompt built', {
+      ignoreWorldInfo,
+      messageCount: messages.length,
+      roles: messages.map((m: any) => m.role),
+    });
+
+    if (trackerWorldInfoMode === TrackerWorldInfoPolicyMode.ALLOWLIST) {
+      const allowlistBookNames = settings.trackerWorldInfoAllowlistBookNames ?? [];
+      const allowlistEntryIds = settings.trackerWorldInfoAllowlistEntryIds ?? [];
+      if (allowlistBookNames.length > 0 || allowlistEntryIds.length > 0) {
+        try {
+          debugLog(settingsManager, 'allowlist injection starting', {
+            allowlistBookNames,
+            allowlistEntryIds,
+            characterId,
+          });
+          const worldInfoText = await buildAllowlistedWorldInfoText({
+            allowlistBookNames,
+            allowlistEntryIds,
+            debug: !!settings.debugLogging,
+            getActiveWorldInfos: () => getWorldInfos(['global', 'chat', 'character', 'persona'], true, characterId),
+            loadBookByName: (name) => loadWorldInfoBookByName(name, { debug: !!settings.debugLogging }),
+          });
+          if (worldInfoText) {
+            const firstNonSystem = messages.findIndex((m: any) => m.role !== 'system');
+            const insertAt = firstNonSystem === -1 ? messages.length : firstNonSystem;
+            messages.splice(insertAt, 0, { role: 'system', content: worldInfoText } as Message);
+
+            debugLog(settingsManager, 'allowlist injected', {
+              insertAt,
+              systemCount: messages.filter((m: any) => m.role === 'system').length,
+              injectedLength: worldInfoText.length,
+              allowlistBookNames,
+              preview: worldInfoText.slice(0, 200),
+            });
+          } else {
+            debugLog(settingsManager, 'allowlist produced empty worldInfoText', {
+              allowlistBookNames,
+              allowlistEntryIds,
+            });
+          }
+        } catch (e) {
+          console.warn('zTracker: failed to load allowlisted World Info; proceeding without it.', e);
+        }
+      }
+    }
+
+    return {
+      message,
+      settings,
+      chatJsonValue,
+      chatHtmlValue,
+      messages,
+    };
+  }
 
   async function deleteTracker(messageId: number) {
     const message = globalContext.chat[messageId];
@@ -107,170 +285,30 @@ export function createTrackerActions(options: {
     }
   }
 
-  async function generateTracker(id: number) {
-    const message = globalContext.chat[id];
-    if (!message) return st_echo('error', `Message with ID ${id} not found.`);
+  async function generateTrackerFull(id: number) {
+    if (cancelIfPending(id)) return;
 
-    if (pendingRequests.has(id)) {
-      const requestId = pendingRequests.get(id)!;
-      generator.abortRequest(requestId);
-      st_echo('info', 'Tracker generation cancelled.');
-      return;
-    }
-
-    const settings = settingsManager.getSettings();
-    if (!settings.profileId) return st_echo('error', 'Please select a connection profile in settings.');
-
-    const context = SillyTavern.getContext();
-    const chatMetadata = context.chatMetadata;
-    const { extensionSettings, CONNECT_API_MAP, saveChat } = globalContext;
-
-    chatMetadata[EXTENSION_KEY] = chatMetadata[EXTENSION_KEY] || {};
-    chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] =
-      chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] || settings.schemaPreset;
-
-    const chatJsonValue = settings.schemaPresets[settings.schemaPreset].value;
-    const chatHtmlValue = settings.schemaPresets[settings.schemaPreset].html;
-
-    const profile = extensionSettings.connectionManager?.profiles?.find((p: any) => p.id === settings.profileId);
-    if (!profile) {
-      st_echo('error', 'Selected connection profile not found. Please re-select a profile in zTracker settings.');
-      return;
-    }
-    if (!profile.api) {
-      st_echo('error', 'Selected connection profile is missing an API. Please edit the profile in SillyTavern settings.');
-      return;
-    }
-
-    const apiMap = CONNECT_API_MAP[profile.api];
-    if (!apiMap?.selected) {
-      st_echo('error', `Unsupported or unknown API for prompt building: ${String(profile.api)}`);
-      return;
-    }
+    const { saveChat } = globalContext;
 
     debugLog(settingsManager, 'generateTracker start', {
       mesId: id,
-      profileId: settings.profileId,
-      api: profile.api,
-      mode: settings.promptEngineeringMode,
-      trackerWorldInfoPolicyMode: settings.trackerWorldInfoPolicyMode,
-      allowlistBookNames: settings.trackerWorldInfoAllowlistBookNames,
-      allowlistEntryIds: settings.trackerWorldInfoAllowlistEntryIds,
+      mode: settingsManager.getSettings().promptEngineeringMode,
     });
-
-    let characterId = characters.findIndex((char: any) => char.avatar === message.original_avatar);
-    characterId = characterId !== -1 ? characterId : undefined;
 
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const mainButton = messageBlock?.querySelector('.mes_ztracker_button');
     const regenerateButton = messageBlock?.querySelector('.ztracker-regenerate-button');
-
-    let detailsState: boolean[] = [];
-    const existingTracker = messageBlock?.querySelector('.mes_ztracker');
-    if (existingTracker) {
-      const detailsElements = existingTracker.querySelectorAll('details');
-      detailsState = Array.from(detailsElements).map((detail) => (detail as HTMLDetailsElement).open);
-    }
+    const detailsState = captureDetailsState(id);
 
     try {
       mainButton?.classList.add('spinning');
       regenerateButton?.classList.add('spinning');
 
-      const trackerWorldInfoMode = settings.trackerWorldInfoPolicyMode ?? TrackerWorldInfoPolicyMode.INCLUDE_ALL;
-      const ignoreWorldInfo = shouldIgnoreWorldInfoDuringTrackerBuild(trackerWorldInfoMode);
-
-      const promptResult = await buildPrompt(apiMap.selected, {
-        targetCharacterId: characterId,
-        messageIndexesBetween: {
-          end: id,
-          start: settings.includeLastXMessages > 0 ? Math.max(0, id - settings.includeLastXMessages) : 0,
-        },
-        presetName: profile?.preset,
-        contextName: profile?.context,
-        instructName: profile?.instruct,
-        syspromptName: profile?.sysprompt,
-        includeNames: !!selected_group,
-        ignoreWorldInfo,
-      });
-
-      let messages = includeZTrackerMessages(promptResult.result, settings);
-      debugLog(settingsManager, 'prompt built', {
-        ignoreWorldInfo,
-        messageCount: messages.length,
-        roles: messages.map((m: any) => m.role),
-      });
-
-      if (trackerWorldInfoMode === TrackerWorldInfoPolicyMode.ALLOWLIST) {
-        const allowlistBookNames = settings.trackerWorldInfoAllowlistBookNames ?? [];
-        const allowlistEntryIds = settings.trackerWorldInfoAllowlistEntryIds ?? [];
-        if (allowlistBookNames.length > 0 || allowlistEntryIds.length > 0) {
-          try {
-            debugLog(settingsManager, 'allowlist injection starting', {
-              allowlistBookNames,
-              allowlistEntryIds,
-              characterId,
-            });
-            const worldInfoText = await buildAllowlistedWorldInfoText({
-              allowlistBookNames,
-              allowlistEntryIds,
-              debug: !!settings.debugLogging,
-              getActiveWorldInfos: () => getWorldInfos(['global', 'chat', 'character', 'persona'], true, characterId),
-              loadBookByName: (name) => loadWorldInfoBookByName(name, { debug: !!settings.debugLogging }),
-            });
-            if (worldInfoText) {
-              const firstNonSystem = messages.findIndex((m: any) => m.role !== 'system');
-              const insertAt = firstNonSystem === -1 ? messages.length : firstNonSystem;
-              messages.splice(insertAt, 0, { role: 'system', content: worldInfoText } as Message);
-
-              debugLog(settingsManager, 'allowlist injected', {
-                insertAt,
-                systemCount: messages.filter((m: any) => m.role === 'system').length,
-                injectedLength: worldInfoText.length,
-                allowlistBookNames,
-                preview: worldInfoText.slice(0, 200),
-              });
-            } else {
-              debugLog(settingsManager, 'allowlist produced empty worldInfoText', {
-                allowlistBookNames,
-                allowlistEntryIds,
-              });
-            }
-          } catch (e) {
-            console.warn('zTracker: failed to load allowlisted World Info; proceeding without it.', e);
-          }
-        }
-      }
+      const { message, settings, chatJsonValue, chatHtmlValue, messages } = await prepareTrackerGeneration(id);
+      const partsOrder = getTopLevelSchemaKeys(chatJsonValue);
+      const makeRequest = makeRequestFactory(id, settings);
 
       let response: ExtractedData['content'];
-
-      const makeRequest = (requestMessages: Message[], overideParams?: any): Promise<ExtractedData | undefined> => {
-        return new Promise((resolve, reject) => {
-          const abortController = new AbortController();
-          generator.generateRequest(
-            {
-              profileId: settings.profileId,
-              prompt: requestMessages,
-              maxTokens: settings.maxResponseToken,
-              custom: { signal: abortController.signal },
-              overridePayload: {
-                ...overideParams,
-              },
-            },
-            {
-              abortController,
-              onStart: (requestId: string) => {
-                pendingRequests.set(id, requestId);
-              },
-              onFinish: (requestId: string, data: unknown, error: unknown) => {
-                pendingRequests.delete(id);
-                if (error) return reject(error);
-                if (!data) return reject(new DOMException('Request aborted by user', 'AbortError'));
-                resolve(data as ExtractedData | undefined);
-              },
-            },
-          );
-        });
-      };
 
       if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
         messages.push({ content: settings.prompt, role: 'user' });
@@ -300,21 +338,10 @@ export function createTrackerActions(options: {
         applyTrackerUpdateAndRender(message as any, {
           trackerData: response,
           trackerHtml: chatHtmlValue,
+          extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder },
           render: () => renderTrackerWithDeps(id),
         });
-
-        if (detailsState.length > 0) {
-          const newTracker = messageBlock?.querySelector('.mes_ztracker');
-          if (newTracker) {
-            const newDetailsElements = newTracker.querySelectorAll('details');
-            newDetailsElements.forEach((detail, index) => {
-              if (detailsState[index] !== undefined) {
-                (detail as HTMLDetailsElement).open = detailsState[index];
-              }
-            });
-          }
-        }
-
+        restoreDetailsState(id, detailsState);
         await saveChat();
       } catch {
         renderTrackerWithDeps(id);
@@ -329,6 +356,191 @@ export function createTrackerActions(options: {
       mainButton?.classList.remove('spinning');
       regenerateButton?.classList.remove('spinning');
     }
+  }
+
+  async function generateTrackerSequential(id: number) {
+    if (cancelIfPending(id)) return;
+
+    const { saveChat } = globalContext;
+    const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
+    const mainButton = messageBlock?.querySelector('.mes_ztracker_button');
+    const regenerateButton = messageBlock?.querySelector('.ztracker-regenerate-button');
+    const detailsState = captureDetailsState(id);
+
+    const token = { cancelled: false };
+    pendingSequences.set(id, token);
+
+    try {
+      mainButton?.classList.add('spinning');
+      regenerateButton?.classList.add('spinning');
+
+      const { message, settings, chatJsonValue, chatHtmlValue, messages } = await prepareTrackerGeneration(id);
+      const partsOrder = getTopLevelSchemaKeys(chatJsonValue);
+      if (partsOrder.length === 0) {
+        throw new Error('Schema has no top-level properties to generate.');
+      }
+
+      const makeRequest = makeRequestFactory(id, settings);
+      const baseMessages = structuredClone(messages) as Message[];
+      let trackerData: any = {};
+
+      for (const partKey of partsOrder) {
+        if (token.cancelled) break;
+
+        const partSchema = buildTopLevelPartSchema(chatJsonValue, partKey);
+        const requestMessages = structuredClone(baseMessages) as Message[];
+
+        let partResponse: any;
+        if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
+          requestMessages.push({
+            role: 'user',
+            content: `${settings.prompt}\n\nGenerate ONLY the field "${partKey}". Return a single JSON object matching the provided schema.`,
+          } as any);
+          const result = await makeRequest(requestMessages, {
+            json_schema: { name: 'SceneTrackerPart', strict: true, value: partSchema },
+          });
+          // @ts-ignore
+          partResponse = result?.content;
+        } else {
+          const format = settings.promptEngineeringMode as 'json' | 'xml';
+          const promptTemplate = format === 'json' ? settings.promptJson : settings.promptXml;
+          const exampleResponse = schemaToExample(partSchema, format);
+          const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
+            schema: JSON.stringify(partSchema, null, 2),
+            example_response: exampleResponse,
+          });
+          requestMessages.push({ content: finalPrompt, role: 'user' });
+          const rest = await makeRequest(requestMessages);
+          if (!rest?.content) throw new Error('No response content received.');
+          partResponse = parseResponse(rest.content as string, format, { schema: partSchema });
+        }
+
+        if (!partResponse || Object.keys(partResponse as any).length === 0) {
+          throw new Error(`Empty response while generating part: ${partKey}`);
+        }
+
+        trackerData = mergeTrackerPart(trackerData, partKey, partResponse);
+      }
+
+      if (token.cancelled) {
+        return;
+      }
+
+      if (!trackerData || Object.keys(trackerData).length === 0) {
+        throw new Error('Empty response from zTracker.');
+      }
+
+      try {
+        applyTrackerUpdateAndRender(message as any, {
+          trackerData,
+          trackerHtml: chatHtmlValue,
+          extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder },
+          render: () => renderTrackerWithDeps(id),
+        });
+        restoreDetailsState(id, detailsState);
+        await saveChat();
+      } catch {
+        renderTrackerWithDeps(id);
+        throw new Error(`Generated data failed to render with the current template. Not saved.`);
+      }
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error('Error generating tracker (sequential):', error);
+        st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
+      }
+    } finally {
+      pendingSequences.delete(id);
+      mainButton?.classList.remove('spinning');
+      regenerateButton?.classList.remove('spinning');
+    }
+  }
+
+  async function generateTrackerPart(id: number, partKey: string) {
+    if (cancelIfPending(id)) return;
+
+    const { saveChat } = globalContext;
+    const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
+    const partButton = messageBlock?.querySelector(
+      `.ztracker-part-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"]`,
+    );
+
+    const detailsState = captureDetailsState(id);
+
+    try {
+      partButton?.classList.add('spinning');
+
+      const { message, settings, chatJsonValue, chatHtmlValue, messages } = await prepareTrackerGeneration(id);
+
+      const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
+      if (!currentTracker || typeof currentTracker !== 'object') {
+        throw new Error('No existing tracker found for this message. Generate a full tracker first.');
+      }
+
+      const partsOrder = getTopLevelSchemaKeys(chatJsonValue);
+      const partSchema = buildTopLevelPartSchema(chatJsonValue, partKey);
+      const makeRequest = makeRequestFactory(id, settings);
+
+      let partResponse: any;
+      if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
+        messages.push({
+          role: 'user',
+          content: `${settings.prompt}\n\nGenerate ONLY the field "${partKey}". Return a single JSON object matching the provided schema.`,
+        } as any);
+        const result = await makeRequest(messages, {
+          json_schema: { name: 'SceneTrackerPart', strict: true, value: partSchema },
+        });
+        // @ts-ignore
+        partResponse = result?.content;
+      } else {
+        const format = settings.promptEngineeringMode as 'json' | 'xml';
+        const promptTemplate = format === 'json' ? settings.promptJson : settings.promptXml;
+        const exampleResponse = schemaToExample(partSchema, format);
+        const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
+          schema: JSON.stringify(partSchema, null, 2),
+          example_response: exampleResponse,
+        });
+        messages.push({ content: finalPrompt, role: 'user' });
+        const rest = await makeRequest(messages);
+        if (!rest?.content) throw new Error('No response content received.');
+        partResponse = parseResponse(rest.content as string, format, { schema: partSchema });
+      }
+
+      if (!partResponse || Object.keys(partResponse as any).length === 0) {
+        throw new Error(`Empty response while generating part: ${partKey}`);
+      }
+
+      const nextTracker = mergeTrackerPart(currentTracker, partKey, partResponse);
+
+      try {
+        applyTrackerUpdateAndRender(message as any, {
+          trackerData: nextTracker,
+          trackerHtml: chatHtmlValue,
+          extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder },
+          render: () => renderTrackerWithDeps(id),
+        });
+        restoreDetailsState(id, detailsState);
+        await saveChat();
+        st_echo('success', `Updated: ${partKey}`);
+      } catch {
+        renderTrackerWithDeps(id);
+        throw new Error(`Generated data failed to render with the current template. Not saved.`);
+      }
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error('Error generating tracker part:', error);
+        st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
+      }
+    } finally {
+      partButton?.classList.remove('spinning');
+    }
+  }
+
+  async function generateTracker(id: number) {
+    const settings = settingsManager.getSettings();
+    if (settings.sequentialPartGeneration) {
+      return generateTrackerSequential(id);
+    }
+    return generateTrackerFull(id);
   }
 
   async function renderExtensionTemplates() {
@@ -446,6 +658,7 @@ export function createTrackerActions(options: {
     deleteTracker,
     editTracker,
     generateTracker,
+    generateTrackerPart,
     modifyChatMetadata,
     renderExtensionTemplates,
   };

@@ -11,6 +11,7 @@ These are “living” per-change specs. Each spec tracks its current status and
 - [05-tracker-context-injection.md](05-tracker-context-injection.md)
 - [06-multi-connection-profiles.md](06-multi-connection-profiles.md)
 - [07-world-info-policy.md](07-world-info-policy.md)
+- [08-sequential-part-generation.md](08-sequential-part-generation.md)
 
 ## Status workflow
 - **Open**: not implemented yet; questions unresolved.

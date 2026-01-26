@@ -16,7 +16,8 @@
 }
 
 .mes_ztracker_button.spinning,
-.ztracker-regenerate-button.spinning {
+.ztracker-regenerate-button.spinning,
+.ztracker-part-regenerate-button.spinning {
   animation: spin 2s linear infinite;
 }
 
@@ -33,7 +34,8 @@
 }
 .mes_ztracker .ztracker-controls .ztracker-regenerate-button,
 .mes_ztracker .ztracker-controls .ztracker-edit-button,
-.mes_ztracker .ztracker-controls .ztracker-delete-button {
+.mes_ztracker .ztracker-controls .ztracker-delete-button,
+.mes_ztracker .ztracker-controls .ztracker-parts-summary {
   cursor: pointer;
   color: var(--text_color);
   opacity: 0.3;
@@ -41,8 +43,46 @@
 }
 .mes_ztracker .ztracker-controls .ztracker-regenerate-button:hover,
 .mes_ztracker .ztracker-controls .ztracker-edit-button:hover,
-.mes_ztracker .ztracker-controls .ztracker-delete-button:hover {
+.mes_ztracker .ztracker-controls .ztracker-delete-button:hover,
+.mes_ztracker .ztracker-controls .ztracker-parts-summary:hover {
   opacity: 1;
+}
+.mes_ztracker .ztracker-controls .ztracker-parts-details {
+  position: relative;
+  margin: 0;
+  padding: 0;
+}
+.mes_ztracker .ztracker-controls .ztracker-parts-details summary {
+  list-style: none;
+}
+.mes_ztracker .ztracker-controls .ztracker-parts-details summary::-webkit-details-marker {
+  display: none;
+}
+.mes_ztracker .ztracker-controls .ztracker-parts-list {
+  position: absolute;
+  right: 0;
+  top: 22px;
+  min-width: 160px;
+  padding: 6px;
+  background: var(--background_color);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 2;
+}
+.mes_ztracker .ztracker-controls .ztracker-part-regenerate-button {
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  opacity: 0.9;
+  user-select: none;
+  white-space: nowrap;
+}
+.mes_ztracker .ztracker-controls .ztracker-part-regenerate-button:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 .mes_ztracker .ztracker_default_mes_template {
   font-size: smaller;

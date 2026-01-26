@@ -33,6 +33,15 @@ export async function initializeGlobalUI(options: {
     const messageId = Number(messageEl.getAttribute('mesid'));
     if (isNaN(messageId)) return;
 
+    const partButton = target.closest('.ztracker-part-regenerate-button') as HTMLElement | null;
+    if (partButton) {
+      const partKey = partButton.getAttribute('data-ztracker-part') ?? '';
+      if (partKey) {
+        actions.generateTrackerPart(messageId, partKey);
+      }
+      return;
+    }
+
     if (target.classList.contains('mes_ztracker_button')) {
       actions.generateTracker(messageId);
     } else if (target.classList.contains('ztracker-edit-button')) {
