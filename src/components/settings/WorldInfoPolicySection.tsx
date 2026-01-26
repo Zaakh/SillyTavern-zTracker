@@ -147,9 +147,12 @@ export const WorldInfoPolicySection: FC<{
   return (
     <>
       <div className="setting-row">
-        <label>World Info during tracker generation</label>
+        <label title="Controls whether SillyTavern World Info is included when zTracker builds the prompt for tracker generation.">
+          World Info during tracker generation
+        </label>
         <select
           className="text_pole"
+          title="Controls whether SillyTavern World Info is included when zTracker builds the prompt for tracker generation."
           value={worldInfoPolicyMode}
           onChange={(e) =>
             updateAndRefresh((s) => {
@@ -165,7 +168,7 @@ export const WorldInfoPolicySection: FC<{
 
       {worldInfoPolicyMode === TrackerWorldInfoPolicyMode.ALLOWLIST && (
         <div className="setting-row">
-          <label>Allowed World Info book names</label>
+          <label title="World Info books (lorebooks) that are allowed when using the allowlist mode.">Allowed World Info book names</label>
 
           <div className="notes">Use the picker to add detected books, then optionally fine-tune via the textarea.</div>
 
@@ -181,6 +184,7 @@ export const WorldInfoPolicySection: FC<{
                 value={worldInfoBookSearch}
                 onChange={(e) => setWorldInfoBookSearch(e.target.value)}
                 placeholder="Search detected books…"
+                title="Filter the detected lorebook list."
               />
 
               <select
@@ -189,6 +193,7 @@ export const WorldInfoPolicySection: FC<{
                 value={selectedWorldInfoBookToAdd}
                 onChange={(e) => setSelectedWorldInfoBookToAdd(e.target.value)}
                 disabled={filteredAvailableBooks.length === 0}
+                title="Select a detected lorebook to add to the allowlist."
               >
                 {filteredAvailableBooks.length === 0 ? (
                   <option value="">No books detected (click Refresh)</option>
@@ -244,7 +249,9 @@ export const WorldInfoPolicySection: FC<{
             </div>
 
             <details>
-              <summary>Advanced: edit book names manually</summary>
+              <summary title="Edit the allowlisted lorebook names directly (one per line). Matching is case-insensitive.">
+                Advanced: edit book names manually
+              </summary>
               <STTextarea
                 value={worldInfoAllowlistText}
                 onChange={(e) => {
@@ -259,7 +266,9 @@ export const WorldInfoPolicySection: FC<{
             </details>
           </div>
 
-          <label>Allowed World Info entry IDs (UIDs; one per line or comma/space separated)</label>
+          <label title="Allowed World Info entry IDs (UIDs). Use one per line, or separate with commas/spaces.">
+            Allowed World Info entry IDs (UIDs; one per line or comma/space separated)
+          </label>
           <STTextarea
             value={worldInfoEntryIdAllowlistText}
             onChange={(e) => {

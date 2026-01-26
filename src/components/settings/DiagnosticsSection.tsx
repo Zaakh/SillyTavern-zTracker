@@ -53,14 +53,19 @@ export const DiagnosticsSection: FC<{
   return (
     <>
       <div className="setting-row">
-        <label>Debug logging</label>
-        <input type="checkbox" checked={!!debugLogging} onChange={(e) => setDebugLogging(e.target.checked)} />
+        <label title="Enables extra console logging and exposes a diagnostics helper for template URLs.">Debug logging</label>
+        <input
+          type="checkbox"
+          title="Enables extra console logging and exposes a diagnostics helper for template URLs."
+          checked={!!debugLogging}
+          onChange={(e) => setDebugLogging(e.target.checked)}
+        />
         <div className="notes">Enables extra console logging and a diagnostics helper. Avoid enabling unless troubleshooting.</div>
       </div>
 
       <div className="setting-row">
         <div className="title_restorable">
-          <span>Diagnostics</span>
+          <span title="Checks whether required zTracker HTML templates are reachable from SillyTavern (helps debug 404s).">Diagnostics</span>
           <STButton className="fa-solid fa-stethoscope" title="Run diagnostics" onClick={runDiagnostics} />
         </div>
         <textarea
