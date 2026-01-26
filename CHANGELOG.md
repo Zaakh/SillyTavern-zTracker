@@ -6,17 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-- Add setting to choose the role used when embedding zTracker snapshots into normal generations (user/system/assistant).
-- Add named, savable regex transform presets for embedded zTracker snapshots (default JSON + minimal top-level formatting).
-- Add setting to customize (or remove) the embedded snapshot header line.
-- Rename the default World Info policy label from "Include all" to "Allow all".
+### Added
 
-## [1.0.0] - Unreleased
+### Changed
+
+### Fixed
+
+## [1.0.0] - 2026-01-26
 
 ### Added
 - World Info policy for tracker generation: include all, exclude all, or allowlist by lorebook name / entry UID.
 - Allowlist picker UI (refresh + search + add/remove) to avoid manual entry.
 - Debug logging toggle and Diagnostics tool for quickly verifying extension template URLs.
+- Setting to choose the role used when embedding zTracker snapshots into normal generations (user/system/assistant).
+- Named, savable regex transform presets for embedded zTracker snapshots (default JSON + minimal top-level formatting).
+- Setting to customize (or remove) the embedded snapshot header line.
 
 ### Changed
 - Extension template bundling now uses `dist/templates` to match SillyTavern’s packaged artifact expectations.
