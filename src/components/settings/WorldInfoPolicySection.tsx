@@ -71,6 +71,7 @@ export const WorldInfoPolicySection: FC<{
   settings: ExtensionSettings;
   updateAndRefresh: (updater: (current: ExtensionSettings) => void) => void;
 }> = ({ settings, updateAndRefresh }) => {
+  const worldInfoPolicyMode = settings.trackerWorldInfoPolicyMode ?? TrackerWorldInfoPolicyMode.INCLUDE_ALL;
   const worldInfoAllowlistText = (settings.trackerWorldInfoAllowlistBookNames ?? []).join('\n');
   const worldInfoEntryIdAllowlistText = (settings.trackerWorldInfoAllowlistEntryIds ?? []).join('\n');
 
@@ -149,20 +150,20 @@ export const WorldInfoPolicySection: FC<{
         <label>World Info during tracker generation</label>
         <select
           className="text_pole"
-          value={settings.trackerWorldInfoPolicyMode}
+          value={worldInfoPolicyMode}
           onChange={(e) =>
             updateAndRefresh((s) => {
               s.trackerWorldInfoPolicyMode = e.target.value as TrackerWorldInfoPolicyMode;
             })
           }
         >
-            <option value={TrackerWorldInfoPolicyMode.INCLUDE_ALL}>Allow all (default)</option>
+          <option value={TrackerWorldInfoPolicyMode.INCLUDE_ALL}>Allow all (default)</option>
           <option value={TrackerWorldInfoPolicyMode.EXCLUDE_ALL}>Exclude all</option>
           <option value={TrackerWorldInfoPolicyMode.ALLOWLIST}>Allow only specified books/UIDs</option>
         </select>
       </div>
 
-      {settings.trackerWorldInfoPolicyMode === TrackerWorldInfoPolicyMode.ALLOWLIST && (
+      {worldInfoPolicyMode === TrackerWorldInfoPolicyMode.ALLOWLIST && (
         <div className="setting-row">
           <label>Allowed World Info book names</label>
 
