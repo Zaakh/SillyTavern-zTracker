@@ -52,6 +52,19 @@ In allowlist mode, zTracker loads the allowlisted lorebooks by name and injects 
 
 When using **Allow only specified books/UIDs**, you can click **Refresh book list** to detect available books, search/select them, and **Add** them to the allowlist (with quick remove buttons). A manual textarea is still available under “Advanced”.
 
+## Embedding tracker snapshots into normal generations
+
+zTracker can optionally embed the last $X$ tracker snapshots into the prompt chat array via its `generate_interceptor` (controlled by **Include Last X zTracker Messages**).
+
+You can also control what **role** those embedded snapshots use (**User**, **System**, or **Assistant**) via **Embed zTracker snapshots as**. This setting only affects embedding; it does not change how zTracker generates trackers.
+
+You can also apply a **regex-based transform** to the embedded snapshot text (for prompt-friendly formatting) via **Embed snapshot transform preset**.
+
+You can customize (or remove) the embedded snapshot header via **Embed snapshot header**.
+
+- **Default (JSON)**: embeds pretty-printed JSON (no changes).
+- **Minimal (top-level properties)**: embeds one line per top-level property (newline-separated).
+
 > What is the difference compared to [famous tracker](https://github.com/kaldigo/SillyTavern-Tracker)?
 
 Most importantly, it works. This is a minimalistic version of the original tracker.

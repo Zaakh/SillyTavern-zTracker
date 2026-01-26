@@ -23,6 +23,7 @@ import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import { useForceUpdate } from '../hooks/useForceUpdate.js';
 import { DiagnosticsSection } from './settings/DiagnosticsSection.js';
 import { WorldInfoPolicySection } from './settings/WorldInfoPolicySection.js';
+import { EmbedSnapshotTransformSection } from './settings/EmbedSnapshotTransformSection.js';
 
 // Initialize the settings manager once, outside the component
 export const settingsManager = new ExtensionSettingsManager<ExtensionSettings>(EXTENSION_KEY, defaultSettings);
@@ -55,6 +56,7 @@ export const ZTrackerSettings: FC = () => {
     }));
   }, [settings.schemaPresets]);
 
+
   // Handler for when a new schema preset is selected
   const handleSchemaPresetChange = (newValue?: string) => {
     const newPresetKey = newValue ?? 'default';
@@ -80,6 +82,7 @@ export const ZTrackerSettings: FC = () => {
       s.schemaPresets = newPresets;
     });
   };
+
 
   // Handler for the schema JSON textarea
   const handleSchemaValueChange = (newSchemaText: string) => {
@@ -343,6 +346,26 @@ export const ZTrackerSettings: FC = () => {
                 }
               />
             </div>
+
+            <div className="setting-row">
+              <label>Embed zTracker snapshots as</label>
+              <select
+                className="text_pole"
+                title="Only affects embedding into the generation chat array (generate_interceptor), not tracker generation."
+                value={settings.embedZTrackerRole ?? 'user'}
+                onChange={(e) =>
+                  updateAndRefresh((s) => {
+                    s.embedZTrackerRole = e.target.value as ExtensionSettings['embedZTrackerRole'];
+                  })
+                }
+              >
+                <option value="user">User</option>
+                <option value="system">System</option>
+                <option value="assistant">Assistant</option>
+              </select>
+            </div>
+
+            <EmbedSnapshotTransformSection settings={settings} updateAndRefresh={updateAndRefresh} />
 
             <WorldInfoPolicySection settings={settings} updateAndRefresh={updateAndRefresh} />
 

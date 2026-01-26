@@ -6,7 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-- (nothing yet)
+- Add setting to choose the role used when embedding zTracker snapshots into normal generations (user/system/assistant).
+- Add named, savable regex transform presets for embedded zTracker snapshots (default JSON + minimal top-level formatting).
+- Add setting to customize (or remove) the embedded snapshot header line.
+- Rename the default World Info policy label from "Include all" to "Allow all".
 
 ## [1.0.0] - Unreleased
 

@@ -24,6 +24,8 @@ These instructions apply to all files in this repository.
 
 ## Code style
 - Brevity and clarity are preferred. Avoid boilerplate where possible.  
+- Split complex logic into small, testable functions in separate modules, especially in `src/`.
+- Avoid large monolithic functions, classes or files.
 
 ## Build and required artifacts
 - This extension is loaded by SillyTavern from `manifest.json` and expects built assets:

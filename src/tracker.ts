@@ -3,6 +3,7 @@ import type { Message } from 'sillytavern-utils-lib';
 import type { ChatMessage } from 'sillytavern-utils-lib/types';
 import type { ExtensionSettings } from './config.js';
 import { EXTENSION_KEY } from './extension-metadata.js';
+import { formatEmbeddedTrackerSnapshot } from './embed-snapshot-transform.js';
 
 export const CHAT_METADATA_SCHEMA_PRESET_KEY = 'schemaKey';
 export const CHAT_MESSAGE_SCHEMA_VALUE_KEY = 'value';
@@ -75,6 +76,8 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
   userName = 'You',
 ): T[] {
   const copyMessages = structuredClone(messages);
+  const embedRole = settings.embedZTrackerRole ?? 'user';
+
   if (settings.includeLastXZTrackerMessages > 0) {
     for (let i = 0; i < settings.includeLastXZTrackerMessages; i++) {
       let foundMessage: T | null = null;
@@ -96,19 +99,27 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
           'source' in foundMessage
             ? (foundMessage as Message).source?.extra
             : (foundMessage as ChatMessage).extra;
-        const content = `Tracker:\n\`\`\`json\n${JSON.stringify(
-          extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY] || '{}',
-          null,
-          2,
-        )}\n\`\`\``;
-        copyMessages.splice(foundIndex + 1, 0, {
-          content,
-          role: 'user',
-          name: userName,
-          is_user: true,
-          mes: content,
-          is_system: false,
-        } as unknown as T);
+        const trackerValue = extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY] || {};
+        const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(trackerValue, settings);
+
+        const header = settings.embedZTrackerSnapshotHeader ?? 'Tracker:';
+        const prefix = header ? `${header}\n` : '';
+        const content = wrapInCodeFence
+          ? `${prefix}\`\`\`${lang}\n${text}\n\`\`\``
+          : `${prefix}${text}`;
+        copyMessages.splice(
+          foundIndex + 1,
+          0,
+          {
+            content,
+            role: embedRole,
+            ...(embedRole === 'user' ? { name: userName } : {}),
+            // These flags are used by SillyTavern Message objects; harmless for ChatMessage.
+            is_user: embedRole === 'user',
+            is_system: embedRole === 'system',
+            mes: content,
+          } as unknown as T,
+        );
       }
     }
   }

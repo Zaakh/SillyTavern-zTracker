@@ -19,6 +19,28 @@ export interface Schema {
   html: string;
 }
 
+export type EmbedSnapshotTransformInput = 'pretty_json' | 'top_level_lines';
+
+export interface EmbedSnapshotRegexTransformPreset {
+  name: string;
+  /**
+   * What text the regex runs against.
+   * - pretty_json: JSON.stringify(data, null, 2)
+   * - top_level_lines: one line per top-level property (values are JSON-stringified)
+   */
+  input: EmbedSnapshotTransformInput;
+  /** JavaScript regex source (without leading/trailing slashes). Empty disables transform. */
+  pattern: string;
+  /** JavaScript regex flags, e.g. "gmi". */
+  flags: string;
+  /** Replacement string for String.prototype.replace(). */
+  replacement: string;
+  /** Markdown code fence language to use when embedding (e.g. json, text). */
+  codeFenceLang: string;
+  /** If false, embedding will not wrap output in a markdown code fence. */
+  wrapInCodeFence?: boolean;
+}
+
 export interface ExtensionSettings {
   version: string;
   formatVersion: string;
@@ -30,6 +52,23 @@ export interface ExtensionSettings {
   prompt: string;
   includeLastXMessages: number; // 0 means all messages
   includeLastXZTrackerMessages: number; // 0 means none
+  /**
+   * Role to use when embedding zTracker snapshots into the generation chat array.
+   * This only affects the generate_interceptor embedding, not tracker generation.
+   */
+  embedZTrackerRole: 'user' | 'assistant' | 'system';
+
+  /**
+   * Controls how embedded zTracker snapshots are transformed (regex find/replace).
+   * This only affects embedding into the generation chat array.
+   */
+  /**
+   * Header line used when embedding zTracker snapshots into the generation chat array.
+   * Set to an empty string to omit the header entirely.
+   */
+  embedZTrackerSnapshotHeader: string;
+  embedZTrackerSnapshotTransformPreset: string;
+  embedZTrackerSnapshotTransformPresets: Record<string, EmbedSnapshotRegexTransformPreset>;
   promptEngineeringMode: PromptEngineeringMode;
   promptJson: string;
   promptXml: string;
@@ -299,6 +338,29 @@ export const defaultSettings: ExtensionSettings = {
   prompt: DEFAULT_PROMPT,
   includeLastXMessages: 0,
   includeLastXZTrackerMessages: 1,
+  embedZTrackerRole: 'user',
+  embedZTrackerSnapshotHeader: 'Tracker:',
+  embedZTrackerSnapshotTransformPreset: 'default',
+  embedZTrackerSnapshotTransformPresets: {
+    default: {
+      name: 'Default (JSON)',
+      input: 'pretty_json',
+      pattern: '',
+      flags: 'g',
+      replacement: '',
+      codeFenceLang: 'json',
+      wrapInCodeFence: true,
+    },
+    minimal: {
+      name: 'Minimal (top-level properties)',
+      input: 'top_level_lines',
+      pattern: '^[\\t ]*\"([^\"]+)\"[\\t ]*:[\\t ]*(.*?)(?:,)?[\\t ]*$',
+      flags: 'gm',
+      replacement: '$1: $2',
+      codeFenceLang: 'text',
+      wrapInCodeFence: false,
+    },
+  },
   promptEngineeringMode: PromptEngineeringMode.NATIVE,
   promptJson: DEFAULT_PROMPT_JSON,
   promptXml: DEFAULT_PROMPT_XML,
