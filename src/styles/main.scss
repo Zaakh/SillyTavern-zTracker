@@ -21,7 +21,8 @@
 }
 
 .mes_ztracker_button.spinning,
-.ztracker-regenerate-button.spinning {
+.ztracker-regenerate-button.spinning,
+.ztracker-part-regenerate-button.spinning {
   animation: spin 2s linear infinite;
 }
 
@@ -38,7 +39,8 @@
 
 		.ztracker-regenerate-button,
 		.ztracker-edit-button,
-		.ztracker-delete-button {
+		.ztracker-delete-button,
+		.ztracker-parts-summary {
 			cursor: pointer;
 			color: var(--text_color);
 			opacity: 0.3;
@@ -46,6 +48,48 @@
 
 			&:hover {
 				opacity: 1;
+			}
+		}
+
+		.ztracker-parts-details {
+			position: relative;
+			margin: 0;
+			padding: 0;
+
+			summary {
+				list-style: none;
+			}
+			summary::-webkit-details-marker {
+				display: none;
+			}
+		}
+
+		.ztracker-parts-list {
+			position: absolute;
+			right: 0;
+			top: 22px;
+			min-width: 160px;
+			padding: 6px;
+			background: var(--background_color);
+			border: 1px solid rgba(255, 255, 255, 0.12);
+			border-radius: 6px;
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
+			z-index: 2;
+		}
+
+		.ztracker-part-regenerate-button {
+			cursor: pointer;
+			padding: 4px 6px;
+			border-radius: 4px;
+			font-size: 0.85em;
+			opacity: 0.9;
+			user-select: none;
+			white-space: nowrap;
+
+			&:hover {
+				background: rgba(255, 255, 255, 0.08);
 			}
 		}
 	}

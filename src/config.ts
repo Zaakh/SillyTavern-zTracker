@@ -47,6 +47,10 @@ export interface ExtensionSettings {
   profileId: string;
   maxResponseToken: number;
   autoMode: AutoModeOptions;
+
+  /** When enabled, zTracker generates the tracker in smaller parts, sequentially. */
+  sequentialPartGeneration: boolean;
+
   schemaPreset: string;
   schemaPresets: Record<string, Schema>;
   prompt: string;
@@ -327,6 +331,7 @@ export const defaultSettings: ExtensionSettings = {
   profileId: '',
   maxResponseToken: 16000,
   autoMode: AutoModeOptions.NONE,
+  sequentialPartGeneration: false,
   schemaPreset: 'default',
   schemaPresets: {
     default: {

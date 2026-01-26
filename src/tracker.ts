@@ -8,6 +8,16 @@ import { formatEmbeddedTrackerSnapshot } from './embed-snapshot-transform.js';
 export const CHAT_METADATA_SCHEMA_PRESET_KEY = 'schemaKey';
 export const CHAT_MESSAGE_SCHEMA_VALUE_KEY = 'value';
 export const CHAT_MESSAGE_SCHEMA_HTML_KEY = 'html';
+export const CHAT_MESSAGE_PARTS_ORDER_KEY = 'partsOrder';
+
+function escapeHtmlAttr(value: string): string {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
 
 export interface TrackerContext {
   chat: Array<ChatMessage & { extra?: Record<string, any> }>;
@@ -58,10 +68,23 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
   container.className = 'mes_ztracker';
   container.innerHTML = renderedHtml;
 
+  const partsOrder: string[] =
+    (message.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PARTS_ORDER_KEY] as any) ?? Object.keys(trackerData ?? {});
+  const partsButtons = partsOrder
+    .map((k) => {
+      const safeKey = escapeHtmlAttr(k);
+      return `<div class="ztracker-part-regenerate-button" data-ztracker-part="${safeKey}" title="Regenerate ${safeKey}">${safeKey}</div>`;
+    })
+    .join('');
+
   const controls = doc.createElement('div');
   controls.className = 'ztracker-controls';
   controls.innerHTML = `
     <div class="ztracker-regenerate-button fa-solid fa-arrows-rotate" title="Regenerate Tracker"></div>
+    <details class="ztracker-parts-details" title="Regenerate individual parts">
+      <summary class="ztracker-parts-summary fa-solid fa-list"></summary>
+      <div class="ztracker-parts-list">${partsButtons}</div>
+    </details>
     <div class="ztracker-edit-button fa-solid fa-code" title="Edit Tracker Data"></div>
     <div class="ztracker-delete-button fa-solid fa-trash-can" title="Delete Tracker"></div>
   `;
@@ -129,6 +152,8 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
 export interface ApplyTrackerUpdateOptions {
   trackerData: unknown;
   trackerHtml: string;
+  /** Additional fields to store on message.extra[EXTENSION_KEY] (besides value/html). */
+  extensionData?: Record<string, unknown>;
   render: () => void;
 }
 
@@ -154,6 +179,12 @@ export function applyTrackerUpdateAndRender(
 
   message.extra = message.extra || {};
   message.extra[EXTENSION_KEY] = message.extra[EXTENSION_KEY] || {};
+
+  if (options.extensionData) {
+    for (const [key, value] of Object.entries(options.extensionData)) {
+      message.extra[EXTENSION_KEY][key] = value;
+    }
+  }
   message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_VALUE_KEY] = options.trackerData;
   message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_HTML_KEY] = options.trackerHtml;
 
