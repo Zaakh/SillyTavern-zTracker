@@ -102,6 +102,36 @@ describe('renderTracker', () => {
     expect(outfitButtons).toEqual(['outfit', 'outfit']);
   });
 
+  it('renders per-field regeneration buttons without partsMeta (fallback from item keys)', () => {
+    const context: TrackerContext = {
+      chat: [
+        {
+          extra: {
+            [EXTENSION_KEY]: {
+              [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+                time: '10:00',
+                characters: [
+                  { name: 'Alice', outfit: 'o1', hair: 'h1' },
+                  { name: 'Bob', outfit: 'o2', hair: 'h2' },
+                ],
+              },
+              [CHAT_MESSAGE_SCHEMA_HTML_KEY]: template,
+            },
+          },
+        } as any,
+      ],
+    };
+
+    renderTracker(0, { context, document, handlebars: Handlebars });
+
+    const fieldButtons = Array.from(
+      document.querySelectorAll('.ztracker-array-item-field-regenerate-button[data-ztracker-part="characters"]'),
+    ).map((el) => (el as HTMLElement).textContent);
+
+    // Sorted fallback field list should include both keys for each item.
+    expect(fieldButtons).toEqual(['hair', 'outfit', 'hair', 'outfit']);
+  });
+
   it('removes previous tracker markup when data has been cleared', () => {
     const context = createContext();
     renderTracker(0, { context, document, handlebars: Handlebars });

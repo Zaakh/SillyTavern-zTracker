@@ -34,6 +34,25 @@ function toShortLabel(value: unknown, maxLen = 28): string {
   return text.length > maxLen ? `${text.slice(0, maxLen - 1)}…` : text;
 }
 
+function deriveArrayItemFieldsFallback(items: unknown[], idKey: string): string[] {
+  if (!Array.isArray(items) || items.length === 0) return [];
+
+  const fields = new Set<string>();
+  const sampleCount = Math.min(items.length, 5);
+  for (let i = 0; i < sampleCount; i++) {
+    const it: any = items[i];
+    if (!it || typeof it !== 'object' || Array.isArray(it)) continue;
+    for (const key of Object.keys(it)) {
+      if (!key) continue;
+      if (key === 'name') continue;
+      if (idKey && key === idKey) continue;
+      fields.add(key);
+    }
+  }
+
+  return Array.from(fields).sort((a, b) => a.localeCompare(b));
+}
+
 export interface TrackerContext {
   chat: Array<ChatMessage & { extra?: Record<string, any> }>;
 }
@@ -107,7 +126,13 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
                 ? `Regenerate ${safeKey} (${escapeHtmlAttr(itemName)})`
                 : `Regenerate ${safeKey}[${index}]`;
 
-              const fields: string[] = Array.isArray(partsMeta?.[k]?.fields) ? partsMeta[k].fields : [];
+              const fieldsFromMeta: string[] = Array.isArray(partsMeta?.[k]?.fields) ? partsMeta[k].fields : [];
+              const fields: string[] =
+                fieldsFromMeta.length > 0
+                  ? fieldsFromMeta
+                  : item && typeof item === 'object' && !Array.isArray(item)
+                    ? deriveArrayItemFieldsFallback(value, idKey)
+                    : [];
               const fieldButtons = fields
                 .map((fieldKey: string) => {
                   const safeField = escapeHtmlAttr(fieldKey);
