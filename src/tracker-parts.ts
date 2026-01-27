@@ -198,6 +198,17 @@ export function mergeTrackerPart(currentTracker: any, partKey: string, partObjec
   };
 }
 
+export function redactTrackerPartValue(currentTracker: any, partKey: string): any {
+  const base = currentTracker && typeof currentTracker === 'object' ? structuredClone(currentTracker) : {};
+  if (!partKey) {
+    throw new Error('Part key is required');
+  }
+  if (partKey in (base as any)) {
+    delete (base as any)[partKey];
+  }
+  return base;
+}
+
 export function replaceTrackerArrayItem(currentTracker: any, partKey: string, index: number, item: unknown): any {
   const base = currentTracker && typeof currentTracker === 'object' ? structuredClone(currentTracker) : {};
   const arr = (base as any)[partKey];
@@ -208,6 +219,21 @@ export function replaceTrackerArrayItem(currentTracker: any, partKey: string, in
     throw new Error(`Array index out of range for ${partKey}: ${index}`);
   }
   arr[index] = item;
+  return base;
+}
+
+export function redactTrackerArrayItemValue(currentTracker: any, partKey: string, index: number): any {
+  const base = currentTracker && typeof currentTracker === 'object' ? structuredClone(currentTracker) : {};
+  const arr = (base as any)[partKey];
+  if (!Array.isArray(arr)) {
+    throw new Error(`Tracker field is not an array: ${partKey}`);
+  }
+  if (index < 0 || index >= arr.length) {
+    throw new Error(`Array index out of range for ${partKey}: ${index}`);
+  }
+
+  // Keep indices stable but remove the old content.
+  arr[index] = null;
   return base;
 }
 

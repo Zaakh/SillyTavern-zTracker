@@ -28,6 +28,8 @@ import {
   getArrayItemIdentityKey,
   resolveTopLevelPartsOrder,
   mergeTrackerPart,
+  redactTrackerArrayItemValue,
+  redactTrackerPartValue,
   replaceTrackerArrayItem,
   replaceTrackerArrayItemField,
   redactTrackerArrayItemFieldValue,
@@ -359,7 +361,6 @@ export function createTrackerActions(options: {
       let response: ExtractedData['content'];
 
       if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
-        appendCurrentTrackerSnapshot(messages as any, existingTracker, 'Current tracker for this message (use as reference):');
         messages.push({ content: settings.prompt, role: 'user' });
         const result = await makeRequest(messages, {
           json_schema: { name: 'SceneTracker', strict: true, value: chatJsonValue },
@@ -370,7 +371,6 @@ export function createTrackerActions(options: {
         const format = settings.promptEngineeringMode as 'json' | 'xml';
         const promptTemplate = format === 'json' ? settings.promptJson : settings.promptXml;
         const exampleResponse = schemaToExample(chatJsonValue, format);
-        appendCurrentTrackerSnapshot(messages as any, existingTracker, 'Current tracker for this message (use as reference):');
         const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
           schema: JSON.stringify(chatJsonValue, null, 2),
           example_response: exampleResponse,
@@ -433,7 +433,6 @@ export function createTrackerActions(options: {
 
       const makeRequest = makeRequestFactory(id, settings);
       const baseMessages = structuredClone(messages) as Message[];
-      appendCurrentTrackerSnapshot(baseMessages, existingTracker, 'Current tracker for this message (use as reference):');
       let trackerData: any = {};
 
       for (const partKey of partsOrder) {
@@ -542,7 +541,12 @@ export function createTrackerActions(options: {
       const partSchema = buildTopLevelPartSchema(chatJsonValue, partKey);
       const makeRequest = makeRequestFactory(id, settings);
 
-      appendCurrentTrackerSnapshot(messages as any, currentTracker, 'Current tracker for this message (keep consistent):');
+      const redactedTracker = redactTrackerPartValue(currentTracker, partKey);
+      appendCurrentTrackerSnapshot(
+        messages as any,
+        redactedTracker,
+        'Current tracker for this message (target part omitted for freshness; keep everything else consistent):',
+      );
 
       let partResponse: any;
       if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
@@ -632,18 +636,29 @@ export function createTrackerActions(options: {
       const itemSchema = buildArrayItemSchema(chatJsonValue, partKey);
       const makeRequest = makeRequestFactory(id, settings);
 
-      appendCurrentTrackerSnapshot(messages as any, currentTracker, 'Current tracker for this message (keep consistent):');
+      const idKey = getArrayItemIdentityKey(chatJsonValue, partKey);
+      const idValue =
+        currentArr[index] && typeof currentArr[index] === 'object' && typeof (currentArr[index] as any)[idKey] === 'string'
+          ? String((currentArr[index] as any)[idKey])
+          : '';
+      const redactedTracker = redactTrackerArrayItemValue(currentTracker, partKey, index);
+
       appendCurrentTrackerSnapshot(
         messages as any,
-        { part: partKey, index, currentItem: currentArr[index] },
-        'Regenerate ONLY this array item:',
+        redactedTracker,
+        'Current tracker for this message (target item omitted for freshness; keep everything else consistent):',
+      );
+      appendCurrentTrackerSnapshot(
+        messages as any,
+        { part: partKey, index, ...(idKey && idValue ? { idKey, idValue } : {}) },
+        'Regenerate ONLY this array item (previous item intentionally omitted):',
       );
 
       let itemResponse: any;
       if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
         messages.push({
           role: 'user',
-          content: `${settings.prompt}\n\nRegenerate ONLY ${partKey}[${index}] as an object under key "item". Return a single JSON object matching the provided schema.`,
+          content: `${settings.prompt}\n\nRegenerate ONLY ${partKey}[${index}] as an object under key "item". Return a single JSON object matching the provided schema. IMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
         } as any);
         const result = await makeRequest(messages, {
           json_schema: { name: 'SceneTrackerItem', strict: true, value: itemSchema },
@@ -734,11 +749,16 @@ export function createTrackerActions(options: {
       const itemSchema = buildArrayItemSchema(chatJsonValue, partKey);
       const makeRequest = makeRequestFactory(id, settings);
 
-      appendCurrentTrackerSnapshot(messages as any, currentTracker, 'Current tracker for this message (keep consistent):');
+      const redactedTracker = redactTrackerArrayItemValue(currentTracker, partKey, index);
       appendCurrentTrackerSnapshot(
         messages as any,
-        { part: partKey, matchBy: 'name', name, index, currentItem },
-        'Regenerate ONLY this array item (matched by name):',
+        redactedTracker,
+        'Current tracker for this message (target item omitted for freshness; keep everything else consistent):',
+      );
+      appendCurrentTrackerSnapshot(
+        messages as any,
+        { part: partKey, matchBy: 'name', name, index },
+        'Regenerate ONLY this array item (matched by name; previous values intentionally omitted):',
       );
 
       let itemResponse: any;
@@ -749,7 +769,7 @@ export function createTrackerActions(options: {
       if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
         messages.push({
           role: 'user',
-          content: `${settings.prompt}\n\nRegenerate ONLY the ${partKey} item with name "${name}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}`,
+          content: `${settings.prompt}\n\nRegenerate ONLY the ${partKey} item with name "${name}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}\n\nIMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
         } as any);
         const result = await makeRequest(messages, {
           json_schema: { name: 'SceneTrackerItem', strict: true, value: itemSchema },
@@ -844,11 +864,16 @@ export function createTrackerActions(options: {
       const itemSchema = buildArrayItemSchema(chatJsonValue, partKey);
       const makeRequest = makeRequestFactory(id, settings);
 
-      appendCurrentTrackerSnapshot(messages as any, currentTracker, 'Current tracker for this message (keep consistent):');
+      const redactedTracker = redactTrackerArrayItemValue(currentTracker, partKey, index);
       appendCurrentTrackerSnapshot(
         messages as any,
-        { part: partKey, matchBy: idKey, idValue, index, currentItem },
-        'Regenerate ONLY this array item (matched by identity):',
+        redactedTracker,
+        'Current tracker for this message (target item omitted for freshness; keep everything else consistent):',
+      );
+      appendCurrentTrackerSnapshot(
+        messages as any,
+        { part: partKey, matchBy: idKey, idValue, index },
+        'Regenerate ONLY this array item (matched by identity; previous values intentionally omitted):',
       );
 
       let itemResponse: any;
@@ -859,7 +884,7 @@ export function createTrackerActions(options: {
       if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
         messages.push({
           role: 'user',
-          content: `${settings.prompt}\n\nRegenerate ONLY the ${partKey} item with ${idKey} "${idValue}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}`,
+          content: `${settings.prompt}\n\nRegenerate ONLY the ${partKey} item with ${idKey} "${idValue}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}\n\nIMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
         } as any);
         const result = await makeRequest(messages, {
           json_schema: { name: 'SceneTrackerItem', strict: true, value: itemSchema },
