@@ -186,6 +186,24 @@ export const ZTrackerSettings: FC = () => {
             </div>
 
             <div className="setting-row">
+              <label title="When enabled, zTracker generates tracker fields sequentially (smaller requests) and enables per-part regeneration controls.">
+                Sequential generation
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={!!settings.sequentialPartGeneration}
+                  onChange={(e) =>
+                    updateAndRefresh((s) => {
+                      s.sequentialPartGeneration = e.target.checked;
+                    })
+                  }
+                />
+                Generate tracker parts one-by-one
+              </label>
+            </div>
+
+            <div className="setting-row">
               <label title="Chooses how zTracker asks the model for structured output: use the native API format, or use JSON/XML prompt-engineering templates.">
                 Prompt Engineering
               </label>

@@ -16,12 +16,16 @@
 }
 
 .mes_ztracker_button.spinning,
-.ztracker-regenerate-button.spinning {
+.ztracker-regenerate-button.spinning,
+.ztracker-part-regenerate-button.spinning,
+.ztracker-array-item-regenerate-button.spinning,
+.ztracker-array-item-field-regenerate-button.spinning {
   animation: spin 2s linear infinite;
 }
 
 .mes_ztracker {
   position: relative;
+  z-index: 50;
 }
 .mes_ztracker .ztracker-controls {
   position: absolute;
@@ -29,11 +33,12 @@
   right: 8px;
   display: flex;
   gap: 12px;
-  z-index: 1;
+  z-index: 5000;
 }
 .mes_ztracker .ztracker-controls .ztracker-regenerate-button,
 .mes_ztracker .ztracker-controls .ztracker-edit-button,
-.mes_ztracker .ztracker-controls .ztracker-delete-button {
+.mes_ztracker .ztracker-controls .ztracker-delete-button,
+.mes_ztracker .ztracker-controls .ztracker-parts-summary {
   cursor: pointer;
   color: var(--text_color);
   opacity: 0.3;
@@ -41,8 +46,112 @@
 }
 .mes_ztracker .ztracker-controls .ztracker-regenerate-button:hover,
 .mes_ztracker .ztracker-controls .ztracker-edit-button:hover,
-.mes_ztracker .ztracker-controls .ztracker-delete-button:hover {
+.mes_ztracker .ztracker-controls .ztracker-delete-button:hover,
+.mes_ztracker .ztracker-controls .ztracker-parts-summary:hover {
   opacity: 1;
+}
+.mes_ztracker .ztracker-controls .ztracker-parts-details {
+  position: relative;
+  margin: 0;
+  padding: 0;
+}
+.mes_ztracker .ztracker-controls .ztracker-parts-details summary {
+  list-style: none;
+}
+.mes_ztracker .ztracker-controls .ztracker-parts-details summary::-webkit-details-marker {
+  display: none;
+}
+.mes_ztracker .ztracker-controls .ztracker-parts-list {
+  position: absolute;
+  right: 0;
+  top: 22px;
+  min-width: 260px;
+  padding: 10px;
+  background-color: var(--ztracker-menu-bg, rgba(0, 0, 0, 0.92));
+  background-image: none;
+  border: 1px solid var(--ztracker-menu-border, rgba(255, 255, 255, 0.12));
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 6000;
+  max-height: 50vh;
+  overflow: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  font-size: 0.95em;
+  line-height: 1.25;
+}
+.mes_ztracker .ztracker-controls .ztracker-part-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.mes_ztracker .ztracker-controls .ztracker-part-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.mes_ztracker .ztracker-controls .ztracker-part-regenerate-button {
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 0.95em;
+  font-weight: 600;
+  opacity: 0.95;
+  user-select: none;
+  white-space: nowrap;
+  background: var(--ztracker-menu-part-bg, rgba(255, 255, 255, 0.06));
+}
+.mes_ztracker .ztracker-controls .ztracker-part-regenerate-button:hover {
+  background: var(--ztracker-menu-hover-bg, rgba(255, 255, 255, 0.1));
+}
+.mes_ztracker .ztracker-controls .ztracker-part-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 10px;
+  max-height: 35vh;
+  overflow: auto;
+}
+.mes_ztracker .ztracker-controls .ztracker-array-item-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mes_ztracker .ztracker-controls .ztracker-array-item-regenerate-button {
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 0.92em;
+  opacity: 0.98;
+  user-select: none;
+  white-space: normal;
+  word-break: break-word;
+  background: var(--ztracker-menu-item-bg, rgba(255, 255, 255, 0.03));
+}
+.mes_ztracker .ztracker-controls .ztracker-array-item-regenerate-button:hover {
+  background: var(--ztracker-menu-hover-bg, rgba(255, 255, 255, 0.1));
+}
+.mes_ztracker .ztracker-controls .ztracker-array-item-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-left: 8px;
+}
+.mes_ztracker .ztracker-controls .ztracker-array-item-field-regenerate-button {
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 999px;
+  font-size: 0.82em;
+  opacity: 0.98;
+  user-select: none;
+  white-space: nowrap;
+  background: var(--ztracker-menu-item-bg, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--ztracker-menu-border, rgba(255, 255, 255, 0.12));
+}
+.mes_ztracker .ztracker-controls .ztracker-array-item-field-regenerate-button:hover {
+  background: var(--ztracker-menu-hover-bg, rgba(255, 255, 255, 0.1));
 }
 .mes_ztracker .ztracker_default_mes_template {
   font-size: smaller;
