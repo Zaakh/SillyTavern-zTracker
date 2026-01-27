@@ -52,6 +52,10 @@ When a tracker is rendered on a message, use the tracker controls:
 - **Regenerate Tracker** (rotate icon) regenerates the whole tracker.
 - **Parts menu** (list icon) lets you regenerate an individual top-level field (e.g. `time`, `location`, `topics`) without regenerating everything.
 
+For array parts (e.g. `characters`), the parts menu also exposes:
+- Per-item regeneration (by stable identity when available).
+- Per-field regeneration inside an item (e.g. regenerate `characters (Silvia).outfit`).
+
 Optional (advanced): you can annotate your JSON schema preset to help zTracker keep interdependent sections ordered and array items stable:
 - `x-ztracker-dependsOn`: top-level part ordering hints for sequential generation.
 - `x-ztracker-idKey`: which string field to use as the array-item identity for per-item regeneration (defaults to `name`).
