@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Sequential per-part tracker generation mode (dependency-aware via current tracker snapshot) and per-part/per-array-item regenerate menu on messages.
+- Schema annotations for part ordering and array identity: `x-ztracker-dependsOn` and `x-ztracker-idKey`.
+- Per-field regeneration for object array items (e.g., regenerate `characters.outfit` for a single character).
+
+### Fixed
+
+- Parts menu usability: array submenus show item previews (instead of generic "items") and render above chat content.
+- Parts menu styling is theme-aware and avoids transparent backgrounds.
+- Field-level regeneration prompts omit the old field value to reduce accidental repetition.
+- Full tracker regeneration no longer sends the prior tracker as prompt context; part/item regeneration redacts the target content to reduce repetition anchoring.
+- Embedded tracker snapshot injection now considers the last message in the prompt chat array (fixes missing injection for SillyTavern Options → Regenerate).
+
 
 ### Changed
 

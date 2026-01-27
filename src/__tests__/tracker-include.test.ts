@@ -54,6 +54,17 @@ describe('includeZTrackerMessages', () => {
     expect(result[1].role).toBe('user');
   });
 
+  it('can discover a tracker on the last message', () => {
+    const messages = [
+      { content: 'first', role: 'user' },
+      buildMessageWithTracker({ id: 1 }),
+    ];
+    const result = includeZTrackerMessages(messages as any, makeSettings(1));
+    expect(result).toHaveLength(3);
+    expect(result[2].content).toContain('Tracker:');
+    expect(result[2].content).toContain('```json');
+  });
+
   it('can apply a minimal formatting preset during embedding', () => {
     const messages = [
       buildMessageWithTracker({ time: '10:00', location: 'Mall', topics: { primaryTopic: 'Talk' } }),

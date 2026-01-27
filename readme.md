@@ -44,6 +44,18 @@ Your API/model might not support structured output. Change `Prompt Engineering` 
 
 In **Extensions → zTracker**, enable **Debug logging** and use the **Diagnostics** panel (stethoscope button) to print template URL checks to the console. This helps confirm whether SillyTavern can access the extension’s HTML templates.
 
+## Sequential generation & per-part regeneration
+
+In **Extensions → zTracker**, enable **Sequential generation** to have zTracker generate tracker fields one-by-one (smaller, sequential requests).
+
+When a tracker is rendered on a message, use the tracker controls:
+- **Regenerate Tracker** (rotate icon) regenerates the whole tracker.
+- **Parts menu** (list icon) lets you regenerate an individual top-level field (e.g. `time`, `location`, `topics`) without regenerating everything.
+
+Optional (advanced): you can annotate your JSON schema preset to help zTracker keep interdependent sections ordered and array items stable:
+- `x-ztracker-dependsOn`: top-level part ordering hints for sequential generation.
+- `x-ztracker-idKey`: which string field to use as the array-item identity for per-item regeneration (defaults to `name`).
+
 ## World Info (lorebooks)
 
 In **Extensions → zTracker**, you can control World Info during tracker generation: include all (default), exclude all, or allowlist specific lorebook **book names** (case-insensitive) and/or entry **UIDs** (numbers). This only affects zTracker tracker generation (button / Auto Mode), not normal SillyTavern generations.

@@ -47,6 +47,10 @@ export interface ExtensionSettings {
   profileId: string;
   maxResponseToken: number;
   autoMode: AutoModeOptions;
+
+  /** When enabled, zTracker generates the tracker in smaller parts, sequentially. */
+  sequentialPartGeneration: boolean;
+
   schemaPreset: string;
   schemaPresets: Record<string, Schema>;
   prompt: string;
@@ -199,12 +203,14 @@ export const DEFAULT_SCHEMA_VALUE: object = {
       type: 'array',
       items: {
         type: 'string',
-        description: 'Character name',
+        description: 'Character names',
       },
       description: 'List of character names present in scene',
     },
     characters: {
       type: 'array',
+      'x-ztracker-dependsOn': ['charactersPresent'],
+      'x-ztracker-idKey': 'name',
       items: {
         type: 'object',
         properties: {
@@ -327,6 +333,7 @@ export const defaultSettings: ExtensionSettings = {
   profileId: '',
   maxResponseToken: 16000,
   autoMode: AutoModeOptions.NONE,
+  sequentialPartGeneration: false,
   schemaPreset: 'default',
   schemaPresets: {
     default: {
