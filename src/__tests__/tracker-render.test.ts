@@ -41,6 +41,32 @@ describe('renderTracker', () => {
     expect(tracker?.querySelector('.ztracker-controls')).not.toBeNull();
   });
 
+  it('renders one clickable entry per array item in the parts menu', () => {
+    const context: TrackerContext = {
+      chat: [
+        {
+          extra: {
+            [EXTENSION_KEY]: {
+              [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+                time: '10:00',
+                charactersPresent: ['Alice', 'Bob'],
+              },
+              [CHAT_MESSAGE_SCHEMA_HTML_KEY]: template,
+            },
+          },
+        } as any,
+      ],
+    };
+
+    renderTracker(0, { context, document, handlebars: Handlebars });
+
+    const items = Array.from(
+      document.querySelectorAll('.ztracker-array-item-regenerate-button[data-ztracker-part="charactersPresent"]'),
+    ).map((el) => (el as HTMLElement).textContent);
+
+    expect(items).toEqual(['Alice', 'Bob']);
+  });
+
   it('removes previous tracker markup when data has been cleared', () => {
     const context = createContext();
     renderTracker(0, { context, document, handlebars: Handlebars });

@@ -90,39 +90,30 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
     .map((k) => {
       const safeKey = escapeHtmlAttr(k);
       const value = (trackerData as any)?.[k];
-      const arrayMenu = Array.isArray(value)
-        ? `<details class="ztracker-array-details">
-            <summary class="ztracker-array-summary" title="Regenerate individual items">${escapeHtmlAttr(
-              value.length === 0
-                ? 'items'
-                : value
-                    .slice(0, 3)
-                    .map((v: any) => toShortLabel(v, 14))
-                    .join(', ') + (value.length > 3 ? ` … (${value.length})` : ''),
-            )}</summary>
-            <div class="ztracker-array-list">${value
-              .map((item: any, index: number) => {
-                const label = escapeHtmlAttr(toShortLabel(item));
-                const itemName = item && typeof item === 'object' && typeof item.name === 'string' ? item.name : '';
-                const safeName = itemName ? ` data-ztracker-name="${escapeHtmlAttr(itemName)}"` : '';
-                const idKey = typeof partsMeta?.[k]?.idKey === 'string' && partsMeta[k].idKey.trim() ? partsMeta[k].idKey.trim() : 'name';
-                const idValue = item && typeof item === 'object' && typeof item[idKey] === 'string' ? item[idKey] : '';
-                const safeId =
-                  idKey && idValue
-                    ? ` data-ztracker-idkey="${escapeHtmlAttr(idKey)}" data-ztracker-idvalue="${escapeHtmlAttr(idValue)}"`
-                    : '';
-                const title = itemName
-                  ? `Regenerate ${safeKey} (${escapeHtmlAttr(itemName)})`
-                  : `Regenerate ${safeKey}[${index}]`;
-                return `<div class="ztracker-array-item-regenerate-button" data-ztracker-part="${safeKey}" data-ztracker-index="${index}"${safeName}${safeId} title="${title}">${label}</div>`;
-              })
-              .join('')}</div>
-          </details>`
+      const arrayItems = Array.isArray(value)
+        ? `<div class="ztracker-part-items" title="Regenerate individual items">${value
+            .map((item: any, index: number) => {
+              const label = escapeHtmlAttr(toShortLabel(item));
+              const itemName = item && typeof item === 'object' && typeof item.name === 'string' ? item.name : '';
+              const safeName = itemName ? ` data-ztracker-name="${escapeHtmlAttr(itemName)}"` : '';
+              const idKey =
+                typeof partsMeta?.[k]?.idKey === 'string' && partsMeta[k].idKey.trim() ? partsMeta[k].idKey.trim() : 'name';
+              const idValue = item && typeof item === 'object' && typeof item[idKey] === 'string' ? item[idKey] : '';
+              const safeId =
+                idKey && idValue
+                  ? ` data-ztracker-idkey="${escapeHtmlAttr(idKey)}" data-ztracker-idvalue="${escapeHtmlAttr(idValue)}"`
+                  : '';
+              const title = itemName
+                ? `Regenerate ${safeKey} (${escapeHtmlAttr(itemName)})`
+                : `Regenerate ${safeKey}[${index}]`;
+              return `<div class="ztracker-array-item-regenerate-button" data-ztracker-part="${safeKey}" data-ztracker-index="${index}"${safeName}${safeId} title="${title}">${label}</div>`;
+            })
+            .join('')}</div>`
         : '';
 
       return `<div class="ztracker-part-row">
         <div class="ztracker-part-regenerate-button" data-ztracker-part="${safeKey}" title="Regenerate ${safeKey}">${safeKey}</div>
-        ${arrayMenu}
+        ${arrayItems}
       </div>`;
     })
     .join('');
