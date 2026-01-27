@@ -7,6 +7,8 @@ import {
   getArrayItemIdentityKey,
   getTopLevelSchemaKeys,
   mergeTrackerPart,
+  redactTrackerArrayItemValue,
+  redactTrackerPartValue,
   replaceTrackerArrayItem,
   replaceTrackerArrayItemField,
   redactTrackerArrayItemFieldValue,
@@ -147,6 +149,18 @@ describe('tracker parts helpers', () => {
     expect((redacted as any).characters[0].makeup).toBeUndefined();
     expect((redacted as any).characters[0].outfit).toBe('o1');
     expect((redacted as any).characters[1].makeup).toBe('old2');
+  });
+
+  it('redacts a top-level part value for prompt context', () => {
+    const current = { time: 't', topics: { a: 1 }, weather: 'w' };
+    const redacted = redactTrackerPartValue(current, 'topics');
+    expect(redacted).toEqual({ time: 't', weather: 'w' });
+  });
+
+  it('redacts a single array element value for prompt context (keeps index stable)', () => {
+    const current = { charactersPresent: ['Alice', 'Bob', 'Cara'], time: 't' };
+    const redacted = redactTrackerArrayItemValue(current, 'charactersPresent', 1);
+    expect(redacted).toEqual({ charactersPresent: ['Alice', null, 'Cara'], time: 't' });
   });
 
   it('finds array item index by name (exact, then unique case-insensitive)', () => {
