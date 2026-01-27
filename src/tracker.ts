@@ -92,7 +92,14 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
       const value = (trackerData as any)?.[k];
       const arrayMenu = Array.isArray(value)
         ? `<details class="ztracker-array-details">
-            <summary class="ztracker-array-summary" title="Regenerate individual items">items</summary>
+            <summary class="ztracker-array-summary" title="Regenerate individual items">${escapeHtmlAttr(
+              value.length === 0
+                ? 'items'
+                : value
+                    .slice(0, 3)
+                    .map((v: any) => toShortLabel(v, 14))
+                    .join(', ') + (value.length > 3 ? ` … (${value.length})` : ''),
+            )}</summary>
             <div class="ztracker-array-list">${value
               .map((item: any, index: number) => {
                 const label = escapeHtmlAttr(toShortLabel(item));
