@@ -9,6 +9,7 @@ export const CHAT_METADATA_SCHEMA_PRESET_KEY = 'schemaKey';
 export const CHAT_MESSAGE_SCHEMA_VALUE_KEY = 'value';
 export const CHAT_MESSAGE_SCHEMA_HTML_KEY = 'html';
 export const CHAT_MESSAGE_PARTS_ORDER_KEY = 'partsOrder';
+export const CHAT_MESSAGE_PARTS_META_KEY = 'partsMeta';
 
 function escapeHtmlAttr(value: string): string {
   return String(value)
@@ -17,6 +18,20 @@ function escapeHtmlAttr(value: string): string {
     .replaceAll("'", '&#39;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;');
+}
+
+function toShortLabel(value: unknown, maxLen = 28): string {
+  let text: string;
+  if (typeof value === 'string') {
+    text = value;
+  } else if (value && typeof value === 'object') {
+    const name = (value as any).name;
+    text = typeof name === 'string' && name.trim() ? name : '[object]';
+  } else {
+    text = String(value);
+  }
+  text = text.replaceAll('\n', ' ').trim();
+  return text.length > maxLen ? `${text.slice(0, maxLen - 1)}…` : text;
 }
 
 export interface TrackerContext {
@@ -70,10 +85,38 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
 
   const partsOrder: string[] =
     (message.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PARTS_ORDER_KEY] as any) ?? Object.keys(trackerData ?? {});
+  const partsMeta: Record<string, any> = (message.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PARTS_META_KEY] as any) ?? {};
   const partsButtons = partsOrder
     .map((k) => {
       const safeKey = escapeHtmlAttr(k);
-      return `<div class="ztracker-part-regenerate-button" data-ztracker-part="${safeKey}" title="Regenerate ${safeKey}">${safeKey}</div>`;
+      const value = (trackerData as any)?.[k];
+      const arrayMenu = Array.isArray(value)
+        ? `<details class="ztracker-array-details">
+            <summary class="ztracker-array-summary" title="Regenerate individual items">items</summary>
+            <div class="ztracker-array-list">${value
+              .map((item: any, index: number) => {
+                const label = escapeHtmlAttr(toShortLabel(item));
+                const itemName = item && typeof item === 'object' && typeof item.name === 'string' ? item.name : '';
+                const safeName = itemName ? ` data-ztracker-name="${escapeHtmlAttr(itemName)}"` : '';
+                const idKey = typeof partsMeta?.[k]?.idKey === 'string' && partsMeta[k].idKey.trim() ? partsMeta[k].idKey.trim() : 'name';
+                const idValue = item && typeof item === 'object' && typeof item[idKey] === 'string' ? item[idKey] : '';
+                const safeId =
+                  idKey && idValue
+                    ? ` data-ztracker-idkey="${escapeHtmlAttr(idKey)}" data-ztracker-idvalue="${escapeHtmlAttr(idValue)}"`
+                    : '';
+                const title = itemName
+                  ? `Regenerate ${safeKey} (${escapeHtmlAttr(itemName)})`
+                  : `Regenerate ${safeKey}[${index}]`;
+                return `<div class="ztracker-array-item-regenerate-button" data-ztracker-part="${safeKey}" data-ztracker-index="${index}"${safeName}${safeId} title="${title}">${label}</div>`;
+              })
+              .join('')}</div>
+          </details>`
+        : '';
+
+      return `<div class="ztracker-part-row">
+        <div class="ztracker-part-regenerate-button" data-ztracker-part="${safeKey}" title="Regenerate ${safeKey}">${safeKey}</div>
+        ${arrayMenu}
+      </div>`;
     })
     .join('');
 

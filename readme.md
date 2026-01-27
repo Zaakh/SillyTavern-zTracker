@@ -52,6 +52,10 @@ When a tracker is rendered on a message, use the tracker controls:
 - **Regenerate Tracker** (rotate icon) regenerates the whole tracker.
 - **Parts menu** (list icon) lets you regenerate an individual top-level field (e.g. `time`, `location`, `topics`) without regenerating everything.
 
+Optional (advanced): you can annotate your JSON schema preset to help zTracker keep interdependent sections ordered and array items stable:
+- `x-ztracker-dependsOn`: top-level part ordering hints for sequential generation.
+- `x-ztracker-idKey`: which string field to use as the array-item identity for per-item regeneration (defaults to `name`).
+
 ## World Info (lorebooks)
 
 In **Extensions → zTracker**, you can control World Info during tracker generation: include all (default), exclude all, or allowlist specific lorebook **book names** (case-insensitive) and/or entry **UIDs** (numbers). This only affects zTracker tracker generation (button / Auto Mode), not normal SillyTavern generations.

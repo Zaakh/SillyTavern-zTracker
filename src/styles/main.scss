@@ -22,7 +22,8 @@
 
 .mes_ztracker_button.spinning,
 .ztracker-regenerate-button.spinning,
-.ztracker-part-regenerate-button.spinning {
+.ztracker-part-regenerate-button.spinning,
+.ztracker-array-item-regenerate-button.spinning {
   animation: spin 2s linear infinite;
 }
 
@@ -79,11 +80,50 @@
 			z-index: 2;
 		}
 
+		.ztracker-part-row {
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
+		}
+
 		.ztracker-part-regenerate-button {
 			cursor: pointer;
 			padding: 4px 6px;
 			border-radius: 4px;
 			font-size: 0.85em;
+			opacity: 0.9;
+			user-select: none;
+			white-space: nowrap;
+
+			&:hover {
+				background: rgba(255, 255, 255, 0.08);
+			}
+		}
+
+		.ztracker-array-details {
+			margin: 0;
+			padding-left: 6px;
+			opacity: 0.9;
+			
+			summary {
+				cursor: pointer;
+				font-size: 0.8em;
+				opacity: 0.7;
+			}
+			
+			.ztracker-array-list {
+				margin-top: 4px;
+				display: flex;
+				flex-direction: column;
+				gap: 4px;
+			}
+		}
+
+		.ztracker-array-item-regenerate-button {
+			cursor: pointer;
+			padding: 4px 6px;
+			border-radius: 4px;
+			font-size: 0.82em;
 			opacity: 0.9;
 			user-select: none;
 			white-space: nowrap;

@@ -33,6 +33,26 @@ export async function initializeGlobalUI(options: {
     const messageId = Number(messageEl.getAttribute('mesid'));
     if (isNaN(messageId)) return;
 
+    const itemButton = target.closest('.ztracker-array-item-regenerate-button') as HTMLElement | null;
+    if (itemButton) {
+      const partKey = itemButton.getAttribute('data-ztracker-part') ?? '';
+      const indexText = itemButton.getAttribute('data-ztracker-index') ?? '';
+      const index = Number(indexText);
+      const name = itemButton.getAttribute('data-ztracker-name') ?? '';
+      const idKey = itemButton.getAttribute('data-ztracker-idkey') ?? '';
+      const idValue = itemButton.getAttribute('data-ztracker-idvalue') ?? '';
+
+      if (partKey && idKey && idValue && 'generateTrackerArrayItemByIdentity' in actions) {
+        // @ts-ignore - optional capability depending on build/version.
+        actions.generateTrackerArrayItemByIdentity(messageId, partKey, idKey, idValue);
+      } else if (partKey && name) {
+        actions.generateTrackerArrayItemByName(messageId, partKey, name);
+      } else if (partKey && !isNaN(index)) {
+        actions.generateTrackerArrayItem(messageId, partKey, index);
+      }
+      return;
+    }
+
     const partButton = target.closest('.ztracker-part-regenerate-button') as HTMLElement | null;
     if (partButton) {
       const partKey = partButton.getAttribute('data-ztracker-part') ?? '';

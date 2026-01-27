@@ -203,12 +203,14 @@ export const DEFAULT_SCHEMA_VALUE: object = {
       type: 'array',
       items: {
         type: 'string',
-        description: 'Character name',
+        description: 'Character names',
       },
       description: 'List of character names present in scene',
     },
     characters: {
       type: 'array',
+      'x-ztracker-dependsOn': ['charactersPresent'],
+      'x-ztracker-idKey': 'name',
       items: {
         type: 'object',
         properties: {
