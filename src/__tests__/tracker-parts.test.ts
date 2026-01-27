@@ -1,4 +1,5 @@
 import {
+  buildArrayItemFieldSchema,
   buildArrayItemSchema,
   buildTopLevelPartSchema,
   findArrayItemIndexByIdentity,
@@ -7,6 +8,7 @@ import {
   getTopLevelSchemaKeys,
   mergeTrackerPart,
   replaceTrackerArrayItem,
+  replaceTrackerArrayItemField,
   resolveTopLevelPartsOrder,
 } from '../tracker-parts.js';
 
@@ -94,10 +96,39 @@ describe('tracker parts helpers', () => {
     expect(itemSchema.properties.item.type).toBe('object');
   });
 
+  it('builds an array item field schema using properties.value', () => {
+    const s = {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      title: 'SceneTracker',
+      type: 'object',
+      properties: {
+        characters: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { outfit: { type: 'string' } },
+            required: ['outfit'],
+          },
+        },
+      },
+    };
+
+    const fieldSchema = buildArrayItemFieldSchema(s, 'characters', 'outfit');
+    expect(fieldSchema.type).toBe('object');
+    expect(fieldSchema.required).toEqual(['value']);
+    expect(fieldSchema.properties.value.type).toBe('string');
+  });
+
   it('replaces a single array item without changing other items', () => {
     const current = { characters: [{ name: 'A' }, { name: 'B' }], time: 't' };
     const next = replaceTrackerArrayItem(current, 'characters', 1, { name: 'C' });
     expect(next).toEqual({ characters: [{ name: 'A' }, { name: 'C' }], time: 't' });
+  });
+
+  it('replaces a single array item field without changing other fields', () => {
+    const current = { characters: [{ name: 'A', outfit: 'o1' }, { name: 'B', outfit: 'o2' }], time: 't' };
+    const next = replaceTrackerArrayItemField(current, 'characters', 1, 'outfit', 'o3');
+    expect(next).toEqual({ characters: [{ name: 'A', outfit: 'o1' }, { name: 'B', outfit: 'o3' }], time: 't' });
   });
 
   it('finds array item index by name (exact, then unique case-insensitive)', () => {

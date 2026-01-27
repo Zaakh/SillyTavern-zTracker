@@ -23,7 +23,8 @@
 .mes_ztracker_button.spinning,
 .ztracker-regenerate-button.spinning,
 .ztracker-part-regenerate-button.spinning,
-.ztracker-array-item-regenerate-button.spinning {
+.ztracker-array-item-regenerate-button.spinning,
+.ztracker-array-item-field-regenerate-button.spinning {
   animation: spin 2s linear infinite;
 }
 
@@ -125,6 +126,12 @@
 			overflow: auto;
 		}
 
+		.ztracker-array-item-row {
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
+		}
+
 		.ztracker-array-item-regenerate-button {
 			cursor: pointer;
 			padding: 6px 8px;
@@ -135,6 +142,29 @@
 			white-space: normal;
 			word-break: break-word;
 			background: var(--ztracker-menu-item-bg, rgba(255, 255, 255, 0.03));
+
+			&:hover {
+				background: var(--ztracker-menu-hover-bg, rgba(255, 255, 255, 0.10));
+			}
+		}
+
+		.ztracker-array-item-fields {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 6px;
+			padding-left: 8px;
+		}
+
+		.ztracker-array-item-field-regenerate-button {
+			cursor: pointer;
+			padding: 4px 6px;
+			border-radius: 999px;
+			font-size: 0.82em;
+			opacity: 0.98;
+			user-select: none;
+			white-space: nowrap;
+			background: var(--ztracker-menu-item-bg, rgba(255, 255, 255, 0.03));
+			border: 1px solid var(--ztracker-menu-border, rgba(255, 255, 255, 0.12));
 
 			&:hover {
 				background: var(--ztracker-menu-hover-bg, rgba(255, 255, 255, 0.10));

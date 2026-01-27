@@ -7,6 +7,7 @@ import {
   renderTracker,
   CHAT_MESSAGE_SCHEMA_VALUE_KEY,
   CHAT_MESSAGE_SCHEMA_HTML_KEY,
+  CHAT_MESSAGE_PARTS_META_KEY,
   TrackerContext,
 } from '../tracker.js';
 import { EXTENSION_KEY } from '../extension-metadata.js';
@@ -65,6 +66,40 @@ describe('renderTracker', () => {
     ).map((el) => (el as HTMLElement).textContent);
 
     expect(items).toEqual(['Alice', 'Bob']);
+  });
+
+  it('renders per-field regeneration buttons for object array items', () => {
+    const context: TrackerContext = {
+      chat: [
+        {
+          extra: {
+            [EXTENSION_KEY]: {
+              [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+                time: '10:00',
+                characters: [
+                  { name: 'Alice', outfit: 'o1', hair: 'h1' },
+                  { name: 'Bob', outfit: 'o2', hair: 'h2' },
+                ],
+              },
+              [CHAT_MESSAGE_SCHEMA_HTML_KEY]: template,
+              [CHAT_MESSAGE_PARTS_META_KEY]: {
+                characters: { idKey: 'name', fields: ['outfit'] },
+              },
+            },
+          },
+        } as any,
+      ],
+    };
+
+    renderTracker(0, { context, document, handlebars: Handlebars });
+
+    const outfitButtons = Array.from(
+      document.querySelectorAll(
+        '.ztracker-array-item-field-regenerate-button[data-ztracker-part="characters"][data-ztracker-field="outfit"]',
+      ),
+    ).map((el) => (el as HTMLElement).textContent);
+
+    expect(outfitButtons).toEqual(['outfit', 'outfit']);
   });
 
   it('removes previous tracker markup when data has been cleared', () => {
