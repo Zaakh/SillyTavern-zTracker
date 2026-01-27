@@ -1,7 +1,7 @@
 # Spec: Sequential per-part tracker generation
 
 Status: Completed
-Last updated: 2026-01-26
+Last updated: 2026-01-27
 
 ## Goal
 Allow zTracker to generate a tracker **in parts**, sequentially (one part after another), and provide UI controls to **regenerate individual parts** for a given chat message.
@@ -86,6 +86,12 @@ A later phase may allow a settings override:
 
 Not required for initial implementation.
 
+### Optional schema annotations (implemented)
+Schema presets may add extension fields on **top-level properties**:
+
+- `x-ztracker-dependsOn`: `string | string[]` list of other top-level keys that should be generated before this part. If a dependency cycle is detected, zTracker falls back to the schema’s declared property order.
+- `x-ztracker-idKey`: `string` identity field name for arrays of objects. Used by per-array-item regeneration to match items by a stable identifier (defaults to `name`).
+
 ## Reduced schema construction
 Given the active full schema `S` (draft-07-ish JSON Schema object), and a part key `k`:
 
@@ -141,9 +147,21 @@ Initial implementation should:
 Each part request should:
 - Include the same conversational context window as full generation.
 - Include prior zTracker snapshots (existing behavior).
+- Include the current tracker for this message (when present) so dependent fields can stay consistent.
 - Add an explicit instruction message:
   - “Generate ONLY the field `<k>` as valid output matching the provided schema.”
   - “Keep it consistent with the current tracker and recent messages.”
+
+### Array item regeneration
+When regenerating an array part’s individual element (e.g. `characters[1]`):
+- Include the full current tracker snapshot.
+- Include the current item snapshot (index + current value) to preserve identity.
+- Request a schema shaped as `{ "item": <itemsSchema> }` and replace only that one element.
+
+When the array items are objects with a stable identifier (e.g. `character.name`), regeneration should prefer matching by that identifier instead of by index:
+- UI carries `data-ztracker-name` for items with `name`.
+- Action resolves the current index by `name`, then replaces that item.
+- Prompt includes an explicit instruction to preserve `name` exactly.
 
 ### Formats
 - **Native**: request `json_schema` with `S_part`.
