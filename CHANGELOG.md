@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Parts menu styling is theme-aware and avoids transparent backgrounds.
 - Field-level regeneration prompts omit the old field value to reduce accidental repetition.
 - Full tracker regeneration no longer sends the prior tracker as prompt context; part/item regeneration redacts the target content to reduce repetition anchoring.
+- Embedded tracker snapshot injection now considers the last message in the prompt chat array (fixes missing injection for SillyTavern Options → Regenerate).
 
 
 ### Changed
