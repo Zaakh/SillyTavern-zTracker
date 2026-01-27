@@ -70,69 +70,70 @@
 			position: absolute;
 			right: 0;
 			top: 22px;
-			min-width: 160px;
-			padding: 6px;
+			min-width: 260px;
+			padding: 10px;
 			background: var(--background_color);
 			border: 1px solid rgba(255, 255, 255, 0.12);
 			border-radius: 6px;
 			display: flex;
 			flex-direction: column;
-			gap: 4px;
+			gap: 8px;
 			z-index: 6000;
 			max-height: 50vh;
 			overflow: auto;
 			box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+			font-size: 0.95em;
+			line-height: 1.25;
 		}
 
 		.ztracker-part-row {
 			display: flex;
 			flex-direction: column;
-			gap: 4px;
+			gap: 6px;
+			padding-bottom: 8px;
+			border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+			&:last-child {
+				border-bottom: 0;
+				padding-bottom: 0;
+			}
 		}
 
 		.ztracker-part-regenerate-button {
 			cursor: pointer;
-			padding: 4px 6px;
+			padding: 6px 8px;
 			border-radius: 4px;
-			font-size: 0.85em;
-			opacity: 0.9;
+			font-size: 0.95em;
+			font-weight: 600;
+			opacity: 0.95;
 			user-select: none;
 			white-space: nowrap;
+			background: rgba(255, 255, 255, 0.06);
 
 			&:hover {
 				background: rgba(255, 255, 255, 0.08);
 			}
 		}
 
-		.ztracker-array-details {
-			margin: 0;
-			padding-left: 6px;
-			opacity: 0.9;
-			
-			summary {
-				cursor: pointer;
-				font-size: 0.8em;
-				opacity: 0.7;
-			}
-			
-			.ztracker-array-list {
-				margin-top: 4px;
-				display: flex;
-				flex-direction: column;
-				gap: 4px;
-				max-height: 35vh;
-				overflow: auto;
-			}
+		.ztracker-part-items {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+			padding-left: 10px;
+			max-height: 35vh;
+			overflow: auto;
 		}
 
 		.ztracker-array-item-regenerate-button {
 			cursor: pointer;
-			padding: 4px 6px;
+			padding: 6px 8px;
 			border-radius: 4px;
-			font-size: 0.82em;
-			opacity: 0.9;
+			font-size: 0.92em;
+			opacity: 0.98;
 			user-select: none;
-			white-space: nowrap;
+			white-space: normal;
+			word-break: break-word;
+			background: rgba(255, 255, 255, 0.03);
 
 			&:hover {
 				background: rgba(255, 255, 255, 0.08);
