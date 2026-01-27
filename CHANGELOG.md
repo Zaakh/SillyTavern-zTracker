@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Parts menu usability: array submenus show item previews (instead of generic "items") and render above chat content.
 - Parts menu styling is theme-aware and avoids transparent backgrounds.
+- Field-level regeneration prompts omit the old field value to reduce accidental repetition.
 
 
 ### Changed

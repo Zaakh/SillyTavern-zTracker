@@ -30,6 +30,7 @@ import {
   mergeTrackerPart,
   replaceTrackerArrayItem,
   replaceTrackerArrayItemField,
+  redactTrackerArrayItemFieldValue,
 } from '../tracker-parts.js';
 import { checkTemplateUrl, getExtensionRoot, getTemplateUrl } from './templates.js';
 import { debugLog, isDebugLoggingEnabled } from './debug.js';
@@ -947,16 +948,36 @@ export function createTrackerActions(options: {
         throw new Error(`Array item is not an object at ${partKey}[${index}]`);
       }
 
+      const idKey = getArrayItemIdentityKey(chatJsonValue, partKey);
+      const idValue = typeof (currentItem as any)?.[idKey] === 'string' ? String((currentItem as any)[idKey]) : '';
+
+      const itemContext = structuredClone(currentItem);
+      if (fieldKey in (itemContext as any)) {
+        delete (itemContext as any)[fieldKey];
+      }
+
+      const redactedTracker = redactTrackerArrayItemFieldValue(currentTracker, partKey, index, fieldKey);
+
       const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
       const partsMeta = buildPartsMeta(chatJsonValue);
       const fieldSchema = buildArrayItemFieldSchema(chatJsonValue, partKey, fieldKey);
       const makeRequest = makeRequestFactory(id, settings);
 
-      appendCurrentTrackerSnapshot(messages as any, currentTracker, 'Current tracker for this message (keep consistent):');
       appendCurrentTrackerSnapshot(
         messages as any,
-        { part: partKey, index, field: fieldKey, currentItem },
-        'Regenerate ONLY this field within this array item:',
+        redactedTracker,
+        'Current tracker for this message (target field omitted for freshness; keep everything else consistent):',
+      );
+      appendCurrentTrackerSnapshot(
+        messages as any,
+        {
+          part: partKey,
+          index,
+          ...(idKey && idValue ? { idKey, idValue } : {}),
+          field: fieldKey,
+          itemContext,
+        },
+        'Regenerate ONLY this field within this array item (field value intentionally omitted):',
       );
 
       let fieldResponse: any;
@@ -964,7 +985,7 @@ export function createTrackerActions(options: {
       if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
         messages.push({
           role: 'user',
-          content: `${settings.prompt}\n\nRegenerate ONLY ${partKey}[${index}].${fieldKey}. Return a single JSON object with key "value" that matches the provided schema. Do not change or rename the array item; only update that field.`,
+          content: `${settings.prompt}\n\nRegenerate ONLY ${partKey}[${index}].${fieldKey}. Return a single JSON object with key "value" that matches the provided schema. Do not change or rename the array item; only update that field. IMPORTANT: Generate a fresh value; the previous value has been intentionally omitted and must not be repeated.`,
         } as any);
         const result = await makeRequest(messages, {
           json_schema: { name: 'SceneTrackerItemField', strict: true, value: fieldSchema },

@@ -240,6 +240,38 @@ export function replaceTrackerArrayItemField(
   return base;
 }
 
+export function redactTrackerArrayItemFieldValue(
+  currentTracker: any,
+  partKey: string,
+  index: number,
+  fieldKey: string,
+): any {
+  const base = currentTracker && typeof currentTracker === 'object' ? structuredClone(currentTracker) : {};
+  const arr = (base as any)[partKey];
+  if (!Array.isArray(arr)) {
+    throw new Error(`Tracker field is not an array: ${partKey}`);
+  }
+  if (index < 0 || index >= arr.length) {
+    throw new Error(`Array index out of range for ${partKey}: ${index}`);
+  }
+
+  const item = arr[index];
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    throw new Error(`Array item is not an object at ${partKey}[${index}]`);
+  }
+  if (!fieldKey) {
+    throw new Error('Field key is required');
+  }
+
+  // Remove the old value entirely so the model isn't anchored to it.
+  if (fieldKey in (item as any)) {
+    delete (item as any)[fieldKey];
+  }
+
+  arr[index] = item;
+  return base;
+}
+
 export function findArrayItemIndexByName(items: unknown[], name: string): number {
   if (!Array.isArray(items)) return -1;
   if (!name) return -1;

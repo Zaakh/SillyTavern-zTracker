@@ -9,6 +9,7 @@ import {
   mergeTrackerPart,
   replaceTrackerArrayItem,
   replaceTrackerArrayItemField,
+  redactTrackerArrayItemFieldValue,
   resolveTopLevelPartsOrder,
 } from '../tracker-parts.js';
 
@@ -129,6 +130,23 @@ describe('tracker parts helpers', () => {
     const current = { characters: [{ name: 'A', outfit: 'o1' }, { name: 'B', outfit: 'o2' }], time: 't' };
     const next = replaceTrackerArrayItemField(current, 'characters', 1, 'outfit', 'o3');
     expect(next).toEqual({ characters: [{ name: 'A', outfit: 'o1' }, { name: 'B', outfit: 'o3' }], time: 't' });
+  });
+
+  it('redacts a single array item field value for prompt context', () => {
+    const current = {
+      characters: [
+        { name: 'A', makeup: 'old', outfit: 'o1' },
+        { name: 'B', makeup: 'old2', outfit: 'o2' },
+      ],
+      time: 't',
+    };
+
+    const redacted = redactTrackerArrayItemFieldValue(current, 'characters', 0, 'makeup');
+    expect((redacted as any).time).toBe('t');
+    expect((redacted as any).characters[0].name).toBe('A');
+    expect((redacted as any).characters[0].makeup).toBeUndefined();
+    expect((redacted as any).characters[0].outfit).toBe('o1');
+    expect((redacted as any).characters[1].makeup).toBe('old2');
   });
 
   it('finds array item index by name (exact, then unique case-insensitive)', () => {
