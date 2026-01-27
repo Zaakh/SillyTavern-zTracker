@@ -11,6 +11,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Sequential per-part tracker generation mode (dependency-aware via current tracker snapshot) and per-part/per-array-item regenerate menu on messages.
 - Schema annotations for part ordering and array identity: `x-ztracker-dependsOn` and `x-ztracker-idKey`.
 
+### Fixed
+
+- Parts menu usability: array submenus show item previews (instead of generic "items") and render above chat content.
+
 
 ### Changed
 
