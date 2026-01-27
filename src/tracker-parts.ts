@@ -140,6 +140,49 @@ export function buildArrayItemSchema(schema: any, partKey: string): any {
   return itemSchema;
 }
 
+export function buildArrayItemFieldSchema(schema: any, partKey: string, fieldKey: string): any {
+  const partDef = schema?.properties?.[partKey];
+  if (!partDef) {
+    throw new Error(`Unknown schema part: ${partKey}`);
+  }
+
+  const itemsDef = partDef?.items;
+  if (!itemsDef) {
+    throw new Error(`Schema part is not an array with items: ${partKey}`);
+  }
+  if (itemsDef?.type !== 'object') {
+    throw new Error(`Schema array items are not an object: ${partKey}`);
+  }
+
+  const props = itemsDef?.properties;
+  if (!props || typeof props !== 'object') {
+    throw new Error(`Schema array items missing properties: ${partKey}`);
+  }
+  const fieldDef = (props as any)[fieldKey];
+  if (!fieldDef) {
+    throw new Error(`Unknown array item field: ${partKey}.${fieldKey}`);
+  }
+
+  const fieldSchema: any = {
+    $schema: schema?.$schema ?? 'http://json-schema.org/draft-07/schema#',
+    title: `${schema?.title ?? 'SceneTracker'}${partKey}Item${fieldKey}Field`,
+    type: 'object',
+    properties: {
+      value: fieldDef,
+    },
+    required: ['value'],
+  };
+
+  if (schema?.definitions) {
+    fieldSchema.definitions = schema.definitions;
+  }
+  if (schema?.$defs) {
+    fieldSchema.$defs = schema.$defs;
+  }
+
+  return fieldSchema;
+}
+
 export function mergeTrackerPart(currentTracker: any, partKey: string, partObject: any): any {
   if (!partObject || typeof partObject !== 'object') {
     throw new Error('Part response must be an object');
@@ -164,6 +207,35 @@ export function replaceTrackerArrayItem(currentTracker: any, partKey: string, in
   if (index < 0 || index >= arr.length) {
     throw new Error(`Array index out of range for ${partKey}: ${index}`);
   }
+  arr[index] = item;
+  return base;
+}
+
+export function replaceTrackerArrayItemField(
+  currentTracker: any,
+  partKey: string,
+  index: number,
+  fieldKey: string,
+  value: unknown,
+): any {
+  const base = currentTracker && typeof currentTracker === 'object' ? structuredClone(currentTracker) : {};
+  const arr = (base as any)[partKey];
+  if (!Array.isArray(arr)) {
+    throw new Error(`Tracker field is not an array: ${partKey}`);
+  }
+  if (index < 0 || index >= arr.length) {
+    throw new Error(`Array index out of range for ${partKey}: ${index}`);
+  }
+
+  const item = arr[index];
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    throw new Error(`Array item is not an object at ${partKey}[${index}]`);
+  }
+  if (!fieldKey) {
+    throw new Error('Field key is required');
+  }
+
+  (item as any)[fieldKey] = value;
   arr[index] = item;
   return base;
 }

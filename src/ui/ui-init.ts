@@ -128,6 +128,36 @@ export async function initializeGlobalUI(options: {
     const messageId = Number(messageEl.getAttribute('mesid'));
     if (isNaN(messageId)) return;
 
+    const fieldButton = target.closest('.ztracker-array-item-field-regenerate-button') as HTMLElement | null;
+    if (fieldButton) {
+      const partKey = fieldButton.getAttribute('data-ztracker-part') ?? '';
+      const indexText = fieldButton.getAttribute('data-ztracker-index') ?? '';
+      const index = Number(indexText);
+      const name = fieldButton.getAttribute('data-ztracker-name') ?? '';
+      const idKey = fieldButton.getAttribute('data-ztracker-idkey') ?? '';
+      const idValue = fieldButton.getAttribute('data-ztracker-idvalue') ?? '';
+      const fieldKey = fieldButton.getAttribute('data-ztracker-field') ?? '';
+
+      if (
+        partKey &&
+        fieldKey &&
+        idKey &&
+        idValue &&
+        'generateTrackerArrayItemFieldByIdentity' in actions
+      ) {
+        // @ts-ignore - optional capability depending on build/version.
+        actions.generateTrackerArrayItemFieldByIdentity(messageId, partKey, idKey, idValue, fieldKey);
+      } else if (partKey && fieldKey && name && 'generateTrackerArrayItemFieldByName' in actions) {
+        // @ts-ignore - optional capability depending on build/version.
+        actions.generateTrackerArrayItemFieldByName(messageId, partKey, name, fieldKey);
+      } else if (partKey && fieldKey && !isNaN(index) && 'generateTrackerArrayItemField' in actions) {
+        // @ts-ignore - optional capability depending on build/version.
+        actions.generateTrackerArrayItemField(messageId, partKey, index, fieldKey);
+      }
+
+      return;
+    }
+
     const itemButton = target.closest('.ztracker-array-item-regenerate-button') as HTMLElement | null;
     if (itemButton) {
       const partKey = itemButton.getAttribute('data-ztracker-part') ?? '';

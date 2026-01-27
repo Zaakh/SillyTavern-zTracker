@@ -106,7 +106,24 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
               const title = itemName
                 ? `Regenerate ${safeKey} (${escapeHtmlAttr(itemName)})`
                 : `Regenerate ${safeKey}[${index}]`;
-              return `<div class="ztracker-array-item-regenerate-button" data-ztracker-part="${safeKey}" data-ztracker-index="${index}"${safeName}${safeId} title="${title}">${label}</div>`;
+
+              const fields: string[] = Array.isArray(partsMeta?.[k]?.fields) ? partsMeta[k].fields : [];
+              const fieldButtons = fields
+                .map((fieldKey: string) => {
+                  const safeField = escapeHtmlAttr(fieldKey);
+                  const fieldTitle = itemName
+                    ? `Regenerate ${safeKey} (${escapeHtmlAttr(itemName)}).${safeField}`
+                    : `Regenerate ${safeKey}[${index}].${safeField}`;
+                  return `<div class="ztracker-array-item-field-regenerate-button" data-ztracker-part="${safeKey}" data-ztracker-index="${index}" data-ztracker-field="${safeField}"${safeName}${safeId} title="${fieldTitle}">${safeField}</div>`;
+                })
+                .join('');
+
+              const fieldsBlock = fieldButtons ? `<div class="ztracker-array-item-fields">${fieldButtons}</div>` : '';
+
+              return `<div class="ztracker-array-item-row">
+                <div class="ztracker-array-item-regenerate-button" data-ztracker-part="${safeKey}" data-ztracker-index="${index}"${safeName}${safeId} title="${title}">${label}</div>
+                ${fieldsBlock}
+              </div>`;
             })
             .join('')}</div>`
         : '';
