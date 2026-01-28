@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+- _Nothing yet._
+
+## [1.1.3] - 2026-01-28
+
 ### Fixed
 
 - Parts menu array submenus are no longer clipped to the tracker height.

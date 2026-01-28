@@ -46,6 +46,10 @@ These instructions apply to all files in this repository.
 - This extension is loaded by SillyTavern from `manifest.json` and expects built assets:
 	- `dist/index.js`
 	- `dist/style.css`
+
+### Do not copy build outputs between projects
+- Do not copy `dist/*` assets between this repo and any SillyTavern repo/folder.
+- Rebuild this repo (`npm run dev`/`npm run build`) and update SillyTavern manually (or install/link this repo as the extension folder) so sources and artifacts stay consistent.
 - For local development, prefer:
 	- `npm install`
 	- `npm run dev` (watch build)
