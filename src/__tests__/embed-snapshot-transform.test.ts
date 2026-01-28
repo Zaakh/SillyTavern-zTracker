@@ -7,19 +7,34 @@ import type { ExtensionSettings } from '../config.js';
 describe('formatEmbeddedTrackerSnapshot (minimal)', () => {
   it('transforms a nested object and writes an artifact file', async () => {
     const trackerValue = {
-      time: '10:00:00; 01/25/2026 (Sunday)',
-      location: 'Food court, second floor',
+      time: '14:32:05; 09/27/2025 (Saturday)',
+      location: 'Cozy downtown bar interior',
+      weather: 'Warm indoor, 72°F, no precipitation',
       topics: {
-        primaryTopic: 'Shopping',
-        emotionalTone: 'Playful',
-        interactionTheme: 'Teasing',
+        primaryTopic: 'Water request',
+        emotionalTone: 'Calm',
+        interactionTheme: 'Customer-service',
       },
-      charactersPresent: ['Alice', 'Bob'],
-      numbers: [1, 2, 3],
-      meta: {
-        flags: [true, false],
-        note: null,
-      },
+      charactersPresent: ['Silvia', 'Jeff'],
+      characters: [
+        {
+          name: 'Silvia',
+          hair: 'Long auburn hair, neatly tied back',
+          makeup: 'Light natural makeup',
+          outfit: 'Black apron over a white button-down shirt, dark slacks, black shoes',
+          stateOfDress: 'Professional and tidy',
+          postureAndInteraction:
+            "Silvia stands behind the polished wooden bar, leaning slightly forward with one hand resting on the counter, her eyes warm and attentive as she listens to the customer's request, occasionally glancing toward Jeff at the nearby stool.",
+        },
+        {
+          name: 'Jeff',
+          hair: 'Violet flames looking like hair',
+          makeup: 'None',
+          outfit: 'Jeff is a flaming elemental, he has not clothing but i clad in red flames',
+          stateOfDress: 'Clad in flames.',
+          postureAndInteraction: 'Sitting on a bar stool a few seats away.',
+        },
+      ],
     };
 
     const settings = {
@@ -51,24 +66,33 @@ describe('formatEmbeddedTrackerSnapshot (minimal)', () => {
     expect(wrapInCodeFence).toBe(false);
 
     const expected =
-      'time: "10:00:00; 01/25/2026 (Sunday)"\n\n' +
-      'location: "Food court, second floor"\n\n' +
+      'time: 14:32:05; 09/27/2025 (Saturday)\n' +
+      'location: Cozy downtown bar interior\n' +
+      'weather: Warm indoor, 72°F, no precipitation\n' +
       'topics:\n' +
-      '  primaryTopic: "Shopping"\n' +
-      '  emotionalTone: "Playful"\n' +
-      '  interactionTheme: "Teasing"\n\n' +
+      '  primaryTopic: Water request\n' +
+      '  emotionalTone: Calm\n' +
+      '  interactionTheme: Customer-service\n' +
       'charactersPresent:\n' +
-      '  - "Alice"\n' +
-      '  - "Bob"\n\n' +
-      'numbers:\n' +
-      '  - 1\n' +
-      '  - 2\n' +
-      '  - 3\n\n' +
-      'meta:\n' +
-      '  flags:\n' +
-      '    - true\n' +
-      '    - false\n' +
-      '  note: null\n';
+      '  - Silvia\n' +
+      '  - Jeff\n' +
+      'characters:\n' +
+      '  [Silvia:\n' +
+      '    name: Silvia\n' +
+      '    hair: Long auburn hair, neatly tied back\n' +
+      '    makeup: Light natural makeup\n' +
+      '    outfit: Black apron over a white button-down shirt, dark slacks, black shoes\n' +
+      '    stateOfDress: Professional and tidy\n' +
+      "    postureAndInteraction: Silvia stands behind the polished wooden bar, leaning slightly forward with one hand resting on the counter, her eyes warm and attentive as she listens to the customer's request, occasionally glancing toward Jeff at the nearby stool.\n" +
+      '  ]\n' +
+      '  [Jeff:\n' +
+      '    name: Jeff\n' +
+      '    hair: Violet flames looking like hair\n' +
+      '    makeup: None\n' +
+      '    outfit: Jeff is a flaming elemental, he has not clothing but i clad in red flames\n' +
+      '    stateOfDress: Clad in flames.\n' +
+      '    postureAndInteraction: Sitting on a bar stool a few seats away.\n' +
+      '  ]\n';
 
     expect(text).toBe(expected);
 
