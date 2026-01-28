@@ -6,17 +6,12 @@ A [SillyTavern](https://docs.sillytavern.app/) extension that helps you track yo
 
 Forked from [SillyTavern WTracker](https://github.com/bmen25124/SillyTavern-WTracker).
 
-![popup](images/overview.png)
+## Highlights (since the fork)
 
----
-
-**You can edit the schema for active chat.**
-
-![modify_for_this_chat](images/modify_for_this_chat.png)
-
----
-
-![settings](images/settings.gif)
+- Optional **Sequential generation** (generate trackers in smaller steps).
+- **Regenerate only what you need** from the parts menu (one section, one list item like a character, or even one field).
+- **Filter World Info used for tracker generation** (allow only selected lorebooks/entries when needed).
+- Optional **embed recent tracker snapshots** into normal generations for better continuity (either full JSON or a compact plain-text format).
 
 ---
 
@@ -81,28 +76,7 @@ You can customize (or remove) the embedded snapshot header via **Embed snapshot 
 - **Default (JSON)**: embeds pretty-printed JSON (no changes).
 - **Minimal (top-level properties)**: embeds one line per top-level property (newline-separated).
 
-> What is the difference compared to [famous tracker](https://github.com/kaldigo/SillyTavern-Tracker)?
-
-Most importantly, it works. This is a minimalistic version of the original tracker.
-- No annoying connection profile switch. (This is the reason why I created this extension in the first place.)
-- No "Prompt Maker" option. Because JSON schema is easy enough to edit.
-- No "Generation Target" option. (Could be added in the future)
-- No "Generation Mode" option. Since this extension doesn't summarize the chat, no need for it. (I'm not planning to add a summarize feature.)
-- There are some templates in the original, but I don't need them since I don't have those features.
 
 ## Versioning
 
-- Canonical version lives in `package.json`; `manifest.json` is derived. Do not edit manifest version manually.
-- `npm run sync-version` updates derived files; it runs automatically before dev/build/test and during `npm version`.
-- CI can run `npm run check-version` (strict mode) to fail fast on drift without rewriting files.
-- Bump versions with `npm version <patch|minor|major>` to keep SemVer tags and changelog aligned.
-- When bumping versions, stage changes under the `Unreleased` section in `CHANGELOG.md`, then move them into a dated release section (e.g., `1.0.0 - YYYY-MM-DD`).
-- See [CHANGELOG.md](CHANGELOG.md) for release history.
-
-## Development & testing
-
-Working on the extension locally?
-
-- Install dependencies once with `npm install`.
-- Run `npm test` to execute the Jest suite (parser/schema helpers + jsdom render tests).
-- For detailed guidance (module structure, mocks, watch mode), see [docs/SILLYTAVERN_DEV_NOTES.md](docs/SILLYTAVERN_DEV_NOTES.md#testing-workflow).
+Developer and maintainer notes (local dev, testing, versioning) are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
