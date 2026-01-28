@@ -13,6 +13,7 @@ type PartsMenuPortalState = {
   summary: HTMLElement;
   list: HTMLElement;
   placeholder: Comment;
+  messageId: number | null;
   reposition: () => void;
 };
 
@@ -120,12 +121,14 @@ function positionPartsMenu(list: HTMLElement, summary: HTMLElement): void {
 
   // Ensure we can measure width accurately.
   const width = Math.max(list.offsetWidth, 260);
-  const maxLeft = Math.max(viewportMargin, window.innerWidth - viewportMargin - width);
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+  const maxLeft = Math.max(scrollX + viewportMargin, scrollX + window.innerWidth - viewportMargin - width);
   const desiredLeft = rect.right - width;
-  const left = Math.max(viewportMargin, Math.min(desiredLeft, maxLeft));
+  const left = Math.max(scrollX + viewportMargin, Math.min(desiredLeft + scrollX, maxLeft));
   const maxHeightPx = Math.max(120, window.innerHeight - top - viewportMargin);
 
-  list.style.top = `${Math.round(top)}px`;
+  list.style.top = `${Math.round(top + scrollY)}px`;
   list.style.left = `${Math.round(left)}px`;
   list.style.maxHeight = `${Math.round(maxHeightPx)}px`;
 }
@@ -138,6 +141,9 @@ function closeActivePartsMenu(): void {
 
 function restorePartsMenu(state: PartsMenuPortalState): void {
   state.list.classList.remove('ztracker-parts-list-portal');
+  state.list.style.removeProperty('position');
+  state.list.style.removeProperty('z-index');
+  state.list.style.removeProperty('right');
   state.list.style.removeProperty('top');
   state.list.style.removeProperty('left');
   state.list.style.removeProperty('max-height');
@@ -169,8 +175,19 @@ function portalPartsMenu(details: HTMLDetailsElement): void {
   document.body.append(list);
   list.classList.add('ztracker-parts-list-portal');
 
+  // Critical portal styling: once portaled, the list is no longer under `.mes_ztracker`,
+  // so nested CSS selectors won't apply. Keep it clickable/overlayed regardless.
+  list.style.position = 'absolute';
+  list.style.zIndex = '2147483647';
+  list.style.right = 'auto';
+
+  const messageEl = details.closest('.mes');
+  const messageIdText = messageEl?.getAttribute('mesid') ?? '';
+  const parsedMessageId = Number(messageIdText);
+  const messageId = Number.isFinite(parsedMessageId) ? parsedMessageId : null;
+
   const reposition = () => positionPartsMenu(list, summary);
-  const state: PartsMenuPortalState = { details, summary, list, placeholder, reposition };
+  const state: PartsMenuPortalState = { details, summary, list, placeholder, messageId, reposition };
   activePartsMenu = state;
 
   // Wait a frame so offsetWidth reflects the new layout.
@@ -260,11 +277,17 @@ export async function initializeGlobalUI(options: {
 
   document.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-    const messageEl = target.closest('.mes');
 
-    if (!messageEl) return;
-    const messageId = Number(messageEl.getAttribute('mesid'));
-    if (isNaN(messageId)) return;
+    let messageId: number | null = null;
+    const messageEl = target.closest('.mes');
+    if (messageEl) {
+      const parsed = Number(messageEl.getAttribute('mesid'));
+      if (!Number.isNaN(parsed)) messageId = parsed;
+    } else if (activePartsMenu && activePartsMenu.list.contains(target)) {
+      messageId = activePartsMenu.messageId;
+    }
+
+    if (messageId === null) return;
 
     const fieldButton = target.closest('.ztracker-array-item-field-regenerate-button') as HTMLElement | null;
     if (fieldButton) {
