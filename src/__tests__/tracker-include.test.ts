@@ -79,10 +79,10 @@ describe('includeZTrackerMessages', () => {
     const injected = result[1].content as string;
     expect(injected).not.toContain('```');
     expect(injected).toContain('Tracker:');
-    expect(injected).toContain('time: "10:00"');
-    expect(injected).toContain('location: "Mall"');
+    expect(injected).toContain('time: 10:00');
+    expect(injected).toContain('location: Mall');
     expect(injected).toContain('topics:\n');
-    expect(injected).toContain('  primaryTopic: "Talk"');
+    expect(injected).toContain('  primaryTopic: Talk');
   });
 
   it('can embed snapshots as system messages', () => {
