@@ -104,6 +104,12 @@
 			line-height: 1.25;
 		}
 
+		.ztracker-parts-list.ztracker-parts-list-portal {
+			position: fixed;
+			right: auto;
+			z-index: 999999;
+		}
+
 		.ztracker-part-row {
 			display: flex;
 			flex-direction: column;
