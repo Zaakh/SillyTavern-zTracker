@@ -97,6 +97,11 @@
   font-size: 0.95em;
   line-height: 1.25;
 }
+.mes_ztracker .ztracker-controls .ztracker-parts-list.ztracker-parts-list-portal {
+  position: fixed;
+  right: auto;
+  z-index: 999999;
+}
 .mes_ztracker .ztracker-controls .ztracker-part-row {
   display: flex;
   flex-direction: column;
