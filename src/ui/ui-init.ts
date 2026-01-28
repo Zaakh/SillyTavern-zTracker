@@ -8,6 +8,17 @@ import type { TrackerActions } from './tracker-actions.js';
 import { includeZTrackerMessages } from '../tracker.js';
 import { st_echo } from 'sillytavern-utils-lib/config';
 
+type PartsMenuPortalState = {
+  details: HTMLDetailsElement;
+  summary: HTMLElement;
+  list: HTMLElement;
+  placeholder: Comment;
+  messageId: number | null;
+  reposition: () => void;
+};
+
+let activePartsMenu: PartsMenuPortalState | null = null;
+
 const incomingTypes = [AutoModeOptions.RESPONSES, AutoModeOptions.BOTH];
 const outgoingTypes = [AutoModeOptions.INPUT, AutoModeOptions.BOTH];
 
@@ -103,6 +114,103 @@ function installZTrackerThemeObserver(): void {
   setZTrackerMenuThemeVars();
 }
 
+function positionPartsMenu(list: HTMLElement, summary: HTMLElement): void {
+  const rect = summary.getBoundingClientRect();
+  const viewportMargin = 8;
+  const top = rect.bottom + 6;
+
+  // Ensure we can measure width accurately.
+  const width = Math.max(list.offsetWidth, 260);
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+  const maxLeft = Math.max(scrollX + viewportMargin, scrollX + window.innerWidth - viewportMargin - width);
+  const desiredLeft = rect.right - width;
+  const left = Math.max(scrollX + viewportMargin, Math.min(desiredLeft + scrollX, maxLeft));
+  const maxHeightPx = Math.max(120, window.innerHeight - top - viewportMargin);
+
+  list.style.top = `${Math.round(top + scrollY)}px`;
+  list.style.left = `${Math.round(left)}px`;
+  list.style.maxHeight = `${Math.round(maxHeightPx)}px`;
+}
+
+function closeActivePartsMenu(): void {
+  if (!activePartsMenu) return;
+  // Toggling open=false triggers the restoration handler.
+  activePartsMenu.details.open = false;
+}
+
+function restorePartsMenu(state: PartsMenuPortalState): void {
+  state.list.classList.remove('ztracker-parts-list-portal');
+  state.list.style.removeProperty('position');
+  state.list.style.removeProperty('z-index');
+  state.list.style.removeProperty('right');
+  state.list.style.removeProperty('top');
+  state.list.style.removeProperty('left');
+  state.list.style.removeProperty('max-height');
+  state.list.style.removeProperty('visibility');
+
+  if (state.placeholder.parentNode) {
+    state.placeholder.replaceWith(state.list);
+  } else {
+    // If the tracker/message was rerendered and the placeholder is gone, avoid leaving
+    // an orphaned menu attached to <body>.
+    state.list.remove();
+  }
+  window.removeEventListener('resize', state.reposition);
+  window.removeEventListener('scroll', state.reposition, true);
+}
+
+function portalPartsMenu(details: HTMLDetailsElement): void {
+  const summary = details.querySelector('summary') as HTMLElement | null;
+  const list = details.querySelector('.ztracker-parts-list') as HTMLElement | null;
+  if (!summary || !list) return;
+
+  // Only one open at a time.
+  if (activePartsMenu?.details && activePartsMenu.details !== details) {
+    closeActivePartsMenu();
+  }
+
+  const placeholder = document.createComment('ztracker-parts-list-placeholder');
+  list.replaceWith(placeholder);
+  document.body.append(list);
+  list.classList.add('ztracker-parts-list-portal');
+
+  // Critical portal styling: once portaled, the list is no longer under `.mes_ztracker`,
+  // so nested CSS selectors won't apply. Keep it clickable/overlayed regardless.
+  list.style.position = 'absolute';
+  list.style.zIndex = '2147483647';
+  list.style.right = 'auto';
+
+  const messageEl = details.closest('.mes');
+  const messageIdText = messageEl?.getAttribute('mesid') ?? '';
+  const parsedMessageId = Number(messageIdText);
+  const messageId = Number.isFinite(parsedMessageId) ? parsedMessageId : null;
+
+  const reposition = () => positionPartsMenu(list, summary);
+  const state: PartsMenuPortalState = { details, summary, list, placeholder, messageId, reposition };
+  activePartsMenu = state;
+
+  // Wait a frame so offsetWidth reflects the new layout.
+  list.style.visibility = 'hidden';
+  requestAnimationFrame(() => {
+    if (!list.isConnected) return;
+    if (!details.isConnected || !details.open) {
+      // Details got removed or closed before we could position.
+      if (list.classList.contains('ztracker-parts-list-portal')) {
+        list.style.visibility = '';
+        restorePartsMenu(state);
+        if (activePartsMenu?.details === details) activePartsMenu = null;
+      }
+      return;
+    }
+    list.style.visibility = '';
+    reposition();
+  });
+
+  window.addEventListener('resize', reposition);
+  window.addEventListener('scroll', reposition, true);
+}
+
 export async function initializeGlobalUI(options: {
   globalContext: any;
   settingsManager: ExtensionSettingsManager<ExtensionSettings>;
@@ -120,13 +228,66 @@ export async function initializeGlobalUI(options: {
   zTrackerIcon.tabIndex = 0;
   document.querySelector('#message_template .mes_buttons .extraMesButtons')?.prepend(zTrackerIcon);
 
+  // Portal the parts menu to <body> while open so it can't be clipped by message/tracker overflow.
+  document.addEventListener(
+    'toggle',
+    (event) => {
+      const details = event.target as HTMLDetailsElement;
+      if (!details?.classList?.contains('ztracker-parts-details')) return;
+
+      if (details.open) {
+        portalPartsMenu(details);
+      } else if (activePartsMenu?.details === details) {
+        restorePartsMenu(activePartsMenu);
+        activePartsMenu = null;
+      }
+    },
+    true,
+  );
+
+  document.addEventListener(
+    'mousedown',
+    (event) => {
+      if (!activePartsMenu) return;
+      if (!activePartsMenu.details.isConnected) {
+        restorePartsMenu(activePartsMenu);
+        activePartsMenu = null;
+        return;
+      }
+      const target = event.target as Node;
+      if (activePartsMenu.list.contains(target) || activePartsMenu.summary.contains(target)) return;
+      closeActivePartsMenu();
+    },
+    true,
+  );
+
+  document.addEventListener(
+    'keydown',
+    (event) => {
+      if (!activePartsMenu) return;
+      if (!activePartsMenu.details.isConnected) {
+        restorePartsMenu(activePartsMenu);
+        activePartsMenu = null;
+        return;
+      }
+      if (event.key === 'Escape') closeActivePartsMenu();
+    },
+    true,
+  );
+
   document.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-    const messageEl = target.closest('.mes');
 
-    if (!messageEl) return;
-    const messageId = Number(messageEl.getAttribute('mesid'));
-    if (isNaN(messageId)) return;
+    let messageId: number | null = null;
+    const messageEl = target.closest('.mes');
+    if (messageEl) {
+      const parsed = Number(messageEl.getAttribute('mesid'));
+      if (!Number.isNaN(parsed)) messageId = parsed;
+    } else if (activePartsMenu && activePartsMenu.list.contains(target)) {
+      messageId = activePartsMenu.messageId;
+    }
+
+    if (messageId === null) return;
 
     const fieldButton = target.closest('.ztracker-array-item-field-regenerate-button') as HTMLElement | null;
     if (fieldButton) {
