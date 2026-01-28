@@ -23,6 +23,120 @@
   animation: spin 2s linear infinite;
 }
 
+/*
+ * Parts menu styles must apply even when the menu is portaled to <body>
+ * (to avoid being clipped by chat/message overflow).
+ */
+.ztracker-parts-list {
+  min-width: 260px;
+  padding: 10px;
+  background-color: var(--ztracker-menu-bg, rgba(0, 0, 0, 0.92));
+  background-image: none;
+  border: 1px solid var(--ztracker-menu-border, rgba(255, 255, 255, 0.12));
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 50vh;
+  overflow: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  font-size: 0.95em;
+  line-height: 1.25;
+  /* Default in-tracker placement; overridden when portaled. */
+  position: absolute;
+  right: 0;
+  top: 22px;
+  z-index: 6000;
+}
+
+.ztracker-parts-list.ztracker-parts-list-portal {
+  /* Page-coordinate positioning via inline top/left in JS. */
+  position: absolute;
+  right: auto;
+  left: auto;
+  /* Ensure it overlays SillyTavern's chat stacking contexts. */
+  z-index: 2147483647;
+}
+
+.ztracker-part-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.ztracker-part-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.ztracker-part-regenerate-button {
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 0.95em;
+  font-weight: 600;
+  opacity: 0.95;
+  user-select: none;
+  white-space: nowrap;
+  background: var(--ztracker-menu-part-bg, rgba(255, 255, 255, 0.06));
+}
+.ztracker-part-regenerate-button:hover {
+  background: var(--ztracker-menu-hover-bg, rgba(255, 255, 255, 0.1));
+}
+
+.ztracker-part-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 10px;
+  max-height: 35vh;
+  overflow: auto;
+}
+
+.ztracker-array-item-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ztracker-array-item-regenerate-button {
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 0.92em;
+  opacity: 0.98;
+  user-select: none;
+  white-space: normal;
+  word-break: break-word;
+  background: var(--ztracker-menu-item-bg, rgba(255, 255, 255, 0.03));
+}
+.ztracker-array-item-regenerate-button:hover {
+  background: var(--ztracker-menu-hover-bg, rgba(255, 255, 255, 0.1));
+}
+
+.ztracker-array-item-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-left: 8px;
+}
+
+.ztracker-array-item-field-regenerate-button {
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 999px;
+  font-size: 0.82em;
+  opacity: 0.98;
+  user-select: none;
+  white-space: nowrap;
+  background: var(--ztracker-menu-item-bg, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--ztracker-menu-border, rgba(255, 255, 255, 0.12));
+}
+.ztracker-array-item-field-regenerate-button:hover {
+  background: var(--ztracker-menu-hover-bg, rgba(255, 255, 255, 0.1));
+}
+
 .mes_ztracker {
   position: relative;
   z-index: 50;
