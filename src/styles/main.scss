@@ -37,6 +37,7 @@
 		top: 8px;
 		right: 8px;
 		display: flex;
+		align-items: center;
 		gap: 12px;
 		z-index: 5000;
 
@@ -67,7 +68,15 @@
 
 			summary {
 				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				padding: 0;
+				margin: 0;
+				line-height: 1;
 				list-style: none;
+			}
+			summary::marker {
+				content: '';
 			}
 			summary::-webkit-details-marker {
 				display: none;
