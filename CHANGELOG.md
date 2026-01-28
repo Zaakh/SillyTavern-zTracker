@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - _Nothing yet._
 
+## [1.1.2] - 2026-01-28
+
+### Fixed
+
+- Minimal embedded tracker snapshots are more compact and LLM-friendly (no blank lines/trailing whitespace, fewer unnecessary quotes, bracket-wrapped array items).
+
 ## [1.1.1] - 2026-01-28
 
 ### Fixed
