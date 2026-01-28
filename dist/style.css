@@ -39,6 +39,12 @@
 .mes_ztracker .ztracker-controls .ztracker-edit-button,
 .mes_ztracker .ztracker-controls .ztracker-delete-button,
 .mes_ztracker .ztracker-controls .ztracker-parts-summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  width: 1em;
+  height: 1em;
   cursor: pointer;
   color: var(--text_color);
   opacity: 0.3;
@@ -56,6 +62,7 @@
   padding: 0;
 }
 .mes_ztracker .ztracker-controls .ztracker-parts-details summary {
+  display: inline-flex;
   list-style: none;
 }
 .mes_ztracker .ztracker-controls .ztracker-parts-details summary::-webkit-details-marker {
