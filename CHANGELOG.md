@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - _Nothing yet._
 
+## [1.1.1] - 2026-01-28
+
+### Fixed
+
+- Align the “Regenerate individual parts” (list) icon in the tracker controls.
+
 ## [1.1.0] - 2026-01-27
 
 ### Added
