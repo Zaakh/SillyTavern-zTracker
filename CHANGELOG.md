@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-
+## [1.1.4] - 2026-03-06
 ### Fixed
 
 - Parts menu no longer appears twice (with a duplicate stuck in the upper-left corner) after editing tracker data and then triggering a partial regeneration. When the tracker DOM was re-rendered the portaled menu list was not cleaned up because the now-disconnected `<details>` element could not fire a `toggle` event to the document; the cleanup now runs directly in that case.
