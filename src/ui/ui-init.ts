@@ -135,6 +135,15 @@ function positionPartsMenu(list: HTMLElement, summary: HTMLElement): void {
 
 function closeActivePartsMenu(): void {
   if (!activePartsMenu) return;
+  // If the details element is no longer in the document (e.g. tracker was re-rendered after an
+  // edit), the toggle event won't bubble to the document capture listener, so restorePartsMenu
+  // would never be called. Clean up directly in that case to avoid leaving an orphaned portal
+  // list in <body> with dangling scroll/resize listeners.
+  if (!activePartsMenu.details.isConnected) {
+    restorePartsMenu(activePartsMenu);
+    activePartsMenu = null;
+    return;
+  }
   // Toggling open=false triggers the restoration handler.
   activePartsMenu.details.open = false;
 }
