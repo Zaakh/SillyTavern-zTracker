@@ -41,6 +41,7 @@ These instructions apply to all files in this repository.
 - Split complex logic into small, testable functions in separate modules, especially in `src/`.
 - Avoid large monolithic functions, classes or files.
 - We prefer "less code", so avoid unnecessary abstractions or patterns and try to re-use existing helpers/utilities.
+- IMPORTANT: Any code change must improve the code quality of the project. 
 
 ## Build and required artifacts
 - This extension is loaded by SillyTavern from `manifest.json` and expects built assets:
