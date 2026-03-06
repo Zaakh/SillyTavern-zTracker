@@ -285,3 +285,6 @@ Minor cleanup notes (non-blocking):
 - Defaults + settings schema: [src/config.ts](src/config.ts)
 - Settings UI: [src/components/Settings.tsx](src/components/Settings.tsx)
 
+## Maintenance
+IMPORTANT: Keep this file up to date. Whenever you discover or learn something about the project propose to add or correct it in this instruction.
+

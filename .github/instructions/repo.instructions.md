@@ -76,3 +76,6 @@ These instructions apply to all files in this repository.
 ## Further reading
 - At `https://github.com/bmen25124/SillyTavern-Utils-Lib` you can find the `sillytavern-utils-lib` library, which this extension uses for prompt building and other SillyTavern-related utilities.
 - For extension integration/testing tips and SillyTavern-specific guidance, see `docs/SILLYTAVERN_DEV_NOTES.md`.
+
+## Maintenance
+Keep this file up to date. Whenever you discover or learn something about the project propose to add or correct it in this instruction.
