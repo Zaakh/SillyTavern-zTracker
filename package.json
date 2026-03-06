@@ -14,7 +14,7 @@
         "pretest": "npm run sync-version",
         "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
         "check-version": "npm run sync-version -- --check",
-        "version": "npm run sync-version",
+        "version": "npm run sync-version && git add manifest.json",
         "prettify": "prettier --write \"src/**/*.ts\" \"templates/**/*.html\" \"src/**/*.tsx\""
     },
     "keywords": [],

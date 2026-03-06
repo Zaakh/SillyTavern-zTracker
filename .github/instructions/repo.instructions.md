@@ -25,7 +25,8 @@ These instructions apply to all files in this repository.
 - Run verification:
 	- `npm test`
 	- `npm run build`
-- Create the release (this bumps `package.json` and syncs derived versions like `manifest.json`): `npm version <patch|minor|major>`.
+- Commit any build artifacts that changed (e.g. `dist/index.js`) before running `npm version`, as it requires a clean working tree.
+- Create the release (this bumps `package.json`, syncs `manifest.json`, and stages it automatically): `npm version <patch|minor|major>`.
 - Sanity check release artifacts exist and are current:
 	- `dist/index.js`
 	- `dist/style.css`
