@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [1.1.5] - 2026-03-10
+
+### Added
+
+- Configurable timeouts in **Extensions → zTracker**: **Request timeout (ms)**, **Save timeout (ms)**, **Auto tracker defer (ms)**. Defaults: 120000, 15000, 80. Reduces risk of infinite wait when the generator or save never completes.
+- Tracker requests are cancelled when the user clicks SillyTavern’s Stop button (listens for `GENERATION_ABORTED`), so the send button can unblock.
+
+### Fixed
+
+- Generate interceptor is wrapped in try/catch; on error the chat array is left unchanged so main message generation can complete instead of hanging.
+- Tracker API request timeout: if the generator never calls `onFinish`, the UI stops waiting after the configured timeout (default 2 min) and recovers.
+- Save timeout: if `saveChat()` never resolves, the UI stops waiting after the configured timeout (default 15 s) and recovers.
+- Auto tracker generation is deferred by a short delay (configurable) after a message is rendered so main generation can fully complete and unblock the UI before the tracker request starts.
+
 ## [1.1.4] - 2026-03-06
 ### Fixed
 

@@ -361,13 +361,33 @@ export async function initializeGlobalUI(options: {
   await actions.renderExtensionTemplates();
 
   const settings = settingsManager.getSettings();
+
+  // When the user clicks Stop, cancel our tracker requests so the send button can unblock.
+  const generationAbortEvent =
+    typeof (EventNames as Record<string, string>)?.GENERATION_ABORTED === 'string'
+      ? (EventNames as Record<string, string>).GENERATION_ABORTED
+      : 'GENERATION_ABORTED';
+  globalContext.eventSource.on(generationAbortEvent, () => {
+    if (typeof actions.cancelAllPendingTrackerRequests === 'function') {
+      actions.cancelAllPendingTrackerRequests();
+    }
+  });
+
   globalContext.eventSource.on(
     EventNames.CHARACTER_MESSAGE_RENDERED,
-    (messageId: number) => incomingTypes.includes(settings.autoMode) && actions.generateTracker(messageId),
+    (messageId: number) => {
+      if (!incomingTypes.includes(settingsManager.getSettings().autoMode)) return;
+      const deferMs = Math.max(0, settingsManager.getSettings().autoTrackerDeferMs ?? 80);
+      setTimeout(() => actions.generateTracker(messageId), deferMs);
+    },
   );
   globalContext.eventSource.on(
     EventNames.USER_MESSAGE_RENDERED,
-    (messageId: number) => outgoingTypes.includes(settings.autoMode) && actions.generateTracker(messageId),
+    (messageId: number) => {
+      if (!outgoingTypes.includes(settingsManager.getSettings().autoMode)) return;
+      const deferMs = Math.max(0, settingsManager.getSettings().autoTrackerDeferMs ?? 80);
+      setTimeout(() => actions.generateTracker(messageId), deferMs);
+    },
   );
 
   globalContext.eventSource.on(EventNames.CHAT_CHANGED, () => {
@@ -391,8 +411,13 @@ export async function initializeGlobalUI(options: {
   });
 
   (globalThis as any).ztrackerGenerateInterceptor = (chat: ChatMessage[]) => {
-    const newChat = includeZTrackerMessages(chat, settingsManager.getSettings());
-    chat.length = 0;
-    chat.push(...newChat);
+    try {
+      const newChat = includeZTrackerMessages(chat, settingsManager.getSettings());
+      chat.length = 0;
+      chat.push(...newChat);
+    } catch (err) {
+      console.error('zTracker: generate interceptor failed; leaving chat unchanged.', err);
+      // Do not mutate chat so SillyTavern can proceed with the original array and generation can complete.
+    }
   };
 }
