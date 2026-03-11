@@ -341,6 +341,62 @@ export const ZTrackerSettings: FC = () => {
                 }
               />
             </div>
+
+            <div className="setting-row">
+              <label title="Tracker API request timeout (ms). If the response is not received in time, the UI recovers instead of waiting forever.">
+                Request timeout (ms)
+              </label>
+              <input
+                type="number"
+                className="text_pole"
+                min="5000"
+                step="1000"
+                title="Tracker API request timeout (ms). Minimum 5000."
+                value={settings.requestTimeoutMs ?? 120000}
+                onChange={(e) =>
+                  updateAndRefresh((s) => {
+                    s.requestTimeoutMs = Math.max(5000, parseInt(e.target.value) || 120000);
+                  })
+                }
+              />
+            </div>
+            <div className="setting-row">
+              <label title="Max time to wait for chat save (ms). If save does not complete, the UI still recovers.">
+                Save timeout (ms)
+              </label>
+              <input
+                type="number"
+                className="text_pole"
+                min="2000"
+                step="1000"
+                title="Save timeout (ms). Minimum 2000."
+                value={settings.saveTimeoutMs ?? 15000}
+                onChange={(e) =>
+                  updateAndRefresh((s) => {
+                    s.saveTimeoutMs = Math.max(2000, parseInt(e.target.value) || 15000);
+                  })
+                }
+              />
+            </div>
+            <div className="setting-row">
+              <label title="Delay (ms) before starting auto tracker after a message is rendered. Helps main generation finish first.">
+                Auto tracker defer (ms)
+              </label>
+              <input
+                type="number"
+                className="text_pole"
+                min="0"
+                step="10"
+                title="Delay before auto tracker starts (ms). 0 = no delay."
+                value={settings.autoTrackerDeferMs ?? 80}
+                onChange={(e) =>
+                  updateAndRefresh((s) => {
+                    s.autoTrackerDeferMs = Math.max(0, parseInt(e.target.value) || 0);
+                  })
+                }
+              />
+            </div>
+
             <div className="setting-row">
               <label title="How many recent chat messages to include when generating a tracker. 0 includes all messages; 1 includes only the last message.">
                 Include Last X Messages (0 means all, 1 means last)

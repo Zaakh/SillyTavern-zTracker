@@ -62,6 +62,7 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
         getSettings: jest.fn(() => ({ autoMode: 'none', includeLastXZTrackerMessages: 1 })),
       } as any,
       actions: {
+        cancelAllPendingTrackerRequests: jest.fn(),
         renderExtensionTemplates: jest.fn(async () => undefined),
         generateTracker: jest.fn(),
         editTracker: jest.fn(),

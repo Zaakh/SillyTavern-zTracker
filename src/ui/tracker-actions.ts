@@ -93,16 +93,39 @@ export function createTrackerActions(options: {
     if (!pendingRequests.has(messageId)) return false;
     const requestId = pendingRequests.get(messageId)!;
     generator.abortRequest(requestId);
+    pendingRequests.delete(messageId);
     const token = pendingSequences.get(messageId);
     if (token) token.cancelled = true;
     st_echo('info', 'Tracker generation cancelled.');
     return true;
   }
 
+  /** Cancel all in-flight tracker requests. Call when the user stops main generation so the send button can unblock. */
+  function cancelAllPendingTrackerRequests(): void {
+    const entries = Array.from(pendingRequests.entries());
+    if (entries.length === 0) return;
+    for (const [messageId, requestId] of entries) {
+      generator.abortRequest(requestId);
+      const token = pendingSequences.get(messageId);
+      if (token) token.cancelled = true;
+    }
+    pendingRequests.clear();
+    pendingSequences.clear();
+    st_echo('info', 'Tracker generation cancelled.');
+  }
+
   function makeRequestFactory(messageId: number, settings: ExtensionSettings) {
+    const requestTimeoutMs = Math.max(5000, settings.requestTimeoutMs ?? 120_000);
     return (requestMessages: Message[], overideParams?: any): Promise<ExtractedData | undefined> => {
       return new Promise((resolve, reject) => {
         const abortController = new AbortController();
+        let timeoutId: ReturnType<typeof setTimeout> | undefined = setTimeout(() => {
+          timeoutId = undefined;
+          pendingRequests.delete(messageId);
+          abortController.abort();
+          reject(new Error('Tracker request timed out. The response may not have been received.'));
+        }, requestTimeoutMs);
+
         generator.generateRequest(
           {
             profileId: settings.profileId,
@@ -119,6 +142,10 @@ export function createTrackerActions(options: {
               pendingRequests.set(messageId, requestId);
             },
             onFinish: (requestId: string, data: unknown, error: unknown) => {
+              if (timeoutId) {
+                clearTimeout(timeoutId);
+                timeoutId = undefined;
+              }
               pendingRequests.delete(messageId);
               if (error) return reject(error);
               if (!data) return reject(new DOMException('Request aborted by user', 'AbortError'));
@@ -128,6 +155,15 @@ export function createTrackerActions(options: {
         );
       });
     };
+  }
+
+  async function saveChatWithTimeout(saveChat: () => Promise<void>): Promise<void> {
+    const saveTimeoutMs = Math.max(2000, settingsManager.getSettings().saveTimeoutMs ?? 15_000);
+    const savePromise = saveChat();
+    const timeoutPromise = new Promise<void>((_, reject) =>
+      setTimeout(() => reject(new Error('Save timed out; tracker data may not have been persisted.')), saveTimeoutMs),
+    );
+    await Promise.race([savePromise, timeoutPromise]);
   }
 
   function appendCurrentTrackerSnapshot(messages: Message[], tracker: unknown, label: string): void {
@@ -269,7 +305,7 @@ export function createTrackerActions(options: {
 
     if (confirm) {
       delete message.extra[EXTENSION_KEY];
-      await globalContext.saveChat();
+      await saveChatWithTimeout(() => globalContext.saveChat());
       renderTrackerWithDeps(messageId);
       st_echo('success', 'Tracker data deleted.');
     }
@@ -298,7 +334,7 @@ export function createTrackerActions(options: {
               const newData = JSON.parse(textarea.value);
               // @ts-ignore
               message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_VALUE_KEY] = newData;
-              await globalContext.saveChat();
+              await saveChatWithTimeout(() => globalContext.saveChat());
               let detailsState: boolean[] = [];
               const messageBlock = document.querySelector(`.mes[mesid="${messageId}"]`);
               const existingTracker = messageBlock?.querySelector('.mes_ztracker');
@@ -392,7 +428,7 @@ export function createTrackerActions(options: {
           render: () => renderTrackerWithDeps(id),
         });
         restoreDetailsState(id, detailsState);
-        await saveChat();
+        await saveChatWithTimeout(() => globalContext.saveChat());
       } catch {
         renderTrackerWithDeps(id);
         throw new Error(`Generated data failed to render with the current template. Not saved.`);
@@ -498,7 +534,7 @@ export function createTrackerActions(options: {
           render: () => renderTrackerWithDeps(id),
         });
         restoreDetailsState(id, detailsState);
-        await saveChat();
+        await saveChatWithTimeout(() => globalContext.saveChat());
       } catch {
         renderTrackerWithDeps(id);
         throw new Error(`Generated data failed to render with the current template. Not saved.`);
@@ -587,7 +623,7 @@ export function createTrackerActions(options: {
           render: () => renderTrackerWithDeps(id),
         });
         restoreDetailsState(id, detailsState);
-        await saveChat();
+        await saveChatWithTimeout(() => globalContext.saveChat());
         st_echo('success', `Updated: ${partKey}`);
       } catch {
         renderTrackerWithDeps(id);
@@ -694,7 +730,7 @@ export function createTrackerActions(options: {
           render: () => renderTrackerWithDeps(id),
         });
         restoreDetailsState(id, detailsState);
-        await saveChat();
+        await saveChatWithTimeout(() => globalContext.saveChat());
         st_echo('success', `Updated: ${partKey}[${index}]`);
       } catch {
         renderTrackerWithDeps(id);
@@ -809,7 +845,7 @@ export function createTrackerActions(options: {
           render: () => renderTrackerWithDeps(id),
         });
         restoreDetailsState(id, detailsState);
-        await saveChat();
+        await saveChatWithTimeout(() => globalContext.saveChat());
         st_echo('success', `Updated: ${partKey} (${name})`);
       } catch {
         renderTrackerWithDeps(id);
@@ -924,7 +960,7 @@ export function createTrackerActions(options: {
           render: () => renderTrackerWithDeps(id),
         });
         restoreDetailsState(id, detailsState);
-        await saveChat();
+        await saveChatWithTimeout(() => globalContext.saveChat());
         st_echo('success', `Updated: ${partKey} (${idKey}=${idValue})`);
       } catch {
         renderTrackerWithDeps(id);
@@ -1046,7 +1082,7 @@ export function createTrackerActions(options: {
           render: () => renderTrackerWithDeps(id),
         });
         restoreDetailsState(id, detailsState);
-        await saveChat();
+        await saveChatWithTimeout(() => globalContext.saveChat());
         st_echo('success', `Updated: ${partKey}[${index}].${fieldKey}`);
       } catch {
         renderTrackerWithDeps(id);
@@ -1220,6 +1256,7 @@ export function createTrackerActions(options: {
   }
 
   return {
+    cancelAllPendingTrackerRequests,
     deleteTracker,
     editTracker,
     generateTracker,

@@ -78,6 +78,19 @@ export interface ExtensionSettings {
   promptXml: string;
 
   /**
+   * Tracker API request timeout (ms). If the generator never calls onFinish, we stop waiting after this.
+   */
+  requestTimeoutMs: number;
+  /**
+   * Max time to wait for saveChat() (ms). Avoids blocking the UI if save never completes.
+   */
+  saveTimeoutMs: number;
+  /**
+   * Delay (ms) before starting auto tracker after a message is rendered. Lets main generation fully complete first.
+   */
+  autoTrackerDeferMs: number;
+
+  /**
    * Enables extra console logging and diagnostics helpers.
    * Intended for troubleshooting; avoid enabling unless needed.
    */
@@ -371,6 +384,10 @@ export const defaultSettings: ExtensionSettings = {
   promptEngineeringMode: PromptEngineeringMode.NATIVE,
   promptJson: DEFAULT_PROMPT_JSON,
   promptXml: DEFAULT_PROMPT_XML,
+
+  requestTimeoutMs: 120_000,
+  saveTimeoutMs: 15_000,
+  autoTrackerDeferMs: 80,
 
   debugLogging: false,
 
