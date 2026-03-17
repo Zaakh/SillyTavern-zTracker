@@ -6,6 +6,7 @@ import { Generator } from 'sillytavern-utils-lib';
 import { st_echo } from 'sillytavern-utils-lib/config';
 import { createTrackerActions } from './ui/tracker-actions.js';
 import { initializeGlobalUI } from './ui/ui-init.js';
+import { ensureZTrackerSystemPromptPresetInstalled } from './system-prompt.js';
 import {
   renderTracker,
 } from './tracker.js';
@@ -53,7 +54,13 @@ function renderReactSettings() {
   );
 }
 
-function main() {
+async function main() {
+  try {
+    await ensureZTrackerSystemPromptPresetInstalled();
+  } catch (error) {
+    console.warn('zTracker: failed to ensure the recommended system prompt preset exists.', error);
+  }
+
   const actions = createTrackerActions({
     globalContext,
     settingsManager,

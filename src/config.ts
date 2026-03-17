@@ -13,6 +13,8 @@ export enum TrackerWorldInfoPolicyMode {
   ALLOWLIST = 'allowlist',
 }
 
+export type TrackerSystemPromptMode = 'profile' | 'saved';
+
 export interface Schema {
   name: string;
   value: object;
@@ -45,6 +47,8 @@ export interface ExtensionSettings {
   version: string;
   formatVersion: string;
   profileId: string;
+  trackerSystemPromptMode: TrackerSystemPromptMode;
+  trackerSystemPromptSavedName: string;
   maxResponseToken: number;
   autoMode: AutoModeOptions;
 
@@ -124,6 +128,18 @@ export const DEFAULT_PROMPT = `You are a Scene Tracker Assistant, tasked with pr
 1. **Recent Messages and Current Tracker**: Before updating, always consider the recent messages to ensure all changes are accurately represented.
 
 Your primary objective is to ensure clarity, consistency, providing complete details even when specifics are not explicitly stated.`;
+
+export const ZTRACKER_SYSTEM_PROMPT_PRESET_NAME = 'zTracker';
+
+export const ZTRACKER_SYSTEM_PROMPT_TEXT = `You are a structured data extraction assistant. Your task is to analyze conversations and produce a JSON tracker update that conforms to a provided schema.
+
+Rules:
+- Output ONLY valid JSON matching the schema. No narration, no markdown unless instructed.
+- Fill every field. Use conversation context to infer values not explicitly stated.
+- Prefer short, specific phrases over full sentences.
+- Maintain consistency with any previous tracker snapshot in the conversation.
+- Do NOT continue the conversation or roleplay. Only produce the requested data.
+- Follow all detailed instructions provided later in this conversation.`;
 
 export const DEFAULT_PROMPT_JSON = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid JSON object that strictly adheres to the provided JSON schema.
 
@@ -331,6 +347,8 @@ export const defaultSettings: ExtensionSettings = {
   version: VERSION,
   formatVersion: FORMAT_VERSION,
   profileId: '',
+  trackerSystemPromptMode: 'profile',
+  trackerSystemPromptSavedName: '',
   maxResponseToken: 16000,
   autoMode: AutoModeOptions.NONE,
   sequentialPartGeneration: false,

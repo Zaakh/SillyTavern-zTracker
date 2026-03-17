@@ -39,6 +39,16 @@ Your API/model might not support structured output. Change `Prompt Engineering` 
 
 In **Extensions → zTracker**, enable **Debug logging** and use the **Diagnostics** panel (stethoscope button) to print template URL checks to the console. This helps confirm whether SillyTavern can access the extension’s HTML templates.
 
+## System prompt selection for tracker generation
+
+zTracker can now choose the system prompt used during tracker generation:
+- **From connection profile**: keep the current SillyTavern connection profile behavior.
+- **From saved ST prompt**: pick a saved SillyTavern system prompt specifically for tracker extraction.
+
+On startup, zTracker installs a recommended **zTracker** system prompt preset if it does not already exist. You can select it in **Extensions → zTracker → System Prompt Source**, and edit it later in SillyTavern's own **System Prompt** manager.
+
+This is especially useful for smaller models: you can keep your roleplay-oriented system prompt for normal chat, while using a lean extraction-oriented prompt for tracker generation.
+
 ## Sequential generation & per-part regeneration
 
 In **Extensions → zTracker**, enable **Sequential generation** to have zTracker generate tracker fields one-by-one (smaller, sequential requests).

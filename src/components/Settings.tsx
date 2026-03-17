@@ -16,11 +16,13 @@ import {
   DEFAULT_SCHEMA_VALUE,
   DEFAULT_SCHEMA_HTML,
   PromptEngineeringMode,
+  ZTRACKER_SYSTEM_PROMPT_PRESET_NAME,
   defaultSettings,
   EXTENSION_KEY,
 } from '../config.js';
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import { useForceUpdate } from '../hooks/useForceUpdate.js';
+import { listSystemPromptPresetNames } from '../system-prompt.js';
 import { DiagnosticsSection } from './settings/DiagnosticsSection.js';
 import { WorldInfoPolicySection } from './settings/WorldInfoPolicySection.js';
 import { EmbedSnapshotTransformSection } from './settings/EmbedSnapshotTransformSection.js';
@@ -55,6 +57,13 @@ export const ZTrackerSettings: FC = () => {
       label: preset.name,
     }));
   }, [settings.schemaPresets]);
+
+  const systemPromptItems = useMemo((): PresetItem[] => {
+    return listSystemPromptPresetNames().map((name) => ({
+      value: name,
+      label: name,
+    }));
+  }, [settings.trackerSystemPromptMode, settings.trackerSystemPromptSavedName]);
 
 
   // Handler for when a new schema preset is selected
@@ -251,6 +260,71 @@ export const ZTrackerSettings: FC = () => {
                 rows={4}
                 placeholder="Enter your schema HTML here..."
               />
+            </div>
+
+            <div className="setting-row">
+              <label title="Choose whether zTracker uses the system prompt from the selected connection profile or a specific saved SillyTavern system prompt.">
+                System Prompt Source
+              </label>
+              <select
+                className="text_pole"
+                title="Choose whether zTracker uses the system prompt from the selected connection profile or a specific saved SillyTavern system prompt."
+                value={settings.trackerSystemPromptMode}
+                onChange={(e) =>
+                  updateAndRefresh((s) => {
+                    const mode = e.target.value as ExtensionSettings['trackerSystemPromptMode'];
+                    s.trackerSystemPromptMode = mode;
+                    if (mode === 'saved' && !s.trackerSystemPromptSavedName) {
+                      s.trackerSystemPromptSavedName = ZTRACKER_SYSTEM_PROMPT_PRESET_NAME;
+                    }
+                  })
+                }
+              >
+                <option value="profile">From connection profile</option>
+                <option value="saved">From saved ST prompt</option>
+              </select>
+
+              {settings.trackerSystemPromptMode === 'saved' && (
+                <>
+                  <label title="Which saved SillyTavern system prompt zTracker should use for tracker generation.">
+                    System Prompt
+                  </label>
+                  {systemPromptItems.length > 0 ? (
+                    <select
+                      className="text_pole"
+                      title="Which saved SillyTavern system prompt zTracker should use for tracker generation."
+                      value={settings.trackerSystemPromptSavedName}
+                      onChange={(e) =>
+                        updateAndRefresh((s) => {
+                          s.trackerSystemPromptSavedName = e.target.value;
+                        })
+                      }
+                    >
+                      {systemPromptItems.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      className="text_pole"
+                      title="Fallback input used if the current SillyTavern build does not expose the system prompt list."
+                      value={settings.trackerSystemPromptSavedName}
+                      onChange={(e) =>
+                        updateAndRefresh((s) => {
+                          s.trackerSystemPromptSavedName = e.target.value;
+                        })
+                      }
+                      placeholder={ZTRACKER_SYSTEM_PROMPT_PRESET_NAME}
+                    />
+                  )}
+                  <small>
+                    Edit prompts in SillyTavern&apos;s System Prompt manager. The &quot;{ZTRACKER_SYSTEM_PROMPT_PRESET_NAME}&quot; preset is optimized for tracker generation.
+                  </small>
+                </>
+              )}
             </div>
 
             <div className="setting-row">

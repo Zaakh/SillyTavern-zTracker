@@ -12,6 +12,8 @@ These are “living” per-change specs. Each spec tracks its current status and
 - [06-multi-connection-profiles.md](06-multi-connection-profiles.md)
 - [07-world-info-policy.md](07-world-info-policy.md)
 - [08-sequential-part-generation.md](08-sequential-part-generation.md)
+- [09-minimal-embedding-whitespace.md](09-minimal-embedding-whitespace.md)
+- [10-system-prompt-selection.md](10-system-prompt-selection.md)
 
 ## Status workflow
 - **Open**: not implemented yet; questions unresolved.
