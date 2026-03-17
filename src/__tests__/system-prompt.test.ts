@@ -1,9 +1,11 @@
 import { jest } from '@jest/globals';
 import {
   ensureZTrackerSystemPromptPresetInstalled,
+  getCurrentGlobalSystemPromptName,
   hasSystemPromptPreset,
   listSystemPromptPresetNames,
   resolveTrackerSystemPromptName,
+  shouldWarnAboutSharedSystemPromptSelection,
   shouldForceTrackerSystemPromptSelection,
 } from '../system-prompt.js';
 import { ZTRACKER_SYSTEM_PROMPT_PRESET_NAME, ZTRACKER_SYSTEM_PROMPT_TEXT } from '../config.js';
@@ -109,6 +111,21 @@ describe('system prompt helpers', () => {
     ).toBe(false);
   });
 
+  test('reads the current global system prompt name from power user settings', () => {
+    expect(
+      getCurrentGlobalSystemPromptName({
+        getPresetManager: () => ({
+          getPresetList: () => ({ presets: [], preset_names: [] }),
+        }),
+        powerUserSettings: {
+          sysprompt: {
+            name: '  Neutral - Chat  ',
+          },
+        },
+      }),
+    ).toBe('Neutral - Chat');
+  });
+
   test('resolves profile system prompt in profile mode', () => {
     expect(
       resolveTrackerSystemPromptName(
@@ -153,6 +170,46 @@ describe('system prompt helpers', () => {
         trackerSystemPromptMode: 'profile',
         trackerSystemPromptSavedName: 'zTracker',
       }),
+    ).toBe(false);
+  });
+
+  test('warns when tracker saved prompt matches the active global system prompt', () => {
+    expect(
+      shouldWarnAboutSharedSystemPromptSelection(
+        {
+          trackerSystemPromptMode: 'saved',
+          trackerSystemPromptSavedName: 'zTracker',
+        },
+        {
+          getPresetManager: () => ({
+            getPresetList: () => ({ presets: [], preset_names: [] }),
+          }),
+          powerUserSettings: {
+            sysprompt: {
+              name: 'ZTRACKER',
+            },
+          },
+        },
+      ),
+    ).toBe(true);
+
+    expect(
+      shouldWarnAboutSharedSystemPromptSelection(
+        {
+          trackerSystemPromptMode: 'saved',
+          trackerSystemPromptSavedName: 'zTracker',
+        },
+        {
+          getPresetManager: () => ({
+            getPresetList: () => ({ presets: [], preset_names: [] }),
+          }),
+          powerUserSettings: {
+            sysprompt: {
+              name: 'Neutral - Chat',
+            },
+          },
+        },
+      ),
     ).toBe(false);
   });
 });

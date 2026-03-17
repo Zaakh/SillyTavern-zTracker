@@ -22,7 +22,11 @@ import {
 } from '../config.js';
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import { useForceUpdate } from '../hooks/useForceUpdate.js';
-import { listSystemPromptPresetNames } from '../system-prompt.js';
+import {
+  getCurrentGlobalSystemPromptName,
+  listSystemPromptPresetNames,
+  shouldWarnAboutSharedSystemPromptSelection,
+} from '../system-prompt.js';
 import { DiagnosticsSection } from './settings/DiagnosticsSection.js';
 import { WorldInfoPolicySection } from './settings/WorldInfoPolicySection.js';
 import { EmbedSnapshotTransformSection } from './settings/EmbedSnapshotTransformSection.js';
@@ -64,6 +68,9 @@ export const ZTrackerSettings: FC = () => {
       label: name,
     }));
   }, [settings.trackerSystemPromptMode, settings.trackerSystemPromptSavedName]);
+
+  const currentGlobalSystemPromptName = getCurrentGlobalSystemPromptName();
+  const showSharedSystemPromptWarning = shouldWarnAboutSharedSystemPromptSelection(settings);
 
 
   // Handler for when a new schema preset is selected
@@ -323,6 +330,12 @@ export const ZTrackerSettings: FC = () => {
                   <small>
                     Edit prompts in SillyTavern&apos;s System Prompt manager. The &quot;{ZTRACKER_SYSTEM_PROMPT_PRESET_NAME}&quot; preset is optimized for tracker generation.
                   </small>
+                  {showSharedSystemPromptWarning && (
+                    <small style={{ color: 'var(--warning-color, #f0ad4e)' }}>
+                      Warning: the selected tracker system prompt matches SillyTavern&apos;s active global system prompt
+                      {currentGlobalSystemPromptName ? ` (${currentGlobalSystemPromptName})` : ''}. Normal chat generations may use it too. Keep a separate chat prompt selected in SillyTavern if this prompt should stay tracker-only.
+                    </small>
+                  )}
                 </>
               )}
             </div>
