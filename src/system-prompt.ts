@@ -18,6 +18,12 @@ type SystemPromptPresetManager = {
 
 type SillyTavernContextLike = {
   getPresetManager: (apiId?: string) => unknown;
+  powerUserSettings?: {
+    prefer_character_prompt?: boolean;
+    sysprompt?: {
+      name?: string;
+    } | null;
+  };
 };
 
 type ConnectionProfileLike = {
@@ -54,6 +60,26 @@ export function hasSystemPromptPreset(name: string, context: SillyTavernContextL
 
   const manager = getSystemPromptPresetManager(context);
   return !!manager?.getCompletionPresetByName(trimmedName);
+}
+
+export function getCurrentGlobalSystemPromptName(
+  context: SillyTavernContextLike = SillyTavern.getContext(),
+): string | undefined {
+  const currentName = context.powerUserSettings?.sysprompt?.name?.trim();
+  return currentName || undefined;
+}
+
+export function shouldWarnAboutSharedSystemPromptSelection(
+  settings: Pick<ExtensionSettings, 'trackerSystemPromptMode' | 'trackerSystemPromptSavedName'>,
+  context: SillyTavernContextLike = SillyTavern.getContext(),
+): boolean {
+  if (settings.trackerSystemPromptMode !== 'saved') return false;
+
+  const trackerPromptName = settings.trackerSystemPromptSavedName.trim();
+  const globalPromptName = getCurrentGlobalSystemPromptName(context);
+  if (!trackerPromptName || !globalPromptName) return false;
+
+  return trackerPromptName.toLowerCase() === globalPromptName.toLowerCase();
 }
 
 export async function ensureZTrackerSystemPromptPresetInstalled(
