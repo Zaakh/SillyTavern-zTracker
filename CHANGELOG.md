@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-03-17
+
 ### Fixed
 
 - Tracker generation now tolerates a small set of near-valid JSON formatting defects before failing, including repeated fences, balanced JSON wrapped in prose, trailing commas, smart quotes used as JSON delimiters, and leading invisible characters. Repair attempts are logged so prompt/parser issues remain diagnosable.
