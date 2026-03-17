@@ -13,8 +13,9 @@ import { buildAllowlistedWorldInfoText } from '../world-info-allowlist.js';
 import { loadWorldInfoBookByName } from '../sillytavern-world-info.js';
 import {
   hasSystemPromptPreset,
+  getSystemPromptPresetContent,
+  insertSystemPromptMessage,
   resolveTrackerSystemPromptName,
-  shouldForceTrackerSystemPromptSelection,
 } from '../system-prompt.js';
 import {
   applyTrackerUpdateAndRender,
@@ -190,6 +191,7 @@ export function createTrackerActions(options: {
     const ignoreWorldInfo = shouldIgnoreWorldInfoDuringTrackerBuild(trackerWorldInfoMode);
 
     const syspromptName = resolveTrackerSystemPromptName(settings, profile);
+    let savedSystemPromptContent: string | undefined;
     if (settings.trackerSystemPromptMode === 'saved') {
       if (!syspromptName) {
         throw new Error('Please select a saved system prompt in zTracker settings.');
@@ -197,34 +199,26 @@ export function createTrackerActions(options: {
       if (!hasSystemPromptPreset(syspromptName, context)) {
         throw new Error(`Saved system prompt not found: ${syspromptName}. Please select another one in zTracker settings.`);
       }
-    }
-
-    const shouldForceSelectedSystemPrompt = shouldForceTrackerSystemPromptSelection(settings);
-    const previousPreferCharacterPrompt = context.powerUserSettings?.prefer_character_prompt;
-    if (shouldForceSelectedSystemPrompt && context.powerUserSettings) {
-      context.powerUserSettings.prefer_character_prompt = false;
+      savedSystemPromptContent = getSystemPromptPresetContent(syspromptName, context);
+      if (!savedSystemPromptContent) {
+        throw new Error(`Saved system prompt is empty: ${syspromptName}. Please edit it or select another one in zTracker settings.`);
+      }
     }
 
     let promptResult;
-    try {
-      promptResult = await buildPrompt(apiMap.selected, {
-        targetCharacterId: characterId,
-        messageIndexesBetween: {
-          end: messageId,
-          start: settings.includeLastXMessages > 0 ? Math.max(0, messageId - settings.includeLastXMessages) : 0,
-        },
-        presetName: profile?.preset,
-        contextName: profile?.context,
-        instructName: profile?.instruct,
-        syspromptName,
-        includeNames: !!selected_group,
-        ignoreWorldInfo,
-      });
-    } finally {
-      if (shouldForceSelectedSystemPrompt && context.powerUserSettings) {
-        context.powerUserSettings.prefer_character_prompt = previousPreferCharacterPrompt;
-      }
-    }
+    promptResult = await buildPrompt(apiMap.selected, {
+      targetCharacterId: characterId,
+      messageIndexesBetween: {
+        end: messageId,
+        start: settings.includeLastXMessages > 0 ? Math.max(0, messageId - settings.includeLastXMessages) : 0,
+      },
+      presetName: profile?.preset,
+      contextName: profile?.context,
+      instructName: profile?.instruct,
+      syspromptName: settings.trackerSystemPromptMode === 'profile' ? syspromptName : undefined,
+      includeNames: !!selected_group,
+      ignoreWorldInfo,
+    });
 
     let messages = includeZTrackerMessages(promptResult.result, settings);
     debugLog(settingsManager, 'prompt built', {
@@ -272,6 +266,10 @@ export function createTrackerActions(options: {
           console.warn('zTracker: failed to load allowlisted World Info; proceeding without it.', e);
         }
       }
+    }
+
+    if (savedSystemPromptContent) {
+      messages = insertSystemPromptMessage(messages, savedSystemPromptContent);
     }
 
     const existingTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];

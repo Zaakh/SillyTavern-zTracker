@@ -62,6 +62,17 @@ export function hasSystemPromptPreset(name: string, context: SillyTavernContextL
   return !!manager?.getCompletionPresetByName(trimmedName);
 }
 
+export function getSystemPromptPresetContent(
+  name: string,
+  context: SillyTavernContextLike = SillyTavern.getContext(),
+): string | undefined {
+  const trimmedName = name.trim();
+  if (!trimmedName) return undefined;
+
+  const content = getSystemPromptPresetManager(context)?.getCompletionPresetByName(trimmedName)?.content?.trim();
+  return content || undefined;
+}
+
 export function getCurrentGlobalSystemPromptName(
   context: SillyTavernContextLike = SillyTavern.getContext(),
 ): string | undefined {
@@ -110,8 +121,21 @@ export function resolveTrackerSystemPromptName(
   return profilePromptName || undefined;
 }
 
-export function shouldForceTrackerSystemPromptSelection(
-  settings: Pick<ExtensionSettings, 'trackerSystemPromptMode' | 'trackerSystemPromptSavedName'>,
-): boolean {
-  return settings.trackerSystemPromptMode === 'saved' && settings.trackerSystemPromptSavedName.trim().length > 0;
+export function insertSystemPromptMessage<T extends { role: string; content: string }>(messages: T[], content: string): T[] {
+  const trimmedContent = content.trim();
+  if (!trimmedContent) return [...messages];
+
+  let insertAt = messages.length;
+  for (let index = 0; index < messages.length; index += 1) {
+    if (messages[index].role !== 'system') {
+      insertAt = index;
+      break;
+    }
+  }
+
+  return [
+    ...messages.slice(0, insertAt),
+    { role: 'system', content: trimmedContent } as T,
+    ...messages.slice(insertAt),
+  ];
 }

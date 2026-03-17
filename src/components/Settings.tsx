@@ -24,6 +24,7 @@ import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import { useForceUpdate } from '../hooks/useForceUpdate.js';
 import {
   getCurrentGlobalSystemPromptName,
+  hasSystemPromptPreset,
   listSystemPromptPresetNames,
   shouldWarnAboutSharedSystemPromptSelection,
 } from '../system-prompt.js';
@@ -39,6 +40,7 @@ export const ZTrackerSettings: FC = () => {
   const settings = settingsManager.getSettings();
 
   const [diagnosticsText, setDiagnosticsText] = useState<string>('');
+  const [systemPromptRefreshRevision, setSystemPromptRefreshRevision] = useState(0);
 
   const [schemaText, setSchemaText] = useState(
     JSON.stringify(settings.schemaPresets[settings.schemaPreset]?.value, null, 2) ?? '',
@@ -67,10 +69,19 @@ export const ZTrackerSettings: FC = () => {
       value: name,
       label: name,
     }));
-  }, [settings.trackerSystemPromptMode, settings.trackerSystemPromptSavedName]);
+  }, [settings.trackerSystemPromptMode, settings.trackerSystemPromptSavedName, systemPromptRefreshRevision]);
 
   const currentGlobalSystemPromptName = getCurrentGlobalSystemPromptName();
   const showSharedSystemPromptWarning = shouldWarnAboutSharedSystemPromptSelection(settings);
+  const showMissingSavedSystemPromptWarning =
+    settings.trackerSystemPromptMode === 'saved' &&
+    settings.trackerSystemPromptSavedName.trim().length > 0 &&
+    systemPromptItems.length > 0 &&
+    !hasSystemPromptPreset(settings.trackerSystemPromptSavedName);
+
+  const refreshSystemPromptState = useCallback(() => {
+    setSystemPromptRefreshRevision((revision) => revision + 1);
+  }, []);
 
 
   // Handler for when a new schema preset is selected
@@ -296,6 +307,7 @@ export const ZTrackerSettings: FC = () => {
                   <label title="Which saved SillyTavern system prompt zTracker should use for tracker generation.">
                     System Prompt
                   </label>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   {systemPromptItems.length > 0 ? (
                     <select
                       className="text_pole"
@@ -327,9 +339,20 @@ export const ZTrackerSettings: FC = () => {
                       placeholder={ZTRACKER_SYSTEM_PROMPT_PRESET_NAME}
                     />
                   )}
+                    <STButton
+                      className="fa-solid fa-rotate"
+                      title="Refresh the saved prompt list and current global prompt warning"
+                      onClick={refreshSystemPromptState}
+                    />
+                  </div>
                   <small>
-                    Edit prompts in SillyTavern&apos;s System Prompt manager. The &quot;{ZTRACKER_SYSTEM_PROMPT_PRESET_NAME}&quot; preset is optimized for tracker generation.
+                    Edit prompts in SillyTavern&apos;s System Prompt manager. The &quot;{ZTRACKER_SYSTEM_PROMPT_PRESET_NAME}&quot; preset is optimized for tracker generation. Click refresh after changing prompts elsewhere in SillyTavern.
                   </small>
+                  {showMissingSavedSystemPromptWarning && (
+                    <small style={{ color: 'var(--warning-color, #f0ad4e)' }}>
+                      Warning: the selected saved system prompt no longer exists. Refresh the list and choose another prompt before generating trackers.
+                    </small>
+                  )}
                   {showSharedSystemPromptWarning && (
                     <small style={{ color: 'var(--warning-color, #f0ad4e)' }}>
                       Warning: the selected tracker system prompt matches SillyTavern&apos;s active global system prompt

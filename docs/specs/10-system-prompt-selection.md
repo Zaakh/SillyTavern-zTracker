@@ -133,7 +133,7 @@ Mode B ('saved'):
   → syspromptName = settings.trackerSystemPromptSavedName
 ```
 
-Implementation detail: this also temporarily disables SillyTavern's `prefer_character_prompt` during tracker prompt assembly when Mode B is active. Without that override, `buildPrompt()` can silently prefer the character-card system prompt over the selected saved system prompt. The previous setting is restored immediately after prompt construction.
+Implementation detail: Mode B no longer mutates SillyTavern's global `prefer_character_prompt` setting during tracker prompt assembly. Instead, zTracker builds the normal prompt without a profile system prompt override and then injects the selected saved system prompt as the final leading `system` message before chat history. That keeps tracker generations isolated from unrelated SillyTavern generations while still applying the selected saved prompt.
 
 ### UI changes (`src/components/Settings.tsx`)
 
@@ -184,7 +184,7 @@ Add a new **System Prompt** section above the existing "Prompt" row:
 
 1. **Enumeration**: resolved. SillyTavern runtime preset managers expose `getPresetList()` and upstream also exposes `getAllPresets()` for advanced-formatting managers such as `sysprompt`.
 2. **Creation**: resolved. Upstream SillyTavern preset managers support `savePreset(name, data)` for `sysprompt`, and system prompts are persisted through the normal `/api/presets/save` endpoint.
-3. **`prefer_character_prompt` interaction**: resolved in implementation. When Mode B is active, zTracker temporarily disables `prefer_character_prompt` while building the tracker prompt so the selected saved system prompt actually applies.
+3. **`prefer_character_prompt` interaction**: resolved in implementation. When Mode B is active, zTracker injects the selected saved prompt as a dedicated leading `system` message instead of temporarily mutating SillyTavern's global `prefer_character_prompt` setting.
 
 ## Acceptance criteria
 

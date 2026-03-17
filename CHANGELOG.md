@@ -13,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - zTracker now installs a recommended `zTracker` system prompt preset for tracker generation and exposes the selector in extension settings.
 - zTracker settings now warn when the tracker-only saved system prompt matches SillyTavern's currently active global system prompt, because that configuration can make normal chat generations use the extraction prompt too.
 
+### Fixed
+
+- Tracker-only saved system prompt mode no longer temporarily mutates SillyTavern's global prompt-preference setting during prompt assembly, avoiding cross-generation leakage.
+
 ## [1.1.4] - 2026-03-06
 ### Fixed
 
