@@ -1,3 +1,4 @@
+import { encode } from '@toon-format/toon';
 import type { ExtensionSettings } from './config.js';
 
 // Formats zTracker tracker snapshots for embedding into prompt context.
@@ -155,6 +156,11 @@ function buildTopLevelLinesForEmbedding(value: unknown): string {
   return `${blocks}\n`;
 }
 
+function normalizeToPlainJsonValue(value: unknown): unknown {
+  const serialized = JSON.stringify(value ?? null);
+  return serialized === undefined ? null : JSON.parse(serialized);
+}
+
 export function formatEmbeddedTrackerSnapshot(
   trackerValue: unknown,
   settings: Pick<ExtensionSettings, 'embedZTrackerSnapshotTransformPreset' | 'embedZTrackerSnapshotTransformPresets'>,
@@ -164,12 +170,20 @@ export function formatEmbeddedTrackerSnapshot(
   const preset = (presetKey && presets && presets[presetKey]) || presets?.default;
 
   const input = preset?.input ?? 'pretty_json';
-  const baseText =
-    input === 'top_level_lines'
-      ? presetKey === 'minimal'
-        ? buildTopLevelLinesForEmbedding(trackerValue)
-        : buildTopLevelLines(trackerValue)
-      : JSON.stringify(trackerValue ?? {}, null, 2);
+  let baseText: string;
+  switch (input) {
+    case 'toon':
+      // includeZTrackerMessages uses structuredClone(), which can produce object shapes
+      // the TOON encoder treats as non-JSON input. Normalize back to plain JSON first.
+      baseText = encode(normalizeToPlainJsonValue(trackerValue ?? {}), { delimiter: '	' });
+      break;
+    case 'top_level_lines':
+      baseText = presetKey === 'minimal' ? buildTopLevelLinesForEmbedding(trackerValue) : buildTopLevelLines(trackerValue);
+      break;
+    default:
+      baseText = JSON.stringify(trackerValue ?? {}, null, 2);
+      break;
+  }
 
   const pattern = preset?.pattern ?? '';
   const flags = preset?.flags ?? '';

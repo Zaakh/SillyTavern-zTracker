@@ -113,6 +113,7 @@ export const EmbedSnapshotTransformSection: FC<{
             >
               <option value="pretty_json">Pretty JSON</option>
               <option value="top_level_lines">Top-level lines</option>
+              <option value="toon">TOON (compact)</option>
             </select>
           </div>
 

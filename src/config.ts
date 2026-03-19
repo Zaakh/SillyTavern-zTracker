@@ -21,7 +21,7 @@ export interface Schema {
   html: string;
 }
 
-export type EmbedSnapshotTransformInput = 'pretty_json' | 'top_level_lines';
+export type EmbedSnapshotTransformInput = 'pretty_json' | 'top_level_lines' | 'toon';
 
 export interface EmbedSnapshotRegexTransformPreset {
   name: string;
@@ -384,6 +384,15 @@ export const defaultSettings: ExtensionSettings = {
       replacement: '$1: $2',
       codeFenceLang: 'text',
       wrapInCodeFence: false,
+    },
+    toon: {
+      name: 'TOON (compact)',
+      input: 'toon',
+      pattern: '',
+      flags: 'g',
+      replacement: '',
+      codeFenceLang: 'toon',
+      wrapInCodeFence: true,
     },
   },
   promptEngineeringMode: PromptEngineeringMode.NATIVE,

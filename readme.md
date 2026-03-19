@@ -85,6 +85,7 @@ You can customize (or remove) the embedded snapshot header via **Embed snapshot 
 
 - **Default (JSON)**: embeds pretty-printed JSON (no changes).
 - **Minimal (top-level properties)**: embeds one line per top-level property (newline-separated).
+- **TOON (compact)**: embeds tracker snapshots as tab-delimited TOON for lower-token structured context while preserving arrays and nested objects.
 
 
 ## Versioning
