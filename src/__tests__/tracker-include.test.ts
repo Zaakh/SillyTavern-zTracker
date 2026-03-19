@@ -28,6 +28,15 @@ describe('includeZTrackerMessages', () => {
           codeFenceLang: 'text',
           wrapInCodeFence: false,
         },
+        toon: {
+          name: 'TOON (compact)',
+          input: 'toon' as any,
+          pattern: '',
+          flags: 'g',
+          replacement: '',
+          codeFenceLang: 'toon',
+          wrapInCodeFence: true,
+        },
       },
     } as ExtensionSettings;
   };
@@ -83,6 +92,36 @@ describe('includeZTrackerMessages', () => {
     expect(injected).toContain('location: Mall');
     expect(injected).toContain('topics:\n');
     expect(injected).toContain('  primaryTopic: Talk');
+  });
+
+  it('can apply a TOON formatting preset during embedding', () => {
+    const messages = [
+      buildMessageWithTracker({
+        time: '10:00',
+        location: 'Mall',
+        topics: { primaryTopic: 'Talk' },
+        characters: [
+          {
+            name: 'Silvia',
+            outfit: 'Black apron over a white button-down shirt, dark slacks, black shoes',
+            mood: 'calm',
+          },
+        ],
+      }),
+      { content: 'current', role: 'user' },
+    ];
+    const settings = makeSettings(1);
+    settings.embedZTrackerSnapshotTransformPreset = 'toon';
+
+    const result = includeZTrackerMessages(messages as any, settings);
+    expect(result).toHaveLength(3);
+
+    const injected = result[1].content as string;
+    expect(injected).toContain('Tracker:');
+    expect(injected).toContain('```toon');
+    expect(injected).not.toContain('```json');
+    expect(injected).toContain('characters[');
+    expect(injected).not.toContain('```toon\n{');
   });
 
   it('can embed snapshots as system messages', () => {
