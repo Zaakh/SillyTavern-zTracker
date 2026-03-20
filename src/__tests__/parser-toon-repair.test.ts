@@ -32,6 +32,7 @@ describe('parseResponse TOON repair fixtures', () => {
   it('rejects the real smoke-test failure where JSON is wrapped in a toon fence', () => {
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     const consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     try {
       expect(() => parseResponse(invalidToonJsonFenceFromSmokeTest, 'toon', { schema: sceneTrackerSchema })).toThrow(
@@ -39,6 +40,7 @@ describe('parseResponse TOON repair fixtures', () => {
       );
       expect(consoleInfoSpy).not.toHaveBeenCalledWith('zTracker: repaired TOON response', expect.anything());
     } finally {
+      consoleWarnSpy.mockRestore();
       consoleErrorSpy.mockRestore();
       consoleInfoSpy.mockRestore();
     }

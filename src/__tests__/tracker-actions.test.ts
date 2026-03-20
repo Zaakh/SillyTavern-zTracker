@@ -130,6 +130,186 @@ describe('createTrackerActions saved system prompt mode', () => {
     document.body.innerHTML = '<div id="extensionsMenu"></div>';
   });
 
+  test('logs malformed prompt-engineered payloads when parsing fails', async () => {
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const context = {
+      chatMetadata: {},
+      powerUserSettings: {
+        prefer_character_prompt: true,
+        sysprompt: { name: 'Neutral - Chat' },
+      },
+      getPresetManager: (apiId?: string) => {
+        if (apiId === 'sysprompt') {
+          return {
+            getCompletionPresetByName: (name?: string) =>
+              name === 'zTracker' ? { name: 'zTracker', content: 'Saved tracker system prompt' } : undefined,
+            getPresetList: () => ({ presets: [], preset_names: ['zTracker'] }),
+          };
+        }
+        return null;
+      },
+    };
+
+    (globalThis as any).SillyTavern = {
+      getContext: () => context,
+    };
+
+    buildPromptMock.mockResolvedValue({
+      result: [
+        { role: 'system', content: 'Existing system prompt' },
+        { role: 'user', content: 'Prior chat message' },
+      ],
+    });
+
+    (schemaToExample as jest.Mock).mockReturnValue('time\tstring');
+    (schemaToPromptSchema as jest.Mock).mockReturnValue('type: object');
+    (parseResponse as jest.Mock).mockImplementation(() => {
+      throw new Error('Model response is not valid TOON.');
+    });
+
+    const generateRequest = jest.fn((
+      _request: any,
+      hooks: { onStart: (requestId: string) => void; onFinish: (requestId: string, data: unknown, error: unknown) => void },
+    ) => {
+      hooks.onStart('request-1');
+      hooks.onFinish('request-1', { content: '```toon\nnot valid\n```' }, null);
+    });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: jest.fn(async () => undefined),
+        extensionSettings: {
+          connectionManager: {
+            profiles: [{ id: 'profile-1', api: 'openai', preset: 'preset-1', context: 'context-1', instruct: 'instruct-1', sysprompt: 'Profile Prompt' }],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => ({
+          ...makeSettings(),
+          promptEngineeringMode: PromptEngineeringMode.TOON,
+          promptToon: 'TOON TEMPLATE\n{{example_response}}',
+        }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: import.meta.url,
+    });
+
+    await actions.generateTracker(0);
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      'zTracker: malformed prompt-engineered payload',
+      expect.objectContaining({
+        format: 'toon',
+        reason: 'parse failure',
+        rawContent: '```toon\nnot valid\n```',
+      }),
+    );
+
+    consoleWarnSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+  });
+
+  test('logs malformed prompt-engineered payloads when parsed data fails strict rendering', async () => {
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const context = {
+      chatMetadata: {},
+      powerUserSettings: {
+        prefer_character_prompt: true,
+        sysprompt: { name: 'Neutral - Chat' },
+      },
+      getPresetManager: (apiId?: string) => {
+        if (apiId === 'sysprompt') {
+          return {
+            getCompletionPresetByName: (name?: string) =>
+              name === 'zTracker' ? { name: 'zTracker', content: 'Saved tracker system prompt' } : undefined,
+            getPresetList: () => ({ presets: [], preset_names: ['zTracker'] }),
+          };
+        }
+        return null;
+      },
+    };
+
+    (globalThis as any).SillyTavern = {
+      getContext: () => context,
+    };
+
+    buildPromptMock.mockResolvedValue({
+      result: [
+        { role: 'system', content: 'Existing system prompt' },
+        { role: 'user', content: 'Prior chat message' },
+      ],
+    });
+
+    const parsedPayload = {
+      time: '10:00:00',
+      charactersPresent: ['Silvia', 'Tobias'],
+      characters: [{ name: 'Silvia' }],
+    };
+
+    (schemaToExample as jest.Mock).mockReturnValue('time\tstring');
+    (schemaToPromptSchema as jest.Mock).mockReturnValue('type: object');
+    (parseResponse as jest.Mock).mockReturnValue(parsedPayload);
+    applyTrackerUpdateAndRenderMock.mockImplementation(() => {
+      throw new Error('render failed');
+    });
+
+    const generateRequest = jest.fn((
+      _request: any,
+      hooks: { onStart: (requestId: string) => void; onFinish: (requestId: string, data: unknown, error: unknown) => void },
+    ) => {
+      hooks.onStart('request-1');
+      hooks.onFinish('request-1', { content: '```toon\ncharactersPresent[2]: "Silvia"\t"Tobias"\n```' }, null);
+    });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: jest.fn(async () => undefined),
+        extensionSettings: {
+          connectionManager: {
+            profiles: [{ id: 'profile-1', api: 'openai', preset: 'preset-1', context: 'context-1', instruct: 'instruct-1', sysprompt: 'Profile Prompt' }],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => ({
+          ...makeSettings(),
+          promptEngineeringMode: PromptEngineeringMode.TOON,
+          promptToon: 'TOON TEMPLATE\n{{example_response}}',
+        }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: import.meta.url,
+    });
+
+    await actions.generateTracker(0);
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      'zTracker: malformed prompt-engineered payload',
+      expect.objectContaining({
+        format: 'toon',
+        reason: 'render rollback',
+        rawContent: '```toon\ncharactersPresent[2]: "Silvia"\t"Tobias"\n```',
+        parsedContent: parsedPayload,
+      }),
+    );
+
+    consoleWarnSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+  });
+
   test('injects the saved prompt without mutating prefer_character_prompt', async () => {
     const powerUserSettings = {
       prefer_character_prompt: true,

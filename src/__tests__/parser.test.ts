@@ -190,9 +190,41 @@ describe('parseResponse', () => {
     const bad = '```json\n{ invalid }\n```';
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     const consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       expect(() => parseResponse(bad, 'json')).toThrow('Model response is not valid JSON.');
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        'zTracker: malformed payload',
+        expect.objectContaining({
+          format: 'json',
+          rawContent: bad,
+        }),
+      );
     } finally {
+      consoleWarnSpy.mockRestore();
+      consoleErrorSpy.mockRestore();
+      consoleInfoSpy.mockRestore();
+    }
+  });
+
+  it('logs malformed raw payloads for TOON parser failures too', () => {
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const bad = 'characters[1\t]{name outfit mood}:\n  Silvia\tBlack apron\tcalm';
+
+    try {
+      expect(() => parseResponse(bad, 'toon')).toThrow('Model response is not valid TOON.');
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        'zTracker: malformed payload',
+        expect.objectContaining({
+          format: 'toon',
+          rawContent: bad,
+        }),
+      );
+    } finally {
+      consoleWarnSpy.mockRestore();
       consoleErrorSpy.mockRestore();
       consoleInfoSpy.mockRestore();
     }
@@ -202,11 +234,13 @@ describe('parseResponse', () => {
     const bad = "{'foo': 'bar'}";
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     const consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     try {
       expect(() => parseResponse(bad, 'json')).toThrow('Model response is not valid JSON.');
       expect(consoleInfoSpy).not.toHaveBeenCalled();
     } finally {
+      consoleWarnSpy.mockRestore();
       consoleErrorSpy.mockRestore();
       consoleInfoSpy.mockRestore();
     }
@@ -219,10 +253,12 @@ describe('parseResponse', () => {
     const bad = encode(value, { delimiter: '\t' }).replace('{name\toutfit\tmood}', '{name outfit mood}');
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     const consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     try {
       expect(() => parseResponse(bad, 'toon')).toThrow('Model response is not valid TOON.');
     } finally {
+      consoleWarnSpy.mockRestore();
       consoleErrorSpy.mockRestore();
       consoleInfoSpy.mockRestore();
     }

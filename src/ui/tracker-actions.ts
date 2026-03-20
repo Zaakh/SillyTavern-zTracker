@@ -45,6 +45,12 @@ import { debugLog, isDebugLoggingEnabled } from './debug.js';
 
 type PromptEngineeredFormat = 'json' | 'xml' | 'toon';
 
+type PromptEngineeredPayloadRecord = {
+  format: PromptEngineeredFormat;
+  rawContent: string;
+  parsedContent?: object;
+};
+
 export function createTrackerActions(options: {
   globalContext: any;
   settingsManager: ExtensionSettingsManager<ExtensionSettings>;
@@ -55,6 +61,7 @@ export function createTrackerActions(options: {
 }) {
   const { globalContext, settingsManager, generator, pendingRequests, renderTrackerWithDeps, importMetaUrl } = options;
   const pendingSequences = new Map<number, { cancelled: boolean }>();
+  const promptEngineeredPayloads = new WeakMap<object, PromptEngineeredPayloadRecord>();
 
   // Stores array identity and dependency hints alongside rendered tracker parts for follow-up validation and UI actions.
   function buildPartsMeta(schema: any): Record<string, { idKey?: string; fields?: string[]; dependsOn?: string[] }> {
@@ -181,6 +188,48 @@ export function createTrackerActions(options: {
     }
   }
 
+  // Captures raw prompt-engineered payloads so malformed replies can be inspected after parse or render failures.
+  function logMalformedPromptEngineeredPayload(details: {
+    format: PromptEngineeredFormat;
+    reason: 'parse failure' | 'render rollback';
+    rawContent: string;
+    parsedContent?: object;
+    error?: unknown;
+  }): void {
+    const { format, reason, rawContent, parsedContent, error } = details;
+    console.warn('zTracker: malformed prompt-engineered payload', {
+      format,
+      reason,
+      rawContent,
+      ...(parsedContent ? { parsedContent } : {}),
+      ...(error instanceof Error ? { error: error.message } : error ? { error: String(error) } : {}),
+    });
+  }
+
+  function rememberPromptEngineeredPayload(parsedContent: object, payload: PromptEngineeredPayloadRecord): object {
+    promptEngineeredPayloads.set(parsedContent, payload);
+    return parsedContent;
+  }
+
+  function logPromptEngineeredRenderRollback(parsedContent: unknown, error: unknown): void {
+    if (!parsedContent || typeof parsedContent !== 'object') {
+      return;
+    }
+
+    const payload = promptEngineeredPayloads.get(parsedContent as object);
+    if (!payload) {
+      return;
+    }
+
+    logMalformedPromptEngineeredPayload({
+      format: payload.format,
+      reason: 'render rollback',
+      rawContent: payload.rawContent,
+      parsedContent: payload.parsedContent,
+      error,
+    });
+  }
+
   async function requestPromptEngineeredResponse(
     makeRequest: (requestMessages: Message[], overideParams?: any) => Promise<ExtractedData | undefined>,
     requestMessages: Message[],
@@ -204,7 +253,22 @@ export function createTrackerActions(options: {
 
     const response = await makeRequest(requestMessages);
     if (!response?.content) throw new Error('No response content received.');
-    return parseResponse(response.content as string, format, { schema });
+    try {
+      const parsedContent = parseResponse(response.content as string, format, { schema });
+      return rememberPromptEngineeredPayload(parsedContent, {
+        format,
+        rawContent: response.content as string,
+        parsedContent,
+      });
+    } catch (error) {
+      logMalformedPromptEngineeredPayload({
+        format,
+        reason: 'parse failure',
+        rawContent: response.content as string,
+        error,
+      });
+      throw error;
+    }
   }
 
   async function prepareTrackerGeneration(messageId: number) {
@@ -468,6 +532,7 @@ export function createTrackerActions(options: {
         restoreDetailsState(id, detailsState);
         await saveChat();
       } catch {
+        logPromptEngineeredRenderRollback(response, new Error('Generated data failed to render with the current template. Not saved.'));
         renderTrackerWithDeps(id);
         throw new Error(`Generated data failed to render with the current template. Not saved.`);
       }
@@ -564,6 +629,7 @@ export function createTrackerActions(options: {
         restoreDetailsState(id, detailsState);
         await saveChat();
       } catch {
+        logPromptEngineeredRenderRollback(trackerData, new Error('Generated data failed to render with the current template. Not saved.'));
         renderTrackerWithDeps(id);
         throw new Error(`Generated data failed to render with the current template. Not saved.`);
       }
@@ -644,6 +710,7 @@ export function createTrackerActions(options: {
         await saveChat();
         st_echo('success', `Updated: ${partKey}`);
       } catch {
+        logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
         renderTrackerWithDeps(id);
         throw new Error(`Generated data failed to render with the current template. Not saved.`);
       }
@@ -741,6 +808,7 @@ export function createTrackerActions(options: {
         await saveChat();
         st_echo('success', `Updated: ${partKey}[${index}]`);
       } catch {
+        logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
         renderTrackerWithDeps(id);
         throw new Error(`Generated data failed to render with the current template. Not saved.`);
       }
@@ -852,6 +920,7 @@ export function createTrackerActions(options: {
         await saveChat();
         st_echo('success', `Updated: ${partKey} (${name})`);
       } catch {
+        logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
         renderTrackerWithDeps(id);
         throw new Error(`Generated data failed to render with the current template. Not saved.`);
       }
@@ -963,6 +1032,7 @@ export function createTrackerActions(options: {
         await saveChat();
         st_echo('success', `Updated: ${partKey} (${idKey}=${idValue})`);
       } catch {
+        logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
         renderTrackerWithDeps(id);
         throw new Error(`Generated data failed to render with the current template. Not saved.`);
       }
@@ -1075,6 +1145,7 @@ export function createTrackerActions(options: {
         await saveChat();
         st_echo('success', `Updated: ${partKey}[${index}].${fieldKey}`);
       } catch {
+        logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
         renderTrackerWithDeps(id);
         throw new Error(`Generated data failed to render with the current template. Not saved.`);
       }

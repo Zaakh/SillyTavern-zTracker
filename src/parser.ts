@@ -11,6 +11,14 @@ export interface ParseResponseOptions {
 
 export type ParseResponseFormat = 'xml' | 'json' | 'toon';
 
+function logMalformedPayload(content: string, format: ParseResponseFormat, error: unknown): void {
+  console.warn('zTracker: malformed payload', {
+    format,
+    rawContent: content,
+    ...(error instanceof Error ? { error: error.message } : error ? { error: String(error) } : {}),
+  });
+}
+
 export function parseResponse(content: string, format: ParseResponseFormat, options: ParseResponseOptions = {}): object {
   try {
     switch (format) {
@@ -33,6 +41,7 @@ export function parseResponse(content: string, format: ParseResponseFormat, opti
         originalLength: content.length,
       });
     }
+    logMalformedPayload(content, format, error);
     console.error(`Error parsing response in format '${format}':`, error);
     console.error('Raw content length:', content.length);
 

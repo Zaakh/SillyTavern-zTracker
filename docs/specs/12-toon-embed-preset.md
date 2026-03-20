@@ -267,6 +267,30 @@ The live SillyTavern follow-up focused on the `Bar` chat with the existing Tobia
 - `applyTrackerUpdateAndRender()` now logs `zTracker: dependent array mismatch` warnings when a detail array such as `characters` is missing entries declared by its dependency array such as `charactersPresent`.
 - Regression fixtures and tests were added for the live malformed XML and TOON replies.
 
+## 2026-03-20 post-update live smoke
+
+### Environment confirmed
+
+- SillyTavern loaded `zTracker 1.2.1 (feat/toon-embed-preset-d7352fa)` from the updated extension folder.
+- The repo state used for the smoke pass was commit `d7352faa447ab9397bbb37fb7238f3e8a4e24452`.
+- Because the refreshed page reopened to the startup assistant instead of restoring the prior chat selection, the live pass resumed in the `Bar` chat and used fresh Tobias user messages to exercise tracker generation end-to-end.
+
+### Results
+
+1. JSON prompt-engineering passed on the updated build. Regenerating the Tobias tracker completed successfully and the tracker remained attached to the message.
+2. XML prompt-engineering also passed on the updated build. A fresh Tobias user message received a tracker with the expected top-level fields and no XML parser/render failure was surfaced.
+3. TOON prompt-engineering still fails in live use on the updated build. A fresh Tobias user message triggered tracker generation, but no tracker was saved.
+4. The TOON failure is no longer the earlier parser hard-stop. The live console now shows:
+  - `zTracker: dependent array mismatch` for `characters` depending on `charactersPresent`
+  - `Error generating tracker: Error: Generated data failed to render with the current template. Not saved.`
+5. The most likely live failure shape is now a partially valid TOON reply that parses into data where dependency-linked arrays drift apart or one or more strict-template fields are still missing. The parser gets far enough for post-parse validation/render to run, but the final rendered tracker is rejected and rolled back.
+6. Separate from zTracker itself, the active global SillyTavern system prompt was still `zTracker-1.2.1`, so normal assistant chat generation in the same session was contaminated and produced structured JSON instead of roleplay text. This matches the warning already shown in zTracker settings and is an environment/configuration issue rather than a new extension regression.
+
+### Follow-up needed
+
+- Capture the raw live TOON reply that produced the render rollback so the exact malformed shape can be converted into a parser or post-parse normalization regression test.
+- Decide whether dependency-linked array reconciliation should stay as warning-only or should also normalize obviously safe cases before strict template rendering.
+
 ## Acceptance criteria
 
 - [x] `EmbedSnapshotTransformInput` type includes `'toon'`.
