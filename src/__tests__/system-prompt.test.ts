@@ -16,6 +16,7 @@ import {
   ZTRACKER_SYSTEM_PROMPT_TEXT,
   DEFAULT_PROMPT_TOON,
   DEFAULT_PROMPT_XML,
+  PREVIOUS_DEFAULT_PROMPT_XML,
   migrateLegacyPromptTemplates,
 } from '../config.js';
 
@@ -245,5 +246,16 @@ describe('system prompt helpers', () => {
     expect(migrateLegacyPromptTemplates(customizedSettings)).toBe(false);
     expect(customizedSettings.promptXml).toContain('customized');
     expect(customizedSettings.promptToon).toContain('customized');
+  });
+
+  test('migrates the previous XML schema-wrapper prompt to the current default', () => {
+    const settings = {
+      promptXml: PREVIOUS_DEFAULT_PROMPT_XML,
+      promptToon: DEFAULT_PROMPT_TOON,
+    };
+
+    expect(migrateLegacyPromptTemplates(settings)).toBe(true);
+    expect(settings.promptXml).toBe(DEFAULT_PROMPT_XML);
+    expect(settings.promptToon).toBe(DEFAULT_PROMPT_TOON);
   });
 });

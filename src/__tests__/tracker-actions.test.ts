@@ -357,7 +357,7 @@ describe('createTrackerActions saved system prompt mode', () => {
     });
 
     (schemaToExample as jest.Mock).mockReturnValue('<time>string</time>');
-    (schemaToPromptSchema as jest.Mock).mockReturnValue('<schema>\n  <type>object</type>\n</schema>');
+    (schemaToPromptSchema as jest.Mock).mockReturnValue('<type>object</type>');
     (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
 
     const generateRequest = jest.fn((
@@ -415,7 +415,7 @@ describe('createTrackerActions saved system prompt mode', () => {
     const sentMessages = generateRequest.mock.calls[0][0].prompt;
     expect(sentMessages.at(-1)).toEqual({
       role: 'user',
-      content: 'XML TEMPLATE\n<schema>\n  <type>object</type>\n</schema>\n<time>string</time>',
+      content: 'XML TEMPLATE\n<type>object</type>\n<time>string</time>',
     });
     expect(sentMessages.at(-1).content).not.toContain('{\n  "type"');
   });

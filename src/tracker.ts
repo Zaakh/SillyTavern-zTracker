@@ -273,6 +273,10 @@ export function applyTrackerUpdateAndRender(
   }
   message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_VALUE_KEY] = options.trackerData;
   message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_HTML_KEY] = options.trackerHtml;
+  warnOnDependentArrayMismatches(
+    options.trackerData,
+    message.extra[EXTENSION_KEY][CHAT_MESSAGE_PARTS_META_KEY] as Record<string, any> | undefined,
+  );
 
   try {
     options.render();
@@ -283,5 +287,58 @@ export function applyTrackerUpdateAndRender(
       delete message.extra[EXTENSION_KEY];
     }
     throw error;
+  }
+}
+
+// Warns when a dependent detail array is missing entries for identifiers declared in its source array.
+function warnOnDependentArrayMismatches(
+  trackerData: unknown,
+  partsMeta: Record<string, { idKey?: string; dependsOn?: string[] }> | undefined,
+): void {
+  if (!trackerData || typeof trackerData !== 'object' || !partsMeta) {
+    return;
+  }
+
+  for (const [partKey, meta] of Object.entries(partsMeta)) {
+    const dependsOn = Array.isArray(meta?.dependsOn) ? meta.dependsOn : [];
+    if (dependsOn.length === 0) {
+      continue;
+    }
+
+    const detailItems = (trackerData as Record<string, any>)[partKey];
+    if (!Array.isArray(detailItems)) {
+      continue;
+    }
+
+    const idKey = typeof meta?.idKey === 'string' && meta.idKey.trim() ? meta.idKey.trim() : 'name';
+    const availableIds = new Set(
+      detailItems
+        .map((item) => (item && typeof item === 'object' ? item[idKey] : undefined))
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0),
+    );
+
+    for (const dependencyKey of dependsOn) {
+      const sourceItems = (trackerData as Record<string, any>)[dependencyKey];
+      if (!Array.isArray(sourceItems)) {
+        continue;
+      }
+
+      const missingIds = sourceItems
+        .map((item) => {
+          if (typeof item === 'string') return item.trim();
+          if (item && typeof item === 'object' && typeof item[idKey] === 'string') return item[idKey].trim();
+          return '';
+        })
+        .filter((value) => value.length > 0 && !availableIds.has(value));
+
+      if (missingIds.length > 0) {
+        console.warn('zTracker: dependent array mismatch', {
+          partKey,
+          dependsOn: dependencyKey,
+          idKey,
+          missingIds,
+        });
+      }
+    }
   }
 }

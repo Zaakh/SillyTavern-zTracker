@@ -94,7 +94,7 @@ export function schemaToPromptSchema(schema: any, format: StructuredFormat): str
   const promptSchema = normalizeSchemaForPrompt(schema);
 
   if (format === 'xml') {
-    return `<schema>\n${objectToXml(promptSchema, 1)}</schema>`;
+    return objectToXml(promptSchema).trim();
   }
 
   if (format === 'toon') {

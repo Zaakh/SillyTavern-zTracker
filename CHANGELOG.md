@@ -9,17 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Embedded tracker snapshots now support a built-in **TOON (compact)** transform preset, using tab-delimited TOON for lower-token prompt context while preserving structured data fidelity.
-- TOON is now available as a first-class prompt-engineering mode in zTracker settings, with its own default template and example generation path alongside JSON and XML.
+- TOON is now available as a prompt-engineering mode alongside JSON and XML.
 
 ### Fixed
 
-- TOON prompt-engineering templates can now be viewed, edited, and reset from zTracker settings just like the JSON and XML prompt templates.
-- Prompt-engineering now translates zTracker's single canonical JSON schema into XML or TOON before sending those format-specific prompts, instead of leaking raw JSON schema blocks into non-JSON modes.
-- Startup now safely upgrades shipped XML/TOON prompt templates stored in extension settings so existing installs benefit from the XML/TOON schema reshaping fix without requiring manual resets.
-- zTracker now installs a versioned recommended saved system prompt preset name, allowing older saved prompt presets to coexist instead of being overwritten in place.
-- Structured reply repair now uses a shared parser workflow for repairable text formats. JSON keeps its existing recovery steps, XML can recover wrapper/prose damage by extracting the XML document, and TOON parsing can recover a common small-LLM failure mode where tabular delimiters are expanded from tabs into aligned spaces.
-- TOON parsing now applies the same schema-based array normalization as XML responses, avoiding single-item array shape drift in prompt-engineered replies.
-- Structured code-block extraction now requires closing fences on their own line, so inline triple-backtick text inside JSON or TOON scalar values no longer truncates parser input.
+- Prompt-engineering now translates the canonical JSON schema into XML or TOON correctly, and existing installs upgrade older shipped XML/TOON prompt templates automatically.
+- zTracker now installs a versioned recommended saved system prompt preset so older saved prompts can coexist safely.
+- XML and TOON reply repair now covers additional live small-model failure shapes, including broken opening XML tags and TOON object-array blocks.
+- Tracker updates now warn when dependency-linked arrays are inconsistent, such as a listed character missing its matching detail entry.
 - Production builds no longer emit webpack's default web-app performance warnings for the extension's single-file bundle.
 
 ## [1.2.1] - 2026-03-17

@@ -12,7 +12,8 @@ export type ToonRepairStepName =
   | 'line-ending normalization'
   | 'whitespace normalization'
   | 'fence cleanup'
-  | 'tabular delimiter normalization';
+  | 'tabular delimiter normalization'
+  | 'object-array block normalization';
 
 function tryParseToonCandidate(content: string): object {
   return decodeToon(content) as object;
@@ -93,6 +94,60 @@ function isAcceptableToonParse(parsed: object): boolean {
   return !hasSuspiciousToonKeys(parsed);
 }
 
+// Converts a single-item object-array block into the tabular TOON row format the decoder expects.
+function normalizeToonObjectArrayBlocks(content: string): string {
+  const lines = content.split('\n');
+  let changed = false;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const headerMatch = lines[index].match(/^(\s*)([A-Za-z_$][\w$-]*)\[(\d+)\]\{\s*$/);
+    if (!headerMatch) {
+      continue;
+    }
+
+    const [, indent, key, countText] = headerMatch;
+    if (Number(countText) !== 1) {
+      continue;
+    }
+
+    const fieldIndent = `${indent}  `;
+    const fields: string[] = [];
+    const values: string[] = [];
+    let cursor = index + 1;
+
+    while (cursor < lines.length) {
+      const line = lines[cursor];
+      if (line.trim() === '}') {
+        break;
+      }
+
+      const fieldMatch = line.match(/^\s{2,}([A-Za-z_$][\w$-]*):\s*(.+?)\s*$/);
+      if (!fieldMatch) {
+        cursor = -1;
+        break;
+      }
+
+      fields.push(fieldMatch[1]);
+      values.push(fieldMatch[2]);
+      cursor += 1;
+    }
+
+    if (cursor === -1 || cursor >= lines.length || lines[cursor].trim() !== '}' || fields.length === 0) {
+      continue;
+    }
+
+    const replacement = [
+      `${indent}${key}[1\t]{${fields.join('\t')}}:`,
+      `${fieldIndent}${values.join('\t')}`,
+    ];
+    lines.splice(index, cursor - index + 1, ...replacement);
+    changed = true;
+    index += replacement.length - 1;
+  }
+
+  return changed ? lines.join('\n') : content;
+}
+
 export function tryParseToonWithRepair(content: string): object {
   return runRepairWorkflow<ToonRepairStepName>({
     content,
@@ -103,6 +158,7 @@ export function tryParseToonWithRepair(content: string): object {
       { name: 'whitespace normalization', transform: normalizeStructuredWhitespace },
       { name: 'fence cleanup', transform: stripRepeatedFenceWrappers },
       { name: 'tabular delimiter normalization', transform: normalizeToonTabularDelimiters },
+      { name: 'object-array block normalization', transform: normalizeToonObjectArrayBlocks },
     ],
     workflowOptions: {
       parseAfterEachStep: false,

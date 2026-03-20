@@ -65,6 +65,8 @@ Optional (advanced): you can annotate your JSON schema preset to help zTracker k
 - `x-ztracker-dependsOn`: top-level part ordering hints for sequential generation.
 - `x-ztracker-idKey`: which string field to use as the array-item identity for per-item regeneration (defaults to `name`).
 
+If a dependency-linked array becomes inconsistent during generation, zTracker now logs a warning in the browser console. Example: `charactersPresent` lists a character name but `characters` has no matching object for that name.
+
 ## World Info (lorebooks)
 
 In **Extensions → zTracker**, you can control World Info during tracker generation: include all (default), exclude all, or allowlist specific lorebook **book names** (case-insensitive) and/or entry **UIDs** (numbers). This only affects zTracker tracker generation (button / Auto Mode), not normal SillyTavern generations.

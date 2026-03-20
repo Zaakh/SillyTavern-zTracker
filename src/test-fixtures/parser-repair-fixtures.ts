@@ -113,6 +113,28 @@ Tracker update for Tobias after he quietly checks the room:
 Silvia status: <still waiting>
 ${TRIPLE_BACKTICKS}`;
 
+export const malformedXmlReplyFromLiveSmokeTest = `${TRIPLE_BACKTICKS}xml
+<root>
+time>14:23:07; 09/28/2025 (Tuesday)</time>
+<location>Bar interior, cozy corner near the bar</location>
+<weather>Clear, 72°F</weather>
+<topics>
+  <primaryTopic>Drink order</primaryTopic>
+  <emotionalTone>Friendly</emotionalTone>
+  <interactionTheme>Customer-service</interactionTheme>
+</topics>
+<charactersPresent>Silvia</charactersPresent>
+<characters>
+  <name>Silvia</name>
+  <hair>Short blonde hair, neat</hair>
+  <makeup>None</makeup>
+  <outfit>White shirt, black apron, black pants, black bra and panties</outfit>
+  <stateOfDress>Polished but casual</stateOfDress>
+  <postureAndInteraction>Standing behind counter, leaning forward, smiling</postureAndInteraction>
+</characters>
+</root>
+${TRIPLE_BACKTICKS}`;
+
 export const damagedToonReplyFromBarChat = `${TRIPLE_BACKTICKS}toon
 time: 14:23:07; 09/28/2025 (Tuesday)
 location: Bar interior, cozy corner near the bar
@@ -149,5 +171,24 @@ export const invalidToonJsonFenceFromSmokeTest = `${TRIPLE_BACKTICKS}toon
       "postureAndInteraction": "Standing behind counter, leaning forward, smiling"
     }
   ]
+}
+${TRIPLE_BACKTICKS}`;
+
+export const malformedToonReplyFromLiveSmokeTest = `${TRIPLE_BACKTICKS}toon
+time: "14:23:07; 09/28/2025 (Tuesday)"
+location: "Bar interior, cozy corner near the bar"
+weather: "Clear, 72°F"
+topics:
+  primaryTopic: "Drink order"
+  emotionalTone: "Friendly"
+  interactionTheme: "Customer-service"
+charactersPresent[1]: "Silvia"
+characters[1]{
+  name: "Silvia"
+  hair: "Short blonde hair, neat"
+  makeup: "None"
+  outfit: "White shirt, black apron, black pants, black bra and panties"
+  stateOfDress: "Polished but casual"
+  postureAndInteraction: "Standing behind counter, leaning forward, smiling"
 }
 ${TRIPLE_BACKTICKS}`;

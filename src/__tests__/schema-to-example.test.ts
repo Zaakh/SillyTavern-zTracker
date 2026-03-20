@@ -37,7 +37,7 @@ describe('schemaToExample', () => {
   it('renders XML prompt schema from the canonical JSON schema', () => {
     const result = schemaToPromptSchema(schema, 'xml');
 
-    expect(result).toContain('<schema>');
+    expect(result).not.toContain('<schema>\n<schema>');
     expect(result).toContain('<type>object</type>');
     expect(result).toContain('<properties>');
     expect(result).toContain('<description>Title text</description>');
@@ -97,5 +97,92 @@ describe('schemaToExample', () => {
     expect(result).toContain('cast[1');
     expect(result).toContain('mood: string');
     expect(result).toContain('traits[1');
+  });
+
+  it('produces examples for distinct tracker scenarios beyond chat scenes', () => {
+    const scenarioSchemas = [
+      {
+        type: 'object',
+        properties: {
+          questName: { type: 'string', description: 'Active quest title' },
+          partyMembers: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'Party member name' },
+                hp: { type: 'number' },
+                statusEffects: { type: 'array', items: { type: 'string' } },
+              },
+            },
+          },
+          encounterState: {
+            type: 'object',
+            properties: {
+              round: { type: 'number' },
+              initiativeLeader: { type: 'string', description: 'Current turn leader' },
+            },
+          },
+        },
+      },
+      {
+        type: 'object',
+        properties: {
+          caseId: { type: 'string', description: 'Investigation case identifier' },
+          suspects: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'Suspect name' },
+                motive: { type: 'string', description: 'Primary motive' },
+                alibiVerified: { type: 'boolean' },
+              },
+            },
+          },
+          evidenceBoard: {
+            type: 'object',
+            properties: {
+              leadSummary: { type: 'string', description: 'Current lead summary' },
+              openQuestions: { type: 'array', items: { type: 'string' } },
+            },
+          },
+        },
+      },
+      {
+        type: 'object',
+        properties: {
+          locationSeed: { type: 'string', description: 'Current biome or region' },
+          resources: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                type: { type: 'string', description: 'Resource type' },
+                quantity: { type: 'number' },
+                spoilageRisk: { type: 'string', description: 'Spoilage or loss risk' },
+              },
+            },
+          },
+          shelter: {
+            type: 'object',
+            properties: {
+              integrity: { type: 'number' },
+              hazards: { type: 'array', items: { type: 'string' } },
+            },
+          },
+        },
+      },
+    ];
+
+    for (const scenarioSchema of scenarioSchemas) {
+      const jsonExample = JSON.parse(schemaToExample(scenarioSchema, 'json'));
+      const xmlExample = schemaToExample(scenarioSchema, 'xml');
+      const toonExample = schemaToExample(scenarioSchema, 'toon');
+
+      expect(Object.keys(jsonExample)).toEqual(Object.keys(scenarioSchema.properties));
+      expect(xmlExample.length).toBeGreaterThan(0);
+      expect(toonExample.length).toBeGreaterThan(0);
+    }
   });
 });

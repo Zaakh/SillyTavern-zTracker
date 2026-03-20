@@ -56,20 +56,26 @@ export function createTrackerActions(options: {
   const { globalContext, settingsManager, generator, pendingRequests, renderTrackerWithDeps, importMetaUrl } = options;
   const pendingSequences = new Map<number, { cancelled: boolean }>();
 
-  function buildPartsMeta(schema: any): Record<string, { idKey?: string; fields?: string[] }> {
-    const meta: Record<string, { idKey?: string; fields?: string[] }> = {};
+  // Stores array identity and dependency hints alongside rendered tracker parts for follow-up validation and UI actions.
+  function buildPartsMeta(schema: any): Record<string, { idKey?: string; fields?: string[]; dependsOn?: string[] }> {
+    const meta: Record<string, { idKey?: string; fields?: string[]; dependsOn?: string[] }> = {};
     const props = schema?.properties;
     if (!props || typeof props !== 'object') return meta;
     for (const key of Object.keys(props)) {
       const def = (props as any)[key];
       if (def?.type === 'array') {
         const idKey = getArrayItemIdentityKey(schema, key);
+        const dependsOn = Array.isArray(def?.['x-ztracker-dependsOn'])
+          ? def['x-ztracker-dependsOn'].filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
+          : typeof def?.['x-ztracker-dependsOn'] === 'string' && def['x-ztracker-dependsOn'].trim().length > 0
+            ? [def['x-ztracker-dependsOn'].trim()]
+            : undefined;
         const itemProps = def?.items?.type === 'object' ? def?.items?.properties : undefined;
         const fields =
           itemProps && typeof itemProps === 'object'
             ? Object.keys(itemProps).filter((f) => f !== idKey && f !== 'name')
             : undefined;
-        meta[key] = { idKey, ...(fields?.length ? { fields } : {}) };
+        meta[key] = { idKey, ...(fields?.length ? { fields } : {}), ...(dependsOn?.length ? { dependsOn } : {}) };
       }
     }
     return meta;

@@ -12,6 +12,7 @@ export type XmlRepairStepName =
   | 'line-ending normalization'
   | 'whitespace normalization'
   | 'fence cleanup'
+  | 'xml opening bracket repair'
   | 'xml substring extraction';
 
 const xmlParser = new XMLParser({
@@ -30,7 +31,31 @@ function tryParseXmlCandidate(content: string): object {
 }
 
 function isAcceptableXmlParse(parsed: object): boolean {
-  return Object.keys(parsed).length > 0;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return false;
+  }
+
+  const keys = Object.keys(parsed);
+  return keys.length > 0 && !(keys.length === 1 && keys[0] === '#text');
+}
+
+// Repairs the specific case where the first opening tag in an XML line loses its leading '<'.
+function repairXmlMissingOpeningBracket(content: string): string {
+  const lines = content.split('\n');
+  let changed = false;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const match = line.match(/^(\s*)([A-Za-z_][\w:.-]*>.*<\/[A-Za-z_][\w:.-]*>\s*)$/);
+    if (!match || line.trimStart().startsWith('<')) {
+      continue;
+    }
+
+    lines[index] = `${match[1]}<${match[2]}`;
+    changed = true;
+  }
+
+  return changed ? lines.join('\n') : content;
 }
 
 function extractXmlSubstring(content: string): string | undefined {
@@ -57,6 +82,7 @@ export function tryParseXmlWithRepair(content: string): object {
       { name: 'line-ending normalization', transform: normalizeLineEndings },
       { name: 'whitespace normalization', transform: normalizeStructuredWhitespace },
       { name: 'fence cleanup', transform: stripRepeatedFenceWrappers },
+      { name: 'xml opening bracket repair', transform: repairXmlMissingOpeningBracket },
       { name: 'xml substring extraction', transform: extractXmlSubstring },
     ],
     workflowOptions: {

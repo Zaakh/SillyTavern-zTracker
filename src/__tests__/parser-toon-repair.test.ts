@@ -6,6 +6,7 @@ import {
   barTrackerExpected,
   damagedToonReplyFromBarChat,
   invalidToonJsonFenceFromSmokeTest,
+  malformedToonReplyFromLiveSmokeTest,
   sceneTrackerSchema,
 } from '../test-fixtures/parser-repair-fixtures.js';
 
@@ -41,5 +42,19 @@ describe('parseResponse TOON repair fixtures', () => {
       consoleErrorSpy.mockRestore();
       consoleInfoSpy.mockRestore();
     }
+  });
+
+  it('repairs the live smoke-test TOON reply when an object array is emitted as a block', () => {
+    const consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
+
+    const result = parseResponse(malformedToonReplyFromLiveSmokeTest, 'toon', { schema: sceneTrackerSchema });
+
+    expect(result).toEqual(barTrackerExpected);
+    expect(consoleInfoSpy).toHaveBeenCalledWith(
+      'zTracker: repaired TOON response',
+      expect.objectContaining({
+        appliedSteps: expect.arrayContaining(['object-array block normalization']),
+      }),
+    );
   });
 });

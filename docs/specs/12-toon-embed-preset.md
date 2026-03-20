@@ -237,6 +237,36 @@ Implemented choice: use a tab delimiter (`'\t'`) for TOON output. This avoids am
 5. **Parser architecture follow-up**: completed separately from the embed feature. Structured reply repair now lives behind a shared parser workflow with format-specific JSON, XML, and TOON modules, which keeps `src/parser.ts` as a small entrypoint instead of a monolithic mixed-logic file.
 6. **Spec stability**: still acceptable for the original feature. zTracker only encodes TOON for prompt input in the embed flow; the parser-side TOON/XML repair workflow is supporting infrastructure rather than a change to the embed preset itself.
 
+## 2026-03-20 live smoke follow-up
+
+### Smoke plan executed
+
+The live SillyTavern follow-up focused on the `Bar` chat with the existing Tobias tracker and covered:
+- JSON prompt-engineering regeneration with the versioned saved prompt preset `zTracker-1.2.1`
+- XML prompt-engineering regeneration with the same preset, including capture of the outgoing prompt and raw model reply
+- TOON prompt-engineering regeneration with the same preset, including capture of the outgoing prompt and raw model reply
+- validation that malformed live replies were either repairable by conservative parser steps or still rejected when they would require unsafe inference
+- validation that dependent tracker arrays now surface warnings when a source array item is missing its corresponding detail entry
+
+### Live findings
+
+1. JSON prompt-engineering succeeded end-to-end in the live `Bar` chat. The outgoing request used the saved `zTracker-1.2.1` system prompt and the model returned valid fenced JSON.
+2. XML prompt-engineering exposed two separate issues:
+  - the saved XML prompt template in settings still wrapped `{{schema}}` inside `<schema>...</schema>`, which duplicated the schema wrapper when paired with the earlier XML prompt-schema renderer
+  - the model returned a repairable malformed XML reply where the first `<time>` opening bracket was missing (`time>...`)
+3. TOON prompt-engineering exposed a new repairable model failure mode: a single-item array of objects was emitted as a block (`characters[1]{ ... }`) instead of the tabular TOON row form expected by the decoder.
+4. The earlier hard failure where JSON was wrapped in a `toon` fence remains intentionally rejected; that shape is still too far from valid TOON to repair safely.
+5. After the code changes and rebuild in this session, automated validation passed (`npm test`, `npm run build`). A second full live regeneration pass after the final migration matcher change was not completed in-session because the refreshed SillyTavern page returned to its startup assistant state instead of restoring the `Bar` chat directly.
+
+### Fixes implemented from this smoke pass
+
+- XML prompt-schema rendering now emits the canonical schema description without adding its own outer `<schema>` wrapper.
+- XML prompt-template migration now upgrades both the old JSON-based XML template and the previously shipped XML-wrapper template to the current default.
+- XML parsing now rejects text-only parses and repairs the specific missing-opening-bracket shape observed in the live smoke test.
+- TOON parsing now repairs the live single-item object-array block form by converting it into the canonical tabular TOON row format before decoding.
+- `applyTrackerUpdateAndRender()` now logs `zTracker: dependent array mismatch` warnings when a detail array such as `characters` is missing entries declared by its dependency array such as `charactersPresent`.
+- Regression fixtures and tests were added for the live malformed XML and TOON replies.
+
 ## Acceptance criteria
 
 - [x] `EmbedSnapshotTransformInput` type includes `'toon'`.

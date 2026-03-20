@@ -173,9 +173,7 @@ export const DEFAULT_PROMPT_XML = `You are a highly specialized AI assistant. Yo
 
 **XML SCHEMA DESCRIPTION TO FOLLOW:**
 \`\`\`xml
-<schema>
 {{schema}}
-</schema>
 \`\`\`
 
 **EXAMPLE OF A PERFECT RESPONSE:**
@@ -225,6 +223,35 @@ export const LEGACY_PROMPT_XML = `You are a highly specialized AI assistant. You
 \`\`\`
 `;
 
+export const PREVIOUS_DEFAULT_PROMPT_XML = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid XML structure that strictly adheres to the provided example.
+
+**CRITICAL INSTRUCTIONS:**
+1.  You MUST wrap the entire XML object in a markdown code block (\`\`\`xml\\n...\\n\`\`\`).
+2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.
+3.  The XML object inside the code block MUST be valid.
+
+**XML SCHEMA DESCRIPTION TO FOLLOW:**
+\`\`\`xml
+<schema>
+{{schema}}
+</schema>
+\`\`\`
+
+**EXAMPLE OF A PERFECT RESPONSE:**
+\`\`\`xml
+<root>
+{{example_response}}
+</root>
+\`\`\`
+`;
+
+// Matches the obsolete XML schema wrapper while tolerating saved line-ending and whitespace normalization.
+function normalizePreviousXmlPromptTemplate(prompt: string): string {
+  return prompt
+    .replace(/```xml\s*\n<schema>\s*\n\{\{schema\}\}\s*\n<\/schema>\s*\n```/, '```xml\n{{schema}}\n```')
+    .trim();
+}
+
 export const LEGACY_PROMPT_TOON = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid TOON structure that strictly adheres to the provided schema and example.
 
 **CRITICAL INSTRUCTIONS:**
@@ -247,7 +274,12 @@ export const LEGACY_PROMPT_TOON = `You are a highly specialized AI assistant. Yo
 export function migrateLegacyPromptTemplates(settings: Pick<ExtensionSettings, 'promptXml' | 'promptToon'>): boolean {
   let changed = false;
 
-  if ((settings.promptXml ?? '').trim() === LEGACY_PROMPT_XML.trim()) {
+  const promptXml = (settings.promptXml ?? '').trim();
+  if (
+    promptXml === LEGACY_PROMPT_XML.trim() ||
+    promptXml === PREVIOUS_DEFAULT_PROMPT_XML.trim() ||
+    normalizePreviousXmlPromptTemplate(promptXml) === DEFAULT_PROMPT_XML.trim()
+  ) {
     settings.promptXml = DEFAULT_PROMPT_XML;
     changed = true;
   }
