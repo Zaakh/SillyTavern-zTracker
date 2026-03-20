@@ -12,6 +12,7 @@ import {
   Schema,
   DEFAULT_PROMPT,
   DEFAULT_PROMPT_JSON,
+  DEFAULT_PROMPT_TOON,
   DEFAULT_PROMPT_XML,
   DEFAULT_SCHEMA_VALUE,
   DEFAULT_SCHEMA_HTML,
@@ -231,12 +232,12 @@ export const ZTrackerSettings: FC = () => {
             </div>
 
             <div className="setting-row">
-              <label title="Chooses how zTracker asks the model for structured output: use the native API format, or use JSON/XML prompt-engineering templates.">
+              <label title="Chooses how zTracker asks the model for structured output: use the native API format, or use JSON/XML/TOON prompt-engineering templates.">
                 Prompt Engineering
               </label>
               <select
                 className="text_pole"
-                title="Chooses how zTracker asks the model for structured output: use the native API format, or use JSON/XML prompt-engineering templates."
+                title="Chooses how zTracker asks the model for structured output: use the native API format, or use JSON/XML/TOON prompt-engineering templates."
                 value={settings.promptEngineeringMode}
                 onChange={(e) =>
                   updateAndRefresh((s) => {
@@ -247,6 +248,7 @@ export const ZTrackerSettings: FC = () => {
                 <option value="native">Native API</option>
                 <option value="json">Prompt Engineering (JSON)</option>
                 <option value="xml">Prompt Engineering (XML)</option>
+                              <option value="toon">Prompt Engineering (TOON)</option>
               </select>
             </div>
 

@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Embedded tracker snapshots now support a built-in **TOON (compact)** transform preset, using tab-delimited TOON for lower-token prompt context while preserving structured data fidelity.
+- TOON is now available as a first-class prompt-engineering mode in zTracker settings, with its own default template and example generation path alongside JSON and XML.
+
+### Fixed
+
+- Structured reply repair now uses a shared parser workflow for repairable text formats. JSON keeps its existing recovery steps, XML can recover wrapper/prose damage by extracting the XML document, and TOON parsing can recover a common small-LLM failure mode where tabular delimiters are expanded from tabs into aligned spaces.
 
 ## [1.2.1] - 2026-03-17
 

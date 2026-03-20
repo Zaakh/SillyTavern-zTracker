@@ -141,9 +141,9 @@ Verify `@toon-format/toon` is bundled correctly. The library is ESM + TS-native,
 
 ### Settings migration
 
-No migration needed. The new preset is added to `defaultSettings` but **existing users who already have saved settings will not see it automatically** (their persisted preset map takes precedence). This is consistent with how `minimal` was shipped — it appeared only in fresh installs or when the user resets settings.
+Review finding: the original assumption above was wrong. Existing users **do** receive the new `toon` preset automatically because zTracker initializes settings with `ExtensionSettingsManager.initializeSettings()` using the default recursive merge strategy, which fills in missing nested keys from `defaultSettings`.
 
-If we want existing users to see the new preset, we would need a `formatVersion` bump and migration logic. **Decision: defer migration. Users can create a TOON preset manually or reset settings.** This keeps the change minimal.
+That means adding `embedZTrackerSnapshotTransformPresets.toon` is an additive persisted-settings change on startup even without a `formatVersion` bump. No explicit migration code is required, but the effect is still observable for existing installs and should be documented accurately.
 
 ### Bundle size impact
 
@@ -233,7 +233,9 @@ Implemented choice: use a tab delimiter (`'\t'`) for TOON output. This avoids am
 1. **Delimiter choice**: resolved. The implementation uses tab-delimited TOON (`delimiter: '\t'`) because tracker values frequently contain commas in outfit/location text.
 2. **Cloned tracker values**: resolved. `includeZTrackerMessages()` clones messages via `structuredClone()`, and the TOON encoder treated those cloned tracker objects as non-JSON input. The implementation normalizes tracker values through `JSON.stringify()` / `JSON.parse()` before TOON encoding.
 3. **Bundle size**: verified. After `npm run build`, `dist/index.js` grew from `510005` bytes at `HEAD` to `535071` bytes (`+25066` bytes).
-4. **Spec stability**: still acceptable. zTracker only encodes TOON for prompt input; it does not persist or parse TOON in runtime flows.
+4. **Settings merge behavior**: corrected after review. Existing installs automatically gain the built-in `toon` preset because missing nested default settings are recursively merged at startup.
+5. **Parser architecture follow-up**: completed separately from the embed feature. Structured reply repair now lives behind a shared parser workflow with format-specific JSON, XML, and TOON modules, which keeps `src/parser.ts` as a small entrypoint instead of a monolithic mixed-logic file.
+6. **Spec stability**: still acceptable for the original feature. zTracker only encodes TOON for prompt input in the embed flow; the parser-side TOON/XML repair workflow is supporting infrastructure rather than a change to the embed preset itself.
 
 ## Acceptance criteria
 
@@ -264,9 +266,15 @@ Implemented choice: use a tab delimiter (`'\t'`) for TOON output. This avoids am
 ## Verification
 
 - `npm test`
-  - 13 test suites passed, 70 tests passed.
-  - New coverage verifies TOON formatting, round-trip decode fidelity, and tracker snapshot injection behavior.
+  - 13 test suites passed, 74 tests passed.
+  - New coverage verifies TOON formatting, round-trip decode fidelity, tracker snapshot injection behavior, and shared JSON/XML/TOON repair behavior.
 - `npm run build`
   - Production build completed successfully.
-  - `dist/index.js` size changed from `510005` bytes at `HEAD` to `535071` bytes after the change (`+25066` bytes).
+  - `dist/index.js` size changed from `510005` bytes at `HEAD` to `551608` bytes after the follow-up parser work.
 - Manual SillyTavern smoke test was not run in this change.
+
+## Recommended next steps
+
+1. TOON is now wired as a selectable prompt-engineering reply mode in settings, so keep future structured-output additions on the same shared `PromptEngineeringMode` plus `parseResponse(...)` path instead of creating format-specific side flows.
+2. Keep repair heuristics sample-driven. Only add new JSON/XML/TOON repair steps from captured malformed model replies, so recovery stays conservative and diagnosable.
+3. Add a manual or Playwright smoke test for malformed reply handling in end-to-end tracker generation flows, not just parser unit tests.

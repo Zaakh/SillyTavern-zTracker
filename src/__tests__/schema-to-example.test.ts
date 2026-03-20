@@ -33,4 +33,12 @@ describe('schemaToExample', () => {
     expect(result).toContain('<tags>string</tags>');
     expect(result).toContain('<count>0</count>');
   });
+
+  it('produces TOON samples that mirror the schema', () => {
+    const result = schemaToExample(schema, 'toon');
+    expect(result).toContain('title: Title text');
+    expect(result).toContain('tags[1');
+    expect(result).toContain('meta:');
+    expect(result).toContain('count: 0');
+  });
 });

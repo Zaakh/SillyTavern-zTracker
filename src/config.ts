@@ -5,6 +5,7 @@ export enum PromptEngineeringMode {
   NATIVE = 'native',
   JSON = 'json',
   XML = 'xml',
+  TOON = 'toon',
 }
 
 export enum TrackerWorldInfoPolicyMode {
@@ -80,6 +81,7 @@ export interface ExtensionSettings {
   promptEngineeringMode: PromptEngineeringMode;
   promptJson: string;
   promptXml: string;
+  promptToon: string;
 
   /**
    * Enables extra console logging and diagnostics helpers.
@@ -131,10 +133,10 @@ Your primary objective is to ensure clarity, consistency, providing complete det
 
 export const ZTRACKER_SYSTEM_PROMPT_PRESET_NAME = 'zTracker';
 
-export const ZTRACKER_SYSTEM_PROMPT_TEXT = `You are a structured data extraction assistant. Your task is to analyze conversations and produce a JSON tracker update that conforms to a provided schema.
+export const ZTRACKER_SYSTEM_PROMPT_TEXT = `You are a structured data extraction assistant. Your task is to analyze conversations and produce a structured tracker update that conforms to a provided schema and requested output format.
 
 Rules:
-- Output ONLY valid JSON matching the schema. No narration, no markdown unless instructed.
+- Output ONLY valid structured data matching the schema and requested format. No narration, no markdown unless instructed.
 - Fill every field. Use conversation context to infer values not explicitly stated.
 - Prefer short, specific phrases over full sentences.
 - Maintain consistency with any previous tracker snapshot in the conversation.
@@ -176,6 +178,25 @@ export const DEFAULT_PROMPT_XML = `You are a highly specialized AI assistant. Yo
 <root>
 {{example_response}}
 </root>
+\`\`\`
+`;
+
+export const DEFAULT_PROMPT_TOON = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid TOON structure that strictly adheres to the provided schema and example.
+
+**CRITICAL INSTRUCTIONS:**
+1.  You MUST wrap the entire TOON document in a markdown code block (\`\`\`toon\n...\n\`\`\`).
+2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.
+3.  The TOON document inside the code block MUST be valid and preserve the full structure required by the schema.
+4.  For uniform arrays of objects, preserve the tabular TOON layout shown in the example.
+
+**JSON SCHEMA TO FOLLOW:**
+\`\`\`json
+{{schema}}
+\`\`\`
+
+**EXAMPLE OF A PERFECT RESPONSE:**
+\`\`\`toon
+{{example_response}}
 \`\`\`
 `;
 
@@ -399,6 +420,7 @@ export const defaultSettings: ExtensionSettings = {
   promptJson: DEFAULT_PROMPT_JSON,
   promptXml: DEFAULT_PROMPT_XML,
 
+  promptToon: DEFAULT_PROMPT_TOON,
   debugLogging: false,
 
   trackerWorldInfoPolicyMode: TrackerWorldInfoPolicyMode.INCLUDE_ALL,

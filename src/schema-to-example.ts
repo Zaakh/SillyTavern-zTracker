@@ -1,3 +1,5 @@
+import { encode } from '@toon-format/toon';
+
 function jsonToXml(json: any, indent = 0): string {
   let xml = '';
   const indentation = '  '.repeat(indent);
@@ -26,10 +28,13 @@ function jsonToXml(json: any, indent = 0): string {
   return xml;
 }
 
-export function schemaToExample(schema: any, format: 'json' | 'xml'): string {
+export function schemaToExample(schema: any, format: 'json' | 'xml' | 'toon'): string {
   const example = generateExample(schema);
   if (format === 'xml') {
     return jsonToXml(example).trim();
+  }
+  if (format === 'toon') {
+    return encode(example, { delimiter: '\t' });
   }
   return JSON.stringify(example, null, 2);
 }

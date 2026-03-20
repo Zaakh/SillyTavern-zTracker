@@ -43,6 +43,8 @@ import {
 import { checkTemplateUrl, getExtensionRoot, getTemplateUrl } from './templates.js';
 import { debugLog, isDebugLoggingEnabled } from './debug.js';
 
+type PromptEngineeredFormat = 'json' | 'xml' | 'toon';
+
 export function createTrackerActions(options: {
   globalContext: any;
   settingsManager: ExtensionSettingsManager<ExtensionSettings>;
@@ -147,6 +149,55 @@ export function createTrackerActions(options: {
     } catch {
       // ignore
     }
+  }
+
+  function getPromptEngineeredFormat(mode: PromptEngineeringMode): PromptEngineeredFormat | undefined {
+    switch (mode) {
+      case PromptEngineeringMode.JSON:
+        return 'json';
+      case PromptEngineeringMode.XML:
+        return 'xml';
+      case PromptEngineeringMode.TOON:
+        return 'toon';
+      default:
+        return undefined;
+    }
+  }
+
+  function getPromptEngineeringTemplate(settings: ExtensionSettings, format: PromptEngineeredFormat): string {
+    switch (format) {
+      case 'xml':
+        return settings.promptXml;
+      case 'toon':
+        return settings.promptToon;
+      default:
+        return settings.promptJson;
+    }
+  }
+
+  async function requestPromptEngineeredResponse(
+    makeRequest: (requestMessages: Message[], overideParams?: any) => Promise<ExtractedData | undefined>,
+    requestMessages: Message[],
+    settings: ExtensionSettings,
+    schema: object,
+    suffix = '',
+  ): Promise<object> {
+    const format = getPromptEngineeredFormat(settings.promptEngineeringMode);
+    if (!format) {
+      throw new Error(`Unsupported prompt-engineering mode: ${settings.promptEngineeringMode}`);
+    }
+
+    const promptTemplate = getPromptEngineeringTemplate(settings, format);
+    const exampleResponse = schemaToExample(schema, format);
+    const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
+      schema: JSON.stringify(schema, null, 2),
+      example_response: exampleResponse,
+    });
+    requestMessages.push({ content: `${finalPrompt}${suffix}`, role: 'user' });
+
+    const response = await makeRequest(requestMessages);
+    if (!response?.content) throw new Error('No response content received.');
+    return parseResponse(response.content as string, format, { schema });
   }
 
   async function prepareTrackerGeneration(messageId: number) {
@@ -394,18 +445,8 @@ export function createTrackerActions(options: {
         // @ts-ignore
         response = result?.content;
       } else {
-        const format = settings.promptEngineeringMode as 'json' | 'xml';
-        const promptTemplate = format === 'json' ? settings.promptJson : settings.promptXml;
-        const exampleResponse = schemaToExample(chatJsonValue, format);
-        const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
-          schema: JSON.stringify(chatJsonValue, null, 2),
-          example_response: exampleResponse,
-        });
-        messages.push({ content: finalPrompt, role: 'user' });
-        const rest = await makeRequest(messages);
-        if (!rest?.content) throw new Error('No response content received.');
         // @ts-ignore
-        response = parseResponse(rest.content as string, format, { schema: chatJsonValue });
+        response = await requestPromptEngineeredResponse(makeRequest, messages, settings, chatJsonValue);
       }
 
       if (!response || Object.keys(response as any).length === 0) throw new Error('Empty response from zTracker.');
@@ -488,17 +529,7 @@ export function createTrackerActions(options: {
           // @ts-ignore
           partResponse = result?.content;
         } else {
-          const format = settings.promptEngineeringMode as 'json' | 'xml';
-          const promptTemplate = format === 'json' ? settings.promptJson : settings.promptXml;
-          const exampleResponse = schemaToExample(partSchema, format);
-          const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
-            schema: JSON.stringify(partSchema, null, 2),
-            example_response: exampleResponse,
-          });
-          requestMessages.push({ content: finalPrompt, role: 'user' });
-          const rest = await makeRequest(requestMessages);
-          if (!rest?.content) throw new Error('No response content received.');
-          partResponse = parseResponse(rest.content as string, format, { schema: partSchema });
+          partResponse = await requestPromptEngineeredResponse(makeRequest, requestMessages, settings, partSchema);
         }
 
         if (!partResponse || Object.keys(partResponse as any).length === 0) {
@@ -586,17 +617,7 @@ export function createTrackerActions(options: {
         // @ts-ignore
         partResponse = result?.content;
       } else {
-        const format = settings.promptEngineeringMode as 'json' | 'xml';
-        const promptTemplate = format === 'json' ? settings.promptJson : settings.promptXml;
-        const exampleResponse = schemaToExample(partSchema, format);
-        const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
-          schema: JSON.stringify(partSchema, null, 2),
-          example_response: exampleResponse,
-        });
-        messages.push({ content: finalPrompt, role: 'user' });
-        const rest = await makeRequest(messages);
-        if (!rest?.content) throw new Error('No response content received.');
-        partResponse = parseResponse(rest.content as string, format, { schema: partSchema });
+        partResponse = await requestPromptEngineeredResponse(makeRequest, messages, settings, partSchema);
       }
 
       if (!partResponse || Object.keys(partResponse as any).length === 0) {
@@ -692,17 +713,7 @@ export function createTrackerActions(options: {
         // @ts-ignore
         itemResponse = result?.content;
       } else {
-        const format = settings.promptEngineeringMode as 'json' | 'xml';
-        const promptTemplate = format === 'json' ? settings.promptJson : settings.promptXml;
-        const exampleResponse = schemaToExample(itemSchema, format);
-        const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
-          schema: JSON.stringify(itemSchema, null, 2),
-          example_response: exampleResponse,
-        });
-        messages.push({ content: finalPrompt, role: 'user' });
-        const rest = await makeRequest(messages);
-        if (!rest?.content) throw new Error('No response content received.');
-        itemResponse = parseResponse(rest.content as string, format, { schema: itemSchema });
+        itemResponse = await requestPromptEngineeredResponse(makeRequest, messages, settings, itemSchema);
       }
 
       const item = itemResponse?.item;
@@ -803,17 +814,13 @@ export function createTrackerActions(options: {
         // @ts-ignore
         itemResponse = result?.content;
       } else {
-        const format = settings.promptEngineeringMode as 'json' | 'xml';
-        const promptTemplate = format === 'json' ? settings.promptJson : settings.promptXml;
-        const exampleResponse = schemaToExample(itemSchema, format);
-        const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
-          schema: JSON.stringify(itemSchema, null, 2),
-          example_response: exampleResponse,
-        });
-        messages.push({ content: `${finalPrompt}${preserveLine}`, role: 'user' });
-        const rest = await makeRequest(messages);
-        if (!rest?.content) throw new Error('No response content received.');
-        itemResponse = parseResponse(rest.content as string, format, { schema: itemSchema });
+        itemResponse = await requestPromptEngineeredResponse(
+          makeRequest,
+          messages,
+          settings,
+          itemSchema,
+          preserveLine,
+        );
       }
 
       let item = itemResponse?.item;
@@ -918,17 +925,13 @@ export function createTrackerActions(options: {
         // @ts-ignore
         itemResponse = result?.content;
       } else {
-        const format = settings.promptEngineeringMode as 'json' | 'xml';
-        const promptTemplate = format === 'json' ? settings.promptJson : settings.promptXml;
-        const exampleResponse = schemaToExample(itemSchema, format);
-        const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
-          schema: JSON.stringify(itemSchema, null, 2),
-          example_response: exampleResponse,
-        });
-        messages.push({ content: `${finalPrompt}${preserveLine}`, role: 'user' });
-        const rest = await makeRequest(messages);
-        if (!rest?.content) throw new Error('No response content received.');
-        itemResponse = parseResponse(rest.content as string, format, { schema: itemSchema });
+        itemResponse = await requestPromptEngineeredResponse(
+          makeRequest,
+          messages,
+          settings,
+          itemSchema,
+          preserveLine,
+        );
       }
 
       let item = itemResponse?.item;
@@ -1044,17 +1047,7 @@ export function createTrackerActions(options: {
         // @ts-ignore
         fieldResponse = result?.content;
       } else {
-        const format = settings.promptEngineeringMode as 'json' | 'xml';
-        const promptTemplate = format === 'json' ? settings.promptJson : settings.promptXml;
-        const exampleResponse = schemaToExample(fieldSchema, format);
-        const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
-          schema: JSON.stringify(fieldSchema, null, 2),
-          example_response: exampleResponse,
-        });
-        messages.push({ content: finalPrompt, role: 'user' });
-        const rest = await makeRequest(messages);
-        if (!rest?.content) throw new Error('No response content received.');
-        fieldResponse = parseResponse(rest.content as string, format, { schema: fieldSchema });
+        fieldResponse = await requestPromptEngineeredResponse(makeRequest, messages, settings, fieldSchema);
       }
 
       const value = fieldResponse?.value;

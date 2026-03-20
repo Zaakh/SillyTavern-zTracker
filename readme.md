@@ -33,7 +33,7 @@ https://github.com/Zaakh/SillyTavern-zTracker
 
 >I'm having API error.
 
-Your API/model might not support structured output. Change `Prompt Engineering` mode from `Native API` to `JSON` or `XML`.
+Your API/model might not support structured output. Change `Prompt Engineering` mode from `Native API` to `JSON`, `XML`, or `TOON`.
 
 > zTracker UI buttons / schema popup are broken (template 404).
 
