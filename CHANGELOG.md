@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-03-20
+
 ### Added
 
 - Embedded tracker snapshots now support a built-in **TOON (compact)** transform preset, using tab-delimited TOON for lower-token prompt context while preserving structured data fidelity.

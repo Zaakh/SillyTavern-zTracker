@@ -258,6 +258,27 @@ The live SillyTavern follow-up focused on the `Bar` chat with the existing Tobia
 4. The earlier hard failure where JSON was wrapped in a `toon` fence remains intentionally rejected; that shape is still too far from valid TOON to repair safely.
 5. After the code changes and rebuild in this session, automated validation passed (`npm test`, `npm run build`). A second full live regeneration pass after the final migration matcher change was not completed in-session because the refreshed SillyTavern page returned to its startup assistant state instead of restoring the `Bar` chat directly.
 
+## 2026-03-20 post-commit live verification
+
+After committing `ee81c9f` (`fix: log malformed payloads uniformly`) and reloading SillyTavern, the extension manager reported `zTracker 1.2.1 (feat/toon-embed-preset-ee81c9f)`, confirming the live instance was running the committed diagnostics build.
+
+### Result
+
+1. Re-entered the `Bar` chat from the startup assistant state and kept zTracker configured for `Prompt Engineering (TOON)` with the `Default` schema preset and saved prompt `zTracker-1.2.1`.
+2. Sent a fresh Tobias user message so the live path exercised the current `Process inputs` auto-mode rather than a stale pre-refresh message.
+3. zTracker completed successfully on the committed build. The browser console reported:
+  - `zTracker: repaired TOON response { appliedSteps: Array(2), originalLength: 727, repairedLength: 715 }`
+  - no `zTracker: malformed payload`
+  - no `zTracker: malformed prompt-engineered payload`
+  - no `dependent array mismatch`
+  - no strict render rollback
+4. The new Tobias message rendered with a saved tracker block above it, confirming the repaired TOON reply parsed and rendered cleanly in the live UI.
+5. The only runtime failure during this pass was unrelated to zTracker parsing/rendering: the normal assistant reply hit an upstream provider rate limit (`429`) after tracker generation had already completed. Two concurrent `Preset undefined not found` console errors were also emitted by SillyTavern core, but they did not block tracker generation.
+
+### Conclusion
+
+The previously observed live TOON failure was not reproducible on the committed `ee81c9f` build. The remaining live error in this pass belongs to the provider / SillyTavern generation path, not to zTracker's TOON parsing or rendering pipeline.
+
 ### Fixes implemented from this smoke pass
 
 - XML prompt-schema rendering now emits the canonical schema description without adding its own outer `<schema>` wrapper.
