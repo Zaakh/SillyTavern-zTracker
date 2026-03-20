@@ -14,6 +14,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - TOON prompt-engineering templates can now be viewed, edited, and reset from zTracker settings just like the JSON and XML prompt templates.
+- Prompt-engineering now translates zTracker's single canonical JSON schema into XML or TOON before sending those format-specific prompts, instead of leaking raw JSON schema blocks into non-JSON modes.
+- Startup now safely upgrades shipped XML/TOON prompt templates stored in extension settings so existing installs benefit from the XML/TOON schema reshaping fix without requiring manual resets.
+- zTracker now installs a versioned recommended saved system prompt preset name, allowing older saved prompt presets to coexist instead of being overwritten in place.
 - Structured reply repair now uses a shared parser workflow for repairable text formats. JSON keeps its existing recovery steps, XML can recover wrapper/prose damage by extracting the XML document, and TOON parsing can recover a common small-LLM failure mode where tabular delimiters are expanded from tabs into aligned spaces.
 - TOON parsing now applies the same schema-based array normalization as XML responses, avoiding single-item array shape drift in prompt-engineered replies.
 - Structured code-block extraction now requires closing fences on their own line, so inline triple-backtick text inside JSON or TOON scalar values no longer truncates parser input.

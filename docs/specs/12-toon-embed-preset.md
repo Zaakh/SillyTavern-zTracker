@@ -261,18 +261,24 @@ Implemented choice: use a tab delimiter (`'\t'`) for TOON output. This avoids am
 - [x] Verify round-trip fidelity and comma/special-char handling
 - [x] Update `CHANGELOG.md`
 - [x] Update `readme.md`
-- [ ] Manual smoke test in SillyTavern UI
+- [x] Manual smoke test in SillyTavern UI
 
 ## Verification
 
 - `npm test`
-  - 13 test suites passed, 80 tests passed.
-  - New coverage verifies TOON formatting, round-trip decode fidelity, tracker snapshot injection behavior, and shared JSON/XML/TOON repair behavior.
+  - 16 test suites passed, 88 tests passed.
+  - Coverage now also verifies prompt-time schema translation for XML and TOON, versioned saved system-prompt installation behavior, and migration of legacy XML/TOON prompt templates stored in extension settings.
+- Additional fixture-backed repair tests now cover separate chat-like malformed JSON, XML, and TOON replies, plus the real smoke-test failure where a model returned JSON inside a `toon` fence.
 - `npm run build`
   - Production build completed successfully.
-  - `dist/index.js` size changed from `510005` bytes on `main` to `554030` bytes on this branch.
+  - `dist/index.js` size changed from `510005` bytes on `main` to `558398` bytes on this branch.
   - Webpack performance warnings are now disabled for production builds because this extension intentionally ships as a single local bundle and the default web-app thresholds were producing noisy, non-actionable warnings.
-- Manual SillyTavern smoke test was not run in this change.
+- Manual SillyTavern smoke test was run against the `Bar` chat in a live SillyTavern instance.
+  - zTracker prompt-engineering mode was switched to TOON successfully.
+  - Tracker regeneration failed because the model returned JSON wrapped in a `toon` fence instead of valid TOON.
+  - The captured prompt, malformed reply shape, and existing tracker context were converted into dedicated parser repair fixtures for unit and future e2e coverage.
+  - After the root-cause fix was implemented, a second live verification attempt showed that the running SillyTavern instance was still serving an older `dist/index.js` from `/scripts/extensions/third-party/SillyTavern-zTracker/dist/index.js`.
+  - The served bundle still contained the old `**JSON SCHEMA TO FOLLOW:**` XML/TOON templates and the old saved prompt name `zTracker`, while the workspace build already contained `XML SCHEMA DESCRIPTION TO FOLLOW`, `TOON SCHEMA DESCRIPTION TO FOLLOW`, and the versioned preset name. The code fix is built and tested locally, but the live smoke re-check remains blocked until SillyTavern reloads the current extension bundle.
 
 ## Recommended next steps
 
@@ -287,6 +293,9 @@ Implemented choice: use a tab delimiter (`'\t'`) for TOON output. This avoids am
 - Moved schema-based array coercion into the shared parse flow so TOON prompt-engineered replies now normalize singleton arrays the same way XML replies do.
 - Tightened code-fence extraction so inline triple-backtick text inside scalar values does not truncate fenced parser content.
 - Added coverage for nested TOON schema examples, TOON schema-based array normalization, strict TOON scalar spacing, and fenced JSON values that contain literal triple backticks.
+- zTracker now keeps one canonical JSON schema in settings and translates it into XML or TOON only when building the corresponding prompt-engineering request.
+- The shared zTracker system prompt is now format-agnostic, and the shipped saved prompt preset name is versioned (for example `zTracker-1.2.1`) so older saved prompts can coexist without being overwritten.
+- Existing XML/TOON prompt templates stored in extension settings are migrated only when they still match the old built-in defaults, so users get the schema-translation fix without losing custom prompt edits.
 
 ## Historical critical review (2026-03-20)
 

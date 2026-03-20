@@ -132,17 +132,19 @@ export const DEFAULT_PROMPT = `You are a Scene Tracker Assistant, tasked with pr
 
 Your primary objective is to ensure clarity, consistency, providing complete details even when specifics are not explicitly stated.`;
 
-export const ZTRACKER_SYSTEM_PROMPT_PRESET_NAME = 'zTracker';
+export const ZTRACKER_SYSTEM_PROMPT_PRESET_VERSION = '1.2.1';
+export const ZTRACKER_SYSTEM_PROMPT_PRESET_NAME = `zTracker-${ZTRACKER_SYSTEM_PROMPT_PRESET_VERSION}`;
 
 export const ZTRACKER_SYSTEM_PROMPT_TEXT = `You are a structured data extraction assistant. Your task is to analyze conversations and produce a structured tracker update that conforms to a provided schema and requested output format.
 
 Rules:
-- Output ONLY valid structured data matching the schema and requested format. No narration, no markdown unless instructed.
+- Output ONLY valid structured data matching the provided schema. No narration, no markdown unless instructed.
 - Fill every field. Use conversation context to infer values not explicitly stated.
 - Prefer short, specific phrases over full sentences.
 - Maintain consistency with any previous tracker snapshot in the conversation.
 - Do NOT continue the conversation or roleplay. Only produce the requested data.
-- Follow all detailed instructions provided later in this conversation.`;
+- Follow all detailed instructions provided later in this conversation.
+- If a later message specifies an output format, wrapper, or schema rendering, follow those instructions exactly.`;
 
 export const DEFAULT_PROMPT_JSON = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid JSON object that strictly adheres to the provided JSON schema.
 
@@ -169,9 +171,11 @@ export const DEFAULT_PROMPT_XML = `You are a highly specialized AI assistant. Yo
 2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.
 3.  The XML object inside the code block MUST be valid.
 
-**JSON SCHEMA TO FOLLOW:**
-\`\`\`json
+**XML SCHEMA DESCRIPTION TO FOLLOW:**
+\`\`\`xml
+<schema>
 {{schema}}
+</schema>
 \`\`\`
 
 **EXAMPLE OF A PERFECT RESPONSE:**
@@ -190,6 +194,45 @@ export const DEFAULT_PROMPT_TOON = `You are a highly specialized AI assistant. Y
 3.  The TOON document inside the code block MUST be valid and preserve the full structure required by the schema.
 4.  For uniform arrays of objects, preserve the tabular TOON layout shown in the example.
 
+**TOON SCHEMA DESCRIPTION TO FOLLOW:**
+\`\`\`toon
+{{schema}}
+\`\`\`
+
+**EXAMPLE OF A PERFECT RESPONSE:**
+\`\`\`toon
+{{example_response}}
+\`\`\`
+`;
+
+export const LEGACY_PROMPT_XML = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid XML structure that strictly adheres to the provided example.
+
+**CRITICAL INSTRUCTIONS:**
+1.  You MUST wrap the entire XML object in a markdown code block (\`\`\`xml\\n...\\n\`\`\`).
+2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.
+3.  The XML object inside the code block MUST be valid.
+
+**JSON SCHEMA TO FOLLOW:**
+\`\`\`json
+{{schema}}
+\`\`\`
+
+**EXAMPLE OF A PERFECT RESPONSE:**
+\`\`\`xml
+<root>
+{{example_response}}
+</root>
+\`\`\`
+`;
+
+export const LEGACY_PROMPT_TOON = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid TOON structure that strictly adheres to the provided schema and example.
+
+**CRITICAL INSTRUCTIONS:**
+1.  You MUST wrap the entire TOON document in a markdown code block (\`\`\`toon\n...\n\`\`\`).
+2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.
+3.  The TOON document inside the code block MUST be valid and preserve the full structure required by the schema.
+4.  For uniform arrays of objects, preserve the tabular TOON layout shown in the example.
+
 **JSON SCHEMA TO FOLLOW:**
 \`\`\`json
 {{schema}}
@@ -200,6 +243,22 @@ export const DEFAULT_PROMPT_TOON = `You are a highly specialized AI assistant. Y
 {{example_response}}
 \`\`\`
 `;
+
+export function migrateLegacyPromptTemplates(settings: Pick<ExtensionSettings, 'promptXml' | 'promptToon'>): boolean {
+  let changed = false;
+
+  if ((settings.promptXml ?? '').trim() === LEGACY_PROMPT_XML.trim()) {
+    settings.promptXml = DEFAULT_PROMPT_XML;
+    changed = true;
+  }
+
+  if ((settings.promptToon ?? '').trim() === LEGACY_PROMPT_TOON.trim()) {
+    settings.promptToon = DEFAULT_PROMPT_TOON;
+    changed = true;
+  }
+
+  return changed;
+}
 
 export const DEFAULT_SCHEMA_VALUE: object = {
   $schema: 'http://json-schema.org/draft-07/schema#',

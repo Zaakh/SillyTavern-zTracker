@@ -7,7 +7,7 @@ import { characters, selected_group, st_echo } from 'sillytavern-utils-lib/confi
 import Handlebars from 'handlebars';
 import { POPUP_RESULT, POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
 import { parseResponse } from '../parser.js';
-import { schemaToExample } from '../schema-to-example.js';
+import { schemaToExample, schemaToPromptSchema } from '../schema-to-example.js';
 import { shouldIgnoreWorldInfoDuringTrackerBuild } from '../world-info-policy.js';
 import { buildAllowlistedWorldInfoText } from '../world-info-allowlist.js';
 import { loadWorldInfoBookByName } from '../sillytavern-world-info.js';
@@ -189,8 +189,9 @@ export function createTrackerActions(options: {
 
     const promptTemplate = getPromptEngineeringTemplate(settings, format);
     const exampleResponse = schemaToExample(schema, format);
+    const promptSchema = schemaToPromptSchema(schema, format);
     const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
-      schema: JSON.stringify(schema, null, 2),
+      schema: promptSchema,
       example_response: exampleResponse,
     });
     requestMessages.push({ content: `${finalPrompt}${suffix}`, role: 'user' });

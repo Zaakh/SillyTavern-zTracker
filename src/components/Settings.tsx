@@ -348,7 +348,7 @@ export const ZTrackerSettings: FC = () => {
                     />
                   </div>
                   <small>
-                    Edit prompts in SillyTavern&apos;s System Prompt manager. The &quot;{ZTRACKER_SYSTEM_PROMPT_PRESET_NAME}&quot; preset is optimized for tracker generation. Click refresh after changing prompts elsewhere in SillyTavern.
+                    Edit prompts in SillyTavern&apos;s System Prompt manager. The shipped &quot;{ZTRACKER_SYSTEM_PROMPT_PRESET_NAME}&quot; preset is optimized for tracker generation. Older zTracker prompt presets are left in place so you can remove them manually if they are no longer needed. Click refresh after changing prompts elsewhere in SillyTavern.
                   </small>
                   {showMissingSavedSystemPromptWarning && (
                     <small style={{ color: 'var(--warning-color, #f0ad4e)' }}>

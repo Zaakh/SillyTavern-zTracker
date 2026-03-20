@@ -1,4 +1,4 @@
-import { schemaToExample } from '../schema-to-example.js';
+import { schemaToExample, schemaToPromptSchema } from '../schema-to-example.js';
 
 describe('schemaToExample', () => {
   const schema = {
@@ -34,12 +34,30 @@ describe('schemaToExample', () => {
     expect(result).toContain('<count>0</count>');
   });
 
+  it('renders XML prompt schema from the canonical JSON schema', () => {
+    const result = schemaToPromptSchema(schema, 'xml');
+
+    expect(result).toContain('<schema>');
+    expect(result).toContain('<type>object</type>');
+    expect(result).toContain('<properties>');
+    expect(result).toContain('<description>Title text</description>');
+  });
+
   it('produces TOON samples that mirror the schema', () => {
     const result = schemaToExample(schema, 'toon');
     expect(result).toContain('title: Title text');
     expect(result).toContain('tags[1');
     expect(result).toContain('meta:');
     expect(result).toContain('count: 0');
+  });
+
+  it('renders TOON prompt schema from the canonical JSON schema', () => {
+    const result = schemaToPromptSchema(schema, 'toon');
+
+    expect(result).toContain('type: object');
+    expect(result).toContain('properties:');
+    expect(result).toContain('title:');
+    expect(result).toContain('description: Title text');
   });
 
   it('produces TOON samples for deeply nested schemas', () => {
