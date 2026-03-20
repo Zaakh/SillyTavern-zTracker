@@ -42,12 +42,19 @@ These instructions apply to all files in this repository.
 - Split complex logic into small, testable functions in separate modules, especially in `src/`.
 - Avoid large monolithic functions, classes or files.
 - We prefer "less code", so avoid unnecessary abstractions or patterns and try to re-use existing helpers/utilities.
-- IMPORTANT: Any code change must improve the code quality of the project. 
+- IMPORTANT: Any code change must improve the code quality of the project. Goal is to have a lean codebase.
+
+## Comments
+- Use comments to explain the "why" behind non-obvious code, especially for complex logic or workarounds.
+- Each file and function should have a brief explanation describing its purpose and behavior.
 
 ## Build and required artifacts
 - This extension is loaded by SillyTavern from `manifest.json` and expects built assets:
 	- `dist/index.js`
 	- `dist/style.css`
+- Build the extension before any SillyTavern smoke test.
+- Commit the changed build artifacts before treating a SillyTavern smoke test as valid for branch review or release work.
+- Assume a live SillyTavern instance may still be serving stale extension assets until the current repo build artifacts are present and committed.
 
 ### Do not copy build outputs between projects
 - Do not copy `dist/*` assets between this repo and any SillyTavern repo/folder.
@@ -61,6 +68,7 @@ These instructions apply to all files in this repository.
 - Run `npm test` after changing executable/compilable source code, especially logic in `src/`.
 - Keep new logic import-safe and testable (prefer small helpers in modules like `src/parser.ts`, `src/tracker.ts`, etc.).
 - Avoid importing `src/index.tsx` in Jest tests (it wires browser/SillyTavern side effects). Test helpers instead.
+- When a live smoke test reveals a mishaped tracker reply, add the captured reply as test data whenever it is safe to repair so parser repair coverage keeps improving.
 
 ## Rendering and schema safety
 - Tracker HTML rendering uses Handlebars compiled with `{ strict: true, noEscape: true }`.
@@ -80,4 +88,4 @@ These instructions apply to all files in this repository.
 - For extension integration/testing tips and SillyTavern-specific guidance, see `docs/SILLYTAVERN_DEV_NOTES.md`.
 
 ## Maintenance
-Keep this file up to date. Whenever you discover or learn something about the project propose to add or correct it in this instruction.
+IMPORTANT: Keep this file up to date. Whenever you discover or learn something about the projects propose, behavior, etc., update this instruction file accordingly.

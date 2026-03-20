@@ -7,7 +7,7 @@ import { characters, selected_group, st_echo } from 'sillytavern-utils-lib/confi
 import Handlebars from 'handlebars';
 import { POPUP_RESULT, POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
 import { parseResponse } from '../parser.js';
-import { schemaToExample } from '../schema-to-example.js';
+import { schemaToExample, schemaToPromptSchema } from '../schema-to-example.js';
 import { shouldIgnoreWorldInfoDuringTrackerBuild } from '../world-info-policy.js';
 import { buildAllowlistedWorldInfoText } from '../world-info-allowlist.js';
 import { loadWorldInfoBookByName } from '../sillytavern-world-info.js';
@@ -43,6 +43,14 @@ import {
 import { checkTemplateUrl, getExtensionRoot, getTemplateUrl } from './templates.js';
 import { debugLog, isDebugLoggingEnabled } from './debug.js';
 
+type PromptEngineeredFormat = 'json' | 'xml' | 'toon';
+
+type PromptEngineeredPayloadRecord = {
+  format: PromptEngineeredFormat;
+  rawContent: string;
+  parsedContent?: object;
+};
+
 export function createTrackerActions(options: {
   globalContext: any;
   settingsManager: ExtensionSettingsManager<ExtensionSettings>;
@@ -53,21 +61,28 @@ export function createTrackerActions(options: {
 }) {
   const { globalContext, settingsManager, generator, pendingRequests, renderTrackerWithDeps, importMetaUrl } = options;
   const pendingSequences = new Map<number, { cancelled: boolean }>();
+  const promptEngineeredPayloads = new WeakMap<object, PromptEngineeredPayloadRecord>();
 
-  function buildPartsMeta(schema: any): Record<string, { idKey?: string; fields?: string[] }> {
-    const meta: Record<string, { idKey?: string; fields?: string[] }> = {};
+  // Stores array identity and dependency hints alongside rendered tracker parts for follow-up validation and UI actions.
+  function buildPartsMeta(schema: any): Record<string, { idKey?: string; fields?: string[]; dependsOn?: string[] }> {
+    const meta: Record<string, { idKey?: string; fields?: string[]; dependsOn?: string[] }> = {};
     const props = schema?.properties;
     if (!props || typeof props !== 'object') return meta;
     for (const key of Object.keys(props)) {
       const def = (props as any)[key];
       if (def?.type === 'array') {
         const idKey = getArrayItemIdentityKey(schema, key);
+        const dependsOn = Array.isArray(def?.['x-ztracker-dependsOn'])
+          ? def['x-ztracker-dependsOn'].filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
+          : typeof def?.['x-ztracker-dependsOn'] === 'string' && def['x-ztracker-dependsOn'].trim().length > 0
+            ? [def['x-ztracker-dependsOn'].trim()]
+            : undefined;
         const itemProps = def?.items?.type === 'object' ? def?.items?.properties : undefined;
         const fields =
           itemProps && typeof itemProps === 'object'
             ? Object.keys(itemProps).filter((f) => f !== idKey && f !== 'name')
             : undefined;
-        meta[key] = { idKey, ...(fields?.length ? { fields } : {}) };
+        meta[key] = { idKey, ...(fields?.length ? { fields } : {}), ...(dependsOn?.length ? { dependsOn } : {}) };
       }
     }
     return meta;
@@ -146,6 +161,113 @@ export function createTrackerActions(options: {
       } as Message);
     } catch {
       // ignore
+    }
+  }
+
+  function getPromptEngineeredFormat(mode: PromptEngineeringMode): PromptEngineeredFormat | undefined {
+    switch (mode) {
+      case PromptEngineeringMode.JSON:
+        return 'json';
+      case PromptEngineeringMode.XML:
+        return 'xml';
+      case PromptEngineeringMode.TOON:
+        return 'toon';
+      default:
+        return undefined;
+    }
+  }
+
+  function getPromptEngineeringTemplate(settings: ExtensionSettings, format: PromptEngineeredFormat): string {
+    switch (format) {
+      case 'xml':
+        return settings.promptXml;
+      case 'toon':
+        return settings.promptToon;
+      default:
+        return settings.promptJson;
+    }
+  }
+
+  // Captures raw prompt-engineered payloads so malformed replies can be inspected after parse or render failures.
+  function logMalformedPromptEngineeredPayload(details: {
+    format: PromptEngineeredFormat;
+    reason: 'parse failure' | 'render rollback';
+    rawContent: string;
+    parsedContent?: object;
+    error?: unknown;
+  }): void {
+    const { format, reason, rawContent, parsedContent, error } = details;
+    console.warn('zTracker: malformed prompt-engineered payload', {
+      format,
+      reason,
+      rawContent,
+      ...(parsedContent ? { parsedContent } : {}),
+      ...(error instanceof Error ? { error: error.message } : error ? { error: String(error) } : {}),
+    });
+  }
+
+  function rememberPromptEngineeredPayload(parsedContent: object, payload: PromptEngineeredPayloadRecord): object {
+    promptEngineeredPayloads.set(parsedContent, payload);
+    return parsedContent;
+  }
+
+  function logPromptEngineeredRenderRollback(parsedContent: unknown, error: unknown): void {
+    if (!parsedContent || typeof parsedContent !== 'object') {
+      return;
+    }
+
+    const payload = promptEngineeredPayloads.get(parsedContent as object);
+    if (!payload) {
+      return;
+    }
+
+    logMalformedPromptEngineeredPayload({
+      format: payload.format,
+      reason: 'render rollback',
+      rawContent: payload.rawContent,
+      parsedContent: payload.parsedContent,
+      error,
+    });
+  }
+
+  async function requestPromptEngineeredResponse(
+    makeRequest: (requestMessages: Message[], overideParams?: any) => Promise<ExtractedData | undefined>,
+    requestMessages: Message[],
+    settings: ExtensionSettings,
+    schema: object,
+    suffix = '',
+  ): Promise<object> {
+    const format = getPromptEngineeredFormat(settings.promptEngineeringMode);
+    if (!format) {
+      throw new Error(`Unsupported prompt-engineering mode: ${settings.promptEngineeringMode}`);
+    }
+
+    const promptTemplate = getPromptEngineeringTemplate(settings, format);
+    const exampleResponse = schemaToExample(schema, format);
+    const promptSchema = schemaToPromptSchema(schema, format);
+    const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
+      schema: promptSchema,
+      example_response: exampleResponse,
+    });
+    requestMessages.push({ content: `${finalPrompt}${suffix}`, role: 'user' });
+
+    const response = await makeRequest(requestMessages);
+    if (!response?.content) throw new Error('No response content received.');
+    try {
+      const parsedContent = parseResponse(response.content as string, format, { schema });
+      return rememberPromptEngineeredPayload(parsedContent, {
+        format,
+        rawContent: response.content as string,
+        parsedContent,
+      });
+    } catch (error) {
+      logMalformedPromptEngineeredPayload({
+        format,
+        reason: 'parse failure',
+        rawContent: response.content as string,
+        error,
+      });
+      throw error;
     }
   }
 
@@ -394,18 +516,8 @@ export function createTrackerActions(options: {
         // @ts-ignore
         response = result?.content;
       } else {
-        const format = settings.promptEngineeringMode as 'json' | 'xml';
-        const promptTemplate = format === 'json' ? settings.promptJson : settings.promptXml;
-        const exampleResponse = schemaToExample(chatJsonValue, format);
-        const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
-          schema: JSON.stringify(chatJsonValue, null, 2),
-          example_response: exampleResponse,
-        });
-        messages.push({ content: finalPrompt, role: 'user' });
-        const rest = await makeRequest(messages);
-        if (!rest?.content) throw new Error('No response content received.');
         // @ts-ignore
-        response = parseResponse(rest.content as string, format, { schema: chatJsonValue });
+        response = await requestPromptEngineeredResponse(makeRequest, messages, settings, chatJsonValue);
       }
 
       if (!response || Object.keys(response as any).length === 0) throw new Error('Empty response from zTracker.');
@@ -420,6 +532,7 @@ export function createTrackerActions(options: {
         restoreDetailsState(id, detailsState);
         await saveChat();
       } catch {
+        logPromptEngineeredRenderRollback(response, new Error('Generated data failed to render with the current template. Not saved.'));
         renderTrackerWithDeps(id);
         throw new Error(`Generated data failed to render with the current template. Not saved.`);
       }
@@ -488,17 +601,7 @@ export function createTrackerActions(options: {
           // @ts-ignore
           partResponse = result?.content;
         } else {
-          const format = settings.promptEngineeringMode as 'json' | 'xml';
-          const promptTemplate = format === 'json' ? settings.promptJson : settings.promptXml;
-          const exampleResponse = schemaToExample(partSchema, format);
-          const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
-            schema: JSON.stringify(partSchema, null, 2),
-            example_response: exampleResponse,
-          });
-          requestMessages.push({ content: finalPrompt, role: 'user' });
-          const rest = await makeRequest(requestMessages);
-          if (!rest?.content) throw new Error('No response content received.');
-          partResponse = parseResponse(rest.content as string, format, { schema: partSchema });
+          partResponse = await requestPromptEngineeredResponse(makeRequest, requestMessages, settings, partSchema);
         }
 
         if (!partResponse || Object.keys(partResponse as any).length === 0) {
@@ -526,6 +629,7 @@ export function createTrackerActions(options: {
         restoreDetailsState(id, detailsState);
         await saveChat();
       } catch {
+        logPromptEngineeredRenderRollback(trackerData, new Error('Generated data failed to render with the current template. Not saved.'));
         renderTrackerWithDeps(id);
         throw new Error(`Generated data failed to render with the current template. Not saved.`);
       }
@@ -586,17 +690,7 @@ export function createTrackerActions(options: {
         // @ts-ignore
         partResponse = result?.content;
       } else {
-        const format = settings.promptEngineeringMode as 'json' | 'xml';
-        const promptTemplate = format === 'json' ? settings.promptJson : settings.promptXml;
-        const exampleResponse = schemaToExample(partSchema, format);
-        const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
-          schema: JSON.stringify(partSchema, null, 2),
-          example_response: exampleResponse,
-        });
-        messages.push({ content: finalPrompt, role: 'user' });
-        const rest = await makeRequest(messages);
-        if (!rest?.content) throw new Error('No response content received.');
-        partResponse = parseResponse(rest.content as string, format, { schema: partSchema });
+        partResponse = await requestPromptEngineeredResponse(makeRequest, messages, settings, partSchema);
       }
 
       if (!partResponse || Object.keys(partResponse as any).length === 0) {
@@ -616,6 +710,7 @@ export function createTrackerActions(options: {
         await saveChat();
         st_echo('success', `Updated: ${partKey}`);
       } catch {
+        logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
         renderTrackerWithDeps(id);
         throw new Error(`Generated data failed to render with the current template. Not saved.`);
       }
@@ -692,17 +787,7 @@ export function createTrackerActions(options: {
         // @ts-ignore
         itemResponse = result?.content;
       } else {
-        const format = settings.promptEngineeringMode as 'json' | 'xml';
-        const promptTemplate = format === 'json' ? settings.promptJson : settings.promptXml;
-        const exampleResponse = schemaToExample(itemSchema, format);
-        const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
-          schema: JSON.stringify(itemSchema, null, 2),
-          example_response: exampleResponse,
-        });
-        messages.push({ content: finalPrompt, role: 'user' });
-        const rest = await makeRequest(messages);
-        if (!rest?.content) throw new Error('No response content received.');
-        itemResponse = parseResponse(rest.content as string, format, { schema: itemSchema });
+        itemResponse = await requestPromptEngineeredResponse(makeRequest, messages, settings, itemSchema);
       }
 
       const item = itemResponse?.item;
@@ -723,6 +808,7 @@ export function createTrackerActions(options: {
         await saveChat();
         st_echo('success', `Updated: ${partKey}[${index}]`);
       } catch {
+        logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
         renderTrackerWithDeps(id);
         throw new Error(`Generated data failed to render with the current template. Not saved.`);
       }
@@ -803,17 +889,13 @@ export function createTrackerActions(options: {
         // @ts-ignore
         itemResponse = result?.content;
       } else {
-        const format = settings.promptEngineeringMode as 'json' | 'xml';
-        const promptTemplate = format === 'json' ? settings.promptJson : settings.promptXml;
-        const exampleResponse = schemaToExample(itemSchema, format);
-        const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
-          schema: JSON.stringify(itemSchema, null, 2),
-          example_response: exampleResponse,
-        });
-        messages.push({ content: `${finalPrompt}${preserveLine}`, role: 'user' });
-        const rest = await makeRequest(messages);
-        if (!rest?.content) throw new Error('No response content received.');
-        itemResponse = parseResponse(rest.content as string, format, { schema: itemSchema });
+        itemResponse = await requestPromptEngineeredResponse(
+          makeRequest,
+          messages,
+          settings,
+          itemSchema,
+          preserveLine,
+        );
       }
 
       let item = itemResponse?.item;
@@ -838,6 +920,7 @@ export function createTrackerActions(options: {
         await saveChat();
         st_echo('success', `Updated: ${partKey} (${name})`);
       } catch {
+        logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
         renderTrackerWithDeps(id);
         throw new Error(`Generated data failed to render with the current template. Not saved.`);
       }
@@ -918,17 +1001,13 @@ export function createTrackerActions(options: {
         // @ts-ignore
         itemResponse = result?.content;
       } else {
-        const format = settings.promptEngineeringMode as 'json' | 'xml';
-        const promptTemplate = format === 'json' ? settings.promptJson : settings.promptXml;
-        const exampleResponse = schemaToExample(itemSchema, format);
-        const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
-          schema: JSON.stringify(itemSchema, null, 2),
-          example_response: exampleResponse,
-        });
-        messages.push({ content: `${finalPrompt}${preserveLine}`, role: 'user' });
-        const rest = await makeRequest(messages);
-        if (!rest?.content) throw new Error('No response content received.');
-        itemResponse = parseResponse(rest.content as string, format, { schema: itemSchema });
+        itemResponse = await requestPromptEngineeredResponse(
+          makeRequest,
+          messages,
+          settings,
+          itemSchema,
+          preserveLine,
+        );
       }
 
       let item = itemResponse?.item;
@@ -953,6 +1032,7 @@ export function createTrackerActions(options: {
         await saveChat();
         st_echo('success', `Updated: ${partKey} (${idKey}=${idValue})`);
       } catch {
+        logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
         renderTrackerWithDeps(id);
         throw new Error(`Generated data failed to render with the current template. Not saved.`);
       }
@@ -1044,17 +1124,7 @@ export function createTrackerActions(options: {
         // @ts-ignore
         fieldResponse = result?.content;
       } else {
-        const format = settings.promptEngineeringMode as 'json' | 'xml';
-        const promptTemplate = format === 'json' ? settings.promptJson : settings.promptXml;
-        const exampleResponse = schemaToExample(fieldSchema, format);
-        const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
-          schema: JSON.stringify(fieldSchema, null, 2),
-          example_response: exampleResponse,
-        });
-        messages.push({ content: finalPrompt, role: 'user' });
-        const rest = await makeRequest(messages);
-        if (!rest?.content) throw new Error('No response content received.');
-        fieldResponse = parseResponse(rest.content as string, format, { schema: fieldSchema });
+        fieldResponse = await requestPromptEngineeredResponse(makeRequest, messages, settings, fieldSchema);
       }
 
       const value = fieldResponse?.value;
@@ -1075,6 +1145,7 @@ export function createTrackerActions(options: {
         await saveChat();
         st_echo('success', `Updated: ${partKey}[${index}].${fieldKey}`);
       } catch {
+        logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
         renderTrackerWithDeps(id);
         throw new Error(`Generated data failed to render with the current template. Not saved.`);
       }

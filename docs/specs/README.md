@@ -15,6 +15,8 @@ These are “living” per-change specs. Each spec tracks its current status and
 - [09-minimal-embedding-whitespace.md](09-minimal-embedding-whitespace.md)
 - [10-system-prompt-selection.md](10-system-prompt-selection.md)
 - [11-json-response-repair.md](11-json-response-repair.md)
+- [12-toon-embed-preset.md](12-toon-embed-preset.md)
+- [13-default-schema-presets.md](13-default-schema-presets.md)
 
 ## Status workflow
 - **Open**: not implemented yet; questions unresolved.

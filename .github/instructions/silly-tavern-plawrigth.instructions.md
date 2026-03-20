@@ -69,6 +69,7 @@ Always confirm you are debugging the intended zTracker build before interacting 
 	- The tracker renders above the message as `.mes_ztracker` content.
 	- Regenerate/edit/delete controls respond.
 - If generation depends on a connection profile, select one in settings first.
+- If the refreshed page does not restore the exact prior chat state, it is acceptable to continue in the target chat with a short fresh user message so tracker generation can be tested end-to-end. Record that the chat was extended for the smoke pass.
 
 ### Playwright quick script (tool-call sequence)
 Use this when you want a deterministic “click-through” run. Element `ref` values must be obtained from the latest `browser_snapshot`.
@@ -133,3 +134,6 @@ Use this when you want a deterministic “click-through” run. Element `ref` va
 - Do not input or store secrets in extension settings while debugging.
 - Do not paste private chat logs into issues or docs.
 - Keep Playwright interactions deterministic: explicit waits, minimal reliance on timing.
+
+## Maintenance
+IMPORTANT: Keep this file up to date. Whenever you discover or learn something about how to use playwrigh tot test/debug the extension, update this instruction file accordingly. This is a living document that should evolve with the project and capture the most effective debugging practices for future maintainers.

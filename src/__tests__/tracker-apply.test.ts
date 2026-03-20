@@ -1,6 +1,7 @@
 import {
   applyTrackerUpdateAndRender,
   CHAT_MESSAGE_SCHEMA_HTML_KEY,
+  CHAT_MESSAGE_PARTS_META_KEY,
   CHAT_MESSAGE_SCHEMA_VALUE_KEY,
 } from '../tracker.js';
 import { EXTENSION_KEY } from '../extension-metadata.js';
@@ -60,5 +61,34 @@ describe('applyTrackerUpdateAndRender', () => {
     ).toThrow('render failed');
 
     expect(message.extra[EXTENSION_KEY]).toBeUndefined();
+  });
+
+  it('warns when a dependent detail array is missing entries for declared source items', () => {
+    const message: any = { extra: {} };
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    applyTrackerUpdateAndRender(message, {
+      trackerData: {
+        charactersPresent: ['Silvia', 'Tobias'],
+        characters: [{ name: 'Silvia', hair: 'Short blonde hair' }],
+      },
+      trackerHtml: '<div>{{data.charactersPresent.length}}</div>',
+      extensionData: {
+        [CHAT_MESSAGE_PARTS_META_KEY]: {
+          characters: { idKey: 'name', dependsOn: ['charactersPresent'] },
+        },
+      },
+      render: jest.fn(),
+    });
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      'zTracker: dependent array mismatch',
+      expect.objectContaining({
+        partKey: 'characters',
+        dependsOn: 'charactersPresent',
+        idKey: 'name',
+        missingIds: ['Tobias'],
+      }),
+    );
   });
 });

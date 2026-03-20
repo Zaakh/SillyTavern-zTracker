@@ -1,4 +1,5 @@
-import type { ExtensionSettings } from './config.js';
+import { encode } from '@toon-format/toon';
+import type { EmbedSnapshotTransformInput, ExtensionSettings } from './config.js';
 
 // Formats zTracker tracker snapshots for embedding into prompt context.
 
@@ -155,6 +156,51 @@ function buildTopLevelLinesForEmbedding(value: unknown): string {
   return `${blocks}\n`;
 }
 
+function normalizeToPlainJsonValue(value: unknown): unknown {
+  const serialized = JSON.stringify(value ?? null);
+  return serialized === undefined ? null : JSON.parse(serialized);
+}
+
+function formatPrettyJsonSnapshot(value: unknown): string {
+  return JSON.stringify(value ?? {}, null, 2);
+}
+
+function formatTopLevelSnapshot(value: unknown, presetKey?: string): string {
+  return presetKey === 'minimal' ? buildTopLevelLinesForEmbedding(value) : buildTopLevelLines(value);
+}
+
+function formatToonSnapshot(value: unknown): string {
+  // includeZTrackerMessages uses structuredClone(), which can produce object shapes
+  // the TOON encoder treats as non-JSON input. Normalize back to plain JSON first.
+  return encode(normalizeToPlainJsonValue(value ?? {}), { delimiter: '\t' });
+}
+
+function buildBaseSnapshotText(input: EmbedSnapshotTransformInput, value: unknown, presetKey?: string): string {
+  switch (input) {
+    case 'toon':
+      return formatToonSnapshot(value);
+    case 'top_level_lines':
+      return formatTopLevelSnapshot(value, presetKey);
+    default:
+      return formatPrettyJsonSnapshot(value);
+  }
+}
+
+function getDefaultCodeFenceLang(input: EmbedSnapshotTransformInput): string {
+  switch (input) {
+    case 'pretty_json':
+      return 'json';
+    case 'toon':
+      return 'toon';
+    default:
+      return 'text';
+  }
+}
+
+function getDefaultCodeFenceWrap(presetKey?: string): boolean {
+  return presetKey === 'minimal' ? false : true;
+}
+
 export function formatEmbeddedTrackerSnapshot(
   trackerValue: unknown,
   settings: Pick<ExtensionSettings, 'embedZTrackerSnapshotTransformPreset' | 'embedZTrackerSnapshotTransformPresets'>,
@@ -164,19 +210,13 @@ export function formatEmbeddedTrackerSnapshot(
   const preset = (presetKey && presets && presets[presetKey]) || presets?.default;
 
   const input = preset?.input ?? 'pretty_json';
-  const baseText =
-    input === 'top_level_lines'
-      ? presetKey === 'minimal'
-        ? buildTopLevelLinesForEmbedding(trackerValue)
-        : buildTopLevelLines(trackerValue)
-      : JSON.stringify(trackerValue ?? {}, null, 2);
+  const baseText = buildBaseSnapshotText(input, trackerValue, presetKey);
 
   const pattern = preset?.pattern ?? '';
   const flags = preset?.flags ?? '';
   const replacement = preset?.replacement ?? '';
-  const lang = preset?.codeFenceLang || (input === 'pretty_json' ? 'json' : 'text');
-  const wrapInCodeFence =
-    typeof preset?.wrapInCodeFence === 'boolean' ? preset.wrapInCodeFence : presetKey === 'minimal' ? false : true;
+  const lang = preset?.codeFenceLang || getDefaultCodeFenceLang(input);
+  const wrapInCodeFence = typeof preset?.wrapInCodeFence === 'boolean' ? preset.wrapInCodeFence : getDefaultCodeFenceWrap(presetKey);
 
   const baseOrMinified = presetKey === 'minimal' ? minifyEmbeddingWhitespace(baseText) : baseText;
 

@@ -33,6 +33,7 @@ jest.unstable_mockModule('../parser.js', () => ({
 
 jest.unstable_mockModule('../schema-to-example.js', () => ({
   schemaToExample: jest.fn(),
+  schemaToPromptSchema: jest.fn(),
 }));
 
 jest.unstable_mockModule('../world-info-policy.js', () => ({
@@ -85,6 +86,8 @@ jest.unstable_mockModule('../ui/debug.js', () => ({
 
 const { createTrackerActions } = await import('../ui/tracker-actions.js');
 const { PromptEngineeringMode, TrackerWorldInfoPolicyMode } = await import('../config.js');
+const { parseResponse } = await import('../parser.js');
+const { schemaToExample, schemaToPromptSchema } = await import('../schema-to-example.js');
 
 function makeSettings() {
   return {
@@ -96,6 +99,7 @@ function makeSettings() {
     prompt: 'Generate tracker JSON',
     promptJson: '',
     promptXml: '',
+    promptToon: '',
     includeLastXMessages: 0,
     includeLastXZTrackerMessages: 0,
     sequentialPartGeneration: false,
@@ -124,6 +128,186 @@ describe('createTrackerActions saved system prompt mode', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     document.body.innerHTML = '<div id="extensionsMenu"></div>';
+  });
+
+  test('logs malformed prompt-engineered payloads when parsing fails', async () => {
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const context = {
+      chatMetadata: {},
+      powerUserSettings: {
+        prefer_character_prompt: true,
+        sysprompt: { name: 'Neutral - Chat' },
+      },
+      getPresetManager: (apiId?: string) => {
+        if (apiId === 'sysprompt') {
+          return {
+            getCompletionPresetByName: (name?: string) =>
+              name === 'zTracker' ? { name: 'zTracker', content: 'Saved tracker system prompt' } : undefined,
+            getPresetList: () => ({ presets: [], preset_names: ['zTracker'] }),
+          };
+        }
+        return null;
+      },
+    };
+
+    (globalThis as any).SillyTavern = {
+      getContext: () => context,
+    };
+
+    buildPromptMock.mockResolvedValue({
+      result: [
+        { role: 'system', content: 'Existing system prompt' },
+        { role: 'user', content: 'Prior chat message' },
+      ],
+    });
+
+    (schemaToExample as jest.Mock).mockReturnValue('time\tstring');
+    (schemaToPromptSchema as jest.Mock).mockReturnValue('type: object');
+    (parseResponse as jest.Mock).mockImplementation(() => {
+      throw new Error('Model response is not valid TOON.');
+    });
+
+    const generateRequest = jest.fn((
+      _request: any,
+      hooks: { onStart: (requestId: string) => void; onFinish: (requestId: string, data: unknown, error: unknown) => void },
+    ) => {
+      hooks.onStart('request-1');
+      hooks.onFinish('request-1', { content: '```toon\nnot valid\n```' }, null);
+    });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: jest.fn(async () => undefined),
+        extensionSettings: {
+          connectionManager: {
+            profiles: [{ id: 'profile-1', api: 'openai', preset: 'preset-1', context: 'context-1', instruct: 'instruct-1', sysprompt: 'Profile Prompt' }],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => ({
+          ...makeSettings(),
+          promptEngineeringMode: PromptEngineeringMode.TOON,
+          promptToon: 'TOON TEMPLATE\n{{example_response}}',
+        }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: import.meta.url,
+    });
+
+    await actions.generateTracker(0);
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      'zTracker: malformed prompt-engineered payload',
+      expect.objectContaining({
+        format: 'toon',
+        reason: 'parse failure',
+        rawContent: '```toon\nnot valid\n```',
+      }),
+    );
+
+    consoleWarnSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+  });
+
+  test('logs malformed prompt-engineered payloads when parsed data fails strict rendering', async () => {
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const context = {
+      chatMetadata: {},
+      powerUserSettings: {
+        prefer_character_prompt: true,
+        sysprompt: { name: 'Neutral - Chat' },
+      },
+      getPresetManager: (apiId?: string) => {
+        if (apiId === 'sysprompt') {
+          return {
+            getCompletionPresetByName: (name?: string) =>
+              name === 'zTracker' ? { name: 'zTracker', content: 'Saved tracker system prompt' } : undefined,
+            getPresetList: () => ({ presets: [], preset_names: ['zTracker'] }),
+          };
+        }
+        return null;
+      },
+    };
+
+    (globalThis as any).SillyTavern = {
+      getContext: () => context,
+    };
+
+    buildPromptMock.mockResolvedValue({
+      result: [
+        { role: 'system', content: 'Existing system prompt' },
+        { role: 'user', content: 'Prior chat message' },
+      ],
+    });
+
+    const parsedPayload = {
+      time: '10:00:00',
+      charactersPresent: ['Silvia', 'Tobias'],
+      characters: [{ name: 'Silvia' }],
+    };
+
+    (schemaToExample as jest.Mock).mockReturnValue('time\tstring');
+    (schemaToPromptSchema as jest.Mock).mockReturnValue('type: object');
+    (parseResponse as jest.Mock).mockReturnValue(parsedPayload);
+    applyTrackerUpdateAndRenderMock.mockImplementation(() => {
+      throw new Error('render failed');
+    });
+
+    const generateRequest = jest.fn((
+      _request: any,
+      hooks: { onStart: (requestId: string) => void; onFinish: (requestId: string, data: unknown, error: unknown) => void },
+    ) => {
+      hooks.onStart('request-1');
+      hooks.onFinish('request-1', { content: '```toon\ncharactersPresent[2]: "Silvia"\t"Tobias"\n```' }, null);
+    });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: jest.fn(async () => undefined),
+        extensionSettings: {
+          connectionManager: {
+            profiles: [{ id: 'profile-1', api: 'openai', preset: 'preset-1', context: 'context-1', instruct: 'instruct-1', sysprompt: 'Profile Prompt' }],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => ({
+          ...makeSettings(),
+          promptEngineeringMode: PromptEngineeringMode.TOON,
+          promptToon: 'TOON TEMPLATE\n{{example_response}}',
+        }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: import.meta.url,
+    });
+
+    await actions.generateTracker(0);
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      'zTracker: malformed prompt-engineered payload',
+      expect.objectContaining({
+        format: 'toon',
+        reason: 'render rollback',
+        rawContent: '```toon\ncharactersPresent[2]: "Silvia"\t"Tobias"\n```',
+        parsedContent: parsedPayload,
+      }),
+    );
+
+    consoleWarnSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
   });
 
   test('injects the saved prompt without mutating prefer_character_prompt', async () => {
@@ -220,5 +404,199 @@ describe('createTrackerActions saved system prompt mode', () => {
       { role: 'user', content: 'Prior chat message' },
       { role: 'user', content: 'Generate tracker JSON' },
     ]);
+  });
+
+  test('uses TOON prompt-engineering mode when selected', async () => {
+    const context = {
+      chatMetadata: {},
+      powerUserSettings: {
+        prefer_character_prompt: true,
+        sysprompt: { name: 'Neutral - Chat' },
+      },
+      getPresetManager: (apiId?: string) => {
+        if (apiId === 'sysprompt') {
+          return {
+            getCompletionPresetByName: (name?: string) =>
+              name === 'zTracker' ? { name: 'zTracker', content: 'Saved tracker system prompt' } : undefined,
+            getPresetList: () => ({ presets: [], preset_names: ['zTracker'] }),
+          };
+        }
+        return null;
+      },
+    };
+
+    (globalThis as any).SillyTavern = {
+      getContext: () => context,
+    };
+
+    buildPromptMock.mockResolvedValue({
+      result: [
+        { role: 'system', content: 'Existing system prompt' },
+        { role: 'user', content: 'Prior chat message' },
+      ],
+    });
+
+    (schemaToExample as jest.Mock).mockReturnValue('time\tstring');
+    (schemaToPromptSchema as jest.Mock).mockReturnValue('type: object\nproperties:\n  time:\n    type: string');
+    (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
+
+    const generateRequest = jest.fn((
+      _request: any,
+      hooks: { onStart: (requestId: string) => void; onFinish: (requestId: string, data: unknown, error: unknown) => void },
+    ) => {
+      hooks.onStart('request-1');
+      hooks.onFinish('request-1', { content: '```toon\ntime\t10:00:00\n```' }, null);
+    });
+
+    const generator = {
+      generateRequest,
+      abortRequest: jest.fn(),
+    };
+
+    const globalContext = {
+      chat: [{ original_avatar: 'avatar.png', extra: {} }],
+      saveChat: jest.fn(async () => undefined),
+      extensionSettings: {
+        connectionManager: {
+          profiles: [
+            {
+              id: 'profile-1',
+              api: 'openai',
+              preset: 'preset-1',
+              context: 'context-1',
+              instruct: 'instruct-1',
+              sysprompt: 'Profile Prompt',
+            },
+          ],
+        },
+      },
+      CONNECT_API_MAP: {
+        openai: { selected: 'openai' },
+      },
+    };
+
+    const toonSettings = {
+      ...makeSettings(),
+      promptEngineeringMode: PromptEngineeringMode.TOON,
+      promptToon: 'TOON TEMPLATE\n{{example_response}}',
+    };
+
+    const actions = createTrackerActions({
+      globalContext,
+      settingsManager: { getSettings: () => toonSettings } as any,
+      generator: generator as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: import.meta.url,
+    });
+
+    await actions.generateTracker(0);
+
+    expect(schemaToExample).toHaveBeenCalledWith(toonSettings.schemaPresets.default.value, 'toon');
+    expect(schemaToPromptSchema).toHaveBeenCalledWith(toonSettings.schemaPresets.default.value, 'toon');
+    expect(parseResponse).toHaveBeenCalledWith('```toon\ntime\t10:00:00\n```', 'toon', {
+      schema: toonSettings.schemaPresets.default.value,
+    });
+
+    const sentMessages = generateRequest.mock.calls[0][0].prompt;
+    expect(sentMessages.at(-1)).toEqual({
+      role: 'user',
+      content: 'TOON TEMPLATE\ntime\tstring',
+    });
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test('injects the translated XML schema instead of raw JSON when XML prompt-engineering is selected', async () => {
+    const context = {
+      chatMetadata: {},
+      powerUserSettings: {
+        prefer_character_prompt: true,
+        sysprompt: { name: 'Neutral - Chat' },
+      },
+      getPresetManager: (apiId?: string) => {
+        if (apiId === 'sysprompt') {
+          return {
+            getCompletionPresetByName: (name?: string) =>
+              name === 'zTracker' ? { name: 'zTracker', content: 'Saved tracker system prompt' } : undefined,
+            getPresetList: () => ({ presets: [], preset_names: ['zTracker'] }),
+          };
+        }
+        return null;
+      },
+    };
+
+    (globalThis as any).SillyTavern = {
+      getContext: () => context,
+    };
+
+    buildPromptMock.mockResolvedValue({
+      result: [
+        { role: 'system', content: 'Existing system prompt' },
+        { role: 'user', content: 'Prior chat message' },
+      ],
+    });
+
+    (schemaToExample as jest.Mock).mockReturnValue('<time>string</time>');
+    (schemaToPromptSchema as jest.Mock).mockReturnValue('<type>object</type>');
+    (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
+
+    const generateRequest = jest.fn((
+      _request: any,
+      hooks: { onStart: (requestId: string) => void; onFinish: (requestId: string, data: unknown, error: unknown) => void },
+    ) => {
+      hooks.onStart('request-1');
+      hooks.onFinish('request-1', { content: '```xml\n<root><time>10:00:00</time></root>\n```' }, null);
+    });
+
+    const generator = {
+      generateRequest,
+      abortRequest: jest.fn(),
+    };
+
+    const globalContext = {
+      chat: [{ original_avatar: 'avatar.png', extra: {} }],
+      saveChat: jest.fn(async () => undefined),
+      extensionSettings: {
+        connectionManager: {
+          profiles: [
+            {
+              id: 'profile-1',
+              api: 'openai',
+              preset: 'preset-1',
+              context: 'context-1',
+              instruct: 'instruct-1',
+              sysprompt: 'Profile Prompt',
+            },
+          ],
+        },
+      },
+      CONNECT_API_MAP: {
+        openai: { selected: 'openai' },
+      },
+    };
+
+    const xmlSettings = {
+      ...makeSettings(),
+      promptEngineeringMode: PromptEngineeringMode.XML,
+      promptXml: 'XML TEMPLATE\n{{schema}}\n{{example_response}}',
+    };
+
+    const actions = createTrackerActions({
+      globalContext,
+      settingsManager: { getSettings: () => xmlSettings } as any,
+      generator: generator as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: import.meta.url,
+    });
+
+    await actions.generateTracker(0);
+
+    const sentMessages = generateRequest.mock.calls[0][0].prompt;
+    expect(sentMessages.at(-1)).toEqual({
+      role: 'user',
+      content: 'XML TEMPLATE\n<type>object</type>\n<time>string</time>',
+    });
+    expect(sentMessages.at(-1).content).not.toContain('{\n  "type"');
   });
 });

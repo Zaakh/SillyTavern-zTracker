@@ -33,7 +33,7 @@ https://github.com/Zaakh/SillyTavern-zTracker
 
 >I'm having API error.
 
-Your API/model might not support structured output. Change `Prompt Engineering` mode from `Native API` to `JSON` or `XML`.
+Your API/model might not support structured output. Change `Prompt Engineering` mode from `Native API` to `JSON`, `XML`, or `TOON`.
 
 > zTracker UI buttons / schema popup are broken (template 404).
 
@@ -45,7 +45,7 @@ zTracker can now choose the system prompt used during tracker generation:
 - **From connection profile**: keep the current SillyTavern connection profile behavior.
 - **From saved ST prompt**: pick a saved SillyTavern system prompt specifically for tracker extraction.
 
-On startup, zTracker installs a recommended **zTracker** system prompt preset if it does not already exist. You can select it in **Extensions → zTracker → System Prompt Source**, and edit it later in SillyTavern's own **System Prompt** manager.
+On startup, zTracker installs a recommended versioned system prompt preset such as **zTracker-1.3.0** if it does not already exist. You can select it in **Extensions → zTracker → System Prompt Source**, and edit it later in SillyTavern's own **System Prompt** manager. Older zTracker prompt presets are not deleted automatically.
 
 This is especially useful for smaller models: you can keep your roleplay-oriented system prompt for normal chat, while using a lean extraction-oriented prompt for tracker generation.
 
@@ -64,6 +64,8 @@ For array parts (e.g. `characters`), the parts menu also exposes:
 Optional (advanced): you can annotate your JSON schema preset to help zTracker keep interdependent sections ordered and array items stable:
 - `x-ztracker-dependsOn`: top-level part ordering hints for sequential generation.
 - `x-ztracker-idKey`: which string field to use as the array-item identity for per-item regeneration (defaults to `name`).
+
+If a dependency-linked array becomes inconsistent during generation, zTracker now logs a warning in the browser console. Example: `charactersPresent` lists a character name but `characters` has no matching object for that name.
 
 ## World Info (lorebooks)
 
@@ -85,6 +87,7 @@ You can customize (or remove) the embedded snapshot header via **Embed snapshot 
 
 - **Default (JSON)**: embeds pretty-printed JSON (no changes).
 - **Minimal (top-level properties)**: embeds one line per top-level property (newline-separated).
+- **TOON (compact)**: embeds tracker snapshots as tab-delimited TOON for lower-token structured context while preserving arrays and nested objects.
 
 
 ## Versioning

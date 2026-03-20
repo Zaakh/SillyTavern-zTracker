@@ -12,6 +12,7 @@ import {
   Schema,
   DEFAULT_PROMPT,
   DEFAULT_PROMPT_JSON,
+  DEFAULT_PROMPT_TOON,
   DEFAULT_PROMPT_XML,
   DEFAULT_SCHEMA_VALUE,
   DEFAULT_SCHEMA_HTML,
@@ -231,12 +232,12 @@ export const ZTrackerSettings: FC = () => {
             </div>
 
             <div className="setting-row">
-              <label title="Chooses how zTracker asks the model for structured output: use the native API format, or use JSON/XML prompt-engineering templates.">
+              <label title="Chooses how zTracker asks the model for structured output: use the native API format, or use JSON/XML/TOON prompt-engineering templates.">
                 Prompt Engineering
               </label>
               <select
                 className="text_pole"
-                title="Chooses how zTracker asks the model for structured output: use the native API format, or use JSON/XML prompt-engineering templates."
+                title="Chooses how zTracker asks the model for structured output: use the native API format, or use JSON/XML/TOON prompt-engineering templates."
                 value={settings.promptEngineeringMode}
                 onChange={(e) =>
                   updateAndRefresh((s) => {
@@ -247,6 +248,7 @@ export const ZTrackerSettings: FC = () => {
                 <option value="native">Native API</option>
                 <option value="json">Prompt Engineering (JSON)</option>
                 <option value="xml">Prompt Engineering (XML)</option>
+                <option value="toon">Prompt Engineering (TOON)</option>
               </select>
             </div>
 
@@ -346,7 +348,7 @@ export const ZTrackerSettings: FC = () => {
                     />
                   </div>
                   <small>
-                    Edit prompts in SillyTavern&apos;s System Prompt manager. The &quot;{ZTRACKER_SYSTEM_PROMPT_PRESET_NAME}&quot; preset is optimized for tracker generation. Click refresh after changing prompts elsewhere in SillyTavern.
+                    Edit prompts in SillyTavern&apos;s System Prompt manager. The shipped &quot;{ZTRACKER_SYSTEM_PROMPT_PRESET_NAME}&quot; preset is optimized for tracker generation. Older zTracker prompt presets are left in place so you can remove them manually if they are no longer needed. Click refresh after changing prompts elsewhere in SillyTavern.
                   </small>
                   {showMissingSavedSystemPromptWarning && (
                     <small style={{ color: 'var(--warning-color, #f0ad4e)' }}>
@@ -429,6 +431,30 @@ export const ZTrackerSettings: FC = () => {
                 onChange={(e) =>
                   updateAndRefresh((s) => {
                     s.promptXml = e.target.value;
+                  })
+                }
+                rows={4}
+              />
+            </div>
+
+            <div className="setting-row">
+              <div className="title_restorable">
+                <span title="Prompt-engineering template used when Prompt Engineering is set to TOON.">Prompt (TOON)</span>
+                <STButton
+                  className="fa-solid fa-undo"
+                  title="Restore main context template to default"
+                  onClick={() =>
+                    updateAndRefresh((s) => {
+                      s.promptToon = DEFAULT_PROMPT_TOON;
+                    })
+                  }
+                />
+              </div>
+              <STTextarea
+                value={settings.promptToon}
+                onChange={(e) =>
+                  updateAndRefresh((s) => {
+                    s.promptToon = e.target.value;
                   })
                 }
                 rows={4}

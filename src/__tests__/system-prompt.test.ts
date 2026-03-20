@@ -9,7 +9,16 @@ import {
   resolveTrackerSystemPromptName,
   shouldWarnAboutSharedSystemPromptSelection,
 } from '../system-prompt.js';
-import { ZTRACKER_SYSTEM_PROMPT_PRESET_NAME, ZTRACKER_SYSTEM_PROMPT_TEXT } from '../config.js';
+import {
+  LEGACY_PROMPT_TOON,
+  LEGACY_PROMPT_XML,
+  ZTRACKER_SYSTEM_PROMPT_PRESET_NAME,
+  ZTRACKER_SYSTEM_PROMPT_TEXT,
+  DEFAULT_PROMPT_TOON,
+  DEFAULT_PROMPT_XML,
+  PREVIOUS_DEFAULT_PROMPT_XML,
+  migrateLegacyPromptTemplates,
+} from '../config.js';
 
 describe('system prompt helpers', () => {
   test('lists preset names from array-based preset list', () => {
@@ -217,5 +226,36 @@ describe('system prompt helpers', () => {
       { role: 'system', content: 'saved tracker prompt' },
       { role: 'user', content: 'hello' },
     ]);
+  });
+
+  test('migrates legacy XML and TOON prompt templates without touching customized values', () => {
+    const legacySettings = {
+      promptXml: LEGACY_PROMPT_XML,
+      promptToon: LEGACY_PROMPT_TOON,
+    };
+
+    expect(migrateLegacyPromptTemplates(legacySettings)).toBe(true);
+    expect(legacySettings.promptXml).toBe(DEFAULT_PROMPT_XML);
+    expect(legacySettings.promptToon).toBe(DEFAULT_PROMPT_TOON);
+
+    const customizedSettings = {
+      promptXml: `${LEGACY_PROMPT_XML}\ncustomized`,
+      promptToon: `${LEGACY_PROMPT_TOON}\ncustomized`,
+    };
+
+    expect(migrateLegacyPromptTemplates(customizedSettings)).toBe(false);
+    expect(customizedSettings.promptXml).toContain('customized');
+    expect(customizedSettings.promptToon).toContain('customized');
+  });
+
+  test('migrates the previous XML schema-wrapper prompt to the current default', () => {
+    const settings = {
+      promptXml: PREVIOUS_DEFAULT_PROMPT_XML,
+      promptToon: DEFAULT_PROMPT_TOON,
+    };
+
+    expect(migrateLegacyPromptTemplates(settings)).toBe(true);
+    expect(settings.promptXml).toBe(DEFAULT_PROMPT_XML);
+    expect(settings.promptToon).toBe(DEFAULT_PROMPT_TOON);
   });
 });

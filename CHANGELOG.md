@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-03-20
+
+### Added
+
+- Embedded tracker snapshots now support a built-in **TOON (compact)** transform preset, using tab-delimited TOON for lower-token prompt context while preserving structured data fidelity.
+- TOON is now available as a prompt-engineering mode alongside JSON and XML.
+
+### Fixed
+
+- Prompt-engineering now translates the canonical JSON schema into XML or TOON correctly, and existing installs upgrade older shipped XML/TOON prompt templates automatically.
+- zTracker now installs a versioned recommended saved system prompt preset so older saved prompts can coexist safely.
+- XML and TOON reply repair now covers additional live small-model failure shapes, including broken opening XML tags and TOON object-array blocks.
+- Malformed model payloads are now logged uniformly for JSON, XML, and TOON parser failures, and prompt-engineered render rollbacks keep the raw payload attached for diagnosis.
+- Tracker updates now warn when dependency-linked arrays are inconsistent, such as a listed character missing its matching detail entry.
+- Production builds no longer emit webpack's default web-app performance warnings for the extension's single-file bundle.
+
 ## [1.2.1] - 2026-03-17
 
 ### Fixed
