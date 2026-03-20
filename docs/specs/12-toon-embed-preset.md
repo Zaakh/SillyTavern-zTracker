@@ -1,7 +1,7 @@
 # Spec: TOON embedding preset for tracker snapshots
 
 Status: Completed
-Last updated: 2026-03-18
+Last updated: 2026-03-20
 
 ## Summary
 
@@ -232,7 +232,7 @@ Implemented choice: use a tab delimiter (`'\t'`) for TOON output. This avoids am
 
 1. **Delimiter choice**: resolved. The implementation uses tab-delimited TOON (`delimiter: '\t'`) because tracker values frequently contain commas in outfit/location text.
 2. **Cloned tracker values**: resolved. `includeZTrackerMessages()` clones messages via `structuredClone()`, and the TOON encoder treated those cloned tracker objects as non-JSON input. The implementation normalizes tracker values through `JSON.stringify()` / `JSON.parse()` before TOON encoding.
-3. **Bundle size**: verified. After `npm run build`, `dist/index.js` grew from `510005` bytes at `HEAD` to `535071` bytes (`+25066` bytes).
+3. **Bundle size**: verified. After `npm run build`, `dist/index.js` grew from `510005` bytes on `main` to `554030` bytes on this branch (`+44025` bytes).
 4. **Settings merge behavior**: corrected after review. Existing installs automatically gain the built-in `toon` preset because missing nested default settings are recursively merged at startup.
 5. **Parser architecture follow-up**: completed separately from the embed feature. Structured reply repair now lives behind a shared parser workflow with format-specific JSON, XML, and TOON modules, which keeps `src/parser.ts` as a small entrypoint instead of a monolithic mixed-logic file.
 6. **Spec stability**: still acceptable for the original feature. zTracker only encodes TOON for prompt input in the embed flow; the parser-side TOON/XML repair workflow is supporting infrastructure rather than a change to the embed preset itself.
@@ -266,11 +266,12 @@ Implemented choice: use a tab delimiter (`'\t'`) for TOON output. This avoids am
 ## Verification
 
 - `npm test`
-  - 13 test suites passed, 74 tests passed.
+  - 13 test suites passed, 80 tests passed.
   - New coverage verifies TOON formatting, round-trip decode fidelity, tracker snapshot injection behavior, and shared JSON/XML/TOON repair behavior.
 - `npm run build`
   - Production build completed successfully.
-  - `dist/index.js` size changed from `510005` bytes at `HEAD` to `551608` bytes after the follow-up parser work.
+  - `dist/index.js` size changed from `510005` bytes on `main` to `554030` bytes on this branch.
+  - Webpack performance warnings are now disabled for production builds because this extension intentionally ships as a single local bundle and the default web-app thresholds were producing noisy, non-actionable warnings.
 - Manual SillyTavern smoke test was not run in this change.
 
 ## Recommended next steps
@@ -278,3 +279,77 @@ Implemented choice: use a tab delimiter (`'\t'`) for TOON output. This avoids am
 1. TOON is now wired as a selectable prompt-engineering reply mode in settings, so keep future structured-output additions on the same shared `PromptEngineeringMode` plus `parseResponse(...)` path instead of creating format-specific side flows.
 2. Keep repair heuristics sample-driven. Only add new JSON/XML/TOON repair steps from captured malformed model replies, so recovery stays conservative and diagnosable.
 3. Add a manual or Playwright smoke test for malformed reply handling in end-to-end tracker generation flows, not just parser unit tests.
+
+## Review follow-up (2026-03-20)
+
+- Added a TOON prompt template editor and reset action to `Settings.tsx`, matching the existing JSON/XML prompt controls.
+- Fixed the prompt-mode dropdown indentation and refreshed the embed-transform input JSDoc to document the `toon` mode.
+- Moved schema-based array coercion into the shared parse flow so TOON prompt-engineered replies now normalize singleton arrays the same way XML replies do.
+- Tightened code-fence extraction so inline triple-backtick text inside scalar values does not truncate fenced parser content.
+- Added coverage for nested TOON schema examples, TOON schema-based array normalization, strict TOON scalar spacing, and fenced JSON values that contain literal triple backticks.
+
+## Historical critical review (2026-03-20)
+
+### Strengths
+
+- **Excellent deduplication in `tracker-actions.ts`**: the `requestPromptEngineeredResponse()` extraction eliminated seven copy-pasted 10-line blocks, reducing ~70 lines of duplicated template-compile → request → parse logic to a single reusable function. This is the most impactful change in the branch.
+- **Clean parser decomposition**: splitting `src/parser.ts` (318 lines) into `parser/json.ts`, `parser/xml.ts`, `parser/toon.ts`, and `parser/shared.ts` with a shared `runRepairWorkflow<T>()` is well-structured. The generic step-name type parameter prevents typos and keeps each format's repair pipeline self-documenting.
+- **TOON repair is conservative and well-guarded**: `parseAfterEachStep: false` ensures all repair transforms are applied before attempting a parse; `hasSuspiciousToonKeys()` post-validation catches silent data-corruption from bad delimiter normalization. This directly addresses the spec's "no viable repair strategy" concern.
+- **Round-trip fidelity is tested**: the embed-snapshot test actually calls `decode(text)` and `expect(decoded).toEqual(toonTrackerValue)` — this proves lossless encode/decode, not just "looks plausible." The test fixture includes commas, colons, newlines, tabs, brackets, and pipes.
+- **Test count increased from 74 to 76**: new coverage includes TOON embed, TOON injection, TOON parsing, TOON repair, TOON failure mode, XML repair, and TOON schema example. All 13 suites pass.
+- **Tracker actions test for TOON mode** verifies the full prompt-engineering path: schema → example generation → template compilation → request → parse → render.
+
+### Critical issues
+
+#### High priority
+
+1. **Committed `dist/index.js` is stale** (spec section "Verification" reports `551608` bytes, but the committed artifact is `553211` bytes, and a fresh `npm run build` matches the committed file). The spec's stated verify size contradicts the actual committed file. This is a documentation inaccuracy rather than a code bug — the committed build is current and matches the source. **Action**: update the "Verification" section with the correct figure (`553211` bytes).
+
+2. **`promptToon` has no editing UI**: `promptJson` and `promptXml` both have editable `<textarea>` elements and "Reset to default" buttons in `Settings.tsx`. The new `promptToon` setting is stored and used but has no corresponding UI element — users cannot view, edit, or reset the TOON prompt template from the settings panel. **Action**: add a TOON prompt textarea + reset button in `Settings.tsx`, matching the JSON/XML pattern. Alternatively, document this as an intentional limitation if user editing is not desired.
+
+3. **Settings.tsx indentation defect**: the TOON option has wrong indentation (14 extra leading spaces):
+   ```tsx
+                                 <option value="toon">Prompt Engineering (TOON)</option>
+   ```
+   Should be:
+   ```tsx
+                   <option value="toon">Prompt Engineering (TOON)</option>
+   ```
+   This doesn't affect runtime behavior but violates code style and makes diffs noisy. **Action**: fix the indentation.
+
+#### Medium priority
+
+4. **JSDoc for `EmbedSnapshotRegexTransformPreset.input` is outdated**: the comment lists only `pretty_json` and `top_level_lines` but the union now includes `'toon'`. **Action**: add `- toon: tab-delimited TOON via @toon-format/toon encode()` to the JSDoc list.
+
+5. **Missing trailing newlines in all four `src/parser/*.ts` files**: `json.ts`, `shared.ts`, `toon.ts`, and `xml.ts` all lack a final newline. This is a POSIX convention violation that can cause git diff noise and some editors to warn. **Action**: add a trailing newline to each file.
+
+6. **`isAcceptableXmlParse` has an unused `candidate` parameter**: the function signature accepts `(parsed: object, candidate: string)` but never uses `candidate`. This was introduced because the `acceptParsedResult` callback signature requires two arguments, but it creates dead code. **Action**: the unused parameter exists to match the `RepairWorkflowOptions.acceptParsedResult` callback signature. Consider prefixing with `_` (i.e. `_candidate`) to signal intent, or restructure the callback type to make the second argument optional.
+
+7. **TOON `schema` option is passed but ignored in parsing**: `requestPromptEngineeredResponse()` calls `parseResponse(content, format, { schema })`, and for XML this triggers `ensureArray()` coercion. For TOON, the schema is passed through but `tryParseToonWithRepair()` silently ignores it. If a model returns a single-element array as a bare object in TOON output, it won't be coerced to an array the way XML does. **Action**: either add `ensureArray()` post-processing for TOON in `parser.ts` (same as XML), or document this as intentional because TOON's tabular format structurally preserves arrays.
+
+#### Low priority
+
+8. **`RepairWorkflowOptions` interface is exported but not used outside `shared.ts`**: it's declared as a standalone interface but only referenced as an inline property type within `runRepairWorkflow()`. **Action**: minor, can remain exported for future extensibility, but could be inlined for minimalism.
+
+9. **`CODE_BLOCK_REGEX` uses non-greedy match on inner content**: `([\s\S]*?)` will match the *first* ` ``` ` closing fence. If a model outputs a TOON table containing literal ` ``` ` inside a value (unlikely for tracker data but theoretically possible), extraction would truncate. The JSON repair has `extractBalancedJsonSubstring` as a fallback; TOON has no equivalent. **Action**: acceptable risk for current use, but worth noting as a known limitation.
+
+10. **Bundle size warning**: webpack now reports a 540 KiB entrypoint, exceeding the 244 KiB recommended limit. The `@toon-format/toon` addition contributed ~25-43 KB to an already large bundle. **Action**: not a blocker for this feature, but the overall bundle size should be monitored. Consider tree-shaking or lazy loading in a future optimization pass.
+
+### Missing considerations
+
+- **No test for `schemaToExample` with deeply nested TOON schemas**: the test only checks a simple schema with `title`, `tags[]`, `meta.count`. A schema with 3+ nesting levels or mixed array types (array-of-arrays) would exercise more edge cases in TOON encoding.
+- **No test for `requestPromptEngineeredResponse` suffix parameter with TOON**: the `suffix` parameter (used for `preserveLine` continuation prompts) is only tested implicitly via the existing JSON/XML paths. A TOON-specific test with suffix could verify the prompt is assembled correctly.
+- **TOON `normalizeToonTabularDelimiters` may false-positive on non-tabular content**: the regex `/ {2,}/` treats any 2+ spaces as a potential delimiter. If a TOON scalar value legitimately contains consecutive spaces (e.g., `"outfit: Red   dress"`), the repair step would incorrectly split it. The `isAcceptableToonParse` guard mitigates this: if repair produces suspicious keys, the original content falls through to failure. But a test exercising this specific case would strengthen confidence.
+- **XML error path changed**: the old code checked `error.message.includes('Invalid XML')` before throwing. The new code throws `'Model response is not valid XML.'` unconditionally for the XML format. This is arguably correct (all XML parse failures should report as invalid XML), but it changes observable error behavior. Any downstream code relying on a `fast-xml-parser`-specific error message in the rethrown error will now see the generic message instead.
+
+### Recommendations
+
+1. **Fix the three high-priority issues** (stale size in spec, missing prompt UI or documentation, indentation) before merging.
+2. **Add trailing newlines** to the four `src/parser/*.ts` files — this is a one-line fix per file.
+3. **Update the `input` JSDoc** in `config.ts` to include `toon`.
+4. **Consider `ensureArray()` for TOON**: if the model can return single-element arrays as bare objects in TOON format, the same coercion applied to XML should apply to TOON. If TOON structurally prevents this, document that rationale.
+5. **Add `_` prefix** to the unused `candidate` parameter in `isAcceptableXmlParse`.
+
+### Overall assessment
+
+**Adequate** — the feature implementation is sound, well-tested (76 tests passing), and the parser refactor is a clear improvement. The branch is near production-ready. The missing TOON prompt editing UI is the most impactful gap — without it, users who want to customize the TOON prompt template must manually edit persisted settings, which is inconsistent with how JSON/XML prompts work. The indentation defect and stale verification figures are minor fixable issues. No security concerns, no logic errors in the core encode/parse paths.

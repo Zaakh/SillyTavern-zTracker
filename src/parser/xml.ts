@@ -21,28 +21,6 @@ const xmlParser = new XMLParser({
   allowBooleanAttributes: true,
 });
 
-function ensureArray(data: any, schema: any) {
-  if (!schema || !data) {
-    return;
-  }
-
-  for (const key in schema.properties) {
-    if (schema.properties[key].type === 'array' && data[key] && !Array.isArray(data[key])) {
-      data[key] = [data[key]];
-    }
-    if (schema.properties[key].type === 'object') {
-      ensureArray(data[key], schema.properties[key]);
-    }
-    if (schema.properties[key].type === 'array' && schema.properties[key].items.type === 'object') {
-      if (Array.isArray(data[key])) {
-        data[key].forEach((item: any) => ensureArray(item, schema.properties[key].items));
-      } else {
-        ensureArray(data[key], schema.properties[key].items);
-      }
-    }
-  }
-}
-
 function tryParseXmlCandidate(content: string): object {
   let parsedXml = xmlParser.parse(content);
   if (parsedXml.root) {
@@ -51,7 +29,7 @@ function tryParseXmlCandidate(content: string): object {
   return parsedXml;
 }
 
-function isAcceptableXmlParse(parsed: object, candidate: string): boolean {
+function isAcceptableXmlParse(parsed: object): boolean {
   return Object.keys(parsed).length > 0;
 }
 
@@ -70,8 +48,8 @@ function extractXmlSubstring(content: string): string | undefined {
   return undefined;
 }
 
-export function tryParseXmlWithRepair(content: string, schema?: any): object {
-  const parsedXml = runRepairWorkflow<XmlRepairStepName>({
+export function tryParseXmlWithRepair(content: string): object {
+  return runRepairWorkflow<XmlRepairStepName>({
     content,
     formatLabel: 'XML',
     parseCandidate: tryParseXmlCandidate,
@@ -82,13 +60,7 @@ export function tryParseXmlWithRepair(content: string, schema?: any): object {
       { name: 'xml substring extraction', transform: extractXmlSubstring },
     ],
     workflowOptions: {
-      acceptParsedResult: (parsed, candidate) => isAcceptableXmlParse(parsed, candidate),
+      acceptParsedResult: (parsed, _candidate) => isAcceptableXmlParse(parsed),
     },
   });
-
-  if (schema) {
-    ensureArray(parsedXml, schema);
-  }
-
-  return parsedXml;
 }

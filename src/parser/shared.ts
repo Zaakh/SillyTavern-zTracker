@@ -1,7 +1,7 @@
 // Shared helpers for extracting and repairing structured model replies before parsing.
 
-const CODE_BLOCK_REGEX = /```(?:[\w-]+\n|\n)([\s\S]*?)```/;
-const FULL_FENCE_REGEX = /^```(?:[\w-]+)?[ \t]*\n([\s\S]*?)\n?```$/;
+const CODE_BLOCK_REGEX = /```(?:[\w-]+[ \t]*\n|\n)([\s\S]*?)\n```(?=\s|$)/;
+const FULL_FENCE_REGEX = /^```(?:[\w-]+)?[ \t]*\n([\s\S]*?)\n```[ \t]*$/;
 const INVISIBLE_EDGE_CHARS_REGEX = /^[\uFEFF\u200B\u200C\u200D\u2060]+|[\uFEFF\u200B\u200C\u200D\u2060]+$/g;
 
 export interface RepairStep<TStepName extends string> {
@@ -9,7 +9,7 @@ export interface RepairStep<TStepName extends string> {
   transform: (value: string) => string | undefined;
 }
 
-export interface RepairWorkflowOptions {
+interface RepairWorkflowOptions {
   parseAfterEachStep?: boolean;
   acceptParsedResult?: (parsed: object, candidate: string) => boolean;
 }
@@ -29,6 +29,30 @@ export function normalizeLineEndings(content: string): string {
 
 export function normalizeStructuredWhitespace(content: string): string {
   return content.replace(INVISIBLE_EDGE_CHARS_REGEX, '').trim();
+}
+
+export function coerceParsedArraysBySchema(data: any, schema?: any): any {
+  if (!schema?.properties || !data || typeof data !== 'object') {
+    return data;
+  }
+
+  for (const key in schema.properties) {
+    if (schema.properties[key].type === 'array' && data[key] && !Array.isArray(data[key])) {
+      data[key] = [data[key]];
+    }
+    if (schema.properties[key].type === 'object') {
+      coerceParsedArraysBySchema(data[key], schema.properties[key]);
+    }
+    if (schema.properties[key].type === 'array' && schema.properties[key].items.type === 'object') {
+      if (Array.isArray(data[key])) {
+        data[key].forEach((item: any) => coerceParsedArraysBySchema(item, schema.properties[key].items));
+      } else {
+        coerceParsedArraysBySchema(data[key], schema.properties[key].items);
+      }
+    }
+  }
+
+  return data;
 }
 
 export function stripRepeatedFenceWrappers(content: string): string {

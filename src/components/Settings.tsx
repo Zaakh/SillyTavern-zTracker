@@ -248,7 +248,7 @@ export const ZTrackerSettings: FC = () => {
                 <option value="native">Native API</option>
                 <option value="json">Prompt Engineering (JSON)</option>
                 <option value="xml">Prompt Engineering (XML)</option>
-                              <option value="toon">Prompt Engineering (TOON)</option>
+                <option value="toon">Prompt Engineering (TOON)</option>
               </select>
             </div>
 
@@ -431,6 +431,30 @@ export const ZTrackerSettings: FC = () => {
                 onChange={(e) =>
                   updateAndRefresh((s) => {
                     s.promptXml = e.target.value;
+                  })
+                }
+                rows={4}
+              />
+            </div>
+
+            <div className="setting-row">
+              <div className="title_restorable">
+                <span title="Prompt-engineering template used when Prompt Engineering is set to TOON.">Prompt (TOON)</span>
+                <STButton
+                  className="fa-solid fa-undo"
+                  title="Restore main context template to default"
+                  onClick={() =>
+                    updateAndRefresh((s) => {
+                      s.promptToon = DEFAULT_PROMPT_TOON;
+                    })
+                  }
+                />
+              </div>
+              <STTextarea
+                value={settings.promptToon}
+                onChange={(e) =>
+                  updateAndRefresh((s) => {
+                    s.promptToon = e.target.value;
                   })
                 }
                 rows={4}

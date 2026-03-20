@@ -13,7 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- TOON prompt-engineering templates can now be viewed, edited, and reset from zTracker settings just like the JSON and XML prompt templates.
 - Structured reply repair now uses a shared parser workflow for repairable text formats. JSON keeps its existing recovery steps, XML can recover wrapper/prose damage by extracting the XML document, and TOON parsing can recover a common small-LLM failure mode where tabular delimiters are expanded from tabs into aligned spaces.
+- TOON parsing now applies the same schema-based array normalization as XML responses, avoiding single-item array shape drift in prompt-engineered replies.
+- Structured code-block extraction now requires closing fences on their own line, so inline triple-backtick text inside JSON or TOON scalar values no longer truncates parser input.
+- Production builds no longer emit webpack's default web-app performance warnings for the extension's single-file bundle.
 
 ## [1.2.1] - 2026-03-17
 

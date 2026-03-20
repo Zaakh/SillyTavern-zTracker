@@ -1,4 +1,5 @@
 import { tryParseJsonWithRepair } from './parser/json.js';
+import { coerceParsedArraysBySchema } from './parser/shared.js';
 import { tryParseToonWithRepair } from './parser/toon.js';
 import { tryParseXmlWithRepair } from './parser/xml.js';
 
@@ -14,13 +15,13 @@ export function parseResponse(content: string, format: ParseResponseFormat, opti
   try {
     switch (format) {
       case 'xml':
-        return tryParseXmlWithRepair(content, options.schema);
+        return coerceParsedArraysBySchema(tryParseXmlWithRepair(content), options.schema);
 
       case 'json':
         return tryParseJsonWithRepair(content);
 
       case 'toon':
-        return tryParseToonWithRepair(content);
+        return coerceParsedArraysBySchema(tryParseToonWithRepair(content), options.schema);
 
       default:
         throw new Error(`Unsupported format specified: ${format}`);

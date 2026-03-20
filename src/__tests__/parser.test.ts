@@ -21,6 +21,13 @@ describe('parseResponse', () => {
     expect(result).toEqual({ foo: 'bar' });
   });
 
+  it('keeps fenced JSON values containing literal triple backticks intact', () => {
+    const content = '```json\n{"foo": "literal ``` fence"}\n```';
+    const result = parseResponse(content, 'json');
+
+    expect(result).toEqual({ foo: 'literal ``` fence' });
+  });
+
   it('repairs JSON with repeated fenced wrappers', () => {
     const content = '```json\n```JSON\n{"foo":"bar"}\n```\n```';
     const consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
@@ -100,19 +107,14 @@ describe('parseResponse', () => {
     expect(result).toEqual({ characters: [{ name: 'Alice' }] });
   });
 
-  it('repairs XML with repeated fenced wrappers', () => {
+  it('parses XML with repeated fenced wrappers', () => {
     const content = '```xml\n```XML\n<root><foo>bar</foo></root>\n```\n```';
     const consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
 
     const result = parseResponse(content, 'xml');
 
     expect(result).toEqual({ foo: 'bar' });
-    expect(consoleInfoSpy).toHaveBeenCalledWith(
-      'zTracker: repaired XML response',
-      expect.objectContaining({
-        appliedSteps: ['fence cleanup'],
-      }),
-    );
+    expect(consoleInfoSpy).not.toHaveBeenCalled();
   });
 
   it('parses strict valid TOON without repair logging', () => {
@@ -147,6 +149,41 @@ describe('parseResponse', () => {
         appliedSteps: ['tabular delimiter normalization'],
       }),
     );
+  });
+
+  it('normalizes TOON arrays according to schema', () => {
+    const schema = {
+      properties: {
+        characters: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+            },
+          },
+        },
+      },
+    };
+    const toon = '```toon\ncharacters:\n  name: Alice\n```';
+
+    const result = parseResponse(toon, 'toon', { schema });
+
+    expect(result).toEqual({ characters: [{ name: 'Alice' }] });
+  });
+
+  it('keeps strict TOON values with repeated spaces inside scalars', () => {
+    const consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
+    const value = {
+      notes: {
+        outfit: 'Red   dress',
+      },
+    };
+
+    const result = parseResponse(encode(value, { delimiter: '\t' }), 'toon');
+
+    expect(result).toEqual(value);
+    expect(consoleInfoSpy).not.toHaveBeenCalled();
   });
 
   it('throws a descriptive error on invalid JSON', () => {

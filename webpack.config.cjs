@@ -68,4 +68,7 @@ module.exports = {
             extractComments: false,
         })],
     },
+    performance: {
+        hints: false,
+    },
 }

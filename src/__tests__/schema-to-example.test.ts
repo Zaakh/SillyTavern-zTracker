@@ -41,4 +41,43 @@ describe('schemaToExample', () => {
     expect(result).toContain('meta:');
     expect(result).toContain('count: 0');
   });
+
+  it('produces TOON samples for deeply nested schemas', () => {
+    const nestedSchema = {
+      type: 'object',
+      properties: {
+        scene: {
+          type: 'object',
+          properties: {
+            cast: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  stats: {
+                    type: 'object',
+                    properties: {
+                      mood: { type: 'string' },
+                    },
+                  },
+                  traits: {
+                    type: 'array',
+                    items: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const result = schemaToExample(nestedSchema, 'toon');
+
+    expect(result).toContain('scene:');
+    expect(result).toContain('cast[1');
+    expect(result).toContain('mood: string');
+    expect(result).toContain('traits[1');
+  });
 });
