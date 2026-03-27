@@ -15,6 +15,7 @@ import {
   ZTRACKER_SYSTEM_PROMPT_PRESET_NAME,
   ZTRACKER_SYSTEM_PROMPT_TEXT,
   DEFAULT_PROMPT_TOON,
+  PREVIOUS_DEFAULT_PROMPT_TOON,
   DEFAULT_PROMPT_XML,
   PREVIOUS_DEFAULT_PROMPT_XML,
   migrateLegacyPromptTemplates,
@@ -257,5 +258,22 @@ describe('system prompt helpers', () => {
     expect(migrateLegacyPromptTemplates(settings)).toBe(true);
     expect(settings.promptXml).toBe(DEFAULT_PROMPT_XML);
     expect(settings.promptToon).toBe(DEFAULT_PROMPT_TOON);
+  });
+
+  test('migrates the previous TOON prompt to the stronger current default', () => {
+    const settings = {
+      promptXml: DEFAULT_PROMPT_XML,
+      promptToon: PREVIOUS_DEFAULT_PROMPT_TOON,
+    };
+
+    expect(migrateLegacyPromptTemplates(settings)).toBe(true);
+    expect(settings.promptXml).toBe(DEFAULT_PROMPT_XML);
+    expect(settings.promptToon).toBe(DEFAULT_PROMPT_TOON);
+  });
+
+  test('ships a TOON prompt that explicitly forbids JSON-like output and wrapper objects', () => {
+    expect(DEFAULT_PROMPT_TOON).toContain('DO NOT output JSON, XML, JavaScript objects, braces, brackets, commas between fields, or quoted property names.');
+    expect(DEFAULT_PROMPT_TOON).toContain('Do not invent wrapper keys like `root`, `scene`, `data`, or `response` unless the schema explicitly requires them.');
+    expect(DEFAULT_PROMPT_TOON).toContain('For uniform arrays of objects, preserve the tabular TOON layout shown in the example, including the header row and tab-delimited values.');
   });
 });
