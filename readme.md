@@ -93,3 +93,5 @@ You can customize (or remove) the embedded snapshot header via **Embed snapshot 
 ## Versioning
 
 Developer and maintainer notes (local dev, testing, versioning) are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
+For prompt debugging, maintainers can run `npm run debug:tracker-context:json`, `npm run debug:tracker-context:xml`, or `npm run debug:tracker-context:toon` to print one example of the tracker-generation request for each supported output mode.

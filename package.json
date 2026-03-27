@@ -13,6 +13,9 @@
         "build": "cross-env NODE_ENV=production sass src/styles/main.scss dist/style.css --no-source-map && cross-env NODE_ENV=production webpack --mode production --config webpack.config.cjs",
         "pretest": "npm run sync-version",
         "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+        "debug:tracker-context:json": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch \"<rootDir>/scripts/debug-tracker-context-json.ts\" --silent=false",
+        "debug:tracker-context:xml": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch \"<rootDir>/scripts/debug-tracker-context-xml.ts\" --silent=false",
+        "debug:tracker-context:toon": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch \"<rootDir>/scripts/debug-tracker-context-toon.ts\" --silent=false",
         "check-version": "npm run sync-version -- --check",
         "version": "npm run sync-version && git add manifest.json",
         "prettify": "prettier --write \"src/**/*.ts\" \"templates/**/*.html\" \"src/**/*.tsx\""
