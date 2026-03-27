@@ -10,10 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Added an on-demand `npm run debug:tracker-context:json` harness that prints one captured JSON-mode tracker-generation request, including injected tracker snapshots and the structured-output schema payload.
 - Added matching `npm run debug:tracker-context:xml` and `npm run debug:tracker-context:toon` harnesses for the prompt-engineered XML and TOON generation paths.
+- Added inspectable markdown request snapshots under `test-output/` for the live-like JSON, XML, and TOON tracker-generation examples.
 
 ### Fixed
 
 - Tracker-generation requests now strip SillyTavern/UI-only message fields such as `source`, `mes`, temporary `zTrackerFound` markers, and related helper flags before sending prompt context to the LLM.
+- Tracker-context debug harnesses now use a live-like `Bar` fixture across JSON, XML, and TOON so the captured local request shape matches SillyTavern's real prompt-engineered tracker context more closely.
+- The shipped TOON prompt now more explicitly forbids JSON-like wrappers and braces, reinforces scalar and array layout rules, and auto-migrates installs that still have the previous weaker default TOON prompt.
 
 ## [1.3.0] - 2026-03-20
 
