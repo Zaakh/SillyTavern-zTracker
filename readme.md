@@ -12,6 +12,7 @@ Forked from [SillyTavern WTracker](https://github.com/bmen25124/SillyTavern-WTra
 - **Regenerate only what you need** from the parts menu (one section, one list item like a character, or even one field).
 - **Filter World Info used for tracker generation** (allow only selected lorebooks/entries when needed).
 - Optional **embed recent tracker snapshots** into normal generations for better continuity (either full JSON or a compact plain-text format).
+- Tracker generation now preserves speaker labels in prompt context where available, so turns like `Tobias:` and `Bar:` stay clearer for pronoun-heavy scenes.
 
 ---
 
@@ -94,4 +95,6 @@ You can customize (or remove) the embedded snapshot header via **Embed snapshot 
 
 Developer and maintainer notes (local dev, testing, versioning) are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-For prompt debugging, maintainers can run `npm run debug:tracker-context:json`, `npm run debug:tracker-context:xml`, or `npm run debug:tracker-context:toon` to print one example of the tracker-generation request for each supported output mode.
+For prompt debugging, maintainers can run `npm run debug:tracker-context:json`, `npm run debug:tracker-context:xml`, or `npm run debug:tracker-context:toon` to inspect one live-like tracker-generation request for each supported output mode. The saved request snapshots live under `test-output/tracker-context-json.md`, `test-output/tracker-context-xml.md`, and `test-output/tracker-context-toon.md`; the plain-text transport views live under `test-output/tracker-context-json.txt`, `test-output/tracker-context-xml.txt`, and `test-output/tracker-context-toon.txt`. Running `npm run debug:tracker-context:artifacts` refreshes only the `.txt` files so they stay aligned with the currently verified live behavior: the active text-completion connection path flattens tracker-generation messages into one raw `prompt` string without `System:`, `User:`, or `Assistant:` labels.
+
+Live verification also showed that tracker generation currently includes character-card prompt content from SillyTavern's `buildPrompt(...)` step. That behavior is verified but not changed here.

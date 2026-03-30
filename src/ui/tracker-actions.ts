@@ -340,7 +340,7 @@ export function createTrackerActions(options: {
       contextName: profile?.context,
       instructName: profile?.instruct,
       syspromptName: settings.trackerSystemPromptMode === 'profile' ? syspromptName : undefined,
-      includeNames: !!selected_group,
+      includeNames: true,
       ignoreWorldInfo,
     });
 

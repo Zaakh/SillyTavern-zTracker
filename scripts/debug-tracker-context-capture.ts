@@ -51,6 +51,20 @@ export type CapturedTrackerContext = {
 	request: Record<string, unknown>;
 };
 
+type CapturedPromptMessage = {
+	role: string;
+	content: string;
+	name?: string;
+	ignoreInstruct?: boolean;
+};
+
+function formatPromptMessageForInspection(message: CapturedPromptMessage): string {
+	if (typeof message.name === 'string' && message.name.trim()) {
+		return `${message.name}: ${String(message.content)}`;
+	}
+	return String(message.content);
+}
+
 const MODE_SAMPLE_RESPONSE: Record<string, string> = {
 	[PromptEngineeringMode.JSON]:
 		'```json\n{"time":"09:13:00; 03/27/2026 (Friday)","location":"Atrium cafe, east window booth","summary":"Alice greets a newly arrived customer near the front entrance."}\n```',
@@ -156,6 +170,22 @@ export function expectLiveLikeTrackerContext(
 		role: 'system',
 		content: expect.stringContaining('Scene details:\ntime: 14:23:07; 09/28/2025 (Tuesday)'),
 	});
+	expect(promptMessages[3]).toMatchObject({
+		role: 'assistant',
+		name: 'Bar',
+	});
+	expect(promptMessages[4]).toMatchObject({
+		role: 'user',
+		name: 'Tobias',
+	});
+	expect(promptMessages[6]).toMatchObject({
+		role: 'assistant',
+		name: 'Bar',
+	});
+	expect(promptMessages[7]).toMatchObject({
+		role: 'user',
+		name: 'Tobias',
+	});
 	expect(captured.request.profileId).toBe(LIVE_BAR_PROFILE_ID);
 	expect(captured.request.maxTokens).toBe(16000);
 	expect(captured.request.overridePayload).toEqual({});
@@ -188,4 +218,25 @@ export function printCapturedTrackerContext(marker: string, captured: CapturedTr
 	console.log(`${marker}_START`);
 	console.log(JSON.stringify(captured, null, 2));
 	console.log(`${marker}_END`);
+}
+
+/**
+ * Mirrors the currently verified live tracker-generation transport more closely
+ * by flattening prompt message contents into one raw text-completion prompt.
+ * This intentionally drops role labels because the live JSON tracker request
+ * observed in SillyTavern shipped a single `prompt` string without them.
+ *
+ * The active profile path also preserved blank-line boundaries between message
+ * bodies, so this uses the same double-newline join SillyTavern falls back to
+ * for text-completion prompts when no extra instruct wrapping is applied. When
+ * the prompt carries explicit speaker names, those labels are preserved inline
+ * so one-on-one chats still disambiguate "I" and "you" in the local artifact.
+ */
+export function flattenPromptMessagesForInspection(messages: CapturedPromptMessage[]): string {
+	return messages.map((message) => formatPromptMessageForInspection(message)).join('\n\n');
+}
+
+/** Returns the plain-text inspection view for one captured tracker-generation request. */
+export function flattenCapturedTrackerContext(captured: CapturedTrackerContext): string {
+	return flattenPromptMessagesForInspection(captured.request.prompt as CapturedPromptMessage[]);
 }

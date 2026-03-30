@@ -16,6 +16,7 @@
         "debug:tracker-context:json": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch \"<rootDir>/scripts/debug-tracker-context-json.ts\" --silent=false",
         "debug:tracker-context:xml": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch \"<rootDir>/scripts/debug-tracker-context-xml.ts\" --silent=false",
         "debug:tracker-context:toon": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch \"<rootDir>/scripts/debug-tracker-context-toon.ts\" --silent=false",
+        "debug:tracker-context:artifacts": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --testMatch \"<rootDir>/scripts/write-tracker-context-artifacts.ts\" --silent=false",
         "check-version": "npm run sync-version -- --check",
         "version": "npm run sync-version && git add manifest.json",
         "prettify": "prettier --write \"src/**/*.ts\" \"templates/**/*.html\" \"src/**/*.tsx\""
