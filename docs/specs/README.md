@@ -18,6 +18,8 @@ These are “living” per-change specs. Each spec tracks its current status and
 - [12-toon-embed-preset.md](12-toon-embed-preset.md)
 - [13-default-schema-presets.md](13-default-schema-presets.md)
 - [14-tracker-generation-context-debug.md](14-tracker-generation-context-debug.md)
+- [15-skip-initial-messages.md](15-skip-initial-messages.md)
+- [16-character-card-in-tracker-generation.md](16-character-card-in-tracker-generation.md)
 
 ## Status workflow
 - **Open**: not implemented yet; questions unresolved.
