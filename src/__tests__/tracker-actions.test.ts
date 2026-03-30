@@ -393,6 +393,7 @@ describe('createTrackerActions saved system prompt mode', () => {
     expect(buildPromptMock).toHaveBeenCalledWith(
       'openai',
       expect.objectContaining({
+        includeNames: true,
         syspromptName: undefined,
       }),
     );

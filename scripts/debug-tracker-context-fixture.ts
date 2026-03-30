@@ -138,11 +138,13 @@ export function makeLiveLikePromptMessages() {
     },
     {
       role: 'assistant',
+      name: 'Bar',
       content:
         'As you enter the bar you realize you are the only customer. The barkeeper greets you: "Hello I am Silvia, what can I get you?"',
     },
     {
       role: 'user',
+      name: 'Tobias',
       content: '"Just checking the room for a moment."',
     },
     {
@@ -151,11 +153,13 @@ export function makeLiveLikePromptMessages() {
     },
     {
       role: 'assistant',
+      name: 'Bar',
       content:
         '“Just checking the room, huh?” Silvia chuckled, a warm, genuine sound. “Well, welcome to ‘The Cozy Corner.’ It *is* a bit quiet today, but that’s usually a good thing, don’t you think? Less noise, more conversation… or just a nice, peaceful drink.” She leaned slightly forward, her smile widening. “So, what’ll it be? We’ve got a lovely selection of local craft beers, some classic cocktails, and of course, a good old-fashioned iced tea.”\n\n“Less noise, more conversation… or just a nice, peaceful drink?”',
     },
     {
       role: 'user',
+      name: 'Tobias',
       content: 'I would like an iced tea and a quiet seat near the wall while I keep an eye on the room.',
     },
     {
