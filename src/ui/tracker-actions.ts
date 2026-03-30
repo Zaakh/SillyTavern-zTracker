@@ -24,6 +24,7 @@ import {
   CHAT_MESSAGE_SCHEMA_VALUE_KEY,
   CHAT_MESSAGE_PARTS_ORDER_KEY,
   includeZTrackerMessages,
+  sanitizeMessagesForGeneration,
 } from '../tracker.js';
 import {
   buildArrayItemFieldSchema,
@@ -124,10 +125,11 @@ export function createTrackerActions(options: {
     return (requestMessages: Message[], overideParams?: any): Promise<ExtractedData | undefined> => {
       return new Promise((resolve, reject) => {
         const abortController = new AbortController();
+        const sanitizedPrompt = sanitizeMessagesForGeneration(requestMessages);
         generator.generateRequest(
           {
             profileId: settings.profileId,
-            prompt: requestMessages,
+            prompt: sanitizedPrompt,
             maxTokens: settings.maxResponseToken,
             custom: { signal: abortController.signal },
             overridePayload: {
@@ -338,7 +340,7 @@ export function createTrackerActions(options: {
       contextName: profile?.context,
       instructName: profile?.instruct,
       syspromptName: settings.trackerSystemPromptMode === 'profile' ? syspromptName : undefined,
-      includeNames: !!selected_group,
+      includeNames: true,
       ignoreWorldInfo,
     });
 

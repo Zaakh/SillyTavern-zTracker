@@ -8,6 +8,7 @@ These instructions apply to all files in this repository.
 
 ## Project context
 - This repo builds a **SillyTavern UI extension** (browser-side) named **zTracker**.
+- The latest release version of SillyTavern is 1.17
 - The extension generates structured “tracker” data for chat messages (via an LLM connection profile), stores it in chat history (`message.extra.zTracker.*`), and renders it above the message.
 
 ## Changelog and versioning
