@@ -55,6 +55,7 @@ jest.unstable_mockModule('../tracker.js', () => ({
   CHAT_MESSAGE_SCHEMA_VALUE_KEY: 'schemaValue',
   CHAT_MESSAGE_PARTS_ORDER_KEY: 'partsOrder',
   includeZTrackerMessages: jest.fn((messages: Array<unknown>) => [...messages]),
+  sanitizeMessagesForGeneration: jest.fn((messages: Array<unknown>) => [...messages]),
 }));
 
 jest.unstable_mockModule('../tracker-parts.js', () => ({
@@ -392,6 +393,7 @@ describe('createTrackerActions saved system prompt mode', () => {
     expect(buildPromptMock).toHaveBeenCalledWith(
       'openai',
       expect.objectContaining({
+        includeNames: true,
         syspromptName: undefined,
       }),
     );

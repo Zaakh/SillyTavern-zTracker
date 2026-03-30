@@ -184,13 +184,37 @@ export const DEFAULT_PROMPT_XML = `You are a highly specialized AI assistant. Yo
 \`\`\`
 `;
 
-export const DEFAULT_PROMPT_TOON = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid TOON structure that strictly adheres to the provided schema and example.
+export const PREVIOUS_DEFAULT_PROMPT_TOON = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid TOON structure that strictly adheres to the provided schema and example.
 
 **CRITICAL INSTRUCTIONS:**
 1.  You MUST wrap the entire TOON document in a markdown code block (\`\`\`toon\n...\n\`\`\`).
 2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.
 3.  The TOON document inside the code block MUST be valid and preserve the full structure required by the schema.
 4.  For uniform arrays of objects, preserve the tabular TOON layout shown in the example.
+
+**TOON SCHEMA DESCRIPTION TO FOLLOW:**
+\`\`\`toon
+{{schema}}
+\`\`\`
+
+**EXAMPLE OF A PERFECT RESPONSE:**
+\`\`\`toon
+{{example_response}}
+\`\`\`
+`;
+
+export const DEFAULT_PROMPT_TOON = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid TOON structure that strictly adheres to the provided schema and example.
+
+**CRITICAL INSTRUCTIONS:**
+1.  You MUST wrap the entire TOON document in a markdown code block (\`\`\`toon\n...\n\`\`\`).
+2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.
+3.  The TOON document inside the code block MUST be valid and preserve the full structure required by the schema.
+4.  Output TOON syntax only. DO NOT output JSON, XML, JavaScript objects, braces, brackets, commas between fields, or quoted property names.
+5.  For scalar fields, use plain \`key: value\` lines exactly as shown in the example.
+6.  For arrays of scalars, use the \`fieldName[count\\t]: item1\\titem2\` layout shown in the example.
+7.  For uniform arrays of objects, preserve the tabular TOON layout shown in the example, including the header row and tab-delimited values.
+8.  Do not invent wrapper keys like \`root\`, \`scene\`, \`data\`, or \`response\` unless the schema explicitly requires them.
+9.  Before finishing, check that every required field from the schema is present exactly once and that the result still matches TOON rather than JSON.
 
 **TOON SCHEMA DESCRIPTION TO FOLLOW:**
 \`\`\`toon
@@ -284,7 +308,8 @@ export function migrateLegacyPromptTemplates(settings: Pick<ExtensionSettings, '
     changed = true;
   }
 
-  if ((settings.promptToon ?? '').trim() === LEGACY_PROMPT_TOON.trim()) {
+  const promptToon = (settings.promptToon ?? '').trim();
+  if (promptToon === LEGACY_PROMPT_TOON.trim() || promptToon === PREVIOUS_DEFAULT_PROMPT_TOON.trim()) {
     settings.promptToon = DEFAULT_PROMPT_TOON;
     changed = true;
   }

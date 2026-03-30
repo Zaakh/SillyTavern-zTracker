@@ -1,5 +1,5 @@
 import type { ExtensionSettings } from '../config.js';
-import { includeZTrackerMessages, CHAT_MESSAGE_SCHEMA_VALUE_KEY } from '../tracker.js';
+import { includeZTrackerMessages, sanitizeMessagesForGeneration, CHAT_MESSAGE_SCHEMA_VALUE_KEY } from '../tracker.js';
 import { EXTENSION_KEY } from '../extension-metadata.js';
 
 describe('includeZTrackerMessages', () => {
@@ -173,5 +173,41 @@ describe('includeZTrackerMessages', () => {
       // So after inserting snapshot #2, snapshot #1 will appear earlier in the final list.
       expect(injected[0].content).toContain('"id": 1');
       expect(injected[1].content).toContain('"id": 2');
+  });
+
+  it('sanitizes prompt messages before generation requests', () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'base',
+        name: 'Narrator',
+        ignoreInstruct: true,
+        source: { extra: { [EXTENSION_KEY]: { [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { id: 1 } } } },
+        extra: { uiOnly: true },
+        zTrackerFound: true,
+        mes: 'base',
+        is_user: false,
+        is_system: false,
+      },
+      {
+        role: 'user',
+        content: 'current',
+        mes: 'current',
+        is_user: true,
+      },
+    ] as any;
+
+    expect(sanitizeMessagesForGeneration(messages)).toEqual([
+      {
+        role: 'assistant',
+        content: 'base',
+        name: 'Narrator',
+        ignoreInstruct: true,
+      },
+      {
+        role: 'user',
+        content: 'current',
+      },
+    ]);
   });
 });
