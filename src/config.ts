@@ -132,7 +132,7 @@ export const DEFAULT_PROMPT = `You are a Scene Tracker Assistant, tasked with pr
 
 Your primary objective is to ensure clarity, consistency, providing complete details even when specifics are not explicitly stated.`;
 
-export const ZTRACKER_SYSTEM_PROMPT_PRESET_VERSION = '1.3.0';
+export const ZTRACKER_SYSTEM_PROMPT_PRESET_VERSION = '1.3.1';
 export const ZTRACKER_SYSTEM_PROMPT_PRESET_NAME = `zTracker-${ZTRACKER_SYSTEM_PROMPT_PRESET_VERSION}`;
 
 export const ZTRACKER_SYSTEM_PROMPT_TEXT = `You are a structured data extraction assistant. Your task is to analyze conversations and produce a structured tracker update that conforms to a provided schema and requested output format.

@@ -18,6 +18,7 @@ These instructions apply to all files in this repository.
 	- `manifest.json` is derived; do not manually edit its version.
 	- Use `npm version <patch|minor|major>` for releases.
 	- Use `npm run sync-version` when needed to update derived version fields.
+- A release is not complete until `package.json`, the newest versioned `CHANGELOG.md` section, and the newest git tag all match.
 
 ## Release checklist
 - Confirm working tree is clean: `git status`.
@@ -28,6 +29,7 @@ These instructions apply to all files in this repository.
 	- `npm run build`
 - Commit any build artifacts that changed (e.g. `dist/index.js`) before running `npm version`, as it requires a clean working tree.
 - Create the release (this bumps `package.json`, syncs `manifest.json`, and stages it automatically): `npm version <patch|minor|major>`.
+- Double-check release completeness after `npm version`: `package.json`, `manifest.json`, the latest `CHANGELOG.md` section, and the latest git tag must all point at the same release version.
 - Sanity check release artifacts exist and are current:
 	- `dist/index.js`
 	- `dist/style.css`
