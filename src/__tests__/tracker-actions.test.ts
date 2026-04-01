@@ -103,6 +103,7 @@ function makeSettings() {
     promptToon: '',
     skipFirstXMessages: 0,
     includeLastXMessages: 0,
+    skipCharacterCardInTrackerGeneration: false,
     includeLastXZTrackerMessages: 0,
     sequentialPartGeneration: false,
     trackerWorldInfoPolicyMode: TrackerWorldInfoPolicyMode.INCLUDE_ALL,
@@ -553,6 +554,164 @@ describe('createTrackerActions saved system prompt mode', () => {
       { role: 'user', content: 'Prior chat message' },
       { role: 'user', content: 'Generate tracker JSON' },
     ]);
+  });
+
+  test('keeps character-card prompt fields by default during tracker generation', async () => {
+    const context = {
+      chatMetadata: {},
+      powerUserSettings: {
+        prefer_character_prompt: true,
+        sysprompt: { name: 'Neutral - Chat' },
+      },
+      getPresetManager: (apiId?: string) => {
+        if (apiId === 'sysprompt') {
+          return {
+            getCompletionPresetByName: (name?: string) =>
+              name === 'zTracker' ? { name: 'zTracker', content: 'Saved tracker system prompt' } : undefined,
+            getPresetList: () => ({ presets: [], preset_names: ['zTracker'] }),
+          };
+        }
+        return null;
+      },
+    };
+
+    (globalThis as any).SillyTavern = {
+      getContext: () => context,
+    };
+
+    buildPromptMock.mockResolvedValue({
+      result: [
+        { role: 'system', content: 'Existing system prompt' },
+        { role: 'user', content: 'Prior chat message' },
+      ],
+    });
+
+    const generateRequest = jest.fn((
+      _request: any,
+      hooks: { onStart: (requestId: string) => void; onFinish: (requestId: string, data: unknown, error: unknown) => void },
+    ) => {
+      hooks.onStart('request-1');
+      hooks.onFinish('request-1', { content: { time: '10:00:00' } }, null);
+    });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: jest.fn(async () => undefined),
+        extensionSettings: {
+          connectionManager: {
+            profiles: [
+              {
+                id: 'profile-1',
+                api: 'openai',
+                preset: 'preset-1',
+                context: 'context-1',
+                instruct: 'instruct-1',
+                sysprompt: 'Profile Prompt',
+              },
+            ],
+          },
+        },
+        CONNECT_API_MAP: {
+          openai: { selected: 'openai' },
+        },
+      },
+      settingsManager: { getSettings: () => makeSettings() } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: import.meta.url,
+    });
+
+    await actions.generateTracker(0);
+
+    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    expect(buildPromptOptions).not.toHaveProperty('ignoreCharacterFields');
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test('omits character-card prompt fields when the tracker-generation setting is enabled', async () => {
+    const context = {
+      chatMetadata: {},
+      powerUserSettings: {
+        prefer_character_prompt: true,
+        sysprompt: { name: 'Neutral - Chat' },
+      },
+      getPresetManager: (apiId?: string) => {
+        if (apiId === 'sysprompt') {
+          return {
+            getCompletionPresetByName: (name?: string) =>
+              name === 'zTracker' ? { name: 'zTracker', content: 'Saved tracker system prompt' } : undefined,
+            getPresetList: () => ({ presets: [], preset_names: ['zTracker'] }),
+          };
+        }
+        return null;
+      },
+    };
+
+    (globalThis as any).SillyTavern = {
+      getContext: () => context,
+    };
+
+    buildPromptMock.mockResolvedValue({
+      result: [
+        { role: 'system', content: 'Existing system prompt' },
+        { role: 'user', content: 'Prior chat message' },
+      ],
+    });
+
+    const generateRequest = jest.fn((
+      _request: any,
+      hooks: { onStart: (requestId: string) => void; onFinish: (requestId: string, data: unknown, error: unknown) => void },
+    ) => {
+      hooks.onStart('request-1');
+      hooks.onFinish('request-1', { content: { time: '10:00:00' } }, null);
+    });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: jest.fn(async () => undefined),
+        extensionSettings: {
+          connectionManager: {
+            profiles: [
+              {
+                id: 'profile-1',
+                api: 'openai',
+                preset: 'preset-1',
+                context: 'context-1',
+                instruct: 'instruct-1',
+                sysprompt: 'Profile Prompt',
+              },
+            ],
+          },
+        },
+        CONNECT_API_MAP: {
+          openai: { selected: 'openai' },
+        },
+      },
+      settingsManager: {
+        getSettings: () => ({
+          ...makeSettings(),
+          skipCharacterCardInTrackerGeneration: true,
+        }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: import.meta.url,
+    });
+
+    await actions.generateTracker(0);
+
+    expect(buildPromptMock).toHaveBeenCalledWith(
+      'openai',
+      expect.objectContaining({
+        ignoreCharacterFields: true,
+        ignoreWorldInfo: false,
+      }),
+    );
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 
   test('uses TOON prompt-engineering mode when selected', async () => {

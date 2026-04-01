@@ -326,6 +326,7 @@ export function createTrackerActions(options: {
 
     const trackerWorldInfoMode = settings.trackerWorldInfoPolicyMode ?? TrackerWorldInfoPolicyMode.INCLUDE_ALL;
     const ignoreWorldInfo = shouldIgnoreWorldInfoDuringTrackerBuild(trackerWorldInfoMode);
+    const skipCharacterCardInTrackerGeneration = settings.skipCharacterCardInTrackerGeneration ?? false;
 
     const syspromptName = resolveTrackerSystemPromptName(settings, profile);
     let savedSystemPromptContent: string | undefined;
@@ -355,10 +356,12 @@ export function createTrackerActions(options: {
       syspromptName: settings.trackerSystemPromptMode === 'profile' ? syspromptName : undefined,
       includeNames: true,
       ignoreWorldInfo,
+      ...(skipCharacterCardInTrackerGeneration ? { ignoreCharacterFields: true } : {}),
     });
 
     let messages = includeZTrackerMessages(promptResult.result, settings);
     debugLog(settingsManager, 'prompt built', {
+      skipCharacterCardInTrackerGeneration,
       ignoreWorldInfo,
       messageCount: messages.length,
       roles: messages.map((m: any) => m.role),
