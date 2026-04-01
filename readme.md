@@ -56,6 +56,8 @@ In **Extensions → zTracker**, enable **Sequential generation** to have zTracke
 
 If you want to avoid low-context tracker updates at the start of a chat, set **Skip First X Messages** in **Extensions → zTracker**. A value of `0` keeps the old behavior; higher values prevent tracker generation on early messages until the threshold is reached.
 
+If character-card prose is adding noise to extraction, enable **Skip character card in tracker generation** in **Extensions → zTracker**. The setting is off by default, and when enabled it makes tracker generation ignore character-card prompt fields such as description, personality, and scenario.
+
 When a tracker is rendered on a message, use the tracker controls:
 - **Regenerate Tracker** (rotate icon) regenerates the whole tracker.
 - **Parts menu** (list icon) lets you regenerate an individual top-level field (e.g. `time`, `location`, `topics`) without regenerating everything.
@@ -99,4 +101,4 @@ Developer and maintainer notes (local dev, testing, versioning) are in [docs/DEV
 
 For prompt debugging, maintainers can run `npm run debug:tracker-context:json`, `npm run debug:tracker-context:xml`, or `npm run debug:tracker-context:toon` to inspect one live-like tracker-generation request for each supported output mode. The saved request snapshots live under `test-output/tracker-context-json.md`, `test-output/tracker-context-xml.md`, and `test-output/tracker-context-toon.md`; the plain-text transport views live under `test-output/tracker-context-json.txt`, `test-output/tracker-context-xml.txt`, and `test-output/tracker-context-toon.txt`. Running `npm run debug:tracker-context:artifacts` refreshes only the `.txt` files so they stay aligned with the currently verified live behavior: the active text-completion connection path flattens tracker-generation messages into one raw `prompt` string without `System:`, `User:`, or `Assistant:` labels.
 
-Live verification also showed that tracker generation currently includes character-card prompt content from SillyTavern's `buildPrompt(...)` step. That behavior is verified but not changed here.
+Live verification also showed that tracker generation includes character-card prompt content from SillyTavern's `buildPrompt(...)` step by default. You can now disable that input with the tracker-generation setting above when you want extraction to rely more heavily on recent chat state.

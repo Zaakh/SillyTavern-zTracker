@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Added a `Skip character card in tracker generation` setting so tracker extraction can optionally ignore character-card prompt fields such as description, personality, and scenario.
+
 ## [1.4.0] - 2026-04-01
 
 ### Added

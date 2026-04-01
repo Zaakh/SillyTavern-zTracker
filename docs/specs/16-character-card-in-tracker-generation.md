@@ -1,7 +1,7 @@
 # Spec: Character card fields during tracker generation
 
-Status: Open
-Last updated: 2026-03-30
+Status: Implemented
+Last updated: 2026-04-01
 
 ## Goal
 
@@ -23,26 +23,26 @@ Secondary user goal:
 ## Definitions
 
 - **Character-card fields**: prompt content derived from the active character card and related card-backed prompt sections such as description, personality, scenario, and similar character prompt fields that `buildPrompt(...)` would normally include.
-- **Include character card in tracker generation**: a new checkbox setting controlling whether those character-card fields are allowed into the tracker-generation prompt.
+- **Skip character card in tracker generation**: a new checkbox setting controlling whether those character-card fields are omitted from the tracker-generation prompt.
 
 ## Proposed behavior
 
-### New setting: `includeCharacterCardInTrackerGeneration`
+### New setting: `skipCharacterCardInTrackerGeneration`
 
 | Property | Value |
 |----------|-------|
-| Name | `includeCharacterCardInTrackerGeneration` |
+| Name | `skipCharacterCardInTrackerGeneration` |
 | Type | `boolean` |
-| Default | `true` |
-| Semantics | When enabled, tracker generation keeps the current behavior and allows character-card prompt fields. When disabled, tracker generation requests `ignoreCharacterFields: true` during prompt building. |
+| Default | `false` |
+| Semantics | When enabled, tracker generation requests `ignoreCharacterFields: true` during prompt building. When disabled, tracker generation keeps character-card prompt fields enabled. |
 
 ### Prompt-building behavior
 
 When `generateTracker(messageId)` prepares prompt context:
 
-1. Read `settings.includeCharacterCardInTrackerGeneration`.
-2. If `true`, call `buildPrompt(...)` as today.
-3. If `false`, call `buildPrompt(..., { ignoreCharacterFields: true })`.
+1. Read `settings.skipCharacterCardInTrackerGeneration`.
+2. If `false`, call `buildPrompt(...)` as today.
+3. If `true`, call `buildPrompt(..., { ignoreCharacterFields: true })`.
 4. All other tracker-generation prompt behavior remains unchanged:
    - tracker system prompt selection
    - recent-message windowing
@@ -53,35 +53,35 @@ When `generateTracker(messageId)` prepares prompt context:
 ## UI
 
 - Add a checkbox to zTracker settings near other prompt-composition options.
-- Label: `Include character card in tracker generation`
+- Label: `Skip character card in tracker generation`
 - Help text / tooltip:
-  - `When disabled, tracker generation ignores character-card prompt fields such as description, personality, and scenario.`
+  - `When enabled, tracker generation ignores character-card prompt fields such as description, personality, and scenario.`
 
 ## Decisions (closed)
 
 1. Scope: this setting affects tracker generation only, not normal chat generation and not embedded tracker snapshot injection.
-2. Default: `true` for backward compatibility.
+2. Default: `false` so tracker extraction avoids static character-card prose unless the user explicitly wants it.
 3. Control type: checkbox, because the behavior is binary.
 4. Implementation hook: use `ignoreCharacterFields` in the existing `buildPrompt(...)` call rather than introducing custom post-processing.
 
 ## Acceptance criteria
 
-- [ ] New boolean setting exists in `ExtensionSettings` and defaults to `true`.
-- [ ] A checkbox is present in zTracker settings and persists correctly.
-- [ ] When enabled, tracker generation continues to include character-card prompt fields (existing behavior).
-- [ ] When disabled, tracker generation passes `ignoreCharacterFields: true` to `buildPrompt(...)`.
-- [ ] Disabling the setting does not change World Info behavior, tracker snapshot injection, or prompt-engineering mode behavior.
-- [ ] Unit tests cover both enabled and disabled cases.
-- [ ] CHANGELOG entry is added when implementation lands.
+- [x] New boolean setting exists in `ExtensionSettings` and defaults to `false`.
+- [x] A checkbox is present in zTracker settings and persists correctly.
+- [x] When disabled, tracker generation continues to include character-card prompt fields.
+- [x] When enabled, tracker generation passes `ignoreCharacterFields: true` to `buildPrompt(...)`.
+- [x] Disabling the setting does not change World Info behavior, tracker snapshot injection, or prompt-engineering mode behavior.
+- [x] Unit tests cover both enabled and disabled cases.
+- [x] CHANGELOG entry is added when implementation lands.
 
 ## Tasks checklist
 
-- [ ] Add `includeCharacterCardInTrackerGeneration: boolean` to `ExtensionSettings` defaults in `src/config.ts`
-- [ ] Update tracker prompt building in `src/ui/tracker-actions.ts` to pass `ignoreCharacterFields` based on the setting
-- [ ] Add checkbox UI in `src/components/Settings.tsx`
-- [ ] Add tests in `src/__tests__/tracker-actions.test.ts`
-- [ ] Update `CHANGELOG.md` when implemented
-- [ ] Update `readme.md` if the setting is user-facing enough to document there
+- [x] Add `skipCharacterCardInTrackerGeneration: boolean` to `ExtensionSettings` defaults in `src/config.ts`
+- [x] Update tracker prompt building in `src/ui/tracker-actions.ts` to pass `ignoreCharacterFields` based on the setting
+- [x] Add checkbox UI in `src/components/Settings.tsx`
+- [x] Add tests in `src/__tests__/tracker-actions.test.ts`
+- [x] Update `CHANGELOG.md` when implemented
+- [x] Update `readme.md` if the setting is user-facing enough to document there
 
 ## Open questions
 
@@ -92,4 +92,4 @@ When `generateTracker(messageId)` prepares prompt context:
 ## Verification
 
 - Live verification on 2026-03-30 showed character-card content present in a real tracker-generation request for the `Bar` chat.
-- No code change is implemented by this spec yet; implementation verification will be added once the setting exists.
+- Implemented on 2026-04-01 with a default-off skip checkbox in zTracker settings and tracker-actions coverage for both enabled and disabled prompt-building paths.

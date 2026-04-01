@@ -514,6 +514,23 @@ export const ZTrackerSettings: FC = () => {
               />
             </div>
             <div className="setting-row">
+              <label title="When enabled, tracker generation ignores character-card prompt fields such as description, personality, and scenario.">
+                Skip character card in tracker generation
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={settings.skipCharacterCardInTrackerGeneration ?? false}
+                  onChange={(e) =>
+                    updateAndRefresh((s) => {
+                      s.skipCharacterCardInTrackerGeneration = e.target.checked;
+                    })
+                  }
+                />
+                Ignore character-card prompt fields
+              </label>
+            </div>
+            <div className="setting-row">
               <label title="How many previous zTracker snapshots to embed into normal generations. 0 disables embedding.">
                 Include Last X zTracker Messages
               </label>
