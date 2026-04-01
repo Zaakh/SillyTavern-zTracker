@@ -217,6 +217,7 @@ export function makeLiveLikeSettings(mode: PromptEngineeringMode) {
       },
     },
     prompt: '',
+    skipFirstXMessages: 0,
     includeLastXMessages: 4,
     includeLastXZTrackerMessages: 2,
     embedZTrackerRole: 'system',
