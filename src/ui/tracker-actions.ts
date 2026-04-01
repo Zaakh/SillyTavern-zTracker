@@ -2,12 +2,9 @@ import type { ExtensionSettings } from '../config.js';
 import { PromptEngineeringMode, TrackerWorldInfoPolicyMode, EXTENSION_KEY, extensionName } from '../config.js';
 import type { ExtensionSettingsManager } from 'sillytavern-utils-lib';
 import { buildPrompt, Generator, getWorldInfos, Message } from 'sillytavern-utils-lib';
-import type { ChatMessage, ExtractedData } from 'sillytavern-utils-lib/types';
-import { characters, selected_group, st_echo } from 'sillytavern-utils-lib/config';
-import Handlebars from 'handlebars';
+import type { ExtractedData } from 'sillytavern-utils-lib/types';
+import { characters, st_echo } from 'sillytavern-utils-lib/config';
 import { POPUP_RESULT, POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
-import { parseResponse } from '../parser.js';
-import { schemaToExample, schemaToPromptSchema } from '../schema-to-example.js';
 import { shouldIgnoreWorldInfoDuringTrackerBuild } from '../world-info-policy.js';
 import { buildAllowlistedWorldInfoText } from '../world-info-allowlist.js';
 import { loadWorldInfoBookByName } from '../sillytavern-world-info.js';
@@ -41,16 +38,17 @@ import {
   replaceTrackerArrayItemField,
   redactTrackerArrayItemFieldValue,
 } from '../tracker-parts.js';
+import { createPromptEngineeringHelpers } from './prompt-engineering.js';
 import { checkTemplateUrl, getExtensionRoot, getTemplateUrl } from './templates.js';
+import {
+  appendCurrentTrackerSnapshot,
+  buildPartsMeta,
+  captureDetailsState,
+  getPromptPresetSelections,
+  restoreDetailsState,
+  shouldSkipTrackerGeneration,
+} from './tracker-action-helpers.js';
 import { debugLog, isDebugLoggingEnabled } from './debug.js';
-
-type PromptEngineeredFormat = 'json' | 'xml' | 'toon';
-
-type PromptEngineeredPayloadRecord = {
-  format: PromptEngineeredFormat;
-  rawContent: string;
-  parsedContent?: object;
-};
 
 export function createTrackerActions(options: {
   globalContext: any;
@@ -62,54 +60,7 @@ export function createTrackerActions(options: {
 }) {
   const { globalContext, settingsManager, generator, pendingRequests, renderTrackerWithDeps, importMetaUrl } = options;
   const pendingSequences = new Map<number, { cancelled: boolean }>();
-  const promptEngineeredPayloads = new WeakMap<object, PromptEngineeredPayloadRecord>();
-
-  // Stores array identity and dependency hints alongside rendered tracker parts for follow-up validation and UI actions.
-  function buildPartsMeta(schema: any): Record<string, { idKey?: string; fields?: string[]; dependsOn?: string[] }> {
-    const meta: Record<string, { idKey?: string; fields?: string[]; dependsOn?: string[] }> = {};
-    const props = schema?.properties;
-    if (!props || typeof props !== 'object') return meta;
-    for (const key of Object.keys(props)) {
-      const def = (props as any)[key];
-      if (def?.type === 'array') {
-        const idKey = getArrayItemIdentityKey(schema, key);
-        const dependsOn = Array.isArray(def?.['x-ztracker-dependsOn'])
-          ? def['x-ztracker-dependsOn'].filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
-          : typeof def?.['x-ztracker-dependsOn'] === 'string' && def['x-ztracker-dependsOn'].trim().length > 0
-            ? [def['x-ztracker-dependsOn'].trim()]
-            : undefined;
-        const itemProps = def?.items?.type === 'object' ? def?.items?.properties : undefined;
-        const fields =
-          itemProps && typeof itemProps === 'object'
-            ? Object.keys(itemProps).filter((f) => f !== idKey && f !== 'name')
-            : undefined;
-        meta[key] = { idKey, ...(fields?.length ? { fields } : {}), ...(dependsOn?.length ? { dependsOn } : {}) };
-      }
-    }
-    return meta;
-  }
-
-  function captureDetailsState(messageId: number): boolean[] {
-    const messageBlock = document.querySelector(`.mes[mesid="${messageId}"]`);
-    const existingTracker = messageBlock?.querySelector('.mes_ztracker');
-    if (!existingTracker) return [];
-    const detailsElements = existingTracker.querySelectorAll('details');
-    return Array.from(detailsElements).map((detail) => (detail as HTMLDetailsElement).open);
-  }
-
-  function restoreDetailsState(messageId: number, detailsState: boolean[]): void {
-    if (!detailsState.length) return;
-    const messageBlock = document.querySelector(`.mes[mesid="${messageId}"]`);
-    const newTracker = messageBlock?.querySelector('.mes_ztracker');
-    if (!newTracker) return;
-
-    const newDetailsElements = newTracker.querySelectorAll('details');
-    newDetailsElements.forEach((detail, index) => {
-      if (detailsState[index] !== undefined) {
-        (detail as HTMLDetailsElement).open = detailsState[index];
-      }
-    });
-  }
+  const { logPromptEngineeredRenderRollback, requestPromptEngineeredResponse } = createPromptEngineeringHelpers();
 
   function cancelIfPending(messageId: number): boolean {
     if (!pendingRequests.has(messageId)) return false;
@@ -118,19 +69,6 @@ export function createTrackerActions(options: {
     const token = pendingSequences.get(messageId);
     if (token) token.cancelled = true;
     st_echo('info', 'Tracker generation cancelled.');
-    return true;
-  }
-
-  /** Returns whether tracker generation should be skipped for early chat messages and optionally informs manual callers. */
-  function shouldSkipTrackerGeneration(messageId: number, settings: ExtensionSettings, silent?: boolean): boolean {
-    if (settings.skipFirstXMessages <= 0 || messageId >= settings.skipFirstXMessages) {
-      return false;
-    }
-
-    if (!silent) {
-      st_echo('info', `Tracker generation skipped: this message is within the first ${settings.skipFirstXMessages} messages.`);
-    }
-
     return true;
   }
 
@@ -164,126 +102,6 @@ export function createTrackerActions(options: {
         );
       });
     };
-  }
-
-  function appendCurrentTrackerSnapshot(messages: Message[], tracker: unknown, label: string): void {
-    if (!tracker || typeof tracker !== 'object') return;
-    try {
-      const text = JSON.stringify(tracker, null, 2);
-      messages.push({
-        role: 'system',
-        content: `${label}\n\n\`\`\`json\n${text}\n\`\`\``,
-      } as Message);
-    } catch {
-      // ignore
-    }
-  }
-
-  function getPromptEngineeredFormat(mode: PromptEngineeringMode): PromptEngineeredFormat | undefined {
-    switch (mode) {
-      case PromptEngineeringMode.JSON:
-        return 'json';
-      case PromptEngineeringMode.XML:
-        return 'xml';
-      case PromptEngineeringMode.TOON:
-        return 'toon';
-      default:
-        return undefined;
-    }
-  }
-
-  function getPromptEngineeringTemplate(settings: ExtensionSettings, format: PromptEngineeredFormat): string {
-    switch (format) {
-      case 'xml':
-        return settings.promptXml;
-      case 'toon':
-        return settings.promptToon;
-      default:
-        return settings.promptJson;
-    }
-  }
-
-  // Captures raw prompt-engineered payloads so malformed replies can be inspected after parse or render failures.
-  function logMalformedPromptEngineeredPayload(details: {
-    format: PromptEngineeredFormat;
-    reason: 'parse failure' | 'render rollback';
-    rawContent: string;
-    parsedContent?: object;
-    error?: unknown;
-  }): void {
-    const { format, reason, rawContent, parsedContent, error } = details;
-    console.warn('zTracker: malformed prompt-engineered payload', {
-      format,
-      reason,
-      rawContent,
-      ...(parsedContent ? { parsedContent } : {}),
-      ...(error instanceof Error ? { error: error.message } : error ? { error: String(error) } : {}),
-    });
-  }
-
-  function rememberPromptEngineeredPayload(parsedContent: object, payload: PromptEngineeredPayloadRecord): object {
-    promptEngineeredPayloads.set(parsedContent, payload);
-    return parsedContent;
-  }
-
-  function logPromptEngineeredRenderRollback(parsedContent: unknown, error: unknown): void {
-    if (!parsedContent || typeof parsedContent !== 'object') {
-      return;
-    }
-
-    const payload = promptEngineeredPayloads.get(parsedContent as object);
-    if (!payload) {
-      return;
-    }
-
-    logMalformedPromptEngineeredPayload({
-      format: payload.format,
-      reason: 'render rollback',
-      rawContent: payload.rawContent,
-      parsedContent: payload.parsedContent,
-      error,
-    });
-  }
-
-  async function requestPromptEngineeredResponse(
-    makeRequest: (requestMessages: Message[], overideParams?: any) => Promise<ExtractedData | undefined>,
-    requestMessages: Message[],
-    settings: ExtensionSettings,
-    schema: object,
-    suffix = '',
-  ): Promise<object> {
-    const format = getPromptEngineeredFormat(settings.promptEngineeringMode);
-    if (!format) {
-      throw new Error(`Unsupported prompt-engineering mode: ${settings.promptEngineeringMode}`);
-    }
-
-    const promptTemplate = getPromptEngineeringTemplate(settings, format);
-    const exampleResponse = schemaToExample(schema, format);
-    const promptSchema = schemaToPromptSchema(schema, format);
-    const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
-      schema: promptSchema,
-      example_response: exampleResponse,
-    });
-    requestMessages.push({ content: `${finalPrompt}${suffix}`, role: 'user' });
-
-    const response = await makeRequest(requestMessages);
-    if (!response?.content) throw new Error('No response content received.');
-    try {
-      const parsedContent = parseResponse(response.content as string, format, { schema });
-      return rememberPromptEngineeredPayload(parsedContent, {
-        format,
-        rawContent: response.content as string,
-        parsedContent,
-      });
-    } catch (error) {
-      logMalformedPromptEngineeredPayload({
-        format,
-        reason: 'parse failure',
-        rawContent: response.content as string,
-        error,
-      });
-      throw error;
-    }
   }
 
   async function prepareTrackerGeneration(messageId: number) {
@@ -350,9 +168,7 @@ export function createTrackerActions(options: {
         end: messageId,
         start: settings.includeLastXMessages > 0 ? Math.max(0, messageId - settings.includeLastXMessages) : 0,
       },
-      presetName: profile?.preset,
-      contextName: profile?.context,
-      instructName: profile?.instruct,
+      ...getPromptPresetSelections(profile),
       syspromptName: settings.trackerSystemPromptMode === 'profile' ? syspromptName : undefined,
       includeNames: true,
       ignoreWorldInfo,
@@ -1218,7 +1034,7 @@ export function createTrackerActions(options: {
   /** Dispatches full tracker generation while enforcing the shared skip-first-messages guard for manual and auto flows. */
   async function generateTracker(id: number, options?: { silent?: boolean }) {
     const settings = settingsManager.getSettings();
-    if (shouldSkipTrackerGeneration(id, settings, options?.silent)) {
+    if (shouldSkipTrackerGeneration(id, settings, (message) => st_echo('info', message), options?.silent)) {
       return;
     }
 

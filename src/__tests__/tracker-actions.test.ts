@@ -714,6 +714,81 @@ describe('createTrackerActions saved system prompt mode', () => {
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 
+  test.each(['openai', 'textgenerationwebui'])(
+    'omits undefined preset slots from buildPrompt for %s profiles',
+    async (api) => {
+      const context = {
+        chatMetadata: {},
+        powerUserSettings: {
+          prefer_character_prompt: true,
+          sysprompt: { name: 'Neutral - Chat' },
+        },
+        getPresetManager: () => null,
+      };
+
+      (globalThis as any).SillyTavern = {
+        getContext: () => context,
+      };
+
+      buildPromptMock.mockResolvedValue({
+        result: [
+          { role: 'system', content: 'Existing system prompt' },
+          { role: 'user', content: 'Prior chat message' },
+        ],
+      });
+
+      const generateRequest = jest.fn((
+        _request: any,
+        hooks: { onStart: (requestId: string) => void; onFinish: (requestId: string, data: unknown, error: unknown) => void },
+      ) => {
+        hooks.onStart('request-1');
+        hooks.onFinish('request-1', { content: { time: '10:00:00' } }, null);
+      });
+
+      const actions = createTrackerActions({
+        globalContext: {
+          chat: [{ original_avatar: 'avatar.png', extra: {} }],
+          saveChat: jest.fn(async () => undefined),
+          extensionSettings: {
+            connectionManager: {
+              profiles: [
+                {
+                  id: 'profile-1',
+                  api,
+                  preset: undefined,
+                  context: '   ',
+                  instruct: undefined,
+                },
+              ],
+            },
+          },
+          CONNECT_API_MAP: {
+            [api]: { selected: api },
+          },
+        },
+        settingsManager: {
+          getSettings: () => ({
+            ...makeSettings(),
+            trackerSystemPromptMode: 'profile',
+          }),
+        } as any,
+        generator: { generateRequest, abortRequest: jest.fn() } as any,
+        pendingRequests: new Map(),
+        renderTrackerWithDeps: renderTrackerWithDepsMock,
+        importMetaUrl: import.meta.url,
+      });
+
+      await actions.generateTracker(0);
+
+      expect(buildPromptMock).toHaveBeenCalledWith(api, expect.any(Object));
+      const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+      expect(buildPromptOptions).not.toHaveProperty('presetName');
+      expect(buildPromptOptions).not.toHaveProperty('contextName');
+      expect(buildPromptOptions).not.toHaveProperty('instructName');
+      expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+    },
+  );
+
   test('uses TOON prompt-engineering mode when selected', async () => {
     const context = {
       chatMetadata: {},

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Tracker generation now omits unset or blank connection-profile preset slots before calling SillyTavern prompt assembly, avoiding browser console errors such as `Preset undefined not found` while preserving valid preset selections.
+
 ## [1.5.0] - 2026-04-01
 
 ### Added
