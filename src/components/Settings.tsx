@@ -478,6 +478,24 @@ export const ZTrackerSettings: FC = () => {
               />
             </div>
             <div className="setting-row">
+              <label title="Minimum number of messages before zTracker starts generating trackers. 0 disables this threshold.">
+                Skip First X Messages
+              </label>
+              <input
+                type="number"
+                className="text_pole"
+                min="0"
+                step="1"
+                title="Minimum number of messages before zTracker starts generating trackers. 0 disables this threshold."
+                value={settings.skipFirstXMessages}
+                onChange={(e) =>
+                  updateAndRefresh((s) => {
+                    s.skipFirstXMessages = parseInt(e.target.value) || 0;
+                  })
+                }
+              />
+            </div>
+            <div className="setting-row">
               <label title="How many recent chat messages to include when generating a tracker. 0 includes all messages; 1 includes only the last message.">
                 Include Last X Messages (0 means all, 1 means last)
               </label>
