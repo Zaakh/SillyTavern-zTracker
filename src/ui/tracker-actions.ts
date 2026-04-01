@@ -121,6 +121,19 @@ export function createTrackerActions(options: {
     return true;
   }
 
+  /** Returns whether tracker generation should be skipped for early chat messages and optionally informs manual callers. */
+  function shouldSkipTrackerGeneration(messageId: number, settings: ExtensionSettings, silent?: boolean): boolean {
+    if (settings.skipFirstXMessages <= 0 || messageId >= settings.skipFirstXMessages) {
+      return false;
+    }
+
+    if (!silent) {
+      st_echo('info', `Tracker generation skipped: this message is within the first ${settings.skipFirstXMessages} messages.`);
+    }
+
+    return true;
+  }
+
   function makeRequestFactory(messageId: number, settings: ExtensionSettings) {
     return (requestMessages: Message[], overideParams?: any): Promise<ExtractedData | undefined> => {
       return new Promise((resolve, reject) => {
@@ -1199,8 +1212,13 @@ export function createTrackerActions(options: {
     return generateTrackerArrayItemField(id, partKey, index, fieldKey);
   }
 
-  async function generateTracker(id: number) {
+  /** Dispatches full tracker generation while enforcing the shared skip-first-messages guard for manual and auto flows. */
+  async function generateTracker(id: number, options?: { silent?: boolean }) {
     const settings = settingsManager.getSettings();
+    if (shouldSkipTrackerGeneration(id, settings, options?.silent)) {
+      return;
+    }
+
     if (settings.sequentialPartGeneration) {
       return generateTrackerSequential(id);
     }

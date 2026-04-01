@@ -60,6 +60,8 @@ export interface ExtensionSettings {
   schemaPreset: string;
   schemaPresets: Record<string, Schema>;
   prompt: string;
+  /** Minimum 0-indexed message threshold before tracker generation is allowed. 0 disables the guard. */
+  skipFirstXMessages: number;
   includeLastXMessages: number; // 0 means all messages
   includeLastXZTrackerMessages: number; // 0 means none
   /**
@@ -499,6 +501,7 @@ export const defaultSettings: ExtensionSettings = {
     },
   },
   prompt: DEFAULT_PROMPT,
+  skipFirstXMessages: 0,
   includeLastXMessages: 0,
   includeLastXZTrackerMessages: 1,
   embedZTrackerRole: 'user',

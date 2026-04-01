@@ -101,6 +101,7 @@ function makeSettings() {
     promptJson: '',
     promptXml: '',
     promptToon: '',
+    skipFirstXMessages: 0,
     includeLastXMessages: 0,
     includeLastXZTrackerMessages: 0,
     sequentialPartGeneration: false,
@@ -124,6 +125,152 @@ function makeSettings() {
     debugLogging: false,
   } as any;
 }
+
+/** Builds a minimal chat array so tracker-action tests can target a specific message index. */
+function makeChat(length: number) {
+  return Array.from({ length }, () => ({ original_avatar: 'avatar.png', extra: {} }));
+}
+
+describe('createTrackerActions skipFirstXMessages', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    buildPromptMock.mockReset();
+    applyTrackerUpdateAndRenderMock.mockReset();
+    renderTrackerWithDepsMock.mockReset();
+    stEchoMock.mockReset();
+    document.body.innerHTML = '<div id="extensionsMenu"></div>';
+    (globalThis as any).SillyTavern = {
+      getContext: () => ({
+        chatMetadata: {},
+        powerUserSettings: {
+          prefer_character_prompt: true,
+          sysprompt: { name: 'Neutral - Chat' },
+        },
+        getPresetManager: () => null,
+      }),
+    };
+  });
+
+  test('shows an info toast and skips manual generation before the threshold', async () => {
+    const generateRequest = jest.fn();
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: makeChat(4),
+        saveChat: jest.fn(async () => undefined),
+        extensionSettings: {
+          connectionManager: {
+            profiles: [{ id: 'profile-1', api: 'openai', preset: 'preset-1', context: 'context-1', instruct: 'instruct-1' }],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => ({
+          ...makeSettings(),
+          trackerSystemPromptMode: 'profile',
+          skipFirstXMessages: 6,
+        }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: import.meta.url,
+    });
+
+    await actions.generateTracker(3);
+
+    expect(stEchoMock).toHaveBeenCalledWith(
+      'info',
+      'Tracker generation skipped: this message is within the first 6 messages.',
+    );
+    expect(buildPromptMock).not.toHaveBeenCalled();
+    expect(generateRequest).not.toHaveBeenCalled();
+  });
+
+  test('silently skips auto generation before the threshold', async () => {
+    const generateRequest = jest.fn();
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: makeChat(4),
+        saveChat: jest.fn(async () => undefined),
+        extensionSettings: {
+          connectionManager: {
+            profiles: [{ id: 'profile-1', api: 'openai', preset: 'preset-1', context: 'context-1', instruct: 'instruct-1' }],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => ({
+          ...makeSettings(),
+          trackerSystemPromptMode: 'profile',
+          skipFirstXMessages: 6,
+        }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: import.meta.url,
+    });
+
+    await actions.generateTracker(3, { silent: true });
+
+    expect(stEchoMock).not.toHaveBeenCalled();
+    expect(buildPromptMock).not.toHaveBeenCalled();
+    expect(generateRequest).not.toHaveBeenCalled();
+  });
+
+  test('allows generation once the message reaches the threshold', async () => {
+    applyTrackerUpdateAndRenderMock.mockImplementation(() => undefined);
+    buildPromptMock.mockResolvedValue({
+      result: [
+        { role: 'system', content: 'Existing system prompt' },
+        { role: 'user', content: 'Prior chat message' },
+      ],
+    });
+
+    const generateRequest = jest.fn((
+      _request: any,
+      hooks: { onStart: (requestId: string) => void; onFinish: (requestId: string, data: unknown, error: unknown) => void },
+    ) => {
+      hooks.onStart('request-1');
+      hooks.onFinish('request-1', { content: { time: '10:00:00' } }, null);
+    });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: makeChat(7),
+        saveChat: jest.fn(async () => undefined),
+        extensionSettings: {
+          connectionManager: {
+            profiles: [{ id: 'profile-1', api: 'openai', preset: 'preset-1', context: 'context-1', instruct: 'instruct-1' }],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => ({
+          ...makeSettings(),
+          trackerSystemPromptMode: 'profile',
+          skipFirstXMessages: 6,
+        }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: import.meta.url,
+    });
+
+    await actions.generateTracker(6);
+
+    expect(buildPromptMock).toHaveBeenCalled();
+    expect(generateRequest).toHaveBeenCalled();
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+    expect(stEchoMock).not.toHaveBeenCalled();
+  });
+});
 
 describe('createTrackerActions saved system prompt mode', () => {
   beforeEach(() => {

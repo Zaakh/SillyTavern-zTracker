@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-04-01
+
+### Added
+
+- Added a `Skip First X Messages` tracker-generation setting so zTracker can ignore the opening messages in a chat until there is enough context to produce useful tracker data.
+
 ## [1.3.1] - 2026-03-30
 
 ### Added
