@@ -2,6 +2,8 @@
 applyTo: '**'
 ---
 
+Maintenance: Last reviewed 2026-04-01. Update when project structure, build flow, or AI-agent guidance changes.
+
 # Repo instructions: SillyTavern-zTracker
 
 These instructions apply to all files in this repository.
@@ -45,11 +47,18 @@ These instructions apply to all files in this repository.
 - Split complex logic into small, testable functions in separate modules, especially in `src/`.
 - Avoid large monolithic functions, classes or files.
 - We prefer "less code", so avoid unnecessary abstractions or patterns and try to re-use existing helpers/utilities.
+- Use soft size targets for human review and agent exploration.
+- Keep most `src/` files under ~300 lines. Re-evaluate past ~400. Allow ~600+ only for strongly cohesive declarative files, schemas, fixtures, or generated output.
+- Keep classes, React components, and long-lived managers under ~150 lines. Split responsibilities past ~200 unless the extra length is mostly simple markup or configuration.
+- Keep functions and methods under ~40 lines. Refactor past ~60 unless the function is straightforward glue code.
+- Prefer cohesive feature-local modules over monolithic cross-feature service files.
+- Do not split code into tiny wrappers purely to satisfy a size target.
+- Break up oversized test files once they stop mapping cleanly to one module or one behavior cluster.
 - IMPORTANT: Any code change must improve the code quality of the project. Goal is to have a lean codebase.
 
 ## Comments
 - Use comments to explain the "why" behind non-obvious code, especially for complex logic or workarounds.
-- Each file and function should have a brief explanation describing its purpose and behavior.
+- Each file and function **must** have a brief explanation describing its purpose and behavior.
 
 ## Build and required artifacts
 - This extension is loaded by SillyTavern from `manifest.json` and expects built assets:

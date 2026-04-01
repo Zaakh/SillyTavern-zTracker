@@ -363,11 +363,11 @@ export async function initializeGlobalUI(options: {
   const settings = settingsManager.getSettings();
   globalContext.eventSource.on(
     EventNames.CHARACTER_MESSAGE_RENDERED,
-    (messageId: number) => incomingTypes.includes(settings.autoMode) && actions.generateTracker(messageId),
+    (messageId: number) => incomingTypes.includes(settings.autoMode) && actions.generateTracker(messageId, { silent: true }),
   );
   globalContext.eventSource.on(
     EventNames.USER_MESSAGE_RENDERED,
-    (messageId: number) => outgoingTypes.includes(settings.autoMode) && actions.generateTracker(messageId),
+    (messageId: number) => outgoingTypes.includes(settings.autoMode) && actions.generateTracker(messageId, { silent: true }),
   );
 
   globalContext.eventSource.on(EventNames.CHAT_CHANGED, () => {
