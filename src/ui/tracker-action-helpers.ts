@@ -83,10 +83,23 @@ export function appendCurrentTrackerSnapshot(messages: Message[], tracker: unkno
   }
 }
 
-/** Normalizes optional connection-profile preset names and only forwards instruct presets for text-completion APIs. */
+type PromptPresetSelectionContextLike = {
+  powerUserSettings?: Record<string, unknown> & {
+    instruct?: {
+      preset?: unknown;
+    } | null;
+  };
+};
+
+/** Normalizes optional prompt selections and fills required text-completion fallbacks for SillyTavern prompt assembly. */
 export function getPromptPresetSelections(
-  profile: { preset?: unknown; context?: unknown; instruct?: unknown },
+  profile: { preset?: unknown; context?: unknown; instruct?: unknown; sysprompt?: unknown },
   selectedApi: string,
+  options: {
+    context?: PromptPresetSelectionContextLike;
+    trackerSystemPromptMode?: ExtensionSettings['trackerSystemPromptMode'];
+    trackerSystemPromptName?: string;
+  } = {},
 ) {
   const normalizePromptPresetName = (value: unknown): string | undefined => {
     if (typeof value !== 'string') {
@@ -99,12 +112,21 @@ export function getPromptPresetSelections(
 
   const presetName = normalizePromptPresetName(profile.preset);
   const contextName = normalizePromptPresetName(profile.context);
-  const instructName = selectedApi === 'textgenerationwebui' ? normalizePromptPresetName(profile.instruct) : undefined;
+  const activeInstructName = normalizePromptPresetName(options.context?.powerUserSettings?.instruct?.preset);
+  const instructName = selectedApi === 'textgenerationwebui'
+    ? normalizePromptPresetName(profile.instruct) ?? activeInstructName
+    : undefined;
+  const syspromptName = options.trackerSystemPromptMode === 'saved'
+    ? selectedApi === 'textgenerationwebui'
+      ? normalizePromptPresetName(options.trackerSystemPromptName)
+      : undefined
+    : normalizePromptPresetName(profile.sysprompt);
 
   return {
     ...(presetName ? { presetName } : {}),
     ...(contextName ? { contextName } : {}),
     ...(instructName ? { instructName } : {}),
+    ...(syspromptName ? { syspromptName } : {}),
   };
 }
 

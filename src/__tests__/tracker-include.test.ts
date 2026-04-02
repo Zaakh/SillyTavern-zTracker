@@ -38,7 +38,7 @@ describe('includeZTrackerMessages', () => {
           wrapInCodeFence: true,
         },
       },
-    } as ExtensionSettings;
+    } as unknown as ExtensionSettings;
   };
 
   const buildMessageWithTracker = (value: Record<string, unknown>) => ({
@@ -56,7 +56,7 @@ describe('includeZTrackerMessages', () => {
       buildMessageWithTracker({ id: 1 }),
       { content: 'current', role: 'user' },
     ];
-    const result = includeZTrackerMessages(messages as any, makeSettings(1));
+    const result = includeZTrackerMessages(messages as any, makeSettings(1)) as any[];
     expect(result).toHaveLength(3);
     expect(result[1].content).toContain('Tracker:');
     expect(result[1].content).toContain('```json');
@@ -69,7 +69,7 @@ describe('includeZTrackerMessages', () => {
       { content: 'first', role: 'user' },
       buildMessageWithTracker({ id: 1 }),
     ];
-    const result = includeZTrackerMessages(messages as any, makeSettings(1));
+    const result = includeZTrackerMessages(messages as any, makeSettings(1)) as any[];
     expect(result).toHaveLength(3);
     expect(result[2].content).toContain('Tracker:');
     expect(result[2].content).toContain('```json');
@@ -83,7 +83,7 @@ describe('includeZTrackerMessages', () => {
     const settings = makeSettings(1);
     settings.embedZTrackerSnapshotTransformPreset = 'minimal';
 
-    const result = includeZTrackerMessages(messages as any, settings);
+    const result = includeZTrackerMessages(messages as any, settings) as any[];
     expect(result).toHaveLength(3);
 
     const injected = result[1].content as string;
@@ -114,7 +114,7 @@ describe('includeZTrackerMessages', () => {
     const settings = makeSettings(1);
     settings.embedZTrackerSnapshotTransformPreset = 'toon';
 
-    const result = includeZTrackerMessages(messages as any, settings);
+    const result = includeZTrackerMessages(messages as any, settings) as any[];
     expect(result).toHaveLength(3);
 
     const injected = result[1].content as string;
@@ -130,7 +130,7 @@ describe('includeZTrackerMessages', () => {
       buildMessageWithTracker({ id: 1 }),
       { content: 'current', role: 'user' },
     ];
-    const result = includeZTrackerMessages(messages as any, makeSettings(1, 'system'));
+    const result = includeZTrackerMessages(messages as any, makeSettings(1, 'system')) as any[];
     expect(result).toHaveLength(3);
     expect(result[1].role).toBe('system');
     expect(result[1]).not.toHaveProperty('name');
@@ -141,7 +141,7 @@ describe('includeZTrackerMessages', () => {
       buildMessageWithTracker({ id: 1 }),
       { content: 'current', role: 'user' },
     ];
-    const result = includeZTrackerMessages(messages as any, makeSettings(1, 'assistant'));
+    const result = includeZTrackerMessages(messages as any, makeSettings(1, 'assistant')) as any[];
     expect(result).toHaveLength(3);
     expect(result[1].role).toBe('assistant');
     expect(result[1]).not.toHaveProperty('name');
@@ -152,7 +152,7 @@ describe('includeZTrackerMessages', () => {
       { content: 'first', role: 'user' },
       { content: 'current', role: 'assistant' },
     ];
-    const result = includeZTrackerMessages(messages as any, makeSettings(2));
+    const result = includeZTrackerMessages(messages as any, makeSettings(2)) as any[];
     expect(result).toHaveLength(messages.length);
     expect(result).not.toBe(messages);
   });
@@ -165,7 +165,7 @@ describe('includeZTrackerMessages', () => {
       { content: 'current', role: 'user' },
     ];
 
-    const result = includeZTrackerMessages(messages as any, makeSettings(2));
+    const result = includeZTrackerMessages(messages as any, makeSettings(2)) as any[];
 
     // Original 4 + 2 injected
     expect(result).toHaveLength(6);
@@ -214,6 +214,38 @@ describe('includeZTrackerMessages', () => {
       {
         role: 'user',
         content: 'current',
+      },
+    ]);
+  });
+
+  it('falls back to source message names when prompt-builder keeps speaker attribution there', () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'The barkeeper sets down the glass.',
+        source: {
+          name: 'Bar',
+        },
+      },
+      {
+        role: 'user',
+        content: 'Thank you.',
+        source: {
+          name: 'Tobias',
+        },
+      },
+    ] as any;
+
+    expect(sanitizeMessagesForGeneration(messages)).toEqual([
+      {
+        role: 'assistant',
+        content: 'The barkeeper sets down the glass.',
+        name: 'Bar',
+      },
+      {
+        role: 'user',
+        content: 'Thank you.',
+        name: 'Tobias',
       },
     ]);
   });

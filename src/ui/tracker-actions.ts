@@ -168,8 +168,11 @@ export function createTrackerActions(options: {
         end: messageId,
         start: settings.includeLastXMessages > 0 ? Math.max(0, messageId - settings.includeLastXMessages) : 0,
       },
-      ...getPromptPresetSelections(profile, apiMap.selected),
-      ...(settings.trackerSystemPromptMode === 'profile' && syspromptName ? { syspromptName } : {}),
+      ...getPromptPresetSelections(profile, apiMap.selected, {
+        context,
+        trackerSystemPromptMode: settings.trackerSystemPromptMode,
+        trackerSystemPromptName: syspromptName,
+      }),
       includeNames: true,
       ignoreWorldInfo,
       ...(skipCharacterCardInTrackerGeneration ? { ignoreCharacterFields: true } : {}),
@@ -224,7 +227,9 @@ export function createTrackerActions(options: {
       }
     }
 
-    if (savedSystemPromptContent) {
+    // Text-completion prompt assembly can consume saved sysprompt presets directly.
+    // Chat-completion paths still need the tracker prompt injected as a standalone system message.
+    if (savedSystemPromptContent && apiMap.selected !== 'textgenerationwebui') {
       messages = insertSystemPromptMessage(messages, savedSystemPromptContent);
     }
 

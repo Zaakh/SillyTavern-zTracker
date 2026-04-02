@@ -236,17 +236,31 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
 /**
  * Reduces prompt messages to the fields the generator request actually needs.
  * This keeps SillyTavern/UI metadata and zTracker's temporary discovery markers
- * out of tracker-generation requests while preserving instruct-relevant flags.
+ * out of tracker-generation requests while preserving instruct-relevant speaker attribution.
  */
-export function sanitizeMessagesForGeneration<T extends { role: string; content: string; name?: string; ignoreInstruct?: boolean }>(
-  messages: T[],
-): Array<{ role: string; content: string; name?: string; ignoreInstruct?: boolean }> {
-  return messages.map((message) => ({
-    role: message.role,
-    content: message.content,
-    ...(typeof message.name === 'string' && message.name.trim() ? { name: message.name } : {}),
-    ...(typeof message.ignoreInstruct === 'boolean' ? { ignoreInstruct: message.ignoreInstruct } : {}),
-  }));
+export function sanitizeMessagesForGeneration<
+  T extends {
+    role: string;
+    content: string;
+    name?: string;
+    ignoreInstruct?: boolean;
+    source?: { name?: string };
+  },
+>(messages: T[]): Array<{ role: string; content: string; name?: string; ignoreInstruct?: boolean }> {
+  return messages.map((message) => {
+    const name = typeof message.name === 'string' && message.name.trim()
+      ? message.name
+      : typeof message.source?.name === 'string' && message.source.name.trim()
+        ? message.source.name
+        : undefined;
+
+    return {
+      role: message.role,
+      content: message.content,
+      ...(name ? { name } : {}),
+      ...(typeof message.ignoreInstruct === 'boolean' ? { ignoreInstruct: message.ignoreInstruct } : {}),
+    };
+  });
 }
 
 export interface ApplyTrackerUpdateOptions {
