@@ -58,9 +58,10 @@ describe('createTrackerActions prompt assembly', () => {
       'openai',
       expect.objectContaining({
         includeNames: true,
-        syspromptName: undefined,
       }),
     );
+    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    expect(buildPromptOptions).not.toHaveProperty('syspromptName');
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
 
     const sentMessages = generateRequest.mock.calls[0][0].prompt;
@@ -155,7 +156,7 @@ describe('createTrackerActions prompt assembly', () => {
           saveChat: async () => undefined,
           extensionSettings: {
             connectionManager: {
-              profiles: [makeProfile({ api, preset: undefined, context: '   ', instruct: undefined })],
+              profiles: [makeProfile({ api, preset: undefined, context: '   ', instruct: undefined, sysprompt: '   ' })],
             },
           },
           CONNECT_API_MAP: {
@@ -178,9 +179,43 @@ describe('createTrackerActions prompt assembly', () => {
       expect(buildPromptOptions).not.toHaveProperty('presetName');
       expect(buildPromptOptions).not.toHaveProperty('contextName');
       expect(buildPromptOptions).not.toHaveProperty('instructName');
+      expect(buildPromptOptions).not.toHaveProperty('syspromptName');
       expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
     },
   );
+
+  test('omits syspromptName from buildPrompt when profile mode has no selected system prompt', async () => {
+    installSillyTavernContext(makeContext());
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const generateRequest = makeGenerateRequest();
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile({ sysprompt: '   ' })],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ trackerSystemPromptMode: 'profile' }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0);
+
+    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    expect(buildPromptOptions).not.toHaveProperty('syspromptName');
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
 
   test.each([
     { api: 'openai', expectedSelectedApi: 'openai', shouldIncludeInstruct: false },
