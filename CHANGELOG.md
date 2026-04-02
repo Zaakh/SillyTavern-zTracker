@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-04-02
+
 ### Fixed
 
 - Tracker generation now omits an unset connection-profile system-prompt selection before calling SillyTavern prompt assembly, avoiding live browser errors such as `Preset undefined not found` when the profile uses the global/default system prompt.
