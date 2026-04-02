@@ -20,7 +20,7 @@ import {
   schemaToExample,
   schemaToPromptSchema,
   TEST_IMPORT_META_URL,
-} from './tracker-actions-test-helpers.js';
+} from '../test-utils/tracker-actions-test-helpers.js';
 
 describe('createTrackerActions prompt engineering', () => {
   beforeEach(() => {

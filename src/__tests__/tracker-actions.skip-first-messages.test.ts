@@ -2,6 +2,7 @@
  * @jest-environment jsdom
  */
 
+import { jest } from '@jest/globals';
 import {
   applyTrackerUpdateAndRenderMock,
   buildPromptMock,
@@ -17,7 +18,7 @@ import {
   resetTrackerActionTestState,
   stEchoMock,
   TEST_IMPORT_META_URL,
-} from './tracker-actions-test-helpers.js';
+} from '../test-utils/tracker-actions-test-helpers.js';
 
 describe('createTrackerActions skipFirstXMessages', () => {
   beforeEach(() => {

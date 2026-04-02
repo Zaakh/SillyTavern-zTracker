@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-04-02
+
 ### Changed
 
 - Consolidated SillyTavern extension-development guidance into the new general skill at `.github/skills/sillytavern-extension-development/` and retired the older standalone SillyTavern notes from `docs/`.
