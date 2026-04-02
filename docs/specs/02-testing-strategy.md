@@ -39,7 +39,7 @@ Add unit and integration tests that catch regressions while remaining realistic 
 - ✅ Refactor entrypoint: move pure/pure-ish logic into import-safe modules (`src/tracker.ts`, `src/extension-metadata.ts`).
 - ✅ Unit tests in Node for pure logic (`parser`, `schema-to-example`, tracker injection helpers).
 - ✅ Integration-ish tests in jsdom for DOM rendering behavior (`renderTracker`).
-- ✅ Document how to run tests + describe mock/stub expectations (see `docs/SILLYTAVERN_DEV_NOTES.md`).
+- ✅ Document how to run tests + describe mock/stub expectations (see `docs/DEVELOPMENT.md`).
 
 ### Why “minimal first” is intentional
 For a SillyTavern UI extension, full-stack E2E is comparatively expensive and brittle because the host app/runtime is outside this repo’s control.
@@ -92,7 +92,7 @@ Implementation note: strict rendering failure is enforced via a small rollback h
   - snapshot injection tests
   - at least one jsdom render test
 - Document how to run tests locally and what is being mocked. ➜ **Pending:** add README/docs blurb summarizing `npm test`, SillyTavern stubs, and what jsdom covers.
-- Document how to run tests locally and what is being mocked. (See `docs/SILLYTAVERN_DEV_NOTES.md` → "Testing workflow".)
+- Document how to run tests locally and what is being mocked. (See `docs/DEVELOPMENT.md`.)
 
 ## Phase 2 triggers (when to add Playwright)
 Add Playwright only after Phase 1 is stable and we have a repeatable harness. Concrete triggers:

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Consolidated SillyTavern extension-development guidance into the new general skill at `.github/skills/sillytavern-extension-development/` and retired the older standalone SillyTavern notes from `docs/`.
+
+### Fixed
+
+- Tracker prompt assembly now only forwards instruct presets when the selected SillyTavern connection profile uses a text-completion API family, so zTracker no longer treats the mere presence of `profile.instruct` as a mode decision for chat-completion profiles.
+
 ## [1.5.1] - 2026-04-02
 
 ### Fixed

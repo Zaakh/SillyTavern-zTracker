@@ -83,8 +83,11 @@ export function appendCurrentTrackerSnapshot(messages: Message[], tracker: unkno
   }
 }
 
-/** Normalizes optional connection-profile preset names so prompt assembly only receives real preset selections. */
-export function getPromptPresetSelections(profile: { preset?: unknown; context?: unknown; instruct?: unknown }) {
+/** Normalizes optional connection-profile preset names and only forwards instruct presets for text-completion APIs. */
+export function getPromptPresetSelections(
+  profile: { preset?: unknown; context?: unknown; instruct?: unknown },
+  selectedApi: string,
+) {
   const normalizePromptPresetName = (value: unknown): string | undefined => {
     if (typeof value !== 'string') {
       return undefined;
@@ -96,7 +99,7 @@ export function getPromptPresetSelections(profile: { preset?: unknown; context?:
 
   const presetName = normalizePromptPresetName(profile.preset);
   const contextName = normalizePromptPresetName(profile.context);
-  const instructName = normalizePromptPresetName(profile.instruct);
+  const instructName = selectedApi === 'textgenerationwebui' ? normalizePromptPresetName(profile.instruct) : undefined;
 
   return {
     ...(presetName ? { presetName } : {}),
