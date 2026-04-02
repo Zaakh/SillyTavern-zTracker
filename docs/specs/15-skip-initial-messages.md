@@ -85,7 +85,7 @@ Example: `skipFirstXMessages = 6`, `includeLastXMessages = 4`
   - Accept an optional `options?: { silent?: boolean }` parameter (or similar) to distinguish auto vs. manual
   - Auto callers in `src/ui/ui-init.ts` pass `{ silent: true }`
 - [ ] Add UI input in `src/components/Settings.tsx`
-- [ ] Add / update unit tests in `src/__tests__/tracker-actions.test.ts`
+- [ ] Add / update unit tests in the `src/__tests__/tracker-actions*.test.ts` suite
 - [ ] Update `CHANGELOG.md` (Unreleased section)
 - [ ] Update `readme.md` if applicable
 

@@ -2,7 +2,7 @@
 applyTo: '**'
 ---
 
-Maintenance: Last reviewed 2026-04-01. Update when project structure, build flow, or AI-agent guidance changes.
+Maintenance: Last reviewed 2026-04-02. Update when project structure, build flow, or AI-agent guidance changes.
 
 # Repo instructions: SillyTavern-zTracker
 
@@ -91,13 +91,20 @@ These instructions apply to all files in this repository.
 - Prefer `SillyTavern.getContext()` APIs over importing SillyTavern internals.
 - Be careful with prompt interception (`generate_interceptor`): clone inputs if mutations must be ephemeral.
 
+## GitHub Copilot skill
+- For SillyTavern extension development work, load `.github/skills/sillytavern-extension-development/SKILL.md`.
+- Use that skill for general SillyTavern extension knowledge: manifest changes, `SillyTavern.getContext()` integrations, events, prompt interceptors, upstream compatibility review, and host-level testing guidance.
+- Use `docs/DEVELOPMENT.md` for zTracker-specific commands, validation commands, release workflow, and contributor operations in this repository.
+- Keep the skill and its reference files current instead of recreating separate SillyTavern guidance docs under `docs/`.
+
 ## Security and data handling
 - Do not store secrets (API keys/tokens) in extension settings.
 - Avoid `eval()`/`Function()` and unsafe DOM insertion patterns.
 
 ## Further reading
 - At `https://github.com/bmen25124/SillyTavern-Utils-Lib` you can find the `sillytavern-utils-lib` library, which this extension uses for prompt building and other SillyTavern-related utilities.
-- For extension integration/testing tips and SillyTavern-specific guidance, see `docs/SILLYTAVERN_DEV_NOTES.md`.
+- For general SillyTavern extension guidance, use `.github/skills/sillytavern-extension-development/`.
+- For zTracker-specific development and release workflow, use `docs/DEVELOPMENT.md`.
 
 ## Maintenance
-IMPORTANT: Keep this file up to date. Whenever you discover or learn something about the projects propose, behavior, etc., update this instruction file accordingly.
+IMPORTANT: Keep this file up to date. Whenever you discover or learn something about the project's purpose, behavior, or workflow, update this instruction file accordingly.

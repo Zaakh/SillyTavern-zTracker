@@ -168,7 +168,7 @@ export function createTrackerActions(options: {
         end: messageId,
         start: settings.includeLastXMessages > 0 ? Math.max(0, messageId - settings.includeLastXMessages) : 0,
       },
-      ...getPromptPresetSelections(profile),
+      ...getPromptPresetSelections(profile, apiMap.selected),
       syspromptName: settings.trackerSystemPromptMode === 'profile' ? syspromptName : undefined,
       includeNames: true,
       ignoreWorldInfo,

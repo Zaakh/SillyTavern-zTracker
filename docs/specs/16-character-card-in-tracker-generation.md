@@ -79,7 +79,7 @@ When `generateTracker(messageId)` prepares prompt context:
 - [x] Add `skipCharacterCardInTrackerGeneration: boolean` to `ExtensionSettings` defaults in `src/config.ts`
 - [x] Update tracker prompt building in `src/ui/tracker-actions.ts` to pass `ignoreCharacterFields` based on the setting
 - [x] Add checkbox UI in `src/components/Settings.tsx`
-- [x] Add tests in `src/__tests__/tracker-actions.test.ts`
+- [x] Add tests in `src/__tests__/tracker-actions.prompt-assembly.test.ts`
 - [x] Update `CHANGELOG.md` when implemented
 - [x] Update `readme.md` if the setting is user-facing enough to document there
 

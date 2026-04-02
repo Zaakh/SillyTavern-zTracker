@@ -12,7 +12,21 @@ Working on the extension locally?
 - Run `npm run debug:tracker-context:json` to print one sample JSON-mode tracker-generation request, including the final prompt array after zTracker snapshot injection and the `json_schema` payload passed to the generator.
 - Run `npm run debug:tracker-context:xml` to print one sample XML prompt-engineering tracker-generation request, including the final prompt array and rendered XML instructions.
 - Run `npm run debug:tracker-context:toon` to print one sample TOON prompt-engineering tracker-generation request, including the final prompt array and rendered TOON instructions.
-- For detailed guidance (module structure, mocks, watch mode), see [SILLYTAVERN_DEV_NOTES.md](SILLYTAVERN_DEV_NOTES.md#testing-workflow).
+
+Test boundaries to remember:
+
+- Keep executable logic in import-safe modules under `src/` so Jest can load it without booting the full extension entrypoint.
+- Avoid importing `src/index.tsx` in tests because it wires browser and SillyTavern side effects.
+- Use jsdom for DOM behavior and lightweight injected context objects for host-state dependent helpers.
+- Register any custom Handlebars helpers explicitly in tests that need them.
+
+## AI agent split
+
+For GitHub Copilot or other coding agents:
+
+- Use `.github/skills/sillytavern-extension-development/` for general SillyTavern extension knowledge such as manifest fields, `SillyTavern.getContext()`, events, interceptors, upstream compatibility, and generic host-level validation strategy.
+- Use this document for zTracker-specific commands, local build and test workflow, release steps, and contributor operations in this repository.
+- Keep repo-only procedures here instead of moving them into the general skill.
 
 ## Versioning
 

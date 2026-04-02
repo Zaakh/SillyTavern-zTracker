@@ -16,9 +16,7 @@ Forked from [SillyTavern WTracker](https://github.com/bmen25124/SillyTavern-WTra
 
 ---
 
-**If you are using a _Text Completion_ profile, make sure your profile contains API, preset, model, and instruct.**
-
-**If you are using a _Chat Completion_ profile; API, settings, model would be enough.**
+zTracker follows the SillyTavern chat type selected by the chosen connection profile. If that profile uses Text Completion, configure its instruct/context presets in SillyTavern itself; if it uses Chat Completion, SillyTavern's chat-completion prompt settings apply.
 
 ---
 
