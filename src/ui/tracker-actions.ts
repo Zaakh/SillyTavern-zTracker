@@ -76,7 +76,11 @@ export function createTrackerActions(options: {
     return (requestMessages: Message[], overideParams?: any): Promise<ExtractedData | undefined> => {
       return new Promise((resolve, reject) => {
         const abortController = new AbortController();
-        const sanitizedPrompt = sanitizeMessagesForGeneration(requestMessages);
+        const profile = globalContext.extensionSettings?.connectionManager?.profiles?.find((p: any) => p.id === settings.profileId);
+        const selectedApi = profile?.api ? globalContext.CONNECT_API_MAP?.[profile.api]?.selected : undefined;
+        const sanitizedPrompt = sanitizeMessagesForGeneration(requestMessages, {
+          inlineNamesIntoContent: selectedApi === 'textgenerationwebui',
+        });
         captureTrackerRequestDebugSnapshot(settingsManager, {
           messageId,
           profileId: settings.profileId,
