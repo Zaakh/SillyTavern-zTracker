@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Tracker generation now supplies valid instruct and system-prompt fallbacks for SillyTavern text-completion prompt assembly, avoiding live `Preset undefined not found` console errors while preserving the configured saved tracker prompt behavior.
 - Tracker-generation requests now preserve speaker names from SillyTavern prompt-builder source messages when instruct-mode prompt assembly keeps attribution outside the flattened message content.
 - Text-completion tracker-generation requests now inline assistant and user speaker labels into the final prompt content when the downstream API ignores structured `name` metadata, without duplicating labels that are already present.
+- Normal instruct-mode chat interception now preserves speaker names from `message.source.name` on regular chat turns, so SillyTavern can still render named dialogue while injected zTracker snapshot messages remain anonymous context blocks.
 
 ## [1.5.3] - 2026-04-02
 

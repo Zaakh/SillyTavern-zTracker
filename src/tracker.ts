@@ -181,7 +181,20 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
   messages: T[],
   settings: ExtensionSettings,
 ): T[] {
-  const copyMessages = structuredClone(messages);
+  // SillyTavern sometimes keeps speaker attribution only on source.name.
+  // Promote it onto cloned chat turns so instruct-mode prompt assembly can still emit named dialogue.
+  const copyMessages = structuredClone(messages).map((message: T) => {
+    const fallbackName =
+      typeof (message as any).name === 'string' && (message as any).name.trim()
+        ? undefined
+        : typeof (message as any).source?.name === 'string' && (message as any).source.name.trim()
+          ? (message as any).source.name
+          : undefined;
+
+    return fallbackName
+      ? ({ ...message, name: fallbackName } as T)
+      : message;
+  });
   const embedRole = settings.embedZTrackerRole ?? 'user';
 
   if (settings.includeLastXZTrackerMessages > 0) {

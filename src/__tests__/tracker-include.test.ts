@@ -218,6 +218,44 @@ describe('includeZTrackerMessages', () => {
     ]);
   });
 
+  it('preserves source-based speaker names on normal chat messages during interceptor embedding', () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'As you enter the bar you realize you are the only customer.',
+        source: {
+          name: 'Bar',
+          extra: {
+            [EXTENSION_KEY]: {
+              [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { id: 1 },
+            },
+          },
+        },
+      },
+      {
+        role: 'user',
+        content: '"A glass of water please" I say and sit down at the bar.',
+        source: {
+          name: 'Tobias',
+        },
+      },
+    ] as any;
+
+    const result = includeZTrackerMessages(messages, makeSettings(1)) as any[];
+
+    expect(result[0]).toMatchObject({
+      role: 'assistant',
+      name: 'Bar',
+      content: 'As you enter the bar you realize you are the only customer.',
+    });
+    expect(result[2]).toMatchObject({
+      role: 'user',
+      name: 'Tobias',
+      content: '"A glass of water please" I say and sit down at the bar.',
+    });
+    expect(result[1]).not.toHaveProperty('name');
+  });
+
   it('falls back to source message names when prompt-builder keeps speaker attribution there', () => {
     const messages = [
       {
