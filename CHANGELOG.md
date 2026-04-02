@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Added a live diagnostics snapshot for the last tracker-generation request so debug mode now captures both the pre-sanitize prompt messages and the final sanitized prompt text shown through the zTracker diagnostics panel.
+- Added clearer embed-snapshot header diagnostics so the active injected label is shown explicitly and no longer gets confused with the settings placeholder text.
 
 ### Fixed
 

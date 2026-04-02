@@ -1,6 +1,7 @@
 import Handlebars from 'handlebars';
 import type { Message } from 'sillytavern-utils-lib';
 import type { ChatMessage } from 'sillytavern-utils-lib/types';
+import { DEFAULT_EMBED_SNAPSHOT_HEADER } from './config.js';
 import type { ExtensionSettings } from './config.js';
 import { EXTENSION_KEY } from './extension-metadata.js';
 import { formatEmbeddedTrackerSnapshot } from './embed-snapshot-transform.js';
@@ -210,7 +211,7 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
         const trackerValue = extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY] || {};
         const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(trackerValue, settings);
 
-        const header = settings.embedZTrackerSnapshotHeader ?? 'Tracker:';
+        const header = settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER;
         const prefix = header ? `${header}\n` : '';
         const content = wrapInCodeFence
           ? `${prefix}\`\`\`${lang}\n${text}\n\`\`\``

@@ -113,6 +113,8 @@ export interface ExtensionSettings {
   trackerWorldInfoAllowlistEntryIds: number[];
 }
 
+export const DEFAULT_EMBED_SNAPSHOT_HEADER = 'Tracker:';
+
 export const DEFAULT_PROMPT = `You are a Scene Tracker Assistant, tasked with providing clear, consistent, and structured updates to a scene tracker for a roleplay. Use the latest message, previous tracker details, and context from recent messages to accurately update the tracker. Your response must ensuring that each field is filled and complete. If specific information is not provided, make reasonable assumptions based on prior descriptions, logical inferences, or default character details.
 
 ### Key Instructions:
@@ -508,7 +510,7 @@ export const defaultSettings: ExtensionSettings = {
   skipCharacterCardInTrackerGeneration: false,
   includeLastXZTrackerMessages: 1,
   embedZTrackerRole: 'user',
-  embedZTrackerSnapshotHeader: 'Tracker:',
+  embedZTrackerSnapshotHeader: DEFAULT_EMBED_SNAPSHOT_HEADER,
   embedZTrackerSnapshotTransformPreset: 'default',
   embedZTrackerSnapshotTransformPresets: {
     default: {
