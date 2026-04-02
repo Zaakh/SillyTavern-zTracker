@@ -73,6 +73,43 @@ describe('createTrackerActions prompt assembly', () => {
     ]);
   });
 
+  test('passes the saved tracker system prompt through buildPrompt for textgenerationwebui profiles', async () => {
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const generateRequest = makeGenerateRequest();
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile({ api: 'textgenerationwebui' })],
+          },
+        },
+        CONNECT_API_MAP: { textgenerationwebui: { selected: 'textgenerationwebui' } },
+      },
+      settingsManager: { getSettings: () => makeSettings() } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0);
+
+    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    expect(buildPromptOptions).toHaveProperty('syspromptName', 'zTracker');
+
+    const sentMessages = generateRequest.mock.calls[0][0].prompt;
+    expect(sentMessages).toEqual([
+      { role: 'system', content: 'Existing system prompt' },
+      { role: 'user', content: 'Prior chat message' },
+      { role: 'user', content: 'Generate tracker JSON' },
+    ]);
+  });
+
   test('keeps character-card prompt fields by default during tracker generation', async () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
 
@@ -261,4 +298,47 @@ describe('createTrackerActions prompt assembly', () => {
       expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
     },
   );
+
+  test('falls back to the active instruct preset for textgenerationwebui profiles when the profile leaves it unset', async () => {
+    installSillyTavernContext(
+      makeContext({
+        powerUserSettings: {
+          instruct: {
+            preset: 'Active Instruct',
+          },
+        },
+      }),
+    );
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const generateRequest = makeGenerateRequest();
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile({ api: 'textgenerationwebui', instruct: '   ' })],
+          },
+        },
+        CONNECT_API_MAP: {
+          textgenerationwebui: { selected: 'textgenerationwebui' },
+        },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ trackerSystemPromptMode: 'profile' }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0);
+
+    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    expect(buildPromptOptions).toHaveProperty('instructName', 'Active Instruct');
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
 });
