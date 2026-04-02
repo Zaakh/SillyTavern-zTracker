@@ -102,7 +102,8 @@ export const LIVE_BAR_SCHEMA_VALUE = {
   required: ['time', 'location', 'weather', 'topics', 'charactersPresent', 'characters'],
 } as const;
 
-const BAR_TRACKER_SNAPSHOT = `Scene details:
+const BAR_TRACKER_SNAPSHOT = `[zTracker scene-state context; not dialogue]
+Scene details:
 time: 14:23:07; 09/28/2025 (Tuesday)
 location: Bar interior, cozy corner near the bar
 weather: Clear, 72°F
