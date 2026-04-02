@@ -247,18 +247,28 @@ export function sanitizeMessagesForGeneration<
     ignoreInstruct?: boolean;
     source?: { name?: string };
   },
->(messages: T[]): Array<{ role: string; content: string; name?: string; ignoreInstruct?: boolean }> {
+>(
+  messages: T[],
+  options: {
+    inlineNamesIntoContent?: boolean;
+  } = {},
+): Array<{ role: string; content: string; name?: string; ignoreInstruct?: boolean }> {
   return messages.map((message) => {
     const name = typeof message.name === 'string' && message.name.trim()
       ? message.name
       : typeof message.source?.name === 'string' && message.source.name.trim()
         ? message.source.name
         : undefined;
+    const shouldInlineName =
+      !!options.inlineNamesIntoContent &&
+      !!name &&
+      (message.role === 'assistant' || message.role === 'user');
+    const content = shouldInlineName ? `${name}: ${message.content}` : message.content;
 
     return {
       role: message.role,
-      content: message.content,
-      ...(name ? { name } : {}),
+      content,
+      ...(!shouldInlineName && name ? { name } : {}),
       ...(typeof message.ignoreInstruct === 'boolean' ? { ignoreInstruct: message.ignoreInstruct } : {}),
     };
   });

@@ -249,4 +249,42 @@ describe('includeZTrackerMessages', () => {
       },
     ]);
   });
+
+  it('inlines assistant and user speaker names into content for text-completion prompts', () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'As you enter the bar you realize you are the only customer.',
+        source: {
+          name: 'Bar',
+        },
+      },
+      {
+        role: 'user',
+        content: '"A glass of water please" I say and sit down at the bar.',
+        source: {
+          name: 'Tobias',
+        },
+      },
+      {
+        role: 'system',
+        content: 'Scene details:\ntime: 14:32:05',
+      },
+    ] as any;
+
+    expect(sanitizeMessagesForGeneration(messages, { inlineNamesIntoContent: true })).toEqual([
+      {
+        role: 'assistant',
+        content: 'Bar: As you enter the bar you realize you are the only customer.',
+      },
+      {
+        role: 'user',
+        content: 'Tobias: "A glass of water please" I say and sit down at the bar.',
+      },
+      {
+        role: 'system',
+        content: 'Scene details:\ntime: 14:32:05',
+      },
+    ]);
+  });
 });
