@@ -7,6 +7,7 @@ import { jest } from '@jest/globals';
 const settingsManager = {
   getSettings: () => ({
     debugLogging: true,
+    embedZTrackerSnapshotHeader: 'Tracker:',
   }),
 } as any;
 
@@ -63,6 +64,7 @@ describe('tracker request debug snapshots', () => {
       profileId: 'profile-1',
       promptEngineeringMode: 'native',
       maxTokens: 16000,
+      embedSnapshotHeader: 'Tracker:',
       requestMessages: [
         {
           role: 'assistant',
@@ -96,6 +98,7 @@ describe('tracker request debug snapshots', () => {
       profileId: 'profile-2',
       promptEngineeringMode: 'json',
       maxTokens: 512,
+      embedSnapshotHeader: 'Scene details:',
       overridePayload: {},
       requestMessages: [],
       sanitizedPrompt: [],
@@ -105,7 +108,9 @@ describe('tracker request debug snapshots', () => {
 
     expect(lines.join('\n')).toContain('lastTrackerRequest:');
     expect(lines.join('\n')).toContain('profileId: profile-2');
+    expect(lines.join('\n')).toContain('embedSnapshotHeader: Scene details:');
     expect(lines.join('\n')).toContain('flattenedSanitizedPrompt:');
     expect(lines.join('\n')).toContain('Bar: hello');
+    expect(lines.join('\n')).toContain('embedSnapshotHeader is the active zTracker-injected snapshot label');
   });
 });

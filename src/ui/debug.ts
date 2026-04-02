@@ -1,3 +1,4 @@
+import { DEFAULT_EMBED_SNAPSHOT_HEADER } from '../config.js';
 import type { ExtensionSettings } from '../config.js';
 import type { ExtensionSettingsManager } from 'sillytavern-utils-lib';
 
@@ -14,6 +15,7 @@ export type TrackerRequestDebugSnapshot = {
   profileId: string;
   promptEngineeringMode: string;
   maxTokens: number;
+  embedSnapshotHeader: string;
   overridePayload: unknown;
   requestMessages: PromptDebugMessage[];
   sanitizedPrompt: PromptDebugMessage[];
@@ -76,7 +78,8 @@ export function captureTrackerRequestDebugSnapshot(
     sanitizedPrompt: Array<{ role: string; content: string; name?: string; ignoreInstruct?: boolean; source?: { name?: string } }>;
   },
 ): void {
-  if (!isDebugLoggingEnabled(settingsManager)) {
+  const settings = settingsManager.getSettings();
+  if (!settings.debugLogging) {
     return;
   }
 
@@ -88,6 +91,7 @@ export function captureTrackerRequestDebugSnapshot(
     profileId: snapshot.profileId,
     promptEngineeringMode: snapshot.promptEngineeringMode,
     maxTokens: snapshot.maxTokens,
+    embedSnapshotHeader: settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER,
     overridePayload: snapshot.overridePayload,
     requestMessages,
     sanitizedPrompt,
@@ -111,9 +115,11 @@ export function formatTrackerRequestDebugSnapshot(snapshot?: TrackerRequestDebug
     `profileId: ${snapshot.profileId}`,
     `promptEngineeringMode: ${snapshot.promptEngineeringMode}`,
     `maxTokens: ${snapshot.maxTokens}`,
+    `embedSnapshotHeader: ${snapshot.embedSnapshotHeader}`,
     `requestMessages: ${snapshot.requestMessages.length}`,
     `sanitizedPrompt: ${snapshot.sanitizedPrompt.length}`,
     `overridePayload: ${JSON.stringify(snapshot.overridePayload ?? {})}`,
+    'note: embedSnapshotHeader is the active zTracker-injected snapshot label, not the input placeholder.',
     '',
     'flattenedRequestMessages:',
     snapshot.flattenedRequestMessages,

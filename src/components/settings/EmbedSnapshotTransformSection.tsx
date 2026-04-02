@@ -1,6 +1,6 @@
 import { FC, useMemo } from 'react';
 import { STPresetSelect, STTextarea, PresetItem } from 'sillytavern-utils-lib/components/react';
-import { ExtensionSettings } from '../../config.js';
+import { DEFAULT_EMBED_SNAPSHOT_HEADER, ExtensionSettings } from '../../config.js';
 
 export const EmbedSnapshotTransformSection: FC<{
   settings: ExtensionSettings;
@@ -65,9 +65,9 @@ export const EmbedSnapshotTransformSection: FC<{
       <input
         type="text"
         className="text_pole"
-        placeholder="Tracker:"
+        placeholder={DEFAULT_EMBED_SNAPSHOT_HEADER}
         title="Header line to prepend before the embedded zTracker snapshot in normal generations. Set empty to omit."
-        value={settings.embedZTrackerSnapshotHeader ?? 'Tracker:'}
+        value={settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER}
         onChange={(e) =>
           updateAndRefresh((s) => {
             s.embedZTrackerSnapshotHeader = e.target.value;
@@ -75,7 +75,7 @@ export const EmbedSnapshotTransformSection: FC<{
         }
       />
 
-      <div className="notes">Set to empty to omit the header line.</div>
+      <div className="notes">Set to empty to omit the header line. The placeholder is only the default fallback, not the active value.</div>
 
       <label title="Choose how embedded snapshots are formatted (optional regex transform + code fence settings).">
         Embed snapshot transform preset
