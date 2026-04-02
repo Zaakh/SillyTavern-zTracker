@@ -78,6 +78,7 @@ jest.unstable_mockModule('../ui/templates.js', () => ({
 }));
 
 jest.unstable_mockModule('../ui/debug.js', () => ({
+  captureTrackerRequestDebugSnapshot: jest.fn(),
   debugLog: jest.fn(),
   isDebugLoggingEnabled: jest.fn(() => false),
 }));
