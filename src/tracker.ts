@@ -179,7 +179,6 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
 export function includeZTrackerMessages<T extends Message | ChatMessage>(
   messages: T[],
   settings: ExtensionSettings,
-  userName = 'You',
 ): T[] {
   const copyMessages = structuredClone(messages);
   const embedRole = settings.embedZTrackerRole ?? 'user';
@@ -212,7 +211,8 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
         const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(trackerValue, settings);
 
         const header = settings.embedZTrackerSnapshotHeader ?? 'Tracker:';
-        const prefix = header ? `${header}\n` : '';
+        const separator = '[zTracker scene-state context; not dialogue]';
+        const prefix = header ? `${separator}\n${header}\n` : `${separator}\n`;
         const content = wrapInCodeFence
           ? `${prefix}\`\`\`${lang}\n${text}\n\`\`\``
           : `${prefix}${text}`;
@@ -222,7 +222,6 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
           {
             content,
             role: embedRole,
-            ...(embedRole === 'user' ? { name: userName } : {}),
             // These flags are used by SillyTavern Message objects; harmless for ChatMessage.
             is_user: embedRole === 'user',
             is_system: embedRole === 'system',

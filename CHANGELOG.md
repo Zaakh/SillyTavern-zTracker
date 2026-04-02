@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Tracker generation now omits an unset connection-profile system-prompt selection before calling SillyTavern prompt assembly, avoiding live browser errors such as `Preset undefined not found` when the profile uses the global/default system prompt.
+- Embedded zTracker snapshots in normal generations are now explicitly labeled as scene-state context and no longer masquerade as named chat turns, so tracker state stays clearly separated from dialogue such as `Tobias:` or `Bar:`.
 
 ## [1.5.2] - 2026-04-02
 

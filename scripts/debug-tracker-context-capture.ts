@@ -168,7 +168,7 @@ export function expectLiveLikeTrackerContext(
 	});
 	expect(promptMessages[5]).toEqual({
 		role: 'system',
-		content: expect.stringContaining('Scene details:\ntime: 14:23:07; 09/28/2025 (Tuesday)'),
+		content: expect.stringContaining('[zTracker scene-state context; not dialogue]\nScene details:\ntime: 14:23:07; 09/28/2025 (Tuesday)'),
 	});
 	expect(promptMessages[3]).toMatchObject({
 		role: 'assistant',
