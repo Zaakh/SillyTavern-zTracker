@@ -263,7 +263,10 @@ export function sanitizeMessagesForGeneration<
       !!options.inlineNamesIntoContent &&
       !!name &&
       (message.role === 'assistant' || message.role === 'user');
-    const content = shouldInlineName ? `${name}: ${message.content}` : message.content;
+    const contentAlreadyHasSpeakerPrefix =
+      !!name &&
+      message.content.startsWith(`${name}:`);
+    const content = shouldInlineName && !contentAlreadyHasSpeakerPrefix ? `${name}: ${message.content}` : message.content;
 
     return {
       role: message.role,

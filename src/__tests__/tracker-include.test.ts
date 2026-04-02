@@ -287,4 +287,34 @@ describe('includeZTrackerMessages', () => {
       },
     ]);
   });
+
+  it('does not duplicate an existing speaker prefix when inlining text-completion prompts', () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'Bar: As you enter the bar you realize you are the only customer.',
+        source: {
+          name: 'Bar',
+        },
+      },
+      {
+        role: 'user',
+        content: 'Tobias: "A glass of water please" I say and sit down at the bar.',
+        source: {
+          name: 'Tobias',
+        },
+      },
+    ] as any;
+
+    expect(sanitizeMessagesForGeneration(messages, { inlineNamesIntoContent: true })).toEqual([
+      {
+        role: 'assistant',
+        content: 'Bar: As you enter the bar you realize you are the only customer.',
+      },
+      {
+        role: 'user',
+        content: 'Tobias: "A glass of water please" I say and sit down at the bar.',
+      },
+    ]);
+  });
 });
