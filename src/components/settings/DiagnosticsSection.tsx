@@ -2,6 +2,7 @@ import { FC, useCallback } from 'react';
 import { STButton } from 'sillytavern-utils-lib/components/react';
 import { getThirdPartyExtensionBasePath } from '../../extension-install.js';
 import { extensionName } from '../../config.js';
+import { formatTrackerRequestDebugSnapshot, getLastTrackerRequestDebugSnapshot } from '../../ui/debug.js';
 
 export const DiagnosticsSection: FC<{
   debugLogging: boolean;
@@ -43,6 +44,8 @@ export const DiagnosticsSection: FC<{
       );
       lines.push('');
     }
+
+    lines.push(...formatTrackerRequestDebugSnapshot(getLastTrackerRequestDebugSnapshot()));
 
     const text = lines.join('\n');
     setDiagnosticsText(text);

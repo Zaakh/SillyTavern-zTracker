@@ -48,7 +48,7 @@ import {
   restoreDetailsState,
   shouldSkipTrackerGeneration,
 } from './tracker-action-helpers.js';
-import { debugLog, isDebugLoggingEnabled } from './debug.js';
+import { captureTrackerRequestDebugSnapshot, debugLog, isDebugLoggingEnabled } from './debug.js';
 
 export function createTrackerActions(options: {
   globalContext: any;
@@ -77,6 +77,15 @@ export function createTrackerActions(options: {
       return new Promise((resolve, reject) => {
         const abortController = new AbortController();
         const sanitizedPrompt = sanitizeMessagesForGeneration(requestMessages);
+        captureTrackerRequestDebugSnapshot(settingsManager, {
+          messageId,
+          profileId: settings.profileId,
+          promptEngineeringMode: settings.promptEngineeringMode,
+          maxTokens: settings.maxResponseToken,
+          overridePayload: overideParams ?? {},
+          requestMessages: requestMessages as any,
+          sanitizedPrompt,
+        });
         generator.generateRequest(
           {
             profileId: settings.profileId,
