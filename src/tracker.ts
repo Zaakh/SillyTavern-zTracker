@@ -211,8 +211,7 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
         const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(trackerValue, settings);
 
         const header = settings.embedZTrackerSnapshotHeader ?? 'Tracker:';
-        const separator = '[zTracker scene-state context; not dialogue]';
-        const prefix = header ? `${separator}\n${header}\n` : `${separator}\n`;
+        const prefix = header ? `${header}\n` : '';
         const content = wrapInCodeFence
           ? `${prefix}\`\`\`${lang}\n${text}\n\`\`\``
           : `${prefix}${text}`;

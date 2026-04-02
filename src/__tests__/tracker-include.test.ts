@@ -58,7 +58,6 @@ describe('includeZTrackerMessages', () => {
     ];
     const result = includeZTrackerMessages(messages as any, makeSettings(1));
     expect(result).toHaveLength(3);
-    expect(result[1].content).toContain('[zTracker scene-state context; not dialogue]');
     expect(result[1].content).toContain('Tracker:');
     expect(result[1].content).toContain('```json');
     expect(result[1].role).toBe('user');
@@ -72,7 +71,6 @@ describe('includeZTrackerMessages', () => {
     ];
     const result = includeZTrackerMessages(messages as any, makeSettings(1));
     expect(result).toHaveLength(3);
-    expect(result[2].content).toContain('[zTracker scene-state context; not dialogue]');
     expect(result[2].content).toContain('Tracker:');
     expect(result[2].content).toContain('```json');
   });
@@ -90,7 +88,6 @@ describe('includeZTrackerMessages', () => {
 
     const injected = result[1].content as string;
     expect(injected).not.toContain('```');
-    expect(injected).toContain('[zTracker scene-state context; not dialogue]');
     expect(injected).toContain('Tracker:');
     expect(injected).toContain('time: 10:00');
     expect(injected).toContain('location: Mall');
@@ -121,7 +118,6 @@ describe('includeZTrackerMessages', () => {
     expect(result).toHaveLength(3);
 
     const injected = result[1].content as string;
-    expect(injected).toContain('[zTracker scene-state context; not dialogue]');
     expect(injected).toContain('Tracker:');
     expect(injected).toContain('```toon');
     expect(injected).not.toContain('```json');
@@ -177,7 +173,7 @@ describe('includeZTrackerMessages', () => {
     const injected = result.filter(
       (m: any) =>
         typeof m.content === 'string' &&
-        m.content.startsWith('[zTracker scene-state context; not dialogue]\nTracker:\n```json'),
+        m.content.startsWith('Tracker:\n```json'),
     );
     expect(injected).toHaveLength(2);
       // The implementation inserts each found snapshot immediately after the message it was found on.
