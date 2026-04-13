@@ -7,6 +7,11 @@ import type { ExtensionSettingsManager } from 'sillytavern-utils-lib';
 import type { TrackerActions } from './tracker-actions.js';
 import { includeZTrackerMessages } from '../tracker.js';
 import { st_echo } from 'sillytavern-utils-lib/config';
+import {
+  shouldAutoGenerateForCharacterMessage,
+  shouldAutoGenerateForUserMessage,
+  syncCharacterAutoModeButton,
+} from './character-auto-mode-exclusion.js';
 
 type PartsMenuPortalState = {
   details: HTMLDetailsElement;
@@ -228,8 +233,35 @@ export async function initializeGlobalUI(options: {
 }) {
   const { globalContext, settingsManager, actions, renderTrackerWithDeps } = options;
 
+  let characterPanelButtonSyncTimer: number | undefined;
+  const scheduleCharacterPanelButtonSync = () => {
+    if (typeof document === 'undefined') return;
+    if (characterPanelButtonSyncTimer) {
+      window.clearTimeout(characterPanelButtonSyncTimer);
+    }
+
+    characterPanelButtonSyncTimer = window.setTimeout(() => {
+      characterPanelButtonSyncTimer = undefined;
+      const context = SillyTavern.getContext();
+      const settings = settingsManager.getSettings();
+      syncCharacterAutoModeButton({
+        context,
+        autoModeEnabled: settings.autoMode !== AutoModeOptions.NONE,
+        onToggle: ({ excluded }) => {
+          st_echo('info', excluded ? 'zTracker auto mode excluded for this character.' : 'zTracker auto mode restored for this character.');
+        },
+      });
+    }, 20);
+  };
+
   // Keep menu colors in sync with the current SillyTavern theme.
   installZTrackerThemeObserver();
+  scheduleCharacterPanelButtonSync();
+
+  if (typeof MutationObserver !== 'undefined') {
+    const observer = new MutationObserver(() => scheduleCharacterPanelButtonSync());
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
 
   const zTrackerIcon = document.createElement('div');
   zTrackerIcon.title = 'zTracker';
@@ -360,17 +392,37 @@ export async function initializeGlobalUI(options: {
 
   await actions.renderExtensionTemplates();
 
-  const settings = settingsManager.getSettings();
   globalContext.eventSource.on(
     EventNames.CHARACTER_MESSAGE_RENDERED,
-    (messageId: number) => incomingTypes.includes(settings.autoMode) && actions.generateTracker(messageId, { silent: true }),
+    (messageId: number) => {
+      const settings = settingsManager.getSettings();
+      if (!incomingTypes.includes(settings.autoMode)) return;
+
+      const context = SillyTavern.getContext();
+      if (!shouldAutoGenerateForCharacterMessage({ chat: context.chat, characters: context.characters }, messageId)) {
+        return;
+      }
+
+      actions.generateTracker(messageId, { silent: true });
+    },
   );
   globalContext.eventSource.on(
     EventNames.USER_MESSAGE_RENDERED,
-    (messageId: number) => outgoingTypes.includes(settings.autoMode) && actions.generateTracker(messageId, { silent: true }),
+    (messageId: number) => {
+      const settings = settingsManager.getSettings();
+      if (!outgoingTypes.includes(settings.autoMode)) return;
+
+      const context = SillyTavern.getContext();
+      if (!shouldAutoGenerateForUserMessage({ characterId: (context as any).characterId, characters: context.characters })) {
+        return;
+      }
+
+      actions.generateTracker(messageId, { silent: true });
+    },
   );
 
   globalContext.eventSource.on(EventNames.CHAT_CHANGED, () => {
+    scheduleCharacterPanelButtonSync();
     const { saveChat } = globalContext;
     let chatModified = false;
     globalContext.chat.forEach((message: any, i: number) => {
