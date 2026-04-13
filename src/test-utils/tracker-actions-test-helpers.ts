@@ -106,6 +106,7 @@ export function makeSettings(overrides: Record<string, unknown> = {}) {
     includeLastXMessages: 0,
     skipCharacterCardInTrackerGeneration: false,
     includeLastXZTrackerMessages: 0,
+    embedZTrackerAsCharacter: false,
     sequentialPartGeneration: false,
     trackerWorldInfoPolicyMode: TrackerWorldInfoPolicyMode.INCLUDE_ALL,
     trackerWorldInfoAllowlistBookNames: [],

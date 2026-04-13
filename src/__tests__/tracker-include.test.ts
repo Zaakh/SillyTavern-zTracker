@@ -3,11 +3,17 @@ import { includeZTrackerMessages, sanitizeMessagesForGeneration, CHAT_MESSAGE_SC
 import { EXTENSION_KEY } from '../extension-metadata.js';
 
 describe('includeZTrackerMessages', () => {
-  const makeSettings = (count: number, role?: ExtensionSettings['embedZTrackerRole']) => {
+  const makeSettings = (
+    count: number,
+    role?: ExtensionSettings['embedZTrackerRole'],
+    asCharacter = false,
+    header = 'Tracker:',
+  ) => {
     return {
       includeLastXZTrackerMessages: count,
       embedZTrackerRole: role,
-      embedZTrackerSnapshotHeader: 'Tracker:',
+      embedZTrackerAsCharacter: asCharacter,
+      embedZTrackerSnapshotHeader: header,
       embedZTrackerSnapshotTransformPreset: 'default',
       embedZTrackerSnapshotTransformPresets: {
         default: {
@@ -62,6 +68,45 @@ describe('includeZTrackerMessages', () => {
     expect(result[1].content).toContain('```json');
     expect(result[1].role).toBe('user');
     expect(result[1]).not.toHaveProperty('name');
+  });
+
+  it('can inject tracker snapshots as a virtual character name', () => {
+    const messages = [
+      buildMessageWithTracker({ id: 1 }),
+      { content: 'current', role: 'user' },
+    ];
+
+    const result = includeZTrackerMessages(messages as any, makeSettings(1, 'assistant', true)) as any[];
+
+    expect(result).toHaveLength(3);
+    expect(result[1].role).toBe('assistant');
+    expect(result[1].name).toBe('Tracker');
+    expect(result[1].content).not.toContain('Tracker:');
+    expect(result[1].content).toContain('```json');
+  });
+
+  it('falls back to Tracker when the configured header is blank in virtual-character mode', () => {
+    const messages = [
+      buildMessageWithTracker({ id: 1 }),
+      { content: 'current', role: 'user' },
+    ];
+
+    const result = includeZTrackerMessages(messages as any, makeSettings(1, 'system', true, '   ')) as any[];
+
+    expect(result[1].role).toBe('system');
+    expect(result[1].name).toBe('Tracker');
+    expect(result[1].content).not.toContain('Tracker:');
+  });
+
+  it('strips trailing punctuation from the virtual-character label', () => {
+    const messages = [
+      buildMessageWithTracker({ id: 1 }),
+      { content: 'current', role: 'user' },
+    ];
+
+    const result = includeZTrackerMessages(messages as any, makeSettings(1, 'assistant', true, 'Tracker Log:  ')) as any[];
+
+    expect(result[1].name).toBe('Tracker Log');
   });
 
   it('can discover a tracker on the last message', () => {
@@ -254,6 +299,45 @@ describe('includeZTrackerMessages', () => {
       content: '"A glass of water please" I say and sit down at the bar.',
     });
     expect(result[1]).not.toHaveProperty('name');
+  });
+
+  it('keeps normal chat names while giving injected snapshots their own virtual-character name', () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'As you enter the bar you realize you are the only customer.',
+        source: {
+          name: 'Bar',
+          extra: {
+            [EXTENSION_KEY]: {
+              [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { id: 1 },
+            },
+          },
+        },
+      },
+      {
+        role: 'user',
+        content: '"A glass of water please" I say and sit down at the bar.',
+        source: {
+          name: 'Tobias',
+        },
+      },
+    ] as any;
+
+    const result = includeZTrackerMessages(messages, makeSettings(1, 'assistant', true)) as any[];
+
+    expect(result[0]).toMatchObject({
+      role: 'assistant',
+      name: 'Bar',
+    });
+    expect(result[1]).toMatchObject({
+      role: 'assistant',
+      name: 'Tracker',
+    });
+    expect(result[2]).toMatchObject({
+      role: 'user',
+      name: 'Tobias',
+    });
   });
 
   it('falls back to source message names when prompt-builder keeps speaker attribution there', () => {
