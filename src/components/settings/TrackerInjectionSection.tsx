@@ -45,6 +45,22 @@ export const TrackerInjectionSection: FC<SettingsSectionProps> = ({ settings, up
         </select>
       </div>
 
+      <div className="setting-row">
+        <label title="When enabled, the tracker header is used as the injected speaker name instead of a content prefix. This avoids double labels such as 'Assistant: Tracker:' when SillyTavern includes speaker names.">
+          Inject as virtual character
+        </label>
+        <input
+          type="checkbox"
+          title="Uses the embed snapshot header as the injected message name and removes the header prefix from the embedded content."
+          checked={settings.embedZTrackerAsCharacter ?? false}
+          onChange={(e) =>
+            updateAndRefresh((s) => {
+              s.embedZTrackerAsCharacter = e.target.checked;
+            })
+          }
+        />
+      </div>
+
       <EmbedSnapshotTransformSection settings={settings} updateAndRefresh={updateAndRefresh} />
     </>
   );

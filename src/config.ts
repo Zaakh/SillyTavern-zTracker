@@ -71,6 +71,8 @@ export interface ExtensionSettings {
    * This only affects the generate_interceptor embedding, not tracker generation.
    */
   embedZTrackerRole: 'user' | 'assistant' | 'system';
+  /** When true, embedded tracker snapshots use the snapshot header as a speaker name instead of a content prefix. */
+  embedZTrackerAsCharacter: boolean;
 
   /**
    * Controls how embedded zTracker snapshots are transformed (regex find/replace).
@@ -510,6 +512,7 @@ export const defaultSettings: ExtensionSettings = {
   skipCharacterCardInTrackerGeneration: false,
   includeLastXZTrackerMessages: 1,
   embedZTrackerRole: 'user',
+  embedZTrackerAsCharacter: false,
   embedZTrackerSnapshotHeader: DEFAULT_EMBED_SNAPSHOT_HEADER,
   embedZTrackerSnapshotTransformPreset: 'default',
   embedZTrackerSnapshotTransformPresets: {

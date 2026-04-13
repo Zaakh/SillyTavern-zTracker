@@ -177,6 +177,13 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
   messageBlock.querySelector('.mes_text')?.before(container);
 }
 
+// Keeps the embedded tracker speaker label aligned with the existing configurable header.
+function deriveEmbeddedTrackerSpeakerName(settings: ExtensionSettings): string {
+  const header = settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER;
+  const trimmedLabel = header.replace(/:+\s*$/, '').trim();
+  return trimmedLabel || 'Tracker';
+}
+
 export function includeZTrackerMessages<T extends Message | ChatMessage>(
   messages: T[],
   settings: ExtensionSettings,
@@ -225,10 +232,12 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
         const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(trackerValue, settings);
 
         const header = settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER;
-        const prefix = header ? `${header}\n` : '';
+        const useCharacterName = settings.embedZTrackerAsCharacter ?? false;
+        const prefix = !useCharacterName && header ? `${header}\n` : '';
         const content = wrapInCodeFence
           ? `${prefix}\`\`\`${lang}\n${text}\n\`\`\``
           : `${prefix}${text}`;
+        const speakerName = useCharacterName ? deriveEmbeddedTrackerSpeakerName(settings) : undefined;
         copyMessages.splice(
           foundIndex + 1,
           0,
@@ -238,6 +247,7 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
             // These flags are used by SillyTavern Message objects; harmless for ChatMessage.
             is_user: embedRole === 'user',
             is_system: embedRole === 'system',
+            ...(speakerName ? { name: speakerName } : {}),
             mes: content,
           } as unknown as T,
         );

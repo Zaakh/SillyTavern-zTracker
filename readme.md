@@ -86,6 +86,8 @@ zTracker can optionally embed the last $X$ tracker snapshots into the prompt cha
 
 You can also control what **role** those embedded snapshots use (**User**, **System**, or **Assistant**) via **Embed zTracker snapshots as**. This setting only affects embedding; it does not change how zTracker generates trackers.
 
+If SillyTavern's prompt formatting is producing awkward prefixes like `Assistant: Tracker:`, enable **Inject as virtual character**. This uses the embed snapshot header as the injected speaker name and removes the duplicated header prefix from the embedded snapshot body.
+
 You can also apply a **regex-based transform** to the embedded snapshot text (for prompt-friendly formatting) via **Embed snapshot transform preset**.
 
 You can customize (or remove) the embedded snapshot header via **Embed snapshot header**.
