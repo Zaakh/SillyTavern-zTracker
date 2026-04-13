@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-04-13
+
 ### Added
 
 - Added an opt-in `Inject as virtual character` tracker-injection setting that sends embedded tracker snapshots with a speaker name derived from the embed header, avoiding double labels such as `Assistant: Tracker:` when SillyTavern includes names in prompts.
