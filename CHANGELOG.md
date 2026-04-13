@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Added a per-character auto-mode exclusion toggle on the character panel so zTracker can skip automatic tracker generation for selected characters without disabling manual tracker generation.
+
 ## [1.6.0] - 2026-04-13
 
 ### Added
