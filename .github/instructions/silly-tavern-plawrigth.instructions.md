@@ -57,12 +57,25 @@ Always confirm you are debugging the intended zTracker build before interacting 
 	- Use `browser_wait_for` for key text that indicates the page is ready (or a short time wait if there is no stable marker).
 - If a modal/dialog is open (common on first load), dismiss it before proceeding:
 	- Press `Escape`, or click the dialog close button, then take a fresh `browser_snapshot()`.
+- If the app shows an `Initializing…` dialog on load, wait for it to disappear before opening side panels; early clicks often target hidden elements.
 - Use accessibility snapshots (`browser_snapshot`) to find element refs; prefer stable labels and IDs over brittle CSS selectors.
+- Take a fresh snapshot after each panel open/close action. Refs from the previous state become stale quickly in the Extensions sidebar.
 
 ### Opening zTracker settings
 - Open the Extensions panel/menu.
 - Select **zTracker**.
 - Validate that zTracker’s settings UI is present (connection profile select, schema preset controls, etc.).
+- Prefer opening Extensions from the visible main UI button first, then refresh the snapshot before targeting inner panel buttons such as `Manage extensions`.
+- If the accessibility snapshot exposes the `Extensions` panel but not its inner buttons reliably, fall back to DOM-text verification with Playwright evaluation instead of repeatedly retrying stale refs.
+- When verifying this settings refactor specifically, confirm the live DOM contains `Tracker Generation` and `Tracker Injection` in addition to existing labels such as `Connection Profile` and `Schema Preset`.
+
+### Manage Extensions fallback
+- Treat **Extensions → Manage Extensions → zTracker** as the primary build-version check.
+- If the `Manage extensions` control is present but not interactable in the snapshot, record the repo commit + `package.json` version anyway and continue with a fallback verification:
+	- confirm the expected new zTracker settings labels are present in the live DOM;
+	- confirm `dist/index.js` and `dist/style.css` were rebuilt recently;
+	- record that the metadata popup could not be read from the current Playwright session.
+- Do not block the whole smoke pass on the metadata popup alone when the loaded UI clearly shows the newly shipped settings structure.
 
 ### Functional smoke checks to run during debugging
 - Verify the zTracker button appears on chat messages.
@@ -88,11 +101,13 @@ Use this when you want a deterministic “click-through” run. Element `ref` va
 	- From the snapshot tree, locate the Extensions UI entry (button/tab/menu; often a left navigation item titled “Extensions”).
 	- `mcp_playwright_browser_click({ element: "Open Extensions", ref: "<ref-from-snapshot>" })`
 	- `mcp_playwright_browser_snapshot()`
+	- If the Extensions panel opens successfully, take a fresh snapshot before trying `Manage extensions` or the `zTracker` entry; do not reuse the pre-open refs.
 	- In the Extensions list, find the collapsible entry named “zTracker” and click it to expand its settings.
 	- `mcp_playwright_browser_click({ element: "Select zTracker", ref: "<ref-from-snapshot>" })`
 	- `mcp_playwright_browser_wait_for({ time: 0.5 })`
 	- `mcp_playwright_browser_snapshot()`
 	- Verify settings UI exists by checking for expected labels like “Connection Profile” and “Schema Preset” in the snapshot.
+	- For the reorganized settings UI, also verify `Tracker Generation` and `Tracker Injection` are present.
 
 3. (Optional) Select a connection profile
 	- If no profile is selected, use the snapshot to find the connection profile dropdown.
@@ -118,6 +133,7 @@ Use this when you want a deterministic “click-through” run. Element `ref` va
 	- Check console errors via `browser_console_messages(onlyErrors: true)`.
 	- Check network activity via `browser_network_requests()`.
 - Capture a screenshot only when it adds value; prefer `browser_snapshot` for actionable structure.
+- If `browser_snapshot` is incomplete for a custom panel, use a targeted Playwright DOM-text query to confirm that expected labels are present before assuming the UI failed to load.
 
 ### DOM / rendering issues
 - Rendering is strict (Handlebars `strict: true`); missing schema fields can throw and prevent tracker rendering.
@@ -137,4 +153,4 @@ Use this when you want a deterministic “click-through” run. Element `ref` va
 - Keep Playwright interactions deterministic: explicit waits, minimal reliance on timing.
 
 ## Maintenance
-IMPORTANT: Keep this file up to date. Whenever you discover or learn something about how to use playwrigh tot test/debug the extension, update this instruction file accordingly. This is a living document that should evolve with the project and capture the most effective debugging practices for future maintainers.
+IMPORTANT: Keep this file up to date. Whenever you discover or learn something about how to use playwrigh to test/debug the extension, update this instruction file accordingly. This is a living document that should evolve with the project and capture the most effective debugging practices for future maintainers.

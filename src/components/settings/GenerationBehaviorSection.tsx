@@ -1,6 +1,5 @@
 import { FC } from 'react';
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
-import { PromptEngineeringMode } from '../../config.js';
 import type { SettingsSectionProps } from './settings-shared.js';
 
 // Renders the core tracker-generation behavior controls that affect timing, prompt mode, and context size.
@@ -44,27 +43,6 @@ export const GenerationBehaviorSection: FC<SettingsSectionProps> = ({ settings, 
           />
           Generate tracker parts one-by-one
         </label>
-      </div>
-
-      <div className="setting-row">
-        <label title="Chooses how zTracker asks the model for structured output: use the native API format, or use JSON/XML/TOON prompt-engineering templates.">
-          Prompt Engineering
-        </label>
-        <select
-          className="text_pole"
-          title="Chooses how zTracker asks the model for structured output: use the native API format, or use JSON/XML/TOON prompt-engineering templates."
-          value={settings.promptEngineeringMode}
-          onChange={(e) =>
-            updateAndRefresh((s) => {
-              s.promptEngineeringMode = e.target.value as PromptEngineeringMode;
-            })
-          }
-        >
-          <option value="native">Native API</option>
-          <option value="json">Prompt Engineering (JSON)</option>
-          <option value="xml">Prompt Engineering (XML)</option>
-          <option value="toon">Prompt Engineering (TOON)</option>
-        </select>
       </div>
 
       <div className="setting-row">
