@@ -22,6 +22,8 @@ These are “living” per-change specs. Each spec tracks its current status and
 - [16-character-card-in-tracker-generation.md](16-character-card-in-tracker-generation.md)
 - [17-preset-undefined-console-error.md](17-preset-undefined-console-error.md)
 - [18-use-sillytavern-selected-chat-type.md](18-use-sillytavern-selected-chat-type.md)
+- [19-virtual-character-tracker-injection.md](19-virtual-character-tracker-injection.md)
+- [20-settings-two-section-layout.md](20-settings-two-section-layout.md)
 
 ## Status workflow
 - **Open**: not implemented yet; questions unresolved.

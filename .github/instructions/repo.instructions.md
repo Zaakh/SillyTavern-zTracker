@@ -42,7 +42,7 @@ These instructions apply to all files in this repository.
 - Any new feature must also have a concise explanation in `readme.md` under the appropriate section.
 - Keep formatting to a minimum; focus on clarity and usefulness.
 
-## Code style
+## IMPORTANT: Code style
 - Brevity and clarity are preferred. Avoid boilerplate where possible.  
 - Split complex logic into small, testable functions in separate modules, especially in `src/`.
 - Avoid large monolithic functions, classes or files.

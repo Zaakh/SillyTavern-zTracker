@@ -3,6 +3,14 @@
   flex-direction: column;
   gap: 12px;
 }
+.ztracker-settings .ztracker-settings-section {
+  margin-top: 4px;
+}
+.ztracker-settings .ztracker-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 .ztracker-settings .setting-row {
   display: flex;
   flex-direction: column;

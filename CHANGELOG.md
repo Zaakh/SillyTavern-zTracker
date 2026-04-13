@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Reorganized the zTracker settings UI into separate Tracker Generation and Tracker Injection sections, keeping shared connection-profile and diagnostics controls outside those two areas for faster navigation.
+
 ## [1.5.4] - 2026-04-13
 
 ### Added

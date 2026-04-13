@@ -9,6 +9,7 @@ Forked from [SillyTavern WTracker](https://github.com/bmen25124/SillyTavern-WTra
 ## Highlights (since the fork)
 
 - Optional **Sequential generation** (generate trackers in smaller steps).
+- The extension settings are grouped into **Tracker Generation** and **Tracker Injection** sections so generation tuning and prompt-context embedding are easier to find.
 - **Regenerate only what you need** from the parts menu (one section, one list item like a character, or even one field).
 - **Filter World Info used for tracker generation** (allow only selected lorebooks/entries when needed).
 - Optional **embed recent tracker snapshots** into normal generations for better continuity (either full JSON or a compact plain-text format).

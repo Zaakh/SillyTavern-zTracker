@@ -14,6 +14,7 @@ Use these instructions when debugging this repo’s UI extension (zTracker) agai
 Always confirm you are debugging the intended zTracker build before interacting with the UI: **Extensions → Manage Extensions → zTracker** 
 
 ### Record repo version
+- Ensure the changes are committed.
 - Run `git rev-parse HEAD` and keep the hash in your notes.
 - Record `package.json` version (example: `node -p "require('./package.json').version"`).
 - Get Version info from SillyTavern:
