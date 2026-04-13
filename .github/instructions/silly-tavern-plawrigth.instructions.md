@@ -26,10 +26,8 @@ Always confirm you are debugging the intended zTracker build before interacting 
 - Ensure `dist/index.js` and `dist/style.css` exist and were updated by the most recent build.
 - Prefer `npm run dev` (watch build) while debugging to avoid stale `dist/*` assets.
 
-### Confirm SillyTavern is loading the correct extension folder
-- Verify the extension is installed from the expected folder under SillyTavern’s extensions directory.
-- If you still see old behavior after rebuilding, hard refresh the tab and/or restart SillyTavern.
-- When in doubt, use browser devtools (Network tab) to confirm the loaded `dist/index.js` timestamp/size matches the current build.
+### Confirm SillyTavern is loading the correct extension version
+- Verify the extension is loaded with the correct version in the Extensions panel.
 
 ## Build and load the extension
 
