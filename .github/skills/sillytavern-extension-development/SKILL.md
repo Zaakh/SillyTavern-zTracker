@@ -15,6 +15,7 @@ This skill does the following:
 - Centralizes reusable extension-validation guidance without depending on one repository's build commands.
 
 When to use this skill:
+- Creating a new spec file or planning new features.
 - Manifest work: `manifest.json`, load order, dependencies, `minimum_client_version`, lifecycle hooks, `generate_interceptor`.
 - Runtime integration work: `SillyTavern.getContext()`, settings, chat metadata, character-card fields, preset data, events, prompt assembly, structured generation.
 - Upstream compatibility work: SillyTavern version upgrades, extension API changes, macro-engine changes, message-shape changes, release impact review.
