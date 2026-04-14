@@ -73,9 +73,8 @@ export function resolveCharacterIdFromMessage(
 
 /** Returns the active solo-character id from the current host context, when available. */
 export function getCurrentCharacterId(context: CharacterContextLike): number | undefined {
-  return Number.isInteger(context.characterId) && Number(context.characterId) >= 0
-    ? Number(context.characterId)
-    : undefined;
+  const characterId = Number(context.characterId);
+  return Number.isInteger(characterId) && characterId >= 0 ? characterId : undefined;
 }
 
 /** Determines whether an incoming character-rendered message should be skipped by auto-mode. */

@@ -2,13 +2,14 @@
  * @jest-environment jsdom
  */
 
-import { jest } from '@jest/globals';
+import { describe, expect, jest, test } from '@jest/globals';
 import {
   EXTENSION_KEY,
 } from '../config.js';
 import {
   CHARACTER_AUTO_MODE_BUTTON_ID,
   findCharacterPanelButtonRow,
+  getCurrentCharacterId,
   isCharacterAutoModeExcluded,
   resolveCharacterIdFromMessage,
   setCharacterAutoModeExcluded,
@@ -35,6 +36,10 @@ describe('character auto-mode exclusion helpers', () => {
     ).toBe(true);
   });
 
+  test('accepts string character ids from the live SillyTavern host context', () => {
+    expect(getCurrentCharacterId({ characterId: '2' })).toBe(2);
+  });
+
   test('skips incoming auto mode when the rendered character is excluded', () => {
     expect(
       shouldAutoGenerateForCharacterMessage(
@@ -50,7 +55,7 @@ describe('character auto-mode exclusion helpers', () => {
   test('skips outgoing auto mode when the active chat character is excluded', () => {
     expect(
       shouldAutoGenerateForUserMessage({
-        characterId: 0,
+        characterId: '0',
         characters: [{ avatar: 'alice.png', data: { extensions: { [EXTENSION_KEY]: { autoModeExcluded: true } } } }],
       }),
     ).toBe(false);
@@ -120,8 +125,8 @@ describe('character auto-mode exclusion button sync', () => {
     button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
     expect(writeExtensionField).toHaveBeenCalledWith(1, EXTENSION_KEY, { autoModeExcluded: true });
-    expect(context.characters[1].data.extensions[EXTENSION_KEY]).toEqual({ autoModeExcluded: true });
-    expect(context.characters[0].data.extensions[EXTENSION_KEY]).toBeUndefined();
+    expect((context.characters[1].data.extensions as Record<string, unknown>)[EXTENSION_KEY]).toEqual({ autoModeExcluded: true });
+    expect((context.characters[0].data.extensions as Record<string, unknown>)[EXTENSION_KEY]).toBeUndefined();
   });
 
   test('does not guess a generic button row when the avatar action row is missing', () => {
