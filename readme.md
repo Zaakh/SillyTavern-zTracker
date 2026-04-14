@@ -12,6 +12,7 @@ Forked from [SillyTavern WTracker](https://github.com/bmen25124/SillyTavern-WTra
 - The extension settings are grouped into **Tracker Generation** and **Tracker Injection** sections so generation tuning and prompt-context embedding are easier to find.
 - **Regenerate only what you need** from the parts menu (one section, one list item like a character, or even one field).
 - **Filter World Info used for tracker generation** (allow only selected lorebooks/entries when needed).
+- **Exclude specific characters from Auto Mode** directly from the character panel when you do not want zTracker to auto-generate trackers for them.
 - Optional **embed recent tracker snapshots** into normal generations for better continuity (either full JSON or a compact plain-text format).
 - Tracker generation now preserves speaker labels in prompt context where available, so turns like `Tobias:` and `Bar:` stay clearer for pronoun-heavy scenes.
 - Normal instruct-mode chat interception also preserves speaker labels when SillyTavern stores them on source messages instead of flattening them directly into turn content.
@@ -57,6 +58,8 @@ In **Extensions → zTracker**, enable **Sequential generation** to have zTracke
 If you want to avoid low-context tracker updates at the start of a chat, set **Skip First X Messages** in **Extensions → zTracker**. A value of `0` keeps the old behavior; higher values prevent tracker generation on early messages until the threshold is reached.
 
 If character-card prose is adding noise to extraction, enable **Skip character card in tracker generation** in **Extensions → zTracker**. The setting is off by default, and when enabled it makes tracker generation ignore character-card prompt fields such as description, personality, and scenario.
+
+If a specific character should never trigger zTracker automatically, open that character's panel and click the zTracker truck toggle in the avatar action row. This excludes that character from **Auto Mode** only; manual tracker generation from message controls still works.
 
 When a tracker is rendered on a message, use the tracker controls:
 - **Regenerate Tracker** (rotate icon) regenerates the whole tracker.

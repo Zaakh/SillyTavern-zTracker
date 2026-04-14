@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-04-14
+
+### Added
+
+- Added a per-character auto-mode exclusion toggle on the character panel so zTracker can skip automatic tracker generation for selected characters without disabling manual tracker generation.
+
+### Fixed
+
+- Updated the character-panel toggle injection to match SillyTavern 1.17's current character info button row so the per-character truck button appears in the live character editor.
+- The per-character truck toggle now accepts the live host's string-form `characterId` values, so clicking the button correctly updates the selected character's auto-mode exclusion state.
+
 ## [1.6.0] - 2026-04-13
 
 ### Added
