@@ -234,6 +234,29 @@ export async function initializeGlobalUI(options: {
   const { globalContext, settingsManager, actions, renderTrackerWithDeps } = options;
 
   let characterPanelButtonSyncTimer: number | undefined;
+  let observedCharacterPanel: HTMLElement | null = null;
+  let characterPanelObserver: MutationObserver | null = null;
+
+  const attachCharacterPanelObserver = () => {
+    if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
+
+    const nextPanel = document.querySelector('#form_create');
+    const characterPanel = nextPanel instanceof HTMLElement ? nextPanel : null;
+    if (characterPanel === observedCharacterPanel) {
+      return;
+    }
+
+    characterPanelObserver?.disconnect();
+    observedCharacterPanel = characterPanel;
+    if (!observedCharacterPanel) {
+      characterPanelObserver = null;
+      return;
+    }
+
+    characterPanelObserver = new MutationObserver(() => scheduleCharacterPanelButtonSync());
+    characterPanelObserver.observe(observedCharacterPanel, { childList: true, subtree: true });
+  };
+
   const scheduleCharacterPanelButtonSync = () => {
     if (typeof document === 'undefined') return;
     if (characterPanelButtonSyncTimer) {
@@ -242,10 +265,10 @@ export async function initializeGlobalUI(options: {
 
     characterPanelButtonSyncTimer = window.setTimeout(() => {
       characterPanelButtonSyncTimer = undefined;
-      const context = SillyTavern.getContext();
+      attachCharacterPanelObserver();
       const settings = settingsManager.getSettings();
       syncCharacterAutoModeButton({
-        context,
+        getContext: () => SillyTavern.getContext(),
         autoModeEnabled: settings.autoMode !== AutoModeOptions.NONE,
         onToggle: ({ excluded }) => {
           st_echo('info', excluded ? 'zTracker auto mode excluded for this character.' : 'zTracker auto mode restored for this character.');
@@ -259,7 +282,20 @@ export async function initializeGlobalUI(options: {
   scheduleCharacterPanelButtonSync();
 
   if (typeof MutationObserver !== 'undefined') {
-    const observer = new MutationObserver(() => scheduleCharacterPanelButtonSync());
+    attachCharacterPanelObserver();
+    const observer = new MutationObserver((mutations) => {
+      const characterPanelChanged = mutations.some((mutation) =>
+        [...mutation.addedNodes, ...mutation.removedNodes].some(
+          (node) => node instanceof Element && (node.id === 'form_create' || !!node.querySelector('#form_create')),
+        ),
+      );
+      if (!characterPanelChanged) {
+        return;
+      }
+
+      attachCharacterPanelObserver();
+      scheduleCharacterPanelButtonSync();
+    });
     observer.observe(document.body, { childList: true, subtree: true });
   }
 

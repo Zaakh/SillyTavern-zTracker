@@ -81,7 +81,7 @@ describe('character auto-mode exclusion button sync', () => {
     const buttonRow = findCharacterPanelButtonRow();
     expect(buttonRow).not.toBeNull();
 
-    const button = syncCharacterAutoModeButton({ context, autoModeEnabled: true });
+    const button = syncCharacterAutoModeButton({ getContext: () => context, autoModeEnabled: true });
     expect(button?.id).toBe(CHARACTER_AUTO_MODE_BUTTON_ID);
     expect(buttonRow?.querySelector(`#${CHARACTER_AUTO_MODE_BUTTON_ID}`)).toBe(button);
     expect(button?.dataset.excluded).toBe('false');
@@ -90,5 +90,42 @@ describe('character auto-mode exclusion button sync', () => {
 
     expect(context.writeExtensionField).toHaveBeenCalledWith(0, EXTENSION_KEY, { autoModeExcluded: true });
     expect(button?.dataset.excluded).toBe('true');
+  });
+
+  test('uses fresh host context when the active character changes before toggling', () => {
+    document.body.innerHTML = '<div id="form_create"><div class="avatar_button_row"></div></div>';
+    const writeExtensionField = jest.fn();
+    const context = {
+      characterId: 0,
+      characters: [
+        { avatar: 'alice.png', data: { extensions: {} } },
+        { avatar: 'bob.png', data: { extensions: {} } },
+      ],
+      writeExtensionField,
+    };
+
+    syncCharacterAutoModeButton({ getContext: () => context, autoModeEnabled: true });
+    context.characterId = 1;
+    const button = syncCharacterAutoModeButton({ getContext: () => context, autoModeEnabled: true });
+
+    button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(writeExtensionField).toHaveBeenCalledWith(1, EXTENSION_KEY, { autoModeExcluded: true });
+    expect(context.characters[1].data.extensions[EXTENSION_KEY]).toEqual({ autoModeExcluded: true });
+    expect(context.characters[0].data.extensions[EXTENSION_KEY]).toBeUndefined();
+  });
+
+  test('does not guess a generic button row when the avatar action row is missing', () => {
+    document.body.innerHTML = `
+      <div id="form_create">
+        <div>
+          <button type="button">One</button>
+          <button type="button">Two</button>
+        </div>
+      </div>
+    `;
+
+    expect(findCharacterPanelButtonRow()).toBeNull();
+    expect(syncCharacterAutoModeButton({ getContext: () => ({ characterId: 0, characters: [] }), autoModeEnabled: true })).toBeNull();
   });
 });

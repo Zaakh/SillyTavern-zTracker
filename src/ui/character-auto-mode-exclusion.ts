@@ -24,6 +24,21 @@ type CharacterContextLike = {
   writeExtensionField?: (characterId: number, key: string, value: unknown) => unknown;
 };
 
+type CharacterPanelButtonSyncOptions = {
+  autoModeEnabled: boolean;
+  root?: ParentNode;
+  context?: CharacterContextLike;
+  getContext?: () => CharacterContextLike;
+  onToggle?: (result: { characterId: number; excluded: boolean }) => void;
+};
+
+function resolveCharacterContext(options: CharacterPanelButtonSyncOptions): CharacterContextLike | null {
+  if (typeof options.getContext === 'function') {
+    return options.getContext();
+  }
+  return options.context ?? null;
+}
+
 /** Returns the zTracker extension payload stored on a character card, if present. */
 export function getCharacterZTrackerExtensionData(character: CharacterLike | undefined): Record<string, unknown> {
   const data = character?.data?.extensions?.[EXTENSION_KEY];
@@ -146,17 +161,7 @@ export function findCharacterPanelButtonRow(root: ParentNode = document): HTMLEl
       return match;
     }
   }
-
-  const candidates = Array.from(form.querySelectorAll<HTMLElement>('div')).filter((element) => {
-    const childButtons = Array.from(element.children).filter(
-      (child) =>
-        child instanceof HTMLElement &&
-        (child.classList.contains('menu_button') || child.classList.contains('right_menu_button') || child.tagName === 'BUTTON'),
-    );
-    return childButtons.length >= 2;
-  });
-
-  return candidates[0] ?? null;
+  return null;
 }
 
 function buildCharacterAutoModeButtonTitle(options: {
@@ -179,15 +184,15 @@ function buildCharacterAutoModeButtonTitle(options: {
 }
 
 /** Creates or refreshes the character-panel exclusion button and keeps its state in sync. */
-export function syncCharacterAutoModeButton(options: {
-  context: CharacterContextLike;
-  autoModeEnabled: boolean;
-  root?: ParentNode;
-  onToggle?: (result: { characterId: number; excluded: boolean }) => void;
-}): HTMLElement | null {
-  const { context, autoModeEnabled, root = document, onToggle } = options;
+export function syncCharacterAutoModeButton(options: CharacterPanelButtonSyncOptions): HTMLElement | null {
+  const { autoModeEnabled, root = document, onToggle } = options;
   const buttonRow = findCharacterPanelButtonRow(root);
   if (!buttonRow) {
+    return null;
+  }
+
+  const context = resolveCharacterContext(options);
+  if (!context) {
     return null;
   }
 
@@ -199,11 +204,16 @@ export function syncCharacterAutoModeButton(options: {
     button.setAttribute('role', 'button');
     button.tabIndex = 0;
     button.addEventListener('click', () => {
-      const result = toggleCurrentCharacterAutoModeExcluded(context);
+      const nextContext = resolveCharacterContext(options);
+      if (!nextContext) {
+        return;
+      }
+
+      const result = toggleCurrentCharacterAutoModeExcluded(nextContext);
       if (!result) {
         return;
       }
-      syncCharacterAutoModeButton({ context, autoModeEnabled, root, onToggle });
+      syncCharacterAutoModeButton({ ...options, root });
       onToggle?.(result);
     });
     buttonRow.appendChild(button);

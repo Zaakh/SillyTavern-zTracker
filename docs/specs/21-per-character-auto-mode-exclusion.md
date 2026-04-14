@@ -1,7 +1,7 @@
 # Spec: Per-character auto-mode exclusion
 
 Status: In Progress
-Last updated: 2026-04-13
+Last updated: 2026-04-14
 
 ## Summary
 
@@ -243,10 +243,12 @@ No additional group-specific logic is needed because the exclusion check resolve
 ## Verification
 
 - Added import-safe helper coverage for per-character exclusion state, message-to-character resolution, outgoing/incoming auto-mode guard decisions, and character-panel button toggling.
+- Added regression coverage for character switching so the character-panel truck button always resolves fresh host context before writing per-character exclusion state.
 - Added `ui-init` integration coverage confirming `CHARACTER_MESSAGE_RENDERED` and `USER_MESSAGE_RENDERED` auto-mode handlers skip excluded characters.
-- Ran `npm test` successfully on the final code: 23 suites passed, 138 tests passed.
+- Ran `npm test` successfully on the final code: 23 suites passed, 140 tests passed.
 - Ran `npm run build` successfully, updating the shipped bundle under `dist/`.
-- Live SillyTavern smoke verification has not been run yet. The remaining host-side risk is the exact character-panel selector used for button injection.
+- Tightened the runtime DOM lookup to explicit character-panel action-row selectors and limited resync observers to character-panel related mutations instead of every document mutation.
+- Live SillyTavern smoke verification has not been run yet. The remaining host-side risk is whether SillyTavern 1.17 exposes one of the expected explicit action-row selectors for button injection.
 
 ## Testing strategy
 
