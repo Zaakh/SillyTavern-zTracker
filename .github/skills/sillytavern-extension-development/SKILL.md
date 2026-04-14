@@ -29,15 +29,16 @@ When not to use this skill:
 Steps:
 1. Classify the task before editing. Decide whether it is host integration, upstream compatibility, validation workflow, or a combination.
 2. If the task touches runtime integration, manifest fields, events, prompt interception, or extension data storage, read [./references/extension-basics.md](./references/extension-basics.md).
-3. If the task depends on SillyTavern version behavior or may break on upgrade, read [./references/upstream-compatibility.md](./references/upstream-compatibility.md).
-4. If the task needs test or smoke-test strategy, read [references/validation-workflow.md](references/validation-workflow.md).
-5. Prefer the stable integration surface: use `SillyTavern.getContext()`, shared `SillyTavern.libs`, relative extension imports, and explicit version gates in `manifest.json` when newer APIs are required.
-6. Keep extension changes local and reversible. Do not add extension-local policy when SillyTavern already owns the behavior.
-7. Validate at the right depth:
+3. If the task touches buttons or controls inside the character info/editor panel, read [./references/character-info-panel-buttons.md](./references/character-info-panel-buttons.md).
+4. If the task depends on SillyTavern version behavior or may break on upgrade, read [./references/upstream-compatibility.md](./references/upstream-compatibility.md).
+5. If the task needs test or smoke-test strategy, read [references/validation-workflow.md](references/validation-workflow.md).
+6. Prefer the stable integration surface: use `SillyTavern.getContext()`, shared `SillyTavern.libs`, relative extension imports, and explicit version gates in `manifest.json` when newer APIs are required.
+7. Keep extension changes local and reversible. Do not add extension-local policy when SillyTavern already owns the behavior.
+8. Validate at the right depth:
    - Use the repository's existing test command after executable source changes.
    - Use the repository's build command after changes that affect shipped extension assets.
    - When behavior depends on the live host, verify against a real SillyTavern instance only after fresh build artifacts exist.
-8. Stop and report if the required SillyTavern runtime fact is unclear or if the repository lacks a stable host API for the behavior you need.
+9. Stop and report if the required SillyTavern runtime fact is unclear or if the repository lacks a stable host API for the behavior you need.
 
 Example:
 
