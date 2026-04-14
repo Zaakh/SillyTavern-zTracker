@@ -24,6 +24,7 @@ These are “living” per-change specs. Each spec tracks its current status and
 - [18-use-sillytavern-selected-chat-type.md](18-use-sillytavern-selected-chat-type.md)
 - [19-virtual-character-tracker-injection.md](19-virtual-character-tracker-injection.md)
 - [20-settings-two-section-layout.md](20-settings-two-section-layout.md)
+- [21-per-character-auto-mode-exclusion.md](21-per-character-auto-mode-exclusion.md)
 
 ## Status workflow
 - **Open**: not implemented yet; questions unresolved.
