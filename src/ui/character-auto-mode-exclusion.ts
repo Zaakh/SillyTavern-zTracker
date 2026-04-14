@@ -154,6 +154,7 @@ export function findCharacterPanelButtonRow(root: ParentNode = document): HTMLEl
     '.avatar_button_row',
     '.right_menu_button_div',
     '.avatar-buttons',
+    '.form_create_bottom_buttons_block.buttons_block',
   ];
   for (const selector of explicitSelectors) {
     const match = form.querySelector(selector);

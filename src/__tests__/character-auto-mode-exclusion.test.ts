@@ -70,6 +70,15 @@ describe('character auto-mode exclusion helpers', () => {
 });
 
 describe('character auto-mode exclusion button sync', () => {
+  test('matches the live SillyTavern character panel button row selector', () => {
+    document.body.innerHTML = '<div id="form_create"><div class="form_create_bottom_buttons_block buttons_block"></div></div>';
+
+    const buttonRow = findCharacterPanelButtonRow();
+
+    expect(buttonRow).not.toBeNull();
+    expect(buttonRow?.className).toBe('form_create_bottom_buttons_block buttons_block');
+  });
+
   test('injects the button into the avatar action row and toggles the current character state', () => {
     document.body.innerHTML = '<div id="form_create"><div class="avatar_button_row"></div></div>';
     const context = {
