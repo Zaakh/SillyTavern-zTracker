@@ -10,8 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Tracker generation now resolves prompt selectors from the configs currently active in SillyTavern instead of the saved selector fields on the chosen connection profile, and text-completion transport now temporarily mirrors the active instruct preset so the final request matches the live host prompt configuration.
 - Auto mode now correctly triggers tracker generation for "Process inputs" again by aligning the settings value with the runtime enum and tolerating the currently selected `inputs` value.
-- Outgoing auto mode now aborts the host's first auto-reply pass, waits for tracker generation to finish and save, and only then resumes normal chat generation so the next reply uses the freshly updated tracker.
+- Outgoing auto mode now aborts the host's first auto-reply pass, waits for tracker generation to finish and save when possible, and then resumes normal chat generation so the next reply uses the freshly updated tracker or still proceeds when tracker generation fails.
 - Schema preset changes in the settings UI now persist reliably across create, rename, delete, and reselection flows, and the embed snapshot transform preset manager now uses the same stable preset-selection logic.
+- Invalid schema JSON drafts are no longer overwritten silently by schema preset changes or related settings rerenders; zTracker now keeps the local draft on the current preset and warns before preset actions that would discard it.
 
 ## [1.7.0] - 2026-04-14
 

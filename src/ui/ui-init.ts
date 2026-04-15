@@ -498,16 +498,17 @@ export async function initializeGlobalUI(options: {
       stopHostGeneration();
 
       void (async () => {
-        const trackerUpdated = await actions.generateTracker(messageId, { silent: true });
+        try {
+          await actions.generateTracker(messageId, { silent: true });
+        } catch (error) {
+          console.error('zTracker auto mode failed to generate a tracker before reply.', error);
+        }
+
         if (outgoingAutoModeState.pendingMessageId !== messageId || outgoingAutoModeState.runId !== runId) {
           return;
         }
 
         outgoingAutoModeState.pendingMessageId = null;
-        if (!trackerUpdated) {
-          return;
-        }
-
         await resumeHostGeneration();
       })();
     },

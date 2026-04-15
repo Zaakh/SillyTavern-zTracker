@@ -15,6 +15,16 @@
 		gap: 12px;
 	}
 
+	.ztracker-schema-textarea.is-invalid {
+		border-color: var(--error-color, #f44336);
+		box-shadow: 0 0 0 1px var(--error-color, #f44336);
+	}
+
+	.ztracker-schema-error {
+		color: var(--error-color, #f44336);
+		margin-top: -2px;
+	}
+
     .setting-row {
         display: flex;
         flex-direction: column;

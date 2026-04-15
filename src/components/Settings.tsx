@@ -1,9 +1,8 @@
-import { FC, useState, useMemo, useCallback, useEffect } from 'react';
+import { FC, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { STConnectionProfileSelect, PresetItem } from 'sillytavern-utils-lib/components/react';
 import { ExtensionSettingsManager } from 'sillytavern-utils-lib';
 import {
   ExtensionSettings,
-  Schema,
   DEFAULT_SCHEMA_VALUE,
   DEFAULT_SCHEMA_HTML,
   defaultSettings,
@@ -18,6 +17,11 @@ import {
 } from '../system-prompt.js';
 import { DiagnosticsSection } from './settings/DiagnosticsSection.js';
 import { reconcilePresetItems, resolvePresetSelection } from './settings/preset-state.js';
+import {
+  formatSchemaText,
+  hasUnsavedInvalidSchemaDraft,
+  shouldSyncSchemaTextFromSettings,
+} from './settings/schema-editor-state.js';
 import { SettingsSectionDrawer } from './settings/SettingsSectionDrawer.js';
 import { TrackerGenerationSection } from './settings/TrackerGenerationSection.js';
 import { TrackerInjectionSection } from './settings/TrackerInjectionSection.js';
@@ -25,14 +29,10 @@ import { TrackerInjectionSection } from './settings/TrackerInjectionSection.js';
 // Initialize the settings manager once, outside the component
 export const settingsManager = new ExtensionSettingsManager<ExtensionSettings>(EXTENSION_KEY, defaultSettings);
 
-// The schema editor keeps a local text buffer so invalid JSON can stay visible until the user fixes it.
-function formatSchemaText(schema?: Schema) {
-  return schema ? JSON.stringify(schema.value, null, 2) : '';
-}
-
 export const ZTrackerSettings: FC = () => {
   const forceUpdate = useForceUpdate();
   const settings = settingsManager.getSettings();
+  const previousSchemaPresetRef = useRef(settings.schemaPreset);
 
   const [diagnosticsText, setDiagnosticsText] = useState<string>('');
   const [systemPromptRefreshRevision, setSystemPromptRefreshRevision] = useState(0);
@@ -78,9 +78,21 @@ export const ZTrackerSettings: FC = () => {
     setSystemPromptRefreshRevision((revision) => revision + 1);
   }, []);
 
+  const activeSchemaText = formatSchemaText(settings.schemaPresets[settings.schemaPreset]);
+  const schemaTextHasError = hasUnsavedInvalidSchemaDraft(schemaText);
+
   useEffect(() => {
-    setSchemaText(formatSchemaText(settings.schemaPresets[settings.schemaPreset]));
-  }, [settings.schemaPreset, settings.schemaPresets]);
+    const activePresetChanged = previousSchemaPresetRef.current !== settings.schemaPreset;
+    previousSchemaPresetRef.current = settings.schemaPreset;
+
+    if (!shouldSyncSchemaTextFromSettings({ currentText: schemaText, activePresetChanged })) {
+      return;
+    }
+
+    if (schemaText !== activeSchemaText) {
+      setSchemaText(activeSchemaText);
+    }
+  }, [activeSchemaText, schemaText, settings.schemaPreset]);
 
   // Handler for when a new schema preset is selected
   const handleSchemaPresetChange = (newValue?: string) => {
@@ -131,8 +143,8 @@ export const ZTrackerSettings: FC = () => {
           };
         }
       });
-    } catch (e) {
-      // Invalid JSON, do nothing until it's valid. A visual error could be added.
+    } catch {
+      // Invalid JSON stays local until it parses so the user can keep editing.
     }
   };
 
@@ -209,6 +221,7 @@ export const ZTrackerSettings: FC = () => {
                 handleSchemaPresetChange={handleSchemaPresetChange}
                 handleSchemaPresetsListChange={handleSchemaPresetsListChange}
                 schemaText={schemaText}
+                schemaTextHasError={schemaTextHasError}
                 handleSchemaValueChange={handleSchemaValueChange}
                 handleSchemaHtmlChange={handleSchemaHtmlChange}
                 restoreSchemaToDefault={restoreSchemaToDefault}

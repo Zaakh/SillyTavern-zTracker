@@ -89,7 +89,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     expect(hostContext.generate).toHaveBeenCalledWith(undefined, { automatic_trigger: true });
   });
 
-  test('does not resume normal generation when tracker generation fails', async () => {
+  test('resumes normal generation when tracker generation fails', async () => {
     const handlers = new Map<string, (...args: any[]) => void>();
     const hostContext = {
       chat: [{ original_avatar: 'alice.png' }],
@@ -130,7 +130,58 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     handlers.get('MESSAGE_SENT')?.(0);
     await Promise.resolve();
 
-    expect(hostContext.generate).not.toHaveBeenCalled();
+    expect(hostContext.generate).toHaveBeenCalledWith(undefined, { automatic_trigger: true });
+  });
+
+  test('resumes normal generation when tracker generation throws', async () => {
+    const handlers = new Map<string, (...args: any[]) => void>();
+    const hostContext = {
+      chat: [{ original_avatar: 'alice.png' }],
+      characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+      characterId: 0,
+      stopGeneration: jest.fn(() => true),
+      generate: jest.fn(async () => undefined),
+    };
+    const actions = {
+      renderExtensionTemplates: jest.fn(async () => undefined),
+      generateTracker: jest.fn(async () => {
+        throw new Error('tracker failed');
+      }),
+      editTracker: jest.fn(),
+      deleteTracker: jest.fn(),
+      generateTrackerPart: jest.fn(),
+      generateTrackerArrayItem: jest.fn(),
+      generateTrackerArrayItemByName: jest.fn(),
+      generateTrackerArrayItemByIdentity: jest.fn(),
+      generateTrackerArrayItemField: jest.fn(),
+      generateTrackerArrayItemFieldByName: jest.fn(),
+      generateTrackerArrayItemFieldByIdentity: jest.fn(),
+    };
+
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    (globalThis as any).SillyTavern = { getContext: () => hostContext };
+
+    await initializeGlobalUI({
+      globalContext: {
+        chat: hostContext.chat,
+        saveChat: jest.fn(async () => undefined),
+        eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
+      },
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+      } as any,
+      actions: actions as any,
+      renderTrackerWithDeps: () => undefined,
+    });
+
+    handlers.get('MESSAGE_SENT')?.(0);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith('zTracker auto mode failed to generate a tracker before reply.', expect.any(Error));
+    expect(hostContext.generate).toHaveBeenCalledWith(undefined, { automatic_trigger: true });
+
+    consoleErrorSpy.mockRestore();
   });
 
   test('auto-generates for outgoing user messages on message_sent when process inputs is selected', async () => {

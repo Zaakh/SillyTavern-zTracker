@@ -9,6 +9,7 @@ export const SchemaPresetSection: FC<{
   handleSchemaPresetChange: (newValue?: string) => void;
   handleSchemaPresetsListChange: (newItems: PresetItem[]) => void;
   schemaText: string;
+  schemaTextHasError: boolean;
   handleSchemaValueChange: (newSchemaText: string) => void;
   handleSchemaHtmlChange: (newHtml: string) => void;
   restoreSchemaToDefault: () => Promise<void>;
@@ -18,6 +19,7 @@ export const SchemaPresetSection: FC<{
   handleSchemaPresetChange,
   handleSchemaPresetsListChange,
   schemaText,
+  schemaTextHasError,
   handleSchemaValueChange,
   handleSchemaHtmlChange,
   restoreSchemaToDefault,
@@ -44,7 +46,16 @@ export const SchemaPresetSection: FC<{
         <STButton className="fa-solid fa-undo" title="Restore default" onClick={restoreSchemaToDefault} />
       </div>
 
-      <STTextarea value={schemaText} onChange={(e) => handleSchemaValueChange(e.target.value)} rows={4} />
+      <STTextarea
+        value={schemaText}
+        onChange={(e) => handleSchemaValueChange(e.target.value)}
+        rows={4}
+        className={schemaTextHasError ? 'ztracker-schema-textarea is-invalid' : 'ztracker-schema-textarea'}
+        aria-invalid={schemaTextHasError}
+      />
+      {schemaTextHasError ? (
+        <div className="notes ztracker-schema-error">Invalid JSON. The schema draft is not saved until it parses successfully.</div>
+      ) : null}
       <STTextarea
         value={settings.schemaPresets[settings.schemaPreset]?.html ?? ''}
         onChange={(e) => handleSchemaHtmlChange(e.target.value)}
