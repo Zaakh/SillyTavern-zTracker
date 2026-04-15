@@ -447,7 +447,7 @@ export async function initializeGlobalUI(options: {
     },
   );
   globalContext.eventSource.on(
-    EventNames.USER_MESSAGE_RENDERED,
+    EventNames.MESSAGE_SENT,
     (messageId: number) => {
       const settings = settingsManager.getSettings();
       if (!isOutgoingAutoMode(settings.autoMode as ExtensionSettings['autoMode'] | 'inputs')) return;
