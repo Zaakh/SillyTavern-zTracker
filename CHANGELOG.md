@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-04-15
+
 ### Fixed
 
 - Tracker generation now resolves prompt selectors from the configs currently active in SillyTavern instead of the saved selector fields on the chosen connection profile, and text-completion transport now temporarily mirrors the active instruct preset so the final request matches the live host prompt configuration.
