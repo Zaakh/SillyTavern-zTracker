@@ -236,6 +236,40 @@ export async function initializeGlobalUI(options: {
   renderTrackerWithDeps: (messageId: number) => void;
 }) {
   const { globalContext, settingsManager, actions, renderTrackerWithDeps } = options;
+  const outgoingAutoModeState = {
+    pendingMessageId: null as number | null,
+    allowNextGenerationStart: false,
+    runId: 0,
+  };
+
+  type AutoModeHostContext = {
+    generate?: (type?: string, options?: { automatic_trigger?: boolean }) => Promise<unknown>;
+    stopGeneration?: () => boolean;
+  };
+
+  const stopHostGeneration = () => {
+    const context = SillyTavern.getContext() as AutoModeHostContext;
+    if (typeof context?.stopGeneration !== 'function') {
+      return false;
+    }
+
+    return context.stopGeneration();
+  };
+
+  const resumeHostGeneration = async () => {
+    const context = SillyTavern.getContext() as AutoModeHostContext;
+    if (typeof context?.generate !== 'function') {
+      return false;
+    }
+
+    outgoingAutoModeState.allowNextGenerationStart = true;
+    try {
+      await context.generate(undefined, { automatic_trigger: true });
+      return true;
+    } finally {
+      outgoingAutoModeState.allowNextGenerationStart = false;
+    }
+  };
 
   let characterPanelButtonSyncTimer: number | undefined;
   let observedCharacterPanel: HTMLElement | null = null;
@@ -457,9 +491,40 @@ export async function initializeGlobalUI(options: {
         return;
       }
 
-      actions.generateTracker(messageId, { silent: true });
+      const runId = ++outgoingAutoModeState.runId;
+      outgoingAutoModeState.pendingMessageId = messageId;
+      outgoingAutoModeState.allowNextGenerationStart = false;
+
+      stopHostGeneration();
+
+      void (async () => {
+        const trackerUpdated = await actions.generateTracker(messageId, { silent: true });
+        if (outgoingAutoModeState.pendingMessageId !== messageId || outgoingAutoModeState.runId !== runId) {
+          return;
+        }
+
+        outgoingAutoModeState.pendingMessageId = null;
+        if (!trackerUpdated) {
+          return;
+        }
+
+        await resumeHostGeneration();
+      })();
     },
   );
+
+  globalContext.eventSource.on(EventNames.GENERATION_STARTED, () => {
+    if (outgoingAutoModeState.pendingMessageId === null) {
+      return;
+    }
+
+    if (outgoingAutoModeState.allowNextGenerationStart) {
+      outgoingAutoModeState.allowNextGenerationStart = false;
+      return;
+    }
+
+    stopHostGeneration();
+  });
 
   globalContext.eventSource.on(EventNames.CHAT_CHANGED, () => {
     scheduleCharacterPanelButtonSync();

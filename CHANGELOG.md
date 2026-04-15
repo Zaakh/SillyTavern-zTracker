@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Tracker generation now resolves prompt selectors from the configs currently active in SillyTavern instead of the saved selector fields on the chosen connection profile, and text-completion transport now temporarily mirrors the active instruct preset so the final request matches the live host prompt configuration.
 - Auto mode now correctly triggers tracker generation for "Process inputs" again by aligning the settings value with the runtime enum and tolerating the currently selected `inputs` value.
-- Outgoing auto mode now hooks SillyTavern's current `message_sent` timing so tracker generation starts before the normal assistant reply flow on updated hosts.
+- Outgoing auto mode now aborts the host's first auto-reply pass, waits for tracker generation to finish and save, and only then resumes normal chat generation so the next reply uses the freshly updated tracker.
 
 ## [1.7.0] - 2026-04-14
 

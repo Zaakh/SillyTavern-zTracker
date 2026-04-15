@@ -20,6 +20,7 @@ jest.unstable_mockModule('sillytavern-utils-lib/types/translate', () => ({
 jest.unstable_mockModule('sillytavern-utils-lib/types', () => ({
   EventNames: {
     CHARACTER_MESSAGE_RENDERED: 'CHARACTER_MESSAGE_RENDERED',
+    GENERATION_STARTED: 'GENERATION_STARTED',
     MESSAGE_SENT: 'MESSAGE_SENT',
     USER_MESSAGE_RENDERED: 'USER_MESSAGE_RENDERED',
     CHAT_CHANGED: 'CHAT_CHANGED',
@@ -33,6 +34,105 @@ jest.unstable_mockModule('../tracker.js', () => ({
 const { initializeGlobalUI } = await import('../ui/ui-init.js');
 
 describe('initializeGlobalUI auto-mode exclusion guards', () => {
+  test('waits for tracker generation to finish before resuming normal generation for outgoing auto mode', async () => {
+    let resolveTracker: (value: boolean) => void = () => undefined;
+    const trackerPromise = new Promise<boolean>((resolve) => {
+      resolveTracker = resolve;
+    });
+    const handlers = new Map<string, (...args: any[]) => void>();
+    const hostContext = {
+      chat: [{ original_avatar: 'alice.png' }],
+      characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+      characterId: 0,
+      stopGeneration: jest.fn(() => true),
+      generate: jest.fn(async () => undefined),
+    };
+    const actions = {
+      renderExtensionTemplates: jest.fn(async () => undefined),
+      generateTracker: jest.fn(() => trackerPromise),
+      editTracker: jest.fn(),
+      deleteTracker: jest.fn(),
+      generateTrackerPart: jest.fn(),
+      generateTrackerArrayItem: jest.fn(),
+      generateTrackerArrayItemByName: jest.fn(),
+      generateTrackerArrayItemByIdentity: jest.fn(),
+      generateTrackerArrayItemField: jest.fn(),
+      generateTrackerArrayItemFieldByName: jest.fn(),
+      generateTrackerArrayItemFieldByIdentity: jest.fn(),
+    };
+
+    (globalThis as any).SillyTavern = { getContext: () => hostContext };
+
+    await initializeGlobalUI({
+      globalContext: {
+        chat: hostContext.chat,
+        saveChat: jest.fn(async () => undefined),
+        eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
+      },
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+      } as any,
+      actions: actions as any,
+      renderTrackerWithDeps: () => undefined,
+    });
+
+    handlers.get('MESSAGE_SENT')?.(0);
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true });
+
+    handlers.get('GENERATION_STARTED')?.();
+    expect(hostContext.stopGeneration).toHaveBeenCalledTimes(2);
+    expect(hostContext.generate).not.toHaveBeenCalled();
+
+    resolveTracker(true);
+    await trackerPromise;
+
+    expect(hostContext.generate).toHaveBeenCalledWith(undefined, { automatic_trigger: true });
+  });
+
+  test('does not resume normal generation when tracker generation fails', async () => {
+    const handlers = new Map<string, (...args: any[]) => void>();
+    const hostContext = {
+      chat: [{ original_avatar: 'alice.png' }],
+      characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+      characterId: 0,
+      stopGeneration: jest.fn(() => true),
+      generate: jest.fn(async () => undefined),
+    };
+    const actions = {
+      renderExtensionTemplates: jest.fn(async () => undefined),
+      generateTracker: jest.fn(async () => false),
+      editTracker: jest.fn(),
+      deleteTracker: jest.fn(),
+      generateTrackerPart: jest.fn(),
+      generateTrackerArrayItem: jest.fn(),
+      generateTrackerArrayItemByName: jest.fn(),
+      generateTrackerArrayItemByIdentity: jest.fn(),
+      generateTrackerArrayItemField: jest.fn(),
+      generateTrackerArrayItemFieldByName: jest.fn(),
+      generateTrackerArrayItemFieldByIdentity: jest.fn(),
+    };
+
+    (globalThis as any).SillyTavern = { getContext: () => hostContext };
+
+    await initializeGlobalUI({
+      globalContext: {
+        chat: hostContext.chat,
+        saveChat: jest.fn(async () => undefined),
+        eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
+      },
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+      } as any,
+      actions: actions as any,
+      renderTrackerWithDeps: () => undefined,
+    });
+
+    handlers.get('MESSAGE_SENT')?.(0);
+    await Promise.resolve();
+
+    expect(hostContext.generate).not.toHaveBeenCalled();
+  });
+
   test('auto-generates for outgoing user messages on message_sent when process inputs is selected', async () => {
     const handlers = new Map<string, (messageId?: number) => void>();
     const actions = {

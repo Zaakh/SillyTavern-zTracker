@@ -381,7 +381,7 @@ export function createTrackerActions(options: {
   }
 
   async function generateTrackerFull(id: number) {
-    if (cancelIfPending(id)) return;
+    if (cancelIfPending(id)) return false;
 
     const { saveChat } = globalContext;
 
@@ -429,6 +429,7 @@ export function createTrackerActions(options: {
         });
         restoreDetailsState(id, detailsState);
         await saveChat();
+        return true;
       } catch {
         logPromptEngineeredRenderRollback(response, new Error('Generated data failed to render with the current template. Not saved.'));
         renderTrackerWithDeps(id);
@@ -439,6 +440,7 @@ export function createTrackerActions(options: {
         console.error('Error generating tracker:', error);
         st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
       }
+      return false;
     } finally {
       mainButton?.classList.remove('spinning');
       regenerateButton?.classList.remove('spinning');
@@ -446,7 +448,7 @@ export function createTrackerActions(options: {
   }
 
   async function generateTrackerSequential(id: number) {
-    if (cancelIfPending(id)) return;
+    if (cancelIfPending(id)) return false;
 
     const { saveChat } = globalContext;
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
@@ -510,7 +512,7 @@ export function createTrackerActions(options: {
       }
 
       if (token.cancelled) {
-        return;
+        return false;
       }
 
       if (!trackerData || Object.keys(trackerData).length === 0) {
@@ -526,6 +528,7 @@ export function createTrackerActions(options: {
         });
         restoreDetailsState(id, detailsState);
         await saveChat();
+        return true;
       } catch {
         logPromptEngineeredRenderRollback(trackerData, new Error('Generated data failed to render with the current template. Not saved.'));
         renderTrackerWithDeps(id);
@@ -536,6 +539,7 @@ export function createTrackerActions(options: {
         console.error('Error generating tracker (sequential):', error);
         st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
       }
+      return false;
     } finally {
       pendingSequences.delete(id);
       mainButton?.classList.remove('spinning');
@@ -1099,7 +1103,7 @@ export function createTrackerActions(options: {
   async function generateTracker(id: number, options?: { silent?: boolean }) {
     const settings = settingsManager.getSettings();
     if (shouldSkipTrackerGeneration(id, settings, (message) => st_echo('info', message), options?.silent)) {
-      return;
+      return false;
     }
 
     if (settings.sequentialPartGeneration) {
