@@ -20,10 +20,10 @@ export const GenerationBehaviorSection: FC<SettingsSectionProps> = ({ settings, 
             })
           }
         >
-          <option value="none">None</option>
-          <option value="responses">Process responses</option>
-          <option value="inputs">Process inputs</option>
-          <option value="both">Process both</option>
+          <option value={AutoModeOptions.NONE}>None</option>
+          <option value={AutoModeOptions.RESPONSES}>Process responses</option>
+          <option value={AutoModeOptions.INPUT}>Process inputs</option>
+          <option value={AutoModeOptions.BOTH}>Process both</option>
         </select>
       </div>
 

@@ -27,6 +27,10 @@ let activePartsMenu: PartsMenuPortalState | null = null;
 const incomingTypes = [AutoModeOptions.RESPONSES, AutoModeOptions.BOTH];
 const outgoingTypes = [AutoModeOptions.INPUT, AutoModeOptions.BOTH];
 
+function isOutgoingAutoMode(autoMode: ExtensionSettings['autoMode'] | 'inputs'): boolean {
+  return outgoingTypes.includes(autoMode as AutoModeOptions) || autoMode === 'inputs';
+}
+
 type Rgb = { r: number; g: number; b: number; a: number };
 
 function clampByte(v: number): number {
@@ -446,7 +450,7 @@ export async function initializeGlobalUI(options: {
     EventNames.USER_MESSAGE_RENDERED,
     (messageId: number) => {
       const settings = settingsManager.getSettings();
-      if (!outgoingTypes.includes(settings.autoMode)) return;
+      if (!isOutgoingAutoMode(settings.autoMode as ExtensionSettings['autoMode'] | 'inputs')) return;
 
       const context = SillyTavern.getContext();
       if (!shouldAutoGenerateForUserMessage({ characterId: (context as any).characterId, characters: context.characters })) {

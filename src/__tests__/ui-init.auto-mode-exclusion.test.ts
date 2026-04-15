@@ -32,6 +32,46 @@ jest.unstable_mockModule('../tracker.js', () => ({
 const { initializeGlobalUI } = await import('../ui/ui-init.js');
 
 describe('initializeGlobalUI auto-mode exclusion guards', () => {
+  test('still auto-generates for outgoing user messages when the selected settings value is inputs', async () => {
+    const handlers = new Map<string, (messageId: number) => void>();
+    const actions = {
+      renderExtensionTemplates: jest.fn(async () => undefined),
+      generateTracker: jest.fn(),
+      editTracker: jest.fn(),
+      deleteTracker: jest.fn(),
+      generateTrackerPart: jest.fn(),
+      generateTrackerArrayItem: jest.fn(),
+      generateTrackerArrayItemByName: jest.fn(),
+      generateTrackerArrayItemByIdentity: jest.fn(),
+      generateTrackerArrayItemField: jest.fn(),
+      generateTrackerArrayItemFieldByName: jest.fn(),
+      generateTrackerArrayItemFieldByIdentity: jest.fn(),
+    };
+
+    const hostContext = {
+      chat: [{ original_avatar: 'alice.png' }],
+      characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+      characterId: 0,
+    };
+    (globalThis as any).SillyTavern = { getContext: () => hostContext };
+
+    await initializeGlobalUI({
+      globalContext: {
+        chat: hostContext.chat,
+        saveChat: jest.fn(async () => undefined),
+        eventSource: { on: (eventName: string, handler: (messageId: number) => void) => handlers.set(eventName, handler) },
+      },
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+      } as any,
+      actions: actions as any,
+      renderTrackerWithDeps: () => undefined,
+    });
+
+    handlers.get('USER_MESSAGE_RENDERED')?.(0);
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true });
+  });
+
   test('skips auto-generation for excluded character-rendered messages', async () => {
     const handlers = new Map<string, (messageId: number) => void>();
     const actions = {
