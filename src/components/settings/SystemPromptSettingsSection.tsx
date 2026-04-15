@@ -23,12 +23,12 @@ export const SystemPromptSettingsSection: FC<{
 }) => {
   return (
     <div className="setting-row">
-      <label title="Choose whether zTracker uses the system prompt from the selected connection profile or a specific saved SillyTavern system prompt.">
+      <label title="Choose whether zTracker uses SillyTavern's currently active system prompt or a specific saved SillyTavern system prompt.">
         System Prompt Source
       </label>
       <select
         className="text_pole"
-        title="Choose whether zTracker uses the system prompt from the selected connection profile or a specific saved SillyTavern system prompt."
+        title="Choose whether zTracker uses SillyTavern's currently active system prompt or a specific saved SillyTavern system prompt."
         value={settings.trackerSystemPromptMode}
         onChange={(e) =>
           updateAndRefresh((s) => {
@@ -40,7 +40,7 @@ export const SystemPromptSettingsSection: FC<{
           })
         }
       >
-        <option value="profile">From connection profile</option>
+        <option value="profile">From active ST prompt</option>
         <option value="saved">From saved ST prompt</option>
       </select>
 

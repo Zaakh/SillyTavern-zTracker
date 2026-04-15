@@ -88,12 +88,15 @@ type PromptPresetSelectionContextLike = {
     instruct?: {
       preset?: unknown;
     } | null;
+    sysprompt?: {
+      name?: unknown;
+    } | null;
   };
 };
 
-/** Normalizes optional prompt selections and fills required text-completion fallbacks for SillyTavern prompt assembly. */
+/** Resolves tracker prompt selectors from the active SillyTavern runtime instead of stored profile prompt slots. */
 export function getPromptPresetSelections(
-  profile: { preset?: unknown; context?: unknown; instruct?: unknown; sysprompt?: unknown },
+  _profile: { preset?: unknown; context?: unknown; instruct?: unknown; sysprompt?: unknown },
   selectedApi: string,
   options: {
     context?: PromptPresetSelectionContextLike;
@@ -110,21 +113,20 @@ export function getPromptPresetSelections(
     return trimmedValue.length > 0 ? trimmedValue : undefined;
   };
 
-  const presetName = normalizePromptPresetName(profile.preset);
-  const contextName = normalizePromptPresetName(profile.context);
+  const activeSystemPromptName = normalizePromptPresetName(options.context?.powerUserSettings?.sysprompt?.name);
   const activeInstructName = normalizePromptPresetName(options.context?.powerUserSettings?.instruct?.preset);
   const instructName = selectedApi === 'textgenerationwebui'
-    ? normalizePromptPresetName(profile.instruct) ?? activeInstructName
+    ? activeInstructName
     : undefined;
   const syspromptName = options.trackerSystemPromptMode === 'saved'
     ? selectedApi === 'textgenerationwebui'
       ? normalizePromptPresetName(options.trackerSystemPromptName)
       : undefined
-    : normalizePromptPresetName(profile.sysprompt);
+    : selectedApi === 'textgenerationwebui'
+      ? activeSystemPromptName
+      : undefined;
 
   return {
-    ...(presetName ? { presetName } : {}),
-    ...(contextName ? { contextName } : {}),
     ...(instructName ? { instructName } : {}),
     ...(syspromptName ? { syspromptName } : {}),
   };

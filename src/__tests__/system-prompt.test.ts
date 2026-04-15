@@ -149,16 +149,25 @@ describe('system prompt helpers', () => {
     ).toBe('Neutral - Chat');
   });
 
-  test('resolves profile system prompt in profile mode', () => {
+  test('resolves the active global system prompt in profile mode', () => {
     expect(
       resolveTrackerSystemPromptName(
         {
           trackerSystemPromptMode: 'profile',
           trackerSystemPromptSavedName: 'zTracker',
         },
-        { sysprompt: 'Profile Prompt' },
+        {
+          getPresetManager: () => ({
+            getPresetList: () => ({ presets: [], preset_names: [] }),
+          }),
+          powerUserSettings: {
+            sysprompt: {
+              name: 'Active Prompt',
+            },
+          },
+        },
       ),
-    ).toBe('Profile Prompt');
+    ).toBe('Active Prompt');
   });
 
   test('resolves saved system prompt in saved mode', () => {
@@ -168,7 +177,16 @@ describe('system prompt helpers', () => {
           trackerSystemPromptMode: 'saved',
           trackerSystemPromptSavedName: 'zTracker',
         },
-        { sysprompt: 'Profile Prompt' },
+        {
+          getPresetManager: () => ({
+            getPresetList: () => ({ presets: [], preset_names: [] }),
+          }),
+          powerUserSettings: {
+            sysprompt: {
+              name: 'Profile Prompt',
+            },
+          },
+        },
       ),
     ).toBe('zTracker');
   });

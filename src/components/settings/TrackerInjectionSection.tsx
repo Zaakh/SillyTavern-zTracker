@@ -26,12 +26,12 @@ export const TrackerInjectionSection: FC<SettingsSectionProps> = ({ settings, up
       </div>
 
       <div className="setting-row">
-        <label title="Which role to use for embedded zTracker snapshots in normal generations. This affects generate_interceptor only, not tracker generation.">
+        <label title="Which role to use for embedded zTracker snapshots in normal generations. This affects generate_interceptor only, after SillyTavern has already built the live prompt chat array.">
           Embed zTracker snapshots as
         </label>
         <select
           className="text_pole"
-          title="Only affects embedding into the generation chat array (generate_interceptor), not tracker generation."
+          title="Only affects embedding into the generation chat array after SillyTavern prompt assembly (generate_interceptor), not tracker generation."
           value={settings.embedZTrackerRole ?? 'user'}
           onChange={(e) =>
             updateAndRefresh((s) => {

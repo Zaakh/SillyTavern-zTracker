@@ -26,10 +26,6 @@ type SillyTavernContextLike = {
   };
 };
 
-type ConnectionProfileLike = {
-  sysprompt?: string;
-};
-
 function getSystemPromptPresetManager(context: SillyTavernContextLike = SillyTavern.getContext()): SystemPromptPresetManager | null {
   return (context.getPresetManager?.('sysprompt') as SystemPromptPresetManager | undefined) ?? null;
 }
@@ -110,15 +106,14 @@ export async function ensureZTrackerSystemPromptPresetInstalled(
 
 export function resolveTrackerSystemPromptName(
   settings: Pick<ExtensionSettings, 'trackerSystemPromptMode' | 'trackerSystemPromptSavedName'>,
-  profile?: ConnectionProfileLike,
+  context: SillyTavernContextLike = SillyTavern.getContext(),
 ): string | undefined {
   if (settings.trackerSystemPromptMode === 'saved') {
     const savedName = settings.trackerSystemPromptSavedName.trim();
     return savedName || undefined;
   }
 
-  const profilePromptName = profile?.sysprompt?.trim();
-  return profilePromptName || undefined;
+  return getCurrentGlobalSystemPromptName(context);
 }
 
 export function insertSystemPromptMessage<T extends { role: string; content: string }>(messages: T[], content: string): T[] {

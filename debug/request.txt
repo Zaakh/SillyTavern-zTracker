@@ -1,0 +1,196 @@
+{
+  stream: false,
+  prompt: 'You are a structured data extraction assistant. Your task is to analyze conversations and produce a structured tracker update that conforms to a provided schema and requested output format.\n' +
+    '\n' +
+    'Rules:\n' +
+    '- Output ONLY valid structured data matching the provided schema. No narration, no markdown unless instructed.\n' +
+    '- Fill every field. Use conversation context to infer values not explicitly stated.\n' +
+    '- Prefer short, specific phrases over full sentences.\n' +
+    '- Maintain consistency with any previous tracker snapshot in the conversation.\n' +
+    '- Do NOT continue the conversation or roleplay. Only produce the requested data.\n' +
+    '- Follow all detailed instructions provided later in this conversation.\n' +
+    '- If a later message specifies an output format, wrapper, or schema rendering, follow those instructions exactly.\n' +
+    '\n' +
+    '\n' +
+    'Bar: As you enter the bar you realize you are the only customer. The barkeeper greets you: "Hello I am Silvia, what can I get you?"\n' +
+    '\n' +
+    'Tobias: "A glass of water please" I say and sit down at the bar.\n' +
+    '\n' +
+    'Scene details: time: 14:32:05; 09/27/2025 (Saturday)\n' +
+    'location: Cozy downtown bar interior\n' +
+    'weather: Warm indoor, 72°F, no precipitation\n' +
+    'topics:\n' +
+    '  primaryTopic: Water request\n' +
+    '  emotionalTone: Calm\n' +
+    '  interactionTheme: Customer-service\n' +
+    'charactersPresent:\n' +
+    '  - Silvia\n' +
+    '  - Tobias\n' +
+    'characters:\n' +
+    '  [Silvia:\n' +
+    '    name: Silvia\n' +
+    '    hair: Long auburn hair, neatly tied back\n' +
+    '    makeup: Light natural makeup\n' +
+    '    outfit: Black apron over a white button-down shirt, dark slacks, black shoes\n' +
+    '    stateOfDress: Professional and tidy\n' +
+    "    postureAndInteraction: Silvia stands behind the polished wooden bar, leaning slightly forward with one hand resting on the counter, her eyes warm and attentive as she listens to the customer's request, occasionally glancing toward Tobias at the nearby stool.\n" +
+    '  ]\n' +
+    '  [Tobias:\n' +
+    '    name: Tobias\n' +
+    '    hair: Violet flames looking like hair\n' +
+    '    makeup: None\n' +
+    '    outfit: Tobias is a flaming elemental, he has not clothing but i clad in red flames\n' +
+    '    stateOfDress: Clad in flames.\n' +
+    '    postureAndInteraction: Sitting on a bar stool a few seats away.\n' +
+    '  ]\n' +
+    '\n' +
+    '\n' +
+    'Bar: The low hum of the refrigerator mingled with the quiet clinking of ice against glass – Silvia was efficiently preparing Tobias’s water. The bar itself was a comforting space, all dark wood and plush velvet booths tucked into the corners. A jazz standard drifted softly from the speakers, barely audible above the murmur of the city outside. Silvia placed the glass in front of Tobias, a small smile gracing her lips. “Here you go, sir. Just the way you like it.”\n' +
+    '\n' +
+    'Tobias: "Thank you"\n' +
+    '\n' +
+    'You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid JSON object that strictly adheres to the provided JSON schema.\n' +
+    '\n' +
+    '**CRITICAL INSTRUCTIONS:**\n' +
+    '1.  You MUST wrap the entire JSON object in a markdown code block (```json\\n...\\n```).\n' +
+    '2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.\n' +
+    '3.  The JSON object inside the code block MUST be valid and conform to the schema.\n' +
+    '\n' +
+    '**JSON SCHEMA TO FOLLOW:**\n' +
+    '```json\n' +
+    '{\n' +
+    '  "$schema": "http://json-schema.org/draft-07/schema#",\n' +
+    '  "title": "SceneTracker",\n' +
+    '  "description": "Schema for tracking roleplay scene details",\n' +
+    '  "type": "object",\n' +
+    '  "properties": {\n' +
+    '    "time": {\n' +
+    '      "type": "string",\n' +
+    '      "description": "Format: HH:MM:SS; MM/DD/YYYY (Day Name)"\n' +
+    '    },\n' +
+    '    "location": {\n' +
+    '      "type": "string",\n' +
+    '      "description": "Specific scene location with increasing specificity"\n' +
+    '    },\n' +
+    '    "weather": {\n' +
+    '      "type": "string",\n' +
+    '      "description": "Current weather conditions and temperature"\n' +
+    '    },\n' +
+    '    "topics": {\n' +
+    '      "type": "object",\n' +
+    '      "properties": {\n' +
+    '        "primaryTopic": {\n' +
+    '          "type": "string",\n' +
+    '          "description": "1-2 word main topic of interaction"\n' +
+    '        },\n' +
+    '        "emotionalTone": {\n' +
+    '          "type": "string",\n' +
+    '          "description": "Dominant emotional tone of scene"\n' +
+    '        },\n' +
+    '        "interactionTheme": {\n' +
+    '          "type": "string",\n' +
+    '          "description": "Type of character interaction"\n' +
+    '        }\n' +
+    '      },\n' +
+    '      "required": [\n' +
+    '        "primaryTopic",\n' +
+    '        "emotionalTone",\n' +
+    '        "interactionTheme"\n' +
+    '      ]\n' +
+    '    },\n' +
+    '    "charactersPresent": {\n' +
+    '      "type": "array",\n' +
+    '      "items": {\n' +
+    '        "type": "string",\n' +
+    '        "description": "Character name"\n' +
+    '      },\n' +
+    '      "description": "List of character names present in scene"\n' +
+    '    },\n' +
+    '    "characters": {\n' +
+    '      "type": "array",\n' +
+    '      "items": {\n' +
+    '        "type": "object",\n' +
+    '        "properties": {\n' +
+    '          "name": {\n' +
+    '            "type": "string",\n' +
+    '            "description": "Character name"\n' +
+    '          },\n' +
+    '          "hair": {\n' +
+    '            "type": "string",\n' +
+    '            "description": "Hairstyle and condition"\n' +
+    '          },\n' +
+    '          "makeup": {\n' +
+    '            "type": "string",\n' +
+    `            "description": "Makeup description or 'None'"\n` +
+    '          },\n' +
+    '          "outfit": {\n' +
+    '            "type": "string",\n' +
+    '            "description": "Complete outfit including underwear"\n' +
+    '          },\n' +
+    '          "stateOfDress": {\n' +
+    '            "type": "string",\n' +
+    '            "description": "How put-together/disheveled character appears, distinct from outfit"\n' +
+    '          },\n' +
+    '          "postureAndInteraction": {\n' +
+    '            "type": "string",\n' +
+    `            "description": "Character's physical positioning and interaction"\n` +
+    '          }\n' +
+    '        },\n' +
+    '        "required": [\n' +
+    '          "name",\n' +
+    '          "hair",\n' +
+    '          "makeup",\n' +
+    '          "outfit",\n' +
+    '          "stateOfDress",\n' +
+    '          "postureAndInteraction"\n' +
+    '        ]\n' +
+    '      },\n' +
+    '      "description": "Array of character objects",\n' +
+    '      "x-ztracker-dependsOn": [\n' +
+    '        "charactersPresent"\n' +
+    '      ],\n' +
+    '      "x-ztracker-idKey": "name"\n' +
+    '    }\n' +
+    '  },\n' +
+    '  "required": [\n' +
+    '    "time",\n' +
+    '    "location",\n' +
+    '    "weather",\n' +
+    '    "topics",\n' +
+    '    "charactersPresent",\n' +
+    '    "characters"\n' +
+    '  ]\n' +
+    '}\n' +
+    '```\n' +
+    '\n' +
+    '**EXAMPLE OF A PERFECT RESPONSE:**\n' +
+    '```json\n' +
+    '{\n' +
+    '  "time": "Format: HH:MM:SS; MM/DD/YYYY (Day Name)",\n' +
+    '  "location": "Specific scene location with increasing specificity",\n' +
+    '  "weather": "Current weather conditions and temperature",\n' +
+    '  "topics": {\n' +
+    '    "primaryTopic": "1-2 word main topic of interaction",\n' +
+    '    "emotionalTone": "Dominant emotional tone of scene",\n' +
+    '    "interactionTheme": "Type of character interaction"\n' +
+    '  },\n' +
+    '  "charactersPresent": [\n' +
+    '    "Character name"\n' +
+    '  ],\n' +
+    '  "characters": [\n' +
+    '    {\n' +
+    '      "name": "Character name",\n' +
+    '      "hair": "Hairstyle and condition",\n' +
+    `      "makeup": "Makeup description or 'None'",\n` +
+    '      "outfit": "Complete outfit including underwear",\n' +
+    '      "stateOfDress": "How put-together/disheveled character appears, distinct from outfit",\n' +
+    `      "postureAndInteraction": "Character's physical positioning and interaction"\n` +
+    '    }\n' +
+    '  ]\n' +
+    '}\n' +
+    '```\n',
+  max_tokens: 1024,
+  max_new_tokens: 1024,
+  api_type: 'llamacpp',
+  api_server: 'http://127.0.0.1:8080'
+}

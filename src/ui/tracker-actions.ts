@@ -62,6 +62,42 @@ export function createTrackerActions(options: {
   const pendingSequences = new Map<number, { cancelled: boolean }>();
   const { logPromptEngineeredRenderRollback, requestPromptEngineeredResponse } = createPromptEngineeringHelpers();
 
+  function temporarilyApplyResolvedInstructPreset(profile: any, selectedApi: string | undefined, instructName: string | undefined) {
+    if (selectedApi !== 'textgenerationwebui' || !profile) {
+      return () => undefined;
+    }
+
+    const normalizePromptName = (value: unknown): string | undefined => {
+      if (typeof value !== 'string') {
+        return undefined;
+      }
+
+      const trimmedValue = value.trim();
+      return trimmedValue.length > 0 ? trimmedValue : undefined;
+    };
+
+    const currentInstruct = normalizePromptName(profile.instruct);
+    const nextInstruct = normalizePromptName(instructName);
+    const shouldOverride = currentInstruct !== nextInstruct;
+
+    if (!shouldOverride) {
+      return () => undefined;
+    }
+
+    const originalInstruct = profile.instruct;
+    profile.instruct = nextInstruct;
+    let restored = false;
+
+    return () => {
+      if (restored) {
+        return;
+      }
+
+      restored = true;
+      profile.instruct = originalInstruct;
+    };
+  }
+
   function cancelIfPending(messageId: number): boolean {
     if (!pendingRequests.has(messageId)) return false;
     const requestId = pendingRequests.get(messageId)!;
@@ -72,12 +108,13 @@ export function createTrackerActions(options: {
     return true;
   }
 
-  function makeRequestFactory(messageId: number, settings: ExtensionSettings) {
+  function makeRequestFactory(messageId: number, settings: ExtensionSettings, options: { instructName?: string } = {}) {
     return (requestMessages: Message[], overideParams?: any): Promise<ExtractedData | undefined> => {
       return new Promise((resolve, reject) => {
         const abortController = new AbortController();
         const profile = globalContext.extensionSettings?.connectionManager?.profiles?.find((p: any) => p.id === settings.profileId);
         const selectedApi = profile?.api ? globalContext.CONNECT_API_MAP?.[profile.api]?.selected : undefined;
+        const restoreResolvedInstructPreset = temporarilyApplyResolvedInstructPreset(profile, selectedApi, options.instructName);
         const sanitizedPrompt = sanitizeMessagesForGeneration(requestMessages, {
           inlineNamesIntoContent: selectedApi === 'textgenerationwebui',
         });
@@ -90,29 +127,35 @@ export function createTrackerActions(options: {
           requestMessages: requestMessages as any,
           sanitizedPrompt,
         });
-        generator.generateRequest(
-          {
-            profileId: settings.profileId,
-            prompt: sanitizedPrompt,
-            maxTokens: settings.maxResponseToken,
-            custom: { signal: abortController.signal },
-            overridePayload: {
-              ...overideParams,
+        try {
+          generator.generateRequest(
+            {
+              profileId: settings.profileId,
+              prompt: sanitizedPrompt,
+              maxTokens: settings.maxResponseToken,
+              custom: { signal: abortController.signal },
+              overridePayload: {
+                ...overideParams,
+              },
             },
-          },
-          {
-            abortController,
-            onStart: (requestId: string) => {
-              pendingRequests.set(messageId, requestId);
+            {
+              abortController,
+              onStart: (requestId: string) => {
+                pendingRequests.set(messageId, requestId);
+              },
+              onFinish: (requestId: string, data: unknown, error: unknown) => {
+                restoreResolvedInstructPreset();
+                pendingRequests.delete(messageId);
+                if (error) return reject(error);
+                if (!data) return reject(new DOMException('Request aborted by user', 'AbortError'));
+                resolve(data as ExtractedData | undefined);
+              },
             },
-            onFinish: (requestId: string, data: unknown, error: unknown) => {
-              pendingRequests.delete(messageId);
-              if (error) return reject(error);
-              if (!data) return reject(new DOMException('Request aborted by user', 'AbortError'));
-              resolve(data as ExtractedData | undefined);
-            },
-          },
-        );
+          );
+        } catch (error) {
+          restoreResolvedInstructPreset();
+          reject(error);
+        }
       });
     };
   }
@@ -159,7 +202,7 @@ export function createTrackerActions(options: {
     const ignoreWorldInfo = shouldIgnoreWorldInfoDuringTrackerBuild(trackerWorldInfoMode);
     const skipCharacterCardInTrackerGeneration = settings.skipCharacterCardInTrackerGeneration ?? false;
 
-    const syspromptName = resolveTrackerSystemPromptName(settings, profile);
+    const syspromptName = resolveTrackerSystemPromptName(settings, context);
     let savedSystemPromptContent: string | undefined;
     if (settings.trackerSystemPromptMode === 'saved') {
       if (!syspromptName) {
@@ -174,6 +217,12 @@ export function createTrackerActions(options: {
       }
     }
 
+    const promptPresetSelections = getPromptPresetSelections(profile, apiMap.selected, {
+      context,
+      trackerSystemPromptMode: settings.trackerSystemPromptMode,
+      trackerSystemPromptName: syspromptName,
+    });
+
     let promptResult;
     promptResult = await buildPrompt(apiMap.selected, {
       targetCharacterId: characterId,
@@ -181,11 +230,7 @@ export function createTrackerActions(options: {
         end: messageId,
         start: settings.includeLastXMessages > 0 ? Math.max(0, messageId - settings.includeLastXMessages) : 0,
       },
-      ...getPromptPresetSelections(profile, apiMap.selected, {
-        context,
-        trackerSystemPromptMode: settings.trackerSystemPromptMode,
-        trackerSystemPromptName: syspromptName,
-      }),
+      ...promptPresetSelections,
       includeNames: true,
       ignoreWorldInfo,
       ...(skipCharacterCardInTrackerGeneration ? { ignoreCharacterFields: true } : {}),
@@ -255,6 +300,7 @@ export function createTrackerActions(options: {
       chatHtmlValue,
       messages,
       existingTracker,
+      transportInstructName: promptPresetSelections.instructName,
     };
   }
 
@@ -353,10 +399,10 @@ export function createTrackerActions(options: {
       mainButton?.classList.add('spinning');
       regenerateButton?.classList.add('spinning');
 
-      const { message, settings, chatJsonValue, chatHtmlValue, messages, existingTracker } = await prepareTrackerGeneration(id);
+      const { message, settings, chatJsonValue, chatHtmlValue, messages, existingTracker, transportInstructName } = await prepareTrackerGeneration(id);
       const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
       const partsMeta = buildPartsMeta(chatJsonValue);
-      const makeRequest = makeRequestFactory(id, settings);
+      const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
 
       let response: ExtractedData['content'];
 
@@ -415,14 +461,14 @@ export function createTrackerActions(options: {
       mainButton?.classList.add('spinning');
       regenerateButton?.classList.add('spinning');
 
-      const { message, settings, chatJsonValue, chatHtmlValue, messages, existingTracker } = await prepareTrackerGeneration(id);
+      const { message, settings, chatJsonValue, chatHtmlValue, messages, existingTracker, transportInstructName } = await prepareTrackerGeneration(id);
       const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
       const partsMeta = buildPartsMeta(chatJsonValue);
       if (partsOrder.length === 0) {
         throw new Error('Schema has no top-level properties to generate.');
       }
 
-      const makeRequest = makeRequestFactory(id, settings);
+      const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
       const baseMessages = structuredClone(messages) as Message[];
       let trackerData: any = {};
 
@@ -511,7 +557,7 @@ export function createTrackerActions(options: {
     try {
       partButton?.classList.add('spinning');
 
-      const { message, settings, chatJsonValue, chatHtmlValue, messages } = await prepareTrackerGeneration(id);
+      const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
 
       const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
       if (!currentTracker || typeof currentTracker !== 'object') {
@@ -521,7 +567,7 @@ export function createTrackerActions(options: {
       const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
       const partsMeta = buildPartsMeta(chatJsonValue);
       const partSchema = buildTopLevelPartSchema(chatJsonValue, partKey);
-      const makeRequest = makeRequestFactory(id, settings);
+      const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
 
       const redactedTracker = redactTrackerPartValue(currentTracker, partKey);
       appendCurrentTrackerSnapshot(
@@ -590,7 +636,7 @@ export function createTrackerActions(options: {
     try {
       itemButton?.classList.add('spinning');
 
-      const { message, settings, chatJsonValue, chatHtmlValue, messages } = await prepareTrackerGeneration(id);
+      const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
       const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
       if (!currentTracker || typeof currentTracker !== 'object') {
         throw new Error('No existing tracker found for this message. Generate a full tracker first.');
@@ -607,7 +653,7 @@ export function createTrackerActions(options: {
       const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
       const partsMeta = buildPartsMeta(chatJsonValue);
       const itemSchema = buildArrayItemSchema(chatJsonValue, partKey);
-      const makeRequest = makeRequestFactory(id, settings);
+      const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
 
       const idKey = getArrayItemIdentityKey(chatJsonValue, partKey);
       const idValue =
@@ -688,7 +734,7 @@ export function createTrackerActions(options: {
     try {
       itemButton?.classList.add('spinning');
 
-      const { message, settings, chatJsonValue, chatHtmlValue, messages } = await prepareTrackerGeneration(id);
+      const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
       const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
       if (!currentTracker || typeof currentTracker !== 'object') {
         throw new Error('No existing tracker found for this message. Generate a full tracker first.');
@@ -711,7 +757,7 @@ export function createTrackerActions(options: {
       const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
       const partsMeta = buildPartsMeta(chatJsonValue);
       const itemSchema = buildArrayItemSchema(chatJsonValue, partKey);
-      const makeRequest = makeRequestFactory(id, settings);
+      const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
 
       const redactedTracker = redactTrackerArrayItemValue(currentTracker, partKey, index);
       appendCurrentTrackerSnapshot(
@@ -800,7 +846,7 @@ export function createTrackerActions(options: {
     try {
       itemButton?.classList.add('spinning');
 
-      const { message, settings, chatJsonValue, chatHtmlValue, messages } = await prepareTrackerGeneration(id);
+      const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
       const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
       if (!currentTracker || typeof currentTracker !== 'object') {
         throw new Error('No existing tracker found for this message. Generate a full tracker first.');
@@ -823,7 +869,7 @@ export function createTrackerActions(options: {
       const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
       const partsMeta = buildPartsMeta(chatJsonValue);
       const itemSchema = buildArrayItemSchema(chatJsonValue, partKey);
-      const makeRequest = makeRequestFactory(id, settings);
+      const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
 
       const redactedTracker = redactTrackerArrayItemValue(currentTracker, partKey, index);
       appendCurrentTrackerSnapshot(
