@@ -16,6 +16,7 @@ export const TrackerGenerationSection: FC<{
   handleSchemaPresetChange: (newValue?: string) => void;
   handleSchemaPresetsListChange: (newItems: PresetItem[]) => void;
   schemaText: string;
+  schemaTextHasError: boolean;
   handleSchemaValueChange: (newSchemaText: string) => void;
   handleSchemaHtmlChange: (newHtml: string) => void;
   restoreSchemaToDefault: () => Promise<void>;
@@ -31,6 +32,7 @@ export const TrackerGenerationSection: FC<{
   handleSchemaPresetChange,
   handleSchemaPresetsListChange,
   schemaText,
+  schemaTextHasError,
   handleSchemaValueChange,
   handleSchemaHtmlChange,
   restoreSchemaToDefault,
@@ -50,6 +52,7 @@ export const TrackerGenerationSection: FC<{
         handleSchemaPresetChange={handleSchemaPresetChange}
         handleSchemaPresetsListChange={handleSchemaPresetsListChange}
         schemaText={schemaText}
+        schemaTextHasError={schemaTextHasError}
         handleSchemaValueChange={handleSchemaValueChange}
         handleSchemaHtmlChange={handleSchemaHtmlChange}
         restoreSchemaToDefault={restoreSchemaToDefault}
