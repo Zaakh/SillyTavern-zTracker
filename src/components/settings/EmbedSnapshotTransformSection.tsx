@@ -1,6 +1,7 @@
 import { FC, useMemo } from 'react';
 import { STPresetSelect, STTextarea, PresetItem } from 'sillytavern-utils-lib/components/react';
 import { DEFAULT_EMBED_SNAPSHOT_HEADER, ExtensionSettings } from '../../config.js';
+import { reconcilePresetItems, resolvePresetSelection } from './preset-state.js';
 
 export const EmbedSnapshotTransformSection: FC<{
   settings: ExtensionSettings;
@@ -15,44 +16,18 @@ export const EmbedSnapshotTransformSection: FC<{
   }, [settings.embedZTrackerSnapshotTransformPresets]);
 
   const handleEmbedTransformPresetChange = (newValue?: string) => {
-    const newPresetKey = newValue ?? 'default';
-    const newPreset = settings.embedZTrackerSnapshotTransformPresets?.[newPresetKey];
-    if (!newPreset) return;
     updateAndRefresh((s) => {
-      s.embedZTrackerSnapshotTransformPreset = newPresetKey;
+      const selection = resolvePresetSelection(s.embedZTrackerSnapshotTransformPresets, newValue);
+      if (!selection) return;
+      s.embedZTrackerSnapshotTransformPreset = selection.key;
     });
   };
 
   const handleEmbedTransformPresetsListChange = (newItems: PresetItem[]) => {
     updateAndRefresh((s) => {
-      const existing = s.embedZTrackerSnapshotTransformPresets ?? {};
-      const activeKey = s.embedZTrackerSnapshotTransformPreset || 'default';
-      const template = existing[activeKey] ?? existing['default'];
-
-      const newPresets: ExtensionSettings['embedZTrackerSnapshotTransformPresets'] = {};
-      newItems.forEach((item) => {
-        const prev = existing[item.value];
-        newPresets[item.value] = prev
-          ? { ...prev, name: item.label }
-          : {
-              ...(template
-                ? structuredClone(template)
-                : {
-                    name: item.label,
-                    input: 'pretty_json',
-                    pattern: '',
-                    flags: 'g',
-                    replacement: '',
-                    codeFenceLang: 'json',
-                  }),
-              name: item.label,
-            };
-      });
-      s.embedZTrackerSnapshotTransformPresets = newPresets;
-
-      if (!newPresets[s.embedZTrackerSnapshotTransformPreset]) {
-        s.embedZTrackerSnapshotTransformPreset = newPresets['default'] ? 'default' : newItems[0]?.value ?? 'default';
-      }
+      const nextState = reconcilePresetItems(s.embedZTrackerSnapshotTransformPresets, s.embedZTrackerSnapshotTransformPreset, newItems);
+      s.embedZTrackerSnapshotTransformPresets = nextState.presets as ExtensionSettings['embedZTrackerSnapshotTransformPresets'];
+      s.embedZTrackerSnapshotTransformPreset = nextState.activeKey;
     });
   };
 
