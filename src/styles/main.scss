@@ -48,6 +48,38 @@
   animation: spin 2s linear infinite;
 }
 
+.mes.ztracker-auto-mode-hold {
+	.mes_text {
+		opacity: 0.72;
+		transition: opacity 0.2s ease-in-out;
+	}
+}
+
+.ztracker-auto-mode-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0 0 8px;
+	padding: 6px 10px;
+	border-radius: 999px;
+	border: 1px solid rgba(127, 127, 127, 0.22);
+	background: rgba(127, 127, 127, 0.12);
+	color: var(--text_color);
+	font-size: 0.9em;
+	line-height: 1.2;
+	width: fit-content;
+	max-width: 100%;
+}
+
+.ztracker-auto-mode-status-icon {
+	animation: spin 1.6s linear infinite;
+	font-size: 0.95em;
+}
+
+.ztracker-auto-mode-status-text {
+	white-space: normal;
+}
+
 /*
  * Parts menu styles must apply even when the menu is portaled to <body>
  * (to avoid being clipped by chat/message overflow).

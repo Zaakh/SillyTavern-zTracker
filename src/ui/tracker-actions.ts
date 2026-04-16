@@ -60,48 +60,79 @@ export function createTrackerActions(options: {
 }) {
   const { globalContext, settingsManager, generator, pendingRequests, renderTrackerWithDeps, importMetaUrl } = options;
   const pendingSequences = new Map<number, { cancelled: boolean }>();
+  const localPendingRequestAborters = new Map<string, AbortController>();
+  let nextLocalRequestId = 0;
   const { logPromptEngineeredRenderRollback, requestPromptEngineeredResponse } = createPromptEngineeringHelpers();
 
-  function temporarilyApplyResolvedInstructPreset(profile: any, selectedApi: string | undefined, instructName: string | undefined) {
-    if (selectedApi !== 'textgenerationwebui' || !profile) {
-      return () => undefined;
+  function createLocalRequestId(messageId: number): string {
+    nextLocalRequestId += 1;
+    return `ztracker-local-${messageId}-${nextLocalRequestId}`;
+  }
+
+  /** Sends text-completion tracker requests with a request-local instruct preset instead of mutating the shared profile. */
+  async function sendTextCompletionTrackerRequest(options: {
+    messageId: number;
+    profile: any;
+    selectedApiType: string | undefined;
+    requestMessages: Message[];
+    instructName?: string;
+    overridePayload?: Record<string, any>;
+    maxTokens: number;
+  }): Promise<ExtractedData | undefined> {
+    const context = SillyTavern.getContext() as {
+      TextCompletionService?: {
+        processRequest?: (
+          requestData: Record<string, any>,
+          requestOptions: { presetName?: string; instructName?: string; instructSettings?: Record<string, any> },
+          extractData?: boolean,
+          signal?: AbortSignal,
+        ) => Promise<ExtractedData | undefined>;
+      };
+    };
+    const processRequest = context?.TextCompletionService?.processRequest;
+    if (typeof processRequest !== 'function') {
+      throw new Error('SillyTavern text-completion request API is unavailable.');
     }
 
-    const normalizePromptName = (value: unknown): string | undefined => {
-      if (typeof value !== 'string') {
-        return undefined;
-      }
+    const abortController = new AbortController();
+    const requestId = createLocalRequestId(options.messageId);
+    pendingRequests.set(options.messageId, requestId);
+    localPendingRequestAborters.set(requestId, abortController);
 
-      const trimmedValue = value.trim();
-      return trimmedValue.length > 0 ? trimmedValue : undefined;
-    };
-
-    const currentInstruct = normalizePromptName(profile.instruct);
-    const nextInstruct = normalizePromptName(instructName);
-    const shouldOverride = currentInstruct !== nextInstruct;
-
-    if (!shouldOverride) {
-      return () => undefined;
+    try {
+      return await processRequest(
+        {
+          stream: false,
+          prompt: options.requestMessages,
+          max_tokens: options.maxTokens,
+          model: options.profile?.model,
+          api_type: options.selectedApiType ?? options.profile?.api,
+          api_server: options.profile?.['api-url'],
+          ...(options.overridePayload ?? {}),
+        },
+        {
+          presetName: options.profile?.preset,
+          instructName: options.instructName,
+          instructSettings: {},
+        },
+        true,
+        abortController.signal,
+      );
+    } finally {
+      localPendingRequestAborters.delete(requestId);
+      pendingRequests.delete(options.messageId);
     }
-
-    const originalInstruct = profile.instruct;
-    profile.instruct = nextInstruct;
-    let restored = false;
-
-    return () => {
-      if (restored) {
-        return;
-      }
-
-      restored = true;
-      profile.instruct = originalInstruct;
-    };
   }
 
   function cancelIfPending(messageId: number): boolean {
     if (!pendingRequests.has(messageId)) return false;
     const requestId = pendingRequests.get(messageId)!;
-    generator.abortRequest(requestId);
+    const localAbortController = localPendingRequestAborters.get(requestId);
+    if (localAbortController) {
+      localAbortController.abort();
+    } else {
+      generator.abortRequest(requestId);
+    }
     const token = pendingSequences.get(messageId);
     if (token) token.cancelled = true;
     st_echo('info', 'Tracker generation cancelled.');
@@ -113,8 +144,8 @@ export function createTrackerActions(options: {
       return new Promise((resolve, reject) => {
         const abortController = new AbortController();
         const profile = globalContext.extensionSettings?.connectionManager?.profiles?.find((p: any) => p.id === settings.profileId);
-        const selectedApi = profile?.api ? globalContext.CONNECT_API_MAP?.[profile.api]?.selected : undefined;
-        const restoreResolvedInstructPreset = temporarilyApplyResolvedInstructPreset(profile, selectedApi, options.instructName);
+        const selectedApiMap = profile?.api ? globalContext.CONNECT_API_MAP?.[profile.api] : undefined;
+        const selectedApi = selectedApiMap?.selected;
         const sanitizedPrompt = sanitizeMessagesForGeneration(requestMessages, {
           inlineNamesIntoContent: selectedApi === 'textgenerationwebui',
         });
@@ -128,6 +159,19 @@ export function createTrackerActions(options: {
           sanitizedPrompt,
         });
         try {
+          if (selectedApi === 'textgenerationwebui') {
+            void sendTextCompletionTrackerRequest({
+              messageId,
+              profile,
+              selectedApiType: selectedApiMap?.type,
+              requestMessages: sanitizedPrompt,
+              instructName: options.instructName,
+              overridePayload: overideParams ?? {},
+              maxTokens: settings.maxResponseToken,
+            }).then(resolve, reject);
+            return;
+          }
+
           generator.generateRequest(
             {
               profileId: settings.profileId,
@@ -144,7 +188,6 @@ export function createTrackerActions(options: {
                 pendingRequests.set(messageId, requestId);
               },
               onFinish: (requestId: string, data: unknown, error: unknown) => {
-                restoreResolvedInstructPreset();
                 pendingRequests.delete(messageId);
                 if (error) return reject(error);
                 if (!data) return reject(new DOMException('Request aborted by user', 'AbortError'));
@@ -153,7 +196,6 @@ export function createTrackerActions(options: {
             },
           );
         } catch (error) {
-          restoreResolvedInstructPreset();
           reject(error);
         }
       });
