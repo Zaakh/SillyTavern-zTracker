@@ -13,7 +13,7 @@ jest.unstable_mockModule('sillytavern-utils-lib/types/translate', () => ({
     NONE: 'none',
     RESPONSES: 'responses',
     BOTH: 'both',
-    INPUT: 'input',
+    INPUT: 'inputs',
   },
 }));
 
@@ -35,6 +35,15 @@ const { initializeGlobalUI } = await import('../ui/ui-init.js');
 
 function buildMessage(messageId: number): string {
   return `<div class="mes" mesid="${messageId}"><div class="mes_text">Message ${messageId}</div></div>`;
+}
+
+function buildSendButton(): string {
+  return '<div id="send_but" class="fa-solid fa-paper-plane interactable" title="Send a message"></div>';
+}
+
+/** Lets MutationObserver callbacks and their deferred sync run before assertions. */
+async function flushDomObservers(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 describe('initializeGlobalUI auto-mode exclusion guards', () => {
@@ -75,7 +84,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
         eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
       },
       settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'input', includeLastXZTrackerMessages: 1 })),
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
       } as any,
       actions: actions as any,
       renderTrackerWithDeps: () => undefined,
@@ -136,7 +145,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
         eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
       },
       settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'input', includeLastXZTrackerMessages: 1 })),
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
       } as any,
       actions: actions as any,
       renderTrackerWithDeps: () => undefined,
@@ -191,7 +200,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
         eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
       },
       settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'input', includeLastXZTrackerMessages: 1 })),
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
       } as any,
       actions: actions as any,
       renderTrackerWithDeps: () => undefined,
@@ -208,6 +217,126 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
 
     resolveTracker(true);
     await trackerPromise;
+  });
+
+  test('reapplies the hold indicator when SillyTavern rerenders the pending message without a user-message event', async () => {
+    document.body.innerHTML = buildMessage(0);
+    let resolveTracker: (value: boolean) => void = () => undefined;
+    const trackerPromise = new Promise<boolean>((resolve) => {
+      resolveTracker = resolve;
+    });
+    const handlers = new Map<string, (...args: any[]) => void>();
+    const hostContext = {
+      chat: [{ original_avatar: 'alice.png' }],
+      characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+      characterId: 0,
+      stopGeneration: jest.fn(() => true),
+      generate: jest.fn(async () => undefined),
+    };
+    const actions = {
+      renderExtensionTemplates: jest.fn(async () => undefined),
+      generateTracker: jest.fn(() => trackerPromise),
+      editTracker: jest.fn(),
+      deleteTracker: jest.fn(),
+      generateTrackerPart: jest.fn(),
+      generateTrackerArrayItem: jest.fn(),
+      generateTrackerArrayItemByName: jest.fn(),
+      generateTrackerArrayItemByIdentity: jest.fn(),
+      generateTrackerArrayItemField: jest.fn(),
+      generateTrackerArrayItemFieldByName: jest.fn(),
+      generateTrackerArrayItemFieldByIdentity: jest.fn(),
+    };
+
+    (globalThis as any).SillyTavern = { getContext: () => hostContext };
+
+    await initializeGlobalUI({
+      globalContext: {
+        chat: hostContext.chat,
+        saveChat: jest.fn(async () => undefined),
+        eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
+      },
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+      } as any,
+      actions: actions as any,
+      renderTrackerWithDeps: () => undefined,
+    });
+
+    handlers.get('MESSAGE_SENT')?.(0);
+    expect(document.querySelector('.ztracker-auto-mode-status')?.textContent).toContain('Generating tracker before reply');
+
+    document.body.innerHTML = buildMessage(0);
+    await flushDomObservers();
+
+    expect(document.querySelector('.mes[mesid="0"]')?.classList.contains('ztracker-auto-mode-hold')).toBe(true);
+    expect(document.querySelector('.ztracker-auto-mode-status')?.textContent).toContain('Generating tracker before reply');
+
+    resolveTracker(true);
+    await trackerPromise;
+  });
+
+  test('turns the host send button into a tracker stop control and cancels the pending tracker run on click', async () => {
+    document.body.innerHTML = `${buildMessage(0)}${buildSendButton()}`;
+    let resolveTracker: (value: boolean) => void = () => undefined;
+    const trackerPromise = new Promise<boolean>((resolve) => {
+      resolveTracker = resolve;
+    });
+    const handlers = new Map<string, (...args: any[]) => void>();
+    const hostContext = {
+      chat: [{ original_avatar: 'alice.png' }],
+      characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+      characterId: 0,
+      stopGeneration: jest.fn(() => true),
+      generate: jest.fn(async () => undefined),
+    };
+    const actions = {
+      renderExtensionTemplates: jest.fn(async () => undefined),
+      generateTracker: jest.fn(() => trackerPromise),
+      cancelTracker: jest.fn(() => true),
+      editTracker: jest.fn(),
+      deleteTracker: jest.fn(),
+      generateTrackerPart: jest.fn(),
+      generateTrackerArrayItem: jest.fn(),
+      generateTrackerArrayItemByName: jest.fn(),
+      generateTrackerArrayItemByIdentity: jest.fn(),
+      generateTrackerArrayItemField: jest.fn(),
+      generateTrackerArrayItemFieldByName: jest.fn(),
+      generateTrackerArrayItemFieldByIdentity: jest.fn(),
+    };
+
+    (globalThis as any).SillyTavern = { getContext: () => hostContext };
+
+    await initializeGlobalUI({
+      globalContext: {
+        chat: hostContext.chat,
+        saveChat: jest.fn(async () => undefined),
+        eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
+      },
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+      } as any,
+      actions: actions as any,
+      renderTrackerWithDeps: () => undefined,
+    });
+
+    handlers.get('MESSAGE_SENT')?.(0);
+
+    const sendButton = document.querySelector('#send_but') as HTMLElement | null;
+    expect(sendButton?.title).toBe('Stop tracker generation');
+    expect(sendButton?.classList.contains('fa-stop')).toBe(true);
+    expect(sendButton?.classList.contains('fa-paper-plane')).toBe(false);
+
+    sendButton?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(actions.cancelTracker).toHaveBeenCalledWith(0);
+    expect(sendButton?.title).toBe('Send a message');
+    expect(sendButton?.classList.contains('fa-paper-plane')).toBe(true);
+    expect(document.querySelector('.ztracker-auto-mode-status')).toBeNull();
+
+    resolveTracker(false);
+    await trackerPromise;
+
+    expect(hostContext.generate).not.toHaveBeenCalled();
   });
 
   test('resumes normal generation when tracker generation fails', async () => {
@@ -243,7 +372,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
         eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
       },
       settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'input', includeLastXZTrackerMessages: 1 })),
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
       } as any,
       actions: actions as any,
       renderTrackerWithDeps: () => undefined,
@@ -292,7 +421,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
         eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
       },
       settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'input', includeLastXZTrackerMessages: 1 })),
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
       } as any,
       actions: actions as any,
       renderTrackerWithDeps: () => undefined,
@@ -339,47 +468,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
         eventSource: { on: (eventName: string, handler: (messageId?: number) => void) => handlers.set(eventName, handler) },
       },
       settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'input', includeLastXZTrackerMessages: 1 })),
-      } as any,
-      actions: actions as any,
-      renderTrackerWithDeps: () => undefined,
-    });
-
-    handlers.get('MESSAGE_SENT')?.(0);
-    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true });
-  });
-
-  test('auto-generates for outgoing user messages when the canonical input setting is selected', async () => {
-    const handlers = new Map<string, (messageId?: number) => void>();
-    const actions = {
-      renderExtensionTemplates: jest.fn(async () => undefined),
-      generateTracker: jest.fn(),
-      editTracker: jest.fn(),
-      deleteTracker: jest.fn(),
-      generateTrackerPart: jest.fn(),
-      generateTrackerArrayItem: jest.fn(),
-      generateTrackerArrayItemByName: jest.fn(),
-      generateTrackerArrayItemByIdentity: jest.fn(),
-      generateTrackerArrayItemField: jest.fn(),
-      generateTrackerArrayItemFieldByName: jest.fn(),
-      generateTrackerArrayItemFieldByIdentity: jest.fn(),
-    };
-
-    const hostContext = {
-      chat: [{ original_avatar: 'alice.png' }],
-      characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
-      characterId: 0,
-    };
-    (globalThis as any).SillyTavern = { getContext: () => hostContext };
-
-    await initializeGlobalUI({
-      globalContext: {
-        chat: hostContext.chat,
-        saveChat: jest.fn(async () => undefined),
-        eventSource: { on: (eventName: string, handler: (messageId?: number) => void) => handlers.set(eventName, handler) },
-      },
-      settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'input', includeLastXZTrackerMessages: 1 })),
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
       } as any,
       actions: actions as any,
       renderTrackerWithDeps: () => undefined,
@@ -459,7 +548,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
         eventSource: { on: (eventName: string, handler: (messageId?: number) => void) => handlers.set(eventName, handler) },
       },
       settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'input', includeLastXZTrackerMessages: 1 })),
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
       } as any,
       actions: actions as any,
       renderTrackerWithDeps: () => undefined,
@@ -506,7 +595,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
         eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
       },
       settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'input', includeLastXZTrackerMessages: 1 })),
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
       } as any,
       actions: actions as any,
       renderTrackerWithDeps: () => undefined,

@@ -131,18 +131,36 @@ export function createTrackerActions(options: {
   }
 
   function cancelIfPending(messageId: number): boolean {
-    if (!pendingRequests.has(messageId)) return false;
-    const requestId = pendingRequests.get(messageId)!;
-    const localAbortController = localPendingRequestAborters.get(requestId);
-    if (localAbortController) {
-      localAbortController.abort();
-    } else {
-      generator.abortRequest(requestId);
-    }
     const token = pendingSequences.get(messageId);
-    if (token) token.cancelled = true;
+    let cancelled = false;
+
+    if (token) {
+      token.cancelled = true;
+      cancelled = true;
+    }
+
+    if (pendingRequests.has(messageId)) {
+      const requestId = pendingRequests.get(messageId)!;
+      const localAbortController = localPendingRequestAborters.get(requestId);
+      if (localAbortController) {
+        localAbortController.abort();
+      } else {
+        generator.abortRequest(requestId);
+      }
+      cancelled = true;
+    }
+
+    if (!cancelled) {
+      return false;
+    }
+
     st_echo('info', 'Tracker generation cancelled.');
     return true;
+  }
+
+  /** Cancels the currently pending tracker run for a message, if one exists. */
+  function cancelTracker(messageId: number): boolean {
+    return cancelIfPending(messageId);
   }
 
   function makeRequestFactory(messageId: number, settings: ExtensionSettings, options: { instructName?: string } = {}) {
@@ -442,12 +460,19 @@ export function createTrackerActions(options: {
     const mainButton = messageBlock?.querySelector('.mes_ztracker_button');
     const regenerateButton = messageBlock?.querySelector('.ztracker-regenerate-button');
     const detailsState = captureDetailsState(id);
+    const token = { cancelled: false };
+
+    pendingSequences.set(id, token);
 
     try {
       mainButton?.classList.add('spinning');
       regenerateButton?.classList.add('spinning');
 
       const { message, settings, chatJsonValue, chatHtmlValue, messages, existingTracker, transportInstructName } = await prepareTrackerGeneration(id);
+      if (token.cancelled) {
+        return false;
+      }
+
       const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
       const partsMeta = buildPartsMeta(chatJsonValue);
       const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
@@ -464,6 +489,10 @@ export function createTrackerActions(options: {
       } else {
         // @ts-ignore
         response = await requestPromptEngineeredResponse(makeRequest, messages, settings, chatJsonValue);
+      }
+
+      if (token.cancelled) {
+        return false;
       }
 
       if (!response || Object.keys(response as any).length === 0) throw new Error('Empty response from zTracker.');
@@ -490,6 +519,7 @@ export function createTrackerActions(options: {
       }
       return false;
     } finally {
+      pendingSequences.delete(id);
       mainButton?.classList.remove('spinning');
       regenerateButton?.classList.remove('spinning');
     }
@@ -512,6 +542,10 @@ export function createTrackerActions(options: {
       regenerateButton?.classList.add('spinning');
 
       const { message, settings, chatJsonValue, chatHtmlValue, messages, existingTracker, transportInstructName } = await prepareTrackerGeneration(id);
+      if (token.cancelled) {
+        return false;
+      }
+
       const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
       const partsMeta = buildPartsMeta(chatJsonValue);
       if (partsOrder.length === 0) {
@@ -1272,6 +1306,7 @@ export function createTrackerActions(options: {
   }
 
   return {
+    cancelTracker,
     deleteTracker,
     editTracker,
     generateTracker,

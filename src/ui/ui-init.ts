@@ -10,467 +10,75 @@ import { st_echo } from 'sillytavern-utils-lib/config';
 import {
   shouldAutoGenerateForCharacterMessage,
   shouldAutoGenerateForUserMessage,
-  syncCharacterAutoModeButton,
 } from './character-auto-mode-exclusion.js';
-
-type PartsMenuPortalState = {
-  details: HTMLDetailsElement;
-  summary: HTMLElement;
-  list: HTMLElement;
-  placeholder: Comment;
-  messageId: number | null;
-  reposition: () => void;
-};
-
-let activePartsMenu: PartsMenuPortalState | null = null;
+import { createCharacterPanelButtonController } from './character-panel-auto-mode.js';
+import { installZTrackerThemeObserver } from './menu-theme.js';
+import { createOutgoingAutoModeController } from './outgoing-auto-mode.js';
+import { installPartsMenuPortalHandlers } from './parts-menu-portal.js';
 
 const incomingTypes = [AutoModeOptions.RESPONSES, AutoModeOptions.BOTH];
 const outgoingTypes = [AutoModeOptions.INPUT, AutoModeOptions.BOTH];
 
-type Rgb = { r: number; g: number; b: number; a: number };
-
-function clampByte(v: number): number {
-  return Math.max(0, Math.min(255, Math.round(v)));
-}
-
-function parseCssColorToRgb(color: string): Rgb | null {
-  const c = (color || '').trim().toLowerCase();
-  if (!c) return null;
-  if (c === 'transparent') return { r: 0, g: 0, b: 0, a: 0 };
-
-  // Computed styles are typically rgb()/rgba(). Handle both.
-  const m = c.match(/^rgba?\(([^)]+)\)$/);
-  if (!m) return null;
-  const parts = m[1].split(',').map((p) => p.trim());
-  if (parts.length < 3) return null;
-
-  const r = Number(parts[0]);
-  const g = Number(parts[1]);
-  const b = Number(parts[2]);
-  const a = parts.length >= 4 ? Number(parts[3]) : 1;
-  if ([r, g, b, a].some((n) => Number.isNaN(n))) return null;
-  return { r: clampByte(r), g: clampByte(g), b: clampByte(b), a: Math.max(0, Math.min(1, a)) };
-}
-
-function rgbToLuma(rgb: Rgb): number {
-  // Relative luminance approximation on sRGB.
-  return (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
-}
-
-function findNearestNonTransparentBackground(start: Element | null): Rgb | null {
-  let el: Element | null = start;
-  while (el) {
-    const style = getComputedStyle(el);
-    const bg = parseCssColorToRgb(style.backgroundColor);
-    if (bg && bg.a > 0.05) return bg;
-    el = el.parentElement;
-  }
-  // Fallback to body/html.
-  const bodyBg = parseCssColorToRgb(getComputedStyle(document.body).backgroundColor);
-  if (bodyBg && bodyBg.a > 0.05) return bodyBg;
-  const htmlBg = parseCssColorToRgb(getComputedStyle(document.documentElement).backgroundColor);
-  if (htmlBg && htmlBg.a > 0.05) return htmlBg;
-  return { r: 0, g: 0, b: 0, a: 1 };
-}
-
-function setZTrackerMenuThemeVars(): void {
-  if (typeof document === 'undefined') return;
-
-  // Try to sample from the chat area first; fall back to a message element; then body/html.
-  const sampleTarget =
-    (document.querySelector('#chat') as Element | null) ??
-    (document.querySelector('#chatLog') as Element | null) ??
-    (document.querySelector('.chat') as Element | null) ??
-    (document.querySelector('.mes') as Element | null) ??
-    document.body;
-
-  const bg = findNearestNonTransparentBackground(sampleTarget);
-  if (!bg) return;
-
-  const luma = rgbToLuma(bg);
-  const isLight = luma > 0.6;
-  const menuAlpha = isLight ? 0.96 : 0.92;
-
-  const root = document.documentElement;
-  root.style.setProperty('--ztracker-menu-bg', `rgba(${bg.r}, ${bg.g}, ${bg.b}, ${menuAlpha})`);
-  root.style.setProperty('--ztracker-menu-border', isLight ? 'rgba(0, 0, 0, 0.18)' : 'rgba(255, 255, 255, 0.12)');
-  root.style.setProperty('--ztracker-menu-part-bg', isLight ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.06)');
-  root.style.setProperty('--ztracker-menu-item-bg', isLight ? 'rgba(0, 0, 0, 0.03)' : 'rgba(255, 255, 255, 0.03)');
-  root.style.setProperty('--ztracker-menu-hover-bg', isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.10)');
-}
-
-function installZTrackerThemeObserver(): void {
-  if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
-
-  let timer: number | undefined;
-  const schedule = () => {
-    if (timer) window.clearTimeout(timer);
-    timer = window.setTimeout(() => {
-      timer = undefined;
-      setZTrackerMenuThemeVars();
-    }, 50);
-  };
-
-  const observer = new MutationObserver(() => schedule());
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
-  observer.observe(document.body, { attributes: true, attributeFilter: ['class', 'style'] });
-
-  // Initial.
-  setZTrackerMenuThemeVars();
-}
-
-function positionPartsMenu(list: HTMLElement, summary: HTMLElement): void {
-  const rect = summary.getBoundingClientRect();
-  const viewportMargin = 8;
-  const top = rect.bottom + 6;
-
-  // Ensure we can measure width accurately.
-  const width = Math.max(list.offsetWidth, 260);
-  const scrollX = window.scrollX;
-  const scrollY = window.scrollY;
-  const maxLeft = Math.max(scrollX + viewportMargin, scrollX + window.innerWidth - viewportMargin - width);
-  const desiredLeft = rect.right - width;
-  const left = Math.max(scrollX + viewportMargin, Math.min(desiredLeft + scrollX, maxLeft));
-  const maxHeightPx = Math.max(120, window.innerHeight - top - viewportMargin);
-
-  list.style.top = `${Math.round(top + scrollY)}px`;
-  list.style.left = `${Math.round(left)}px`;
-  list.style.maxHeight = `${Math.round(maxHeightPx)}px`;
-}
-
-function closeActivePartsMenu(): void {
-  if (!activePartsMenu) return;
-  const state = activePartsMenu;
-  activePartsMenu = null;
-
-  // Close the native details state for visual consistency, then restore immediately.
-  // Relying on the async `toggle` event can orphan a previously portaled list when another
-  // menu becomes active before the close event is delivered.
-  if (state.details.isConnected && state.details.open) {
-    state.details.open = false;
-  }
-
-  restorePartsMenu(state);
-}
-
-function restorePartsMenu(state: PartsMenuPortalState): void {
-  state.list.classList.remove('ztracker-parts-list-portal');
-  state.list.style.removeProperty('position');
-  state.list.style.removeProperty('z-index');
-  state.list.style.removeProperty('right');
-  state.list.style.removeProperty('top');
-  state.list.style.removeProperty('left');
-  state.list.style.removeProperty('max-height');
-  state.list.style.removeProperty('visibility');
-
-  if (state.placeholder.parentNode) {
-    state.placeholder.replaceWith(state.list);
-  } else {
-    // If the tracker/message was rerendered and the placeholder is gone, avoid leaving
-    // an orphaned menu attached to <body>.
-    state.list.remove();
-  }
-  window.removeEventListener('resize', state.reposition);
-  window.removeEventListener('scroll', state.reposition, true);
-}
-
-function portalPartsMenu(details: HTMLDetailsElement): void {
-  const summary = details.querySelector('summary') as HTMLElement | null;
-  const list = details.querySelector('.ztracker-parts-list') as HTMLElement | null;
-  if (!summary || !list) return;
-
-  // Only one open at a time.
-  if (activePartsMenu?.details && activePartsMenu.details !== details) {
-    closeActivePartsMenu();
-  }
-
-  const placeholder = document.createComment('ztracker-parts-list-placeholder');
-  list.replaceWith(placeholder);
-  document.body.append(list);
-  list.classList.add('ztracker-parts-list-portal');
-
-  // Critical portal styling: once portaled, the list is no longer under `.mes_ztracker`,
-  // so nested CSS selectors won't apply. Keep it clickable/overlayed regardless.
-  list.style.position = 'absolute';
-  list.style.zIndex = '2147483647';
-  list.style.right = 'auto';
-
-  const messageEl = details.closest('.mes');
-  const messageIdText = messageEl?.getAttribute('mesid') ?? '';
-  const parsedMessageId = Number(messageIdText);
-  const messageId = Number.isFinite(parsedMessageId) ? parsedMessageId : null;
-
-  const reposition = () => positionPartsMenu(list, summary);
-  const state: PartsMenuPortalState = { details, summary, list, placeholder, messageId, reposition };
-  activePartsMenu = state;
-
-  // Wait a frame so offsetWidth reflects the new layout.
-  list.style.visibility = 'hidden';
-  requestAnimationFrame(() => {
-    if (!list.isConnected) return;
-    if (!details.isConnected || !details.open) {
-      // Details got removed or closed before we could position.
-      if (list.classList.contains('ztracker-parts-list-portal')) {
-        list.style.visibility = '';
-        restorePartsMenu(state);
-        if (activePartsMenu?.details === details) activePartsMenu = null;
-      }
-      return;
-    }
-    list.style.visibility = '';
-    reposition();
-  });
-
-  window.addEventListener('resize', reposition);
-  window.addEventListener('scroll', reposition, true);
-}
-
-export async function initializeGlobalUI(options: {
+type InitializeGlobalUIOptions = {
   globalContext: any;
   settingsManager: ExtensionSettingsManager<ExtensionSettings>;
   actions: TrackerActions;
   renderTrackerWithDeps: (messageId: number) => void;
-}) {
-  const { globalContext, settingsManager, actions, renderTrackerWithDeps } = options;
-  const outgoingAutoModeState = {
-    pendingMessageId: null as number | null,
-    allowNextGenerationStart: false,
-    shouldBlockNextGenerationStart: false,
-    runId: 0,
-  };
+};
 
-  const resetOutgoingAutoModeState = (options: { invalidateRun?: boolean } = {}) => {
-    outgoingAutoModeState.pendingMessageId = null;
-    outgoingAutoModeState.allowNextGenerationStart = false;
-    outgoingAutoModeState.shouldBlockNextGenerationStart = false;
-
-    if (options.invalidateRun) {
-      outgoingAutoModeState.runId += 1;
-    }
-  };
-
-  /** Keeps the outgoing auto-mode hold badge attached to the current pending user message even if the DOM rerenders. */
-  const syncOutgoingAutoModeHoldIndicator = () => {
-    if (typeof document === 'undefined') {
-      return;
-    }
-
-    document.querySelectorAll('.ztracker-auto-mode-hold').forEach((element) => {
-      element.classList.remove('ztracker-auto-mode-hold');
-    });
-    document.querySelectorAll('.ztracker-auto-mode-status').forEach((element) => {
-      element.remove();
-    });
-
-    if (outgoingAutoModeState.pendingMessageId === null) {
-      return;
-    }
-
-    const messageBlock = document.querySelector(`.mes[mesid="${outgoingAutoModeState.pendingMessageId}"]`);
-    if (!(messageBlock instanceof HTMLElement)) {
-      return;
-    }
-
-    messageBlock.classList.add('ztracker-auto-mode-hold');
-
-    const status = document.createElement('div');
-    status.className = 'ztracker-auto-mode-status';
-    status.setAttribute('role', 'status');
-    status.setAttribute('aria-live', 'polite');
-
-    const icon = document.createElement('span');
-    icon.className = 'ztracker-auto-mode-status-icon fa-solid fa-truck-fast';
-    icon.setAttribute('aria-hidden', 'true');
-
-    const text = document.createElement('span');
-    text.className = 'ztracker-auto-mode-status-text';
-    text.textContent = 'Generating tracker before reply';
-
-    status.append(icon, text);
-
-    const messageText = messageBlock.querySelector('.mes_text');
-    if (messageText) {
-      messageText.before(status);
-    } else {
-      messageBlock.prepend(status);
-    }
-  };
-
-  type AutoModeHostContext = {
-    generate?: (type?: string, options?: { automatic_trigger?: boolean }) => Promise<unknown>;
-    stopGeneration?: () => boolean;
-  };
-
-  const stopHostGeneration = () => {
-    const context = SillyTavern.getContext() as AutoModeHostContext;
-    if (typeof context?.stopGeneration !== 'function') {
-      return false;
-    }
-
-    return context.stopGeneration();
-  };
-
-  const resumeHostGeneration = async () => {
-    const context = SillyTavern.getContext() as AutoModeHostContext;
-    if (typeof context?.generate !== 'function') {
-      return false;
-    }
-
-    outgoingAutoModeState.allowNextGenerationStart = true;
-    try {
-      await context.generate(undefined, { automatic_trigger: true });
-      return true;
-    } finally {
-      outgoingAutoModeState.allowNextGenerationStart = false;
-    }
-  };
-
-  let characterPanelButtonSyncTimer: number | undefined;
-  let observedCharacterPanel: HTMLElement | null = null;
-  let characterPanelObserver: MutationObserver | null = null;
-
-  const attachCharacterPanelObserver = () => {
-    if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
-
-    const nextPanel = document.querySelector('#form_create');
-    const characterPanel = nextPanel instanceof HTMLElement ? nextPanel : null;
-    if (characterPanel === observedCharacterPanel) {
-      return;
-    }
-
-    characterPanelObserver?.disconnect();
-    observedCharacterPanel = characterPanel;
-    if (!observedCharacterPanel) {
-      characterPanelObserver = null;
-      return;
-    }
-
-    characterPanelObserver = new MutationObserver(() => scheduleCharacterPanelButtonSync());
-    characterPanelObserver.observe(observedCharacterPanel, { childList: true, subtree: true });
-  };
-
-  const scheduleCharacterPanelButtonSync = () => {
-    if (typeof document === 'undefined') return;
-    if (characterPanelButtonSyncTimer) {
-      window.clearTimeout(characterPanelButtonSyncTimer);
-    }
-
-    characterPanelButtonSyncTimer = window.setTimeout(() => {
-      characterPanelButtonSyncTimer = undefined;
-      attachCharacterPanelObserver();
-      const settings = settingsManager.getSettings();
-      syncCharacterAutoModeButton({
-        getContext: () => SillyTavern.getContext(),
-        autoModeEnabled: settings.autoMode !== AutoModeOptions.NONE,
-        onToggle: ({ excluded }) => {
-          st_echo('info', excluded ? 'zTracker auto mode excluded for this character.' : 'zTracker auto mode restored for this character.');
-        },
-      });
-    }, 20);
-  };
-
-  // Keep menu colors in sync with the current SillyTavern theme.
-  installZTrackerThemeObserver();
-  scheduleCharacterPanelButtonSync();
-
-  if (typeof MutationObserver !== 'undefined') {
-    attachCharacterPanelObserver();
-    const observer = new MutationObserver((mutations) => {
-      const characterPanelChanged = mutations.some((mutation) =>
-        [...mutation.addedNodes, ...mutation.removedNodes].some(
-          (node) => node instanceof Element && (node.id === 'form_create' || !!node.querySelector('#form_create')),
-        ),
-      );
-      if (!characterPanelChanged) {
-        return;
-      }
-
-      attachCharacterPanelObserver();
-      scheduleCharacterPanelButtonSync();
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-  }
-
+/** Injects the zTracker per-message action button into SillyTavern's message template. */
+function ensureMessageTemplateButton(): void {
   const zTrackerIcon = document.createElement('div');
   zTrackerIcon.title = 'zTracker';
   zTrackerIcon.className = 'mes_button mes_ztracker_button fa-solid fa-truck-moving interactable';
   zTrackerIcon.tabIndex = 0;
   document.querySelector('#message_template .mes_buttons .extraMesButtons')?.prepend(zTrackerIcon);
+}
 
-  // Portal the parts menu to <body> while open so it can't be clipped by message/tracker overflow.
-  document.addEventListener(
-    'toggle',
-    (event) => {
-      const details = event.target as HTMLDetailsElement;
-      if (!details?.classList?.contains('ztracker-parts-details')) return;
+/** Resolves the message id for a click target from either a message row or the active portaled parts menu. */
+function resolveMessageIdFromTarget(
+  target: HTMLElement,
+  getPortaledPartsMessageId: (target: HTMLElement) => number | null,
+): number | null {
+  const messageElement = target.closest('.mes');
+  if (messageElement) {
+    const parsedMessageId = Number(messageElement.getAttribute('mesid'));
+    return Number.isNaN(parsedMessageId) ? null : parsedMessageId;
+  }
 
-      if (details.open) {
-        portalPartsMenu(details);
-      } else if (activePartsMenu?.details === details) {
-        restorePartsMenu(activePartsMenu);
-        activePartsMenu = null;
-      }
-    },
-    true,
-  );
+  return getPortaledPartsMessageId(target);
+}
 
-  document.addEventListener(
-    'mousedown',
-    (event) => {
-      if (!activePartsMenu) return;
-      const target = event.target as Node;
-      if (activePartsMenu.list.contains(target) || activePartsMenu.summary.contains(target)) return;
-      closeActivePartsMenu();
-    },
-    true,
-  );
-
-  document.addEventListener(
-    'keydown',
-    (event) => {
-      if (!activePartsMenu) return;
-      if (event.key === 'Escape') closeActivePartsMenu();
-    },
-    true,
-  );
+/** Applies tracker-specific click actions for message buttons and parts-menu controls. */
+function installTrackerActionClickHandler(options: {
+  actions: TrackerActions;
+  getPortaledPartsMessageId: (target: HTMLElement) => number | null;
+}): void {
+  const { actions, getPortaledPartsMessageId } = options;
 
   document.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-
-    let messageId: number | null = null;
-    const messageEl = target.closest('.mes');
-    if (messageEl) {
-      const parsed = Number(messageEl.getAttribute('mesid'));
-      if (!Number.isNaN(parsed)) messageId = parsed;
-    } else if (activePartsMenu && activePartsMenu.list.contains(target)) {
-      messageId = activePartsMenu.messageId;
+    const messageId = resolveMessageIdFromTarget(target, getPortaledPartsMessageId);
+    if (messageId === null) {
+      return;
     }
-
-    if (messageId === null) return;
 
     const fieldButton = target.closest('.ztracker-array-item-field-regenerate-button') as HTMLElement | null;
     if (fieldButton) {
       const partKey = fieldButton.getAttribute('data-ztracker-part') ?? '';
-      const indexText = fieldButton.getAttribute('data-ztracker-index') ?? '';
-      const index = Number(indexText);
+      const index = Number(fieldButton.getAttribute('data-ztracker-index') ?? '');
       const name = fieldButton.getAttribute('data-ztracker-name') ?? '';
       const idKey = fieldButton.getAttribute('data-ztracker-idkey') ?? '';
       const idValue = fieldButton.getAttribute('data-ztracker-idvalue') ?? '';
       const fieldKey = fieldButton.getAttribute('data-ztracker-field') ?? '';
 
-      if (
-        partKey &&
-        fieldKey &&
-        idKey &&
-        idValue &&
-        'generateTrackerArrayItemFieldByIdentity' in actions
-      ) {
+      if (partKey && fieldKey && idKey && idValue && 'generateTrackerArrayItemFieldByIdentity' in actions) {
         // @ts-ignore - optional capability depending on build/version.
         actions.generateTrackerArrayItemFieldByIdentity(messageId, partKey, idKey, idValue, fieldKey);
       } else if (partKey && fieldKey && name && 'generateTrackerArrayItemFieldByName' in actions) {
         // @ts-ignore - optional capability depending on build/version.
         actions.generateTrackerArrayItemFieldByName(messageId, partKey, name, fieldKey);
-      } else if (partKey && fieldKey && !isNaN(index) && 'generateTrackerArrayItemField' in actions) {
+      } else if (partKey && fieldKey && !Number.isNaN(index) && 'generateTrackerArrayItemField' in actions) {
         // @ts-ignore - optional capability depending on build/version.
         actions.generateTrackerArrayItemField(messageId, partKey, index, fieldKey);
       }
@@ -481,8 +89,7 @@ export async function initializeGlobalUI(options: {
     const itemButton = target.closest('.ztracker-array-item-regenerate-button') as HTMLElement | null;
     if (itemButton) {
       const partKey = itemButton.getAttribute('data-ztracker-part') ?? '';
-      const indexText = itemButton.getAttribute('data-ztracker-index') ?? '';
-      const index = Number(indexText);
+      const index = Number(itemButton.getAttribute('data-ztracker-index') ?? '');
       const name = itemButton.getAttribute('data-ztracker-name') ?? '';
       const idKey = itemButton.getAttribute('data-ztracker-idkey') ?? '';
       const idValue = itemButton.getAttribute('data-ztracker-idvalue') ?? '';
@@ -492,7 +99,7 @@ export async function initializeGlobalUI(options: {
         actions.generateTrackerArrayItemByIdentity(messageId, partKey, idKey, idValue);
       } else if (partKey && name) {
         actions.generateTrackerArrayItemByName(messageId, partKey, name);
-      } else if (partKey && !isNaN(index)) {
+      } else if (partKey && !Number.isNaN(index)) {
         actions.generateTrackerArrayItem(messageId, partKey, index);
       }
       return;
@@ -517,9 +124,54 @@ export async function initializeGlobalUI(options: {
       actions.deleteTracker(messageId);
     }
   });
+}
+
+/** Rerenders persisted trackers for the active chat and strips any data that no longer matches the template. */
+function rerenderTrackersForCurrentChat(options: {
+  globalContext: any;
+  renderTrackerWithDeps: (messageId: number) => void;
+}): void {
+  const { globalContext, renderTrackerWithDeps } = options;
+  const { saveChat } = globalContext;
+  let chatModified = false;
+
+  globalContext.chat.forEach((message: any, messageId: number) => {
+    try {
+      renderTrackerWithDeps(messageId);
+    } catch (error) {
+      console.error(`Error rendering zTracker on message ${messageId}, removing data:`, error);
+      st_echo('error', 'A zTracker template failed to render. Removing tracker from the message.');
+      if (message?.extra?.[EXTENSION_KEY]) {
+        delete message.extra[EXTENSION_KEY];
+        chatModified = true;
+      }
+    }
+  });
+
+  if (chatModified) {
+    saveChat();
+  }
+}
+
+/** Boots zTracker's document-level UI helpers and wires them to SillyTavern runtime events. */
+export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
+  const { globalContext, settingsManager, actions, renderTrackerWithDeps } = options;
+  const partsMenuPortal = installPartsMenuPortalHandlers();
+  const characterPanelButtons = createCharacterPanelButtonController({ settingsManager });
+  const outgoingAutoMode = createOutgoingAutoModeController({ actions });
+
+  installZTrackerThemeObserver();
+  characterPanelButtons.scheduleSync();
+  characterPanelButtons.installDomObserver();
+  outgoingAutoMode.installDocumentHandlers();
+  ensureMessageTemplateButton();
+  installTrackerActionClickHandler({
+    actions,
+    getPortaledPartsMessageId: partsMenuPortal.getMessageIdForTarget,
+  });
 
   await actions.renderExtensionTemplates();
-  syncOutgoingAutoModeHoldIndicator();
+  outgoingAutoMode.syncUi();
 
   globalContext.eventSource.on(
     EventNames.CHARACTER_MESSAGE_RENDERED,
@@ -536,11 +188,7 @@ export async function initializeGlobalUI(options: {
     },
   );
   globalContext.eventSource.on(EventNames.USER_MESSAGE_RENDERED, (messageId: number) => {
-    if (messageId !== outgoingAutoModeState.pendingMessageId) {
-      return;
-    }
-
-    syncOutgoingAutoModeHoldIndicator();
+    outgoingAutoMode.handleUserMessageRendered(messageId);
   });
   globalContext.eventSource.on(
     EventNames.MESSAGE_SENT,
@@ -553,18 +201,8 @@ export async function initializeGlobalUI(options: {
         return;
       }
 
-      if (outgoingAutoModeState.pendingMessageId !== null && outgoingAutoModeState.pendingMessageId !== messageId) {
-        resetOutgoingAutoModeState({ invalidateRun: true });
-        syncOutgoingAutoModeHoldIndicator();
-      }
-
-      const runId = ++outgoingAutoModeState.runId;
-      outgoingAutoModeState.pendingMessageId = messageId;
-      outgoingAutoModeState.allowNextGenerationStart = false;
-      outgoingAutoModeState.shouldBlockNextGenerationStart = true;
-      syncOutgoingAutoModeHoldIndicator();
-
-      stopHostGeneration();
+      const runId = outgoingAutoMode.beginPendingMessage(messageId);
+      outgoingAutoMode.stopHostGeneration();
 
       void (async () => {
         try {
@@ -573,56 +211,23 @@ export async function initializeGlobalUI(options: {
           console.error('zTracker auto mode failed to generate a tracker before reply.', error);
         }
 
-        if (outgoingAutoModeState.pendingMessageId !== messageId || outgoingAutoModeState.runId !== runId) {
+        if (!outgoingAutoMode.finishPendingMessage(messageId, runId)) {
           return;
         }
 
-        resetOutgoingAutoModeState();
-        syncOutgoingAutoModeHoldIndicator();
-        await resumeHostGeneration();
+        await outgoingAutoMode.resumeHostGeneration();
       })();
     },
   );
 
   globalContext.eventSource.on(EventNames.GENERATION_STARTED, () => {
-    if (outgoingAutoModeState.pendingMessageId === null) {
-      return;
-    }
-
-    if (outgoingAutoModeState.allowNextGenerationStart) {
-      outgoingAutoModeState.allowNextGenerationStart = false;
-      return;
-    }
-
-    if (!outgoingAutoModeState.shouldBlockNextGenerationStart) {
-      return;
-    }
-
-    outgoingAutoModeState.shouldBlockNextGenerationStart = false;
-    stopHostGeneration();
+    outgoingAutoMode.handleGenerationStarted();
   });
 
   globalContext.eventSource.on(EventNames.CHAT_CHANGED, () => {
-    resetOutgoingAutoModeState({ invalidateRun: true });
-    syncOutgoingAutoModeHoldIndicator();
-    scheduleCharacterPanelButtonSync();
-    const { saveChat } = globalContext;
-    let chatModified = false;
-    globalContext.chat.forEach((message: any, i: number) => {
-      try {
-        renderTrackerWithDeps(i);
-      } catch (error) {
-        console.error(`Error rendering zTracker on message ${i}, removing data:`, error);
-        st_echo('error', 'A zTracker template failed to render. Removing tracker from the message.');
-        if (message?.extra?.[EXTENSION_KEY]) {
-          delete message.extra[EXTENSION_KEY];
-          chatModified = true;
-        }
-      }
-    });
-    if (chatModified) {
-      saveChat();
-    }
+    outgoingAutoMode.resetAndSync({ invalidateRun: true });
+    characterPanelButtons.scheduleSync();
+    rerenderTrackersForCurrentChat({ globalContext, renderTrackerWithDeps });
   });
 
   (globalThis as any).ztrackerGenerateInterceptor = (chat: ChatMessage[]) => {
