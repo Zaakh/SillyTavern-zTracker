@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Outgoing auto mode now keeps the pending-message "Generating tracker before reply" badge visible across SillyTavern message rerenders, even when the host replaces the message DOM without emitting a matching user-message render event.
+- While outgoing auto mode is generating a tracker before reply, the lower-right host send button now flips into a tracker-specific stop control and cancels the pending tracker run when clicked.
+
 ## [1.7.1] - 2026-04-16
 
 ### Fixed
