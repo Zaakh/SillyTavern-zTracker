@@ -1,4 +1,5 @@
 import { jest } from '@jest/globals';
+import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import {
   ensureZTrackerSystemPromptPresetInstalled,
   getCurrentGlobalSystemPromptName,
@@ -18,6 +19,7 @@ import {
   PREVIOUS_DEFAULT_PROMPT_TOON,
   DEFAULT_PROMPT_XML,
   PREVIOUS_DEFAULT_PROMPT_XML,
+  migrateLegacyAutoMode,
   migrateLegacyPromptTemplates,
 } from '../config.js';
 
@@ -287,6 +289,16 @@ describe('system prompt helpers', () => {
     expect(migrateLegacyPromptTemplates(settings)).toBe(true);
     expect(settings.promptXml).toBe(DEFAULT_PROMPT_XML);
     expect(settings.promptToon).toBe(DEFAULT_PROMPT_TOON);
+  });
+
+  test('migrates the legacy input auto-mode value to the canonical enum value', () => {
+    const settings = {
+      autoMode: 'input',
+    } as { autoMode: string };
+
+    expect(migrateLegacyAutoMode(settings as any)).toBe(true);
+    expect(settings.autoMode).toBe(AutoModeOptions.INPUT);
+    expect(migrateLegacyAutoMode(settings as any)).toBe(false);
   });
 
   test('ships a TOON prompt that explicitly forbids JSON-like output and wrapper objects', () => {

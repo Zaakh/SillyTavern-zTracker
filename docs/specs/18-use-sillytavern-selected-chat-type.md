@@ -34,8 +34,8 @@ The desired behavior is simpler: if the user changes the active mode in SillyTav
 
 1. `prepareTrackerGeneration()` looks up the zTracker-selected connection profile.
 2. It resolves `profile.api` and maps that through `CONNECT_API_MAP`.
-3. It calls `buildPrompt(apiMap.selected, ...)` and passes normalized profile preset fields from `getPromptPresetSelections(profile)`.
-4. Those preset fields can include `presetName`, `contextName`, and `instructName`.
+3. It calls `buildPrompt(apiMap.selected, ...)` and passes the runtime-owned prompt selectors returned by `getPromptPresetSelections(apiMap.selected, { ... })`.
+4. Those prompt selectors are limited to the active instruct/system-prompt state SillyTavern needs for text-completion assembly.
 
 Relevant current code:
 - `src/ui/tracker-actions.ts`
@@ -93,7 +93,7 @@ It should not be responsible for deciding which completion family is active.
 
 ### 3. Stop treating mode-specific preset slots as zTracker-owned policy
 
-`getPromptPresetSelections(profile)` currently normalizes and forwards `preset`, `context`, and `instruct` profile fields.
+`getPromptPresetSelections(...)` now resolves active runtime instruct and system-prompt selectors for text-completion assembly instead of forwarding saved profile preset slots.
 
 Implementation direction:
 - only forward preset fields that are relevant to the chat type SillyTavern says is currently active,
@@ -130,7 +130,7 @@ When this spec is implemented:
 | File | Intended change |
 |------|-----------------|
 | `src/ui/tracker-actions.ts` | Resolve active mode from SillyTavern-owned state and remove any redundant zTracker-side mode assumptions during tracker generation. |
-| `src/ui/tracker-action-helpers.ts` | Narrow or replace `getPromptPresetSelections(...)` so zTracker no longer treats `instruct` / other preset slots as its own policy decision. |
+| `src/ui/tracker-action-helpers.ts` | Keep `getPromptPresetSelections(...)` limited to runtime-owned text-completion selectors so zTracker no longer treats `instruct` / other preset slots as its own policy decision. |
 | `src/__tests__/tracker-actions.prompt-assembly.test.ts` | Add regression coverage that tracker generation only forwards `instructName` when SillyTavern is using a text-completion API family. |
 | `readme.md` | Replace the current Text Completion / Chat Completion setup note with a simpler statement that zTracker follows the active SillyTavern chat type. |
 | `CHANGELOG.md` | Add an Unreleased entry when implementation begins. |

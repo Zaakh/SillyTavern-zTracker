@@ -4,7 +4,7 @@ import { settingsManager, ZTrackerSettings } from './components/Settings.js';
 import Handlebars from 'handlebars';
 import { Generator } from 'sillytavern-utils-lib';
 import { st_echo } from 'sillytavern-utils-lib/config';
-import { migrateLegacyPromptTemplates } from './config.js';
+import { migrateLegacyAutoMode, migrateLegacyPromptTemplates } from './config.js';
 import { createTrackerActions } from './ui/tracker-actions.js';
 import { initializeGlobalUI } from './ui/ui-init.js';
 import { ensureZTrackerSystemPromptPresetInstalled } from './system-prompt.js';
@@ -56,7 +56,13 @@ function renderReactSettings() {
 }
 
 async function main() {
-  if (migrateLegacyPromptTemplates(settingsManager.getSettings())) {
+  const settings = settingsManager.getSettings();
+  const didMigrateLegacySettings = [
+    migrateLegacyAutoMode(settings),
+    migrateLegacyPromptTemplates(settings),
+  ].some(Boolean);
+
+  if (didMigrateLegacySettings) {
     settingsManager.saveSettings();
   }
 

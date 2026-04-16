@@ -27,10 +27,6 @@ let activePartsMenu: PartsMenuPortalState | null = null;
 const incomingTypes = [AutoModeOptions.RESPONSES, AutoModeOptions.BOTH];
 const outgoingTypes = [AutoModeOptions.INPUT, AutoModeOptions.BOTH];
 
-function isOutgoingAutoMode(autoMode: ExtensionSettings['autoMode'] | 'inputs'): boolean {
-  return outgoingTypes.includes(autoMode as AutoModeOptions) || autoMode === 'inputs';
-}
-
 type Rgb = { r: number; g: number; b: number; a: number };
 
 function clampByte(v: number): number {
@@ -241,6 +237,16 @@ export async function initializeGlobalUI(options: {
     allowNextGenerationStart: false,
     shouldBlockNextGenerationStart: false,
     runId: 0,
+  };
+
+  const resetOutgoingAutoModeState = (options: { invalidateRun?: boolean } = {}) => {
+    outgoingAutoModeState.pendingMessageId = null;
+    outgoingAutoModeState.allowNextGenerationStart = false;
+    outgoingAutoModeState.shouldBlockNextGenerationStart = false;
+
+    if (options.invalidateRun) {
+      outgoingAutoModeState.runId += 1;
+    }
   };
 
   /** Keeps the outgoing auto-mode hold badge attached to the current pending user message even if the DOM rerenders. */
@@ -540,7 +546,7 @@ export async function initializeGlobalUI(options: {
     EventNames.MESSAGE_SENT,
     (messageId: number) => {
       const settings = settingsManager.getSettings();
-      if (!isOutgoingAutoMode(settings.autoMode as ExtensionSettings['autoMode'] | 'inputs')) return;
+      if (!outgoingTypes.includes(settings.autoMode)) return;
 
       const context = SillyTavern.getContext();
       if (!shouldAutoGenerateForUserMessage({ characterId: (context as any).characterId, characters: context.characters })) {
@@ -548,7 +554,7 @@ export async function initializeGlobalUI(options: {
       }
 
       if (outgoingAutoModeState.pendingMessageId !== null && outgoingAutoModeState.pendingMessageId !== messageId) {
-        outgoingAutoModeState.pendingMessageId = null;
+        resetOutgoingAutoModeState({ invalidateRun: true });
         syncOutgoingAutoModeHoldIndicator();
       }
 
@@ -571,8 +577,7 @@ export async function initializeGlobalUI(options: {
           return;
         }
 
-        outgoingAutoModeState.pendingMessageId = null;
-        outgoingAutoModeState.shouldBlockNextGenerationStart = false;
+        resetOutgoingAutoModeState();
         syncOutgoingAutoModeHoldIndicator();
         await resumeHostGeneration();
       })();
@@ -598,6 +603,7 @@ export async function initializeGlobalUI(options: {
   });
 
   globalContext.eventSource.on(EventNames.CHAT_CHANGED, () => {
+    resetOutgoingAutoModeState({ invalidateRun: true });
     syncOutgoingAutoModeHoldIndicator();
     scheduleCharacterPanelButtonSync();
     const { saveChat } = globalContext;

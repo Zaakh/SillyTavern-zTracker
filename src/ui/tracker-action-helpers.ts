@@ -96,7 +96,6 @@ type PromptPresetSelectionContextLike = {
 
 /** Resolves tracker prompt selectors from the active SillyTavern runtime instead of stored profile prompt slots. */
 export function getPromptPresetSelections(
-  _profile: { preset?: unknown; context?: unknown; instruct?: unknown; sysprompt?: unknown },
   selectedApi: string,
   options: {
     context?: PromptPresetSelectionContextLike;

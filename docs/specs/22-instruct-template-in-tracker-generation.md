@@ -232,16 +232,15 @@ buildPrompt(..., {
 });
 
 if (selectedApi === 'textgenerationwebui') {
-  profile.instruct = resolvedInstructName ?? undefined;
-  try {
-    sendRequest(...);
-  } finally {
-    profile.instruct = originalInstruct;
-  }
+  sendTextCompletionTrackerRequest({
+    requestMessages: sanitizedPrompt,
+    instructName: resolvedInstructName,
+    presetName: profile.preset,
+  });
 }
 ```
 
-This keeps the final flattening and instruct-token application inside SillyTavern's request service while making tracker generation respect the active host prompt state instead of whichever selector values happened to be saved on the chosen zTracker profile.
+This keeps instruct-token application inside SillyTavern's own text-completion service while making tracker generation respect the active host prompt state instead of whichever selector values happened to be saved on the chosen zTracker profile. Because the stable request-service path still does not expose an `instructName` override, the implementation currently uses `SillyTavern.getContext().TextCompletionService.processRequest()` as an isolated bridge. That dependency is intentional technical debt and should move back to the stable request service once upstream exposes the needed override.
 
 ### Implemented behavior
 
@@ -250,8 +249,8 @@ This keeps the final flattening and instruct-token application inside SillyTaver
 3. `resolveTrackerSystemPromptName()` now uses the active SillyTavern global system prompt in profile mode instead of `profile.sysprompt`.
 4. zTracker still preserves the explicit saved tracker-system-prompt override when `trackerSystemPromptMode === 'saved'`.
 5. `prepareTrackerGeneration()` returns the resolved transport instruct name alongside the built messages.
-6. `makeRequestFactory()` temporarily aligns the selected text-completion profile's `instruct` field with the active runtime instruct state for the duration of the request, including clearing a stale saved instruct value when no active instruct preset is selected.
-7. The temporary profile mutation is restored in all request completion paths, including synchronous generator errors.
+6. `makeRequestFactory()` routes text-completion tracker requests through a request-local helper that calls SillyTavern's `TextCompletionService.processRequest()` with the resolved `instructName` instead of mutating the shared profile.
+7. The text-completion helper keeps its own abort controller and pending-request bookkeeping so cancellation still works without touching the shared profile state.
 8. Chat-completion request behavior remains unchanged.
 9. Injection behavior remains unchanged because it already operates on SillyTavern's live prompt array after prompt assembly.
 
@@ -274,10 +273,11 @@ The following product and design decisions are now fixed for this spec:
 2. **Ownership**
   - zTracker should prefer SillyTavern request-service support.
   - zTracker should not implement its own instruct-template formatter unless a separate future spec explicitly chooses that path.
+  - Until SillyTavern exposes an instruct-name override on the stable request-service path, zTracker may use the isolated `TextCompletionService.processRequest()` bridge described above as a compatibility stopgap.
 
 3. **Fallback policy**
-  - If `ConnectionManagerRequestService` does not reliably support instruct formatting for tracker-generation requests, this work is blocked on upstream/library support.
-  - This spec does not authorize a zTracker-local fallback formatter.
+  - The current implementation does not introduce a zTracker-local instruct formatter.
+  - The remaining upstream gap is only the lack of a stable request-service override for `instructName`; once that exists, this implementation should move back to the stable request-service path.
 
 4. **Injected-message roles**
   - Keep the current injected roles.
@@ -295,8 +295,8 @@ The following product and design decisions are now fixed for this spec:
 ### Remaining verification questions
 
 1. **Concurrency**
-  - The implemented fix temporarily mutates the selected connection profile during the request window.
-  - This is acceptable for the current host-aligned fix, but simultaneous tracker requests sharing the same profile would be the next area to harden if real-world usage exposes overlap.
+  - The request-local transport removed the shared-profile mutation risk.
+  - The remaining overlap risk is limited to concurrent tracker requests for the same message id sharing one pending-request slot; that would be the next area to harden if real-world usage exposes overlap.
 
 ### Message role mapping
 
@@ -347,7 +347,7 @@ For a text-completion API with instruct template applied:
 
 | File | Change |
 |------|--------|
-| `src/ui/tracker-actions.ts` | Temporarily align the selected text-completion profile's `instruct` field with the active runtime instruct state during request dispatch |
+| `src/ui/tracker-actions.ts` | Send text-completion tracker requests through a request-local helper that passes the active runtime instruct preset into SillyTavern's text-completion service |
 | `src/ui/tracker-action-helpers.ts` | Resolve tracker-generation selectors from active runtime state and stop forwarding saved `preset` and `context` selector names |
 | `src/system-prompt.ts` | Resolve profile-mode tracker system prompt selection from the active SillyTavern global system prompt |
 | `src/components/settings/SystemPromptSettingsSection.tsx` | Update settings copy to reflect that profile mode uses the active SillyTavern prompt |
@@ -363,9 +363,8 @@ For a text-completion API with instruct template applied:
 - Verify that text-completion prompt assembly uses the active runtime instruct preset instead of stale saved `profile.instruct` data.
 - Verify that tracker-generation prompt selection no longer forwards saved `preset` and `context` selector names.
 - Verify that profile-mode tracker system prompt resolution uses the active global system prompt.
-- Verify that tracker request transport temporarily sees the active runtime instruct state on the selected connection profile.
-- Verify that stale saved instruct values are restored after request completion.
-- Verify that stale saved instruct values are cleared during request transport when no active instruct preset is selected.
+- Verify that tracker request transport passes the active runtime instruct state as request-local transport data without mutating the selected connection profile.
+- Verify that stale saved instruct values are ignored by the transport when no active instruct preset is selected.
 
 ### Integration / smoke test
 
@@ -373,7 +372,7 @@ For a text-completion API with instruct template applied:
 - Enable debug logging or inspect the outgoing request through the host/network tooling.
 - Verify that the final text-completion request follows the active SillyTavern instruct preset instead of degrading to blank-line concatenation.
 - Verify that tracker-generation system prompt selection follows the active SillyTavern system prompt when tracker system prompt mode is not `saved`.
-- Verify that the profile does not stay mutated after the request completes.
+- Verify that the selected connection profile stays unchanged after the request completes.
 - Verify that injection still reflects the active SillyTavern prompt configuration without additional zTracker prompt rebuilding.
 
 ### Regression
@@ -385,14 +384,14 @@ For a text-completion API with instruct template applied:
 
 ## Migration
 
-No settings migration is required. This is a behavioral fix only. Users who manually worked around stale profile selectors or the broken text-completion transport by embedding instruct tokens directly into custom prompts may still want to remove those workarounds after live verification.
+No user-facing migration is required for the transport change itself. Users who manually worked around stale profile selectors or the broken text-completion transport by embedding instruct tokens directly into custom prompts may still want to remove those workarounds after live verification.
 
 ## Dependencies
 
 - Depends on SillyTavern continuing to own instruct formatting for text-completion requests.
-- Depends on the selected connection profile object remaining writable for the duration of the request.
 - Depends on active runtime prompt selectors remaining available through `SillyTavern.getContext()`.
-- Does not require upstream API changes for the current host-aligned fix.
+- Depends on `SillyTavern.getContext().TextCompletionService.processRequest()` remaining available on the current host surface until the stable request-service path exposes an `instructName` override.
+- `manifest.json` now gates this path behind `minimum_client_version: 1.17.0`, which is the currently tested SillyTavern baseline for this repository.
 
 ## Verification
 
@@ -406,8 +405,8 @@ Verified in this repository after implementation:
 
 - Added regression coverage proving tracker generation now uses the active SillyTavern instruct preset for text-completion assembly.
 - Added regression coverage proving profile-mode tracker system prompt resolution now uses the active SillyTavern global system prompt.
-- Added regression coverage proving the selected `textgenerationwebui` profile is temporarily aligned to the active instruct state during request transport and restored immediately afterward.
-- Added regression coverage proving stale saved instruct values are cleared during transport when no active instruct preset is selected.
+- Added regression coverage proving text-completion transport now receives the active instruct preset as request-local state without mutating the selected profile.
+- Added regression coverage proving stale saved instruct values are ignored during transport when no active instruct preset is selected.
 - Confirmed during code audit that injection already operates on SillyTavern's live prompt array and therefore already follows active host prompt configuration.
 - `npm test` passed.
 - `npm run build` passed.
