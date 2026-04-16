@@ -64,7 +64,7 @@ These instructions apply to all files in this repository.
 - This extension is loaded by SillyTavern from `manifest.json` and expects built assets:
 	- `dist/index.js`
 	- `dist/style.css`
-- Build the extension before any SillyTavern smoke test.
+- Build the extension before any SillyTavern smoke test and commit the changes. The extension must be updated in SillyTavern after that!
 - Commit the changed build artifacts before treating a SillyTavern smoke test as valid for branch review or release work.
 - Assume a live SillyTavern instance may still be serving stale extension assets until the current repo build artifacts are present and committed.
 
