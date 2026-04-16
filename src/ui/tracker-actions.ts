@@ -69,7 +69,13 @@ export function createTrackerActions(options: {
     return `ztracker-local-${messageId}-${nextLocalRequestId}`;
   }
 
-  /** Sends text-completion tracker requests with a request-local instruct preset instead of mutating the shared profile. */
+  /**
+   * Sends text-completion tracker requests with a request-local instruct preset.
+   * This currently depends on SillyTavern's internal TextCompletionService because
+   * the public request service does not expose an instruct-name override yet.
+   * Keep this path isolated so it can move back to the stable request service once
+   * upstream surfaces that override.
+   */
   async function sendTextCompletionTrackerRequest(options: {
     messageId: number;
     profile: any;
@@ -259,7 +265,7 @@ export function createTrackerActions(options: {
       }
     }
 
-    const promptPresetSelections = getPromptPresetSelections(profile, apiMap.selected, {
+    const promptPresetSelections = getPromptPresetSelections(apiMap.selected, {
       context,
       trackerSystemPromptMode: settings.trackerSystemPromptMode,
       trackerSystemPromptName: syspromptName,

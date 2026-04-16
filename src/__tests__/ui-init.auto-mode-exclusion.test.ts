@@ -75,7 +75,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
         eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
       },
       settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+        getSettings: jest.fn(() => ({ autoMode: 'input', includeLastXZTrackerMessages: 1 })),
       } as any,
       actions: actions as any,
       renderTrackerWithDeps: () => undefined,
@@ -83,8 +83,8 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
 
     handlers.get('MESSAGE_SENT')?.(0);
     expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true });
-  expect(document.querySelector('.mes[mesid="0"]')?.classList.contains('ztracker-auto-mode-hold')).toBe(true);
-  expect(document.querySelector('.ztracker-auto-mode-status')?.textContent).toContain('Generating tracker before reply');
+    expect(document.querySelector('.mes[mesid="0"]')?.classList.contains('ztracker-auto-mode-hold')).toBe(true);
+    expect(document.querySelector('.ztracker-auto-mode-status')?.textContent).toContain('Generating tracker before reply');
 
     handlers.get('GENERATION_STARTED')?.();
     handlers.get('GENERATION_STARTED')?.();
@@ -136,7 +136,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
         eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
       },
       settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+        getSettings: jest.fn(() => ({ autoMode: 'input', includeLastXZTrackerMessages: 1 })),
       } as any,
       actions: actions as any,
       renderTrackerWithDeps: () => undefined,
@@ -191,7 +191,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
         eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
       },
       settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+        getSettings: jest.fn(() => ({ autoMode: 'input', includeLastXZTrackerMessages: 1 })),
       } as any,
       actions: actions as any,
       renderTrackerWithDeps: () => undefined,
@@ -243,7 +243,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
         eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
       },
       settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+        getSettings: jest.fn(() => ({ autoMode: 'input', includeLastXZTrackerMessages: 1 })),
       } as any,
       actions: actions as any,
       renderTrackerWithDeps: () => undefined,
@@ -292,7 +292,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
         eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
       },
       settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+        getSettings: jest.fn(() => ({ autoMode: 'input', includeLastXZTrackerMessages: 1 })),
       } as any,
       actions: actions as any,
       renderTrackerWithDeps: () => undefined,
@@ -339,7 +339,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
         eventSource: { on: (eventName: string, handler: (messageId?: number) => void) => handlers.set(eventName, handler) },
       },
       settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+        getSettings: jest.fn(() => ({ autoMode: 'input', includeLastXZTrackerMessages: 1 })),
       } as any,
       actions: actions as any,
       renderTrackerWithDeps: () => undefined,
@@ -349,7 +349,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true });
   });
 
-  test('still auto-generates for outgoing user messages when the selected settings value is inputs', async () => {
+  test('auto-generates for outgoing user messages when the canonical input setting is selected', async () => {
     const handlers = new Map<string, (messageId?: number) => void>();
     const actions = {
       renderExtensionTemplates: jest.fn(async () => undefined),
@@ -379,7 +379,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
         eventSource: { on: (eventName: string, handler: (messageId?: number) => void) => handlers.set(eventName, handler) },
       },
       settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+        getSettings: jest.fn(() => ({ autoMode: 'input', includeLastXZTrackerMessages: 1 })),
       } as any,
       actions: actions as any,
       renderTrackerWithDeps: () => undefined,
@@ -467,5 +467,61 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
 
     handlers.get('MESSAGE_SENT')?.(0);
     expect(actions.generateTracker).not.toHaveBeenCalled();
+  });
+
+  test('does not resume host generation after chat changes during the pending outgoing auto-mode hold', async () => {
+    document.body.innerHTML = buildMessage(0);
+    let resolveTracker: (value: boolean) => void = () => undefined;
+    const trackerPromise = new Promise<boolean>((resolve) => {
+      resolveTracker = resolve;
+    });
+    const handlers = new Map<string, (...args: any[]) => void>();
+    const hostContext = {
+      chat: [{ original_avatar: 'alice.png' }],
+      characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+      characterId: 0,
+      stopGeneration: jest.fn(() => true),
+      generate: jest.fn(async () => undefined),
+    };
+    const actions = {
+      renderExtensionTemplates: jest.fn(async () => undefined),
+      generateTracker: jest.fn(() => trackerPromise),
+      editTracker: jest.fn(),
+      deleteTracker: jest.fn(),
+      generateTrackerPart: jest.fn(),
+      generateTrackerArrayItem: jest.fn(),
+      generateTrackerArrayItemByName: jest.fn(),
+      generateTrackerArrayItemByIdentity: jest.fn(),
+      generateTrackerArrayItemField: jest.fn(),
+      generateTrackerArrayItemFieldByName: jest.fn(),
+      generateTrackerArrayItemFieldByIdentity: jest.fn(),
+    };
+
+    (globalThis as any).SillyTavern = { getContext: () => hostContext };
+
+    await initializeGlobalUI({
+      globalContext: {
+        chat: hostContext.chat,
+        saveChat: jest.fn(async () => undefined),
+        eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
+      },
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'input', includeLastXZTrackerMessages: 1 })),
+      } as any,
+      actions: actions as any,
+      renderTrackerWithDeps: () => undefined,
+    });
+
+    handlers.get('MESSAGE_SENT')?.(0);
+    expect(document.querySelector('.ztracker-auto-mode-status')?.textContent).toContain('Generating tracker before reply');
+
+    handlers.get('CHAT_CHANGED')?.();
+    expect(document.querySelector('.ztracker-auto-mode-status')).toBeNull();
+
+    resolveTracker(true);
+    await trackerPromise;
+
+    expect(hostContext.generate).not.toHaveBeenCalled();
+    expect(document.querySelector('.ztracker-auto-mode-status')).toBeNull();
   });
 });

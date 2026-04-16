@@ -303,6 +303,16 @@ export const LEGACY_PROMPT_TOON = `You are a highly specialized AI assistant. Yo
 \`\`\`
 `;
 
+/** Migrates legacy auto-mode values to the canonical SillyTavern enum value used at runtime. */
+export function migrateLegacyAutoMode(settings: Pick<ExtensionSettings, 'autoMode'>): boolean {
+  if ((settings.autoMode as unknown) !== 'input') {
+    return false;
+  }
+
+  settings.autoMode = AutoModeOptions.INPUT;
+  return true;
+}
+
 export function migrateLegacyPromptTemplates(settings: Pick<ExtensionSettings, 'promptXml' | 'promptToon'>): boolean {
   let changed = false;
 
