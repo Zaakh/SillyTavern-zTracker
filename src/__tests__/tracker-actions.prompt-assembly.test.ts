@@ -597,4 +597,83 @@ describe('createTrackerActions prompt assembly', () => {
     );
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
+
+  test('wraps leading text-completion system messages through the active story string before sending tracker requests', async () => {
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const textCompletionConstructPrompt = jest.fn((prompt: Array<{ role: string; content: string }>) => {
+      return `BODY:${prompt.map((message) => `${message.role}:${message.content}`).join(' | ')}`;
+    });
+    const textCompletionCreateRequestData = jest.fn((requestData: Record<string, unknown>) => requestData);
+    const textCompletionSendRequest = jest.fn(async () => ({ content: { time: '10:00:00' } }));
+    const textCompletionStoryStringFormatterLoader = jest.fn(async () => ({
+      renderStoryString: (params: Record<string, unknown>) => `SYSTEM:${String(params.system ?? '')}`,
+      formatInstructModeStoryString: (storyString: string) => `WRAPPED:${storyString}`,
+      getInstructStoppingSequences: () => ['</s>'],
+    }));
+    installSillyTavernContext(
+      makeContext({
+        powerUserSettings: {
+          instruct: {
+            preset: 'Active Instruct',
+            story_string_prefix: '[INST]',
+            story_string_suffix: '[/INST]Understood.</s>',
+          },
+          context: {
+            preset: 'Active Context',
+            story_string: '{{#if system}}{{system}}{{/if}}',
+            story_string_position: 0,
+          },
+        },
+        textCompletionConstructPrompt,
+        textCompletionCreateRequestData,
+        textCompletionSendRequest,
+      }),
+    );
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile({ api: 'textgenerationwebui' })],
+          },
+        },
+        CONNECT_API_MAP: {
+          textgenerationwebui: { selected: 'textgenerationwebui', type: 'textgenerationwebui' },
+        },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ trackerSystemPromptMode: 'profile' }),
+      } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+      textCompletionStoryStringFormatterLoader,
+    });
+
+    await actions.generateTracker(0);
+
+    expect(textCompletionStoryStringFormatterLoader).toHaveBeenCalled();
+    expect(textCompletionConstructPrompt).toHaveBeenCalledWith(
+      [
+        { role: 'user', content: 'Prior chat message' },
+        { role: 'user', content: 'Generate tracker JSON' },
+      ],
+      expect.objectContaining({
+        preset: 'Active Instruct',
+      }),
+      {},
+    );
+    expect(textCompletionCreateRequestData).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: 'WRAPPED:SYSTEM:Existing system prompt\nBODY:user:Prior chat message | user:Generate tracker JSON',
+      stop: ['</s>'],
+      stopping_strings: ['</s>'],
+    }));
+    expect(textCompletionSendRequest).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: 'WRAPPED:SYSTEM:Existing system prompt\nBODY:user:Prior chat message | user:Generate tracker JSON',
+    }), true, expect.any(AbortSignal));
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
 });

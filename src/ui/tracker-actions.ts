@@ -20,6 +20,7 @@ import {
   CHAT_MESSAGE_SCHEMA_HTML_KEY,
   CHAT_MESSAGE_SCHEMA_VALUE_KEY,
   CHAT_MESSAGE_PARTS_ORDER_KEY,
+  extractLeadingSystemPrompt,
   includeZTrackerMessages,
   sanitizeMessagesForGeneration,
 } from '../tracker.js';
@@ -50,6 +51,191 @@ import {
 } from './tracker-action-helpers.js';
 import { captureTrackerRequestDebugSnapshot, debugLog, isDebugLoggingEnabled } from './debug.js';
 
+interface TextCompletionStoryStringFormatter {
+  renderStoryString: (
+    params: Record<string, unknown>,
+    options?: {
+      customStoryString?: string | null;
+      customInstructSettings?: Record<string, unknown> | null;
+      customContextSettings?: Record<string, unknown> | null;
+    },
+  ) => string;
+  formatInstructModeStoryString: (
+    storyString: string,
+    options?: {
+      customContext?: Record<string, unknown> | null;
+      customInstruct?: Record<string, unknown> | null;
+    },
+  ) => string;
+  getInstructStoppingSequences: (
+    options?: {
+      customInstruct?: Record<string, unknown> | null;
+      useStopStrings?: boolean;
+    },
+  ) => string[];
+}
+
+let textCompletionStoryStringFormatterPromise: Promise<TextCompletionStoryStringFormatter | undefined> | undefined;
+
+// Mirrors the host's story-string helpers at runtime without bundling SillyTavern's internal modules.
+async function loadTextCompletionStoryStringFormatter(): Promise<TextCompletionStoryStringFormatter | undefined> {
+  if (textCompletionStoryStringFormatterPromise) {
+    return textCompletionStoryStringFormatterPromise;
+  }
+
+  if (typeof window === 'undefined') {
+    return undefined;
+  }
+
+  textCompletionStoryStringFormatterPromise = Promise.all([
+    // @ts-expect-error SillyTavern serves this browser-only module at runtime.
+    import(/* webpackIgnore: true */ '/scripts/power-user.js'),
+    // @ts-expect-error SillyTavern serves this browser-only module at runtime.
+    import(/* webpackIgnore: true */ '/scripts/instruct-mode.js'),
+  ])
+    .then(([powerUserModule, instructModeModule]) => {
+      if (
+        typeof powerUserModule.renderStoryString !== 'function' ||
+        typeof instructModeModule.formatInstructModeStoryString !== 'function' ||
+        typeof instructModeModule.getInstructStoppingSequences !== 'function'
+      ) {
+        return undefined;
+      }
+
+      return {
+        renderStoryString: powerUserModule.renderStoryString,
+        formatInstructModeStoryString: instructModeModule.formatInstructModeStoryString,
+        getInstructStoppingSequences: instructModeModule.getInstructStoppingSequences,
+      } satisfies TextCompletionStoryStringFormatter;
+    })
+    .catch((error) => {
+      console.warn('zTracker: failed to load SillyTavern story-string helpers; falling back to direct prompt assembly.', error);
+      return undefined;
+    });
+
+  return textCompletionStoryStringFormatterPromise;
+}
+
+function trimTextCompletionResponse(
+  response: ExtractedData | undefined,
+  stoppingStrings: string[] | undefined,
+  instructSettings?: Record<string, unknown>,
+): ExtractedData | undefined {
+  if (!response || typeof response.content !== 'string') {
+    return response;
+  }
+
+  let message = response.content.replace(/[^\S\r\n]+$/gm, '');
+
+  for (const stoppingString of stoppingStrings ?? []) {
+    if (!stoppingString.length) {
+      continue;
+    }
+
+    for (let length = stoppingString.length; length > 0; length -= 1) {
+      if (message.slice(-length) === stoppingString.slice(0, length)) {
+        message = message.slice(0, -length);
+        break;
+      }
+    }
+  }
+
+  for (const sequence of [instructSettings?.stop_sequence, instructSettings?.input_sequence]) {
+    if (typeof sequence !== 'string' || !sequence.trim()) {
+      continue;
+    }
+
+    const index = message.indexOf(sequence);
+    if (index !== -1) {
+      message = message.substring(0, index);
+    }
+  }
+
+  for (const sequences of [instructSettings?.output_sequence, instructSettings?.last_output_sequence]) {
+    if (typeof sequences !== 'string' || !sequences.length) {
+      continue;
+    }
+
+    sequences
+      .split('\n')
+      .filter((line) => line.trim() !== '')
+      .forEach((line) => {
+        message = message.replaceAll(line, '');
+      });
+  }
+
+  return {
+    ...response,
+    content: message,
+  };
+}
+
+async function buildStoryStringWrappedTextCompletionPrompt(options: {
+  requestMessages: Message[];
+  context: {
+    powerUserSettings?: {
+      instruct?: Record<string, unknown>;
+      context?: Record<string, unknown>;
+    };
+  };
+  textCompletionService: {
+    constructPrompt?: (
+      prompt: Message[],
+      instructPreset?: string | Record<string, unknown>,
+      instructSettings?: Record<string, unknown>,
+    ) => string;
+  };
+  formatterLoader?: () => Promise<TextCompletionStoryStringFormatter | undefined>;
+}): Promise<{ prompt: string; stoppingStrings: string[]; instructSettings: Record<string, unknown> } | undefined> {
+  const activeInstructSettings = options.context.powerUserSettings?.instruct;
+  const activeContextSettings = options.context.powerUserSettings?.context;
+  if (!activeInstructSettings || !activeContextSettings || typeof options.textCompletionService.constructPrompt !== 'function') {
+    return undefined;
+  }
+
+  const formatter = await (options.formatterLoader ?? loadTextCompletionStoryStringFormatter)();
+  if (!formatter) {
+    return undefined;
+  }
+
+  const { systemPrompt, remainingMessages } = extractLeadingSystemPrompt(options.requestMessages);
+  if (!systemPrompt) {
+    return undefined;
+  }
+
+  const promptParts: string[] = [];
+  const storyString = formatter.renderStoryString(
+    { system: systemPrompt },
+    {
+      customInstructSettings: activeInstructSettings,
+      customContextSettings: activeContextSettings,
+    },
+  );
+  const wrappedStoryString = formatter.formatInstructModeStoryString(storyString, {
+    customContext: activeContextSettings,
+    customInstruct: activeInstructSettings,
+  });
+  if (wrappedStoryString.length > 0) {
+    promptParts.push(wrappedStoryString);
+  }
+
+  if (remainingMessages.length > 0) {
+    const promptBody = options.textCompletionService.constructPrompt(remainingMessages, activeInstructSettings, {});
+    if (promptBody.length > 0) {
+      promptParts.push(promptBody);
+    }
+  }
+
+  return {
+    prompt: promptParts.join('\n'),
+    stoppingStrings: formatter.getInstructStoppingSequences({
+      customInstruct: activeInstructSettings,
+      useStopStrings: false,
+    }),
+    instructSettings: activeInstructSettings,
+  };
+}
+
 export function createTrackerActions(options: {
   globalContext: any;
   settingsManager: ExtensionSettingsManager<ExtensionSettings>;
@@ -58,12 +244,14 @@ export function createTrackerActions(options: {
   renderTrackerWithDeps: (messageId: number) => void;
   importMetaUrl: string;
   beforeRequestStartHook?: () => void;
+  textCompletionStoryStringFormatterLoader?: () => Promise<TextCompletionStoryStringFormatter | undefined>;
 }) {
   const { globalContext, settingsManager, generator, pendingRequests, renderTrackerWithDeps, importMetaUrl } = options;
   const pendingSequences = new Map<number, { cancelled: boolean }>();
   const localPendingRequestAborters = new Map<string, AbortController>();
   let nextLocalRequestId = 0;
   let beforeRequestStartHook = options.beforeRequestStartHook;
+  const textCompletionStoryStringFormatterLoader = options.textCompletionStoryStringFormatterLoader;
   const { logPromptEngineeredRenderRollback, requestPromptEngineeredResponse } = createPromptEngineeringHelpers();
 
   function createLocalRequestId(messageId: number): string {
@@ -89,12 +277,27 @@ export function createTrackerActions(options: {
   }): Promise<ExtractedData | undefined> {
     const context = SillyTavern.getContext() as {
       TextCompletionService?: {
+        constructPrompt?: (
+          prompt: Message[],
+          instructPreset?: string | Record<string, unknown>,
+          instructSettings?: Record<string, unknown>,
+        ) => string;
+        createRequestData?: (requestData: Record<string, any>) => Record<string, any>;
         processRequest?: (
           requestData: Record<string, any>,
           requestOptions: { presetName?: string; instructName?: string; instructSettings?: Record<string, any> },
           extractData?: boolean,
           signal?: AbortSignal,
         ) => Promise<ExtractedData | undefined>;
+        sendRequest?: (
+          requestData: Record<string, any>,
+          extractData?: boolean,
+          signal?: AbortSignal,
+        ) => Promise<ExtractedData | undefined>;
+      };
+      powerUserSettings?: {
+        instruct?: Record<string, unknown>;
+        context?: Record<string, unknown>;
       };
     };
     const textCompletionService = context?.TextCompletionService;
@@ -108,6 +311,49 @@ export function createTrackerActions(options: {
     localPendingRequestAborters.set(requestId, abortController);
 
     try {
+      const wrappedPrompt = await buildStoryStringWrappedTextCompletionPrompt({
+        requestMessages: options.requestMessages,
+        context,
+        textCompletionService,
+        formatterLoader: textCompletionStoryStringFormatterLoader,
+      });
+      if (
+        wrappedPrompt &&
+        typeof textCompletionService.createRequestData === 'function' &&
+        typeof textCompletionService.sendRequest === 'function'
+      ) {
+        beforeRequestStartHook?.();
+
+        const requestData = textCompletionService.createRequestData.call(textCompletionService, {
+          stream: false,
+          prompt: wrappedPrompt.prompt,
+          max_tokens: options.maxTokens,
+          model: options.profile?.model,
+          api_type: options.selectedApiType ?? options.profile?.api,
+          api_server: options.profile?.['api-url'],
+          ...(wrappedPrompt.stoppingStrings.length > 0
+            ? {
+                stop: wrappedPrompt.stoppingStrings,
+                stopping_strings: wrappedPrompt.stoppingStrings,
+              }
+            : {}),
+          ...(options.overridePayload ?? {}),
+        });
+
+        const response = await textCompletionService.sendRequest.call(
+          textCompletionService,
+          requestData,
+          true,
+          abortController.signal,
+        );
+
+        return trimTextCompletionResponse(
+          response,
+          requestData.stopping_strings,
+          wrappedPrompt.instructSettings,
+        );
+      }
+
       beforeRequestStartHook?.();
       return await textCompletionService.processRequest.call(
         textCompletionService,

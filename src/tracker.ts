@@ -341,6 +341,33 @@ export function sanitizeMessagesForGeneration<
   });
 }
 
+/**
+ * Collapses consecutive leading system messages into one block so text-completion
+ * prompt assembly can run them through SillyTavern's story-string wrapper.
+ */
+export function extractLeadingSystemPrompt<
+  T extends {
+    role: string;
+    content: string;
+  },
+>(
+  messages: T[],
+): { systemPrompt?: string; remainingMessages: T[] } {
+  const firstNonSystemIndex = messages.findIndex((message) => message.role !== 'system');
+  if (firstNonSystemIndex === 0) {
+    return { remainingMessages: [...messages] };
+  }
+
+  const systemMessages = (firstNonSystemIndex === -1 ? messages : messages.slice(0, firstNonSystemIndex))
+    .map((message) => message.content.trim())
+    .filter((content) => content.length > 0);
+
+  return {
+    ...(systemMessages.length > 0 ? { systemPrompt: systemMessages.join('\n\n') } : {}),
+    remainingMessages: firstNonSystemIndex === -1 ? [] : messages.slice(firstNonSystemIndex),
+  };
+}
+
 export interface ApplyTrackerUpdateOptions {
   trackerData: unknown;
   trackerHtml: string;

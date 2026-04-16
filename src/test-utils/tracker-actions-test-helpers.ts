@@ -52,6 +52,21 @@ jest.unstable_mockModule('../tracker.js', () => ({
   CHAT_MESSAGE_SCHEMA_HTML_KEY: 'schemaHtml',
   CHAT_MESSAGE_SCHEMA_VALUE_KEY: 'schemaValue',
   CHAT_MESSAGE_PARTS_ORDER_KEY: 'partsOrder',
+  extractLeadingSystemPrompt: jest.fn((messages: Array<{ role: string; content: string }>) => {
+    const firstNonSystemIndex = messages.findIndex((message) => message.role !== 'system');
+    if (firstNonSystemIndex === 0) {
+      return { remainingMessages: [...messages] };
+    }
+
+    const systemMessages = (firstNonSystemIndex === -1 ? messages : messages.slice(0, firstNonSystemIndex))
+      .map((message) => message.content.trim())
+      .filter((content) => content.length > 0);
+
+    return {
+      ...(systemMessages.length > 0 ? { systemPrompt: systemMessages.join('\n\n') } : {}),
+      remainingMessages: firstNonSystemIndex === -1 ? [] : messages.slice(firstNonSystemIndex),
+    };
+  }),
   includeZTrackerMessages: jest.fn((messages: Array<unknown>) => [...messages]),
   sanitizeMessagesForGeneration: sanitizeMessagesForGenerationMock,
 }));
@@ -155,6 +170,9 @@ export function makeContext(options: {
   powerUserSettings?: Record<string, unknown>;
   getPresetManager?: (apiId?: string) => unknown;
   textCompletionProcessRequest?: jest.Mock;
+  textCompletionConstructPrompt?: jest.Mock;
+  textCompletionCreateRequestData?: jest.Mock;
+  textCompletionSendRequest?: jest.Mock;
 } = {}) {
   const savedPromptPreset = {
     getCompletionPresetByName: (name?: string) =>
@@ -172,8 +190,11 @@ export function makeContext(options: {
       ...(options.powerUserSettings ?? {}),
     },
     TextCompletionService: {
+      constructPrompt: options.textCompletionConstructPrompt,
+      createRequestData: options.textCompletionCreateRequestData,
       processRequest:
         options.textCompletionProcessRequest ?? jest.fn(async () => ({ content: { time: '10:00:00' } })),
+      sendRequest: options.textCompletionSendRequest,
     },
     getPresetManager:
       options.getPresetManager ??

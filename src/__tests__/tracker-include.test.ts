@@ -1,5 +1,10 @@
 import type { ExtensionSettings } from '../config.js';
-import { includeZTrackerMessages, sanitizeMessagesForGeneration, CHAT_MESSAGE_SCHEMA_VALUE_KEY } from '../tracker.js';
+import {
+  extractLeadingSystemPrompt,
+  includeZTrackerMessages,
+  sanitizeMessagesForGeneration,
+  CHAT_MESSAGE_SCHEMA_VALUE_KEY,
+} from '../tracker.js';
 import { EXTENSION_KEY } from '../extension-metadata.js';
 
 describe('includeZTrackerMessages', () => {
@@ -261,6 +266,21 @@ describe('includeZTrackerMessages', () => {
         content: 'current',
       },
     ]);
+  });
+
+  it('extracts consecutive leading system messages into one story-string candidate', () => {
+    const result = extractLeadingSystemPrompt([
+      { role: 'system', content: 'Primary system prompt' },
+      { role: 'system', content: 'World info block' },
+      { role: 'user', content: 'Prior chat message' },
+    ]);
+
+    expect(result).toEqual({
+      systemPrompt: 'Primary system prompt\n\nWorld info block',
+      remainingMessages: [
+        { role: 'user', content: 'Prior chat message' },
+      ],
+    });
   });
 
   it('preserves source-based speaker names on normal chat messages during interceptor embedding', () => {
