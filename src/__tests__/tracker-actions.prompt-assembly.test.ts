@@ -103,6 +103,7 @@ describe('createTrackerActions prompt assembly', () => {
 
     const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
     expect(buildPromptOptions).toHaveProperty('syspromptName', 'zTracker');
+    expect(buildPromptOptions).toHaveProperty('includeNames', false);
 
     expect(generateRequest).not.toHaveBeenCalled();
     const sentMessages = (context.TextCompletionService.processRequest as jest.Mock).mock.calls[0][0].prompt;
@@ -691,5 +692,40 @@ describe('createTrackerActions prompt assembly', () => {
       prompt: 'WRAPPED:SYSTEM:Existing system prompt\nBODY:Tobias:Prior chat message | Bar:Prior assistant reply | user:Generate tracker JSON',
     }), true, expect.any(AbortSignal));
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test('does not ask buildPrompt to pre-inline speaker names for text-completion tracker prompts', async () => {
+    installSillyTavernContext(makeContext());
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile({ api: 'textgenerationwebui' })],
+          },
+        },
+        CONNECT_API_MAP: {
+          textgenerationwebui: { selected: 'textgenerationwebui', type: 'textgenerationwebui' },
+        },
+      },
+      settingsManager: { getSettings: () => makeSettings({ trackerSystemPromptMode: 'profile' }) } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0);
+
+    expect(buildPromptMock).toHaveBeenCalledWith(
+      'textgenerationwebui',
+      expect.objectContaining({
+        includeNames: false,
+      }),
+    );
   });
 });

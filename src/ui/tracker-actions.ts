@@ -564,6 +564,7 @@ export function createTrackerActions(options: {
       trackerSystemPromptMode: settings.trackerSystemPromptMode,
       trackerSystemPromptName: syspromptName,
     });
+    const includePromptNames = apiMap.selected !== 'textgenerationwebui';
 
     let promptResult;
     promptResult = await buildPrompt(apiMap.selected, {
@@ -573,7 +574,7 @@ export function createTrackerActions(options: {
         start: settings.includeLastXMessages > 0 ? Math.max(0, messageId - settings.includeLastXMessages) : 0,
       },
       ...promptPresetSelections,
-      includeNames: true,
+      includeNames: includePromptNames,
       ignoreWorldInfo,
       ...(skipCharacterCardInTrackerGeneration ? { ignoreCharacterFields: true } : {}),
     });
