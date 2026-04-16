@@ -172,6 +172,7 @@ function trimTextCompletionResponse(
 
 async function buildStoryStringWrappedTextCompletionPrompt(options: {
   requestMessages: Message[];
+  bodyRequestMessages?: Message[];
   context: {
     powerUserSettings?: {
       instruct?: Record<string, unknown>;
@@ -219,8 +220,11 @@ async function buildStoryStringWrappedTextCompletionPrompt(options: {
     promptParts.push(wrappedStoryString);
   }
 
-  if (remainingMessages.length > 0) {
-    const promptBody = options.textCompletionService.constructPrompt(remainingMessages, activeInstructSettings, {});
+  const bodyMessages = options.bodyRequestMessages
+    ? extractLeadingSystemPrompt(options.bodyRequestMessages).remainingMessages
+    : remainingMessages;
+  if (bodyMessages.length > 0) {
+    const promptBody = options.textCompletionService.constructPrompt(bodyMessages, activeInstructSettings, {});
     if (promptBody.length > 0) {
       promptParts.push(promptBody);
     }
@@ -271,6 +275,7 @@ export function createTrackerActions(options: {
     profile: any;
     selectedApiType: string | undefined;
     requestMessages: Message[];
+    wrappedRequestMessages?: Message[];
     instructName?: string;
     overridePayload?: Record<string, any>;
     maxTokens: number;
@@ -313,6 +318,7 @@ export function createTrackerActions(options: {
     try {
       const wrappedPrompt = await buildStoryStringWrappedTextCompletionPrompt({
         requestMessages: options.requestMessages,
+        bodyRequestMessages: options.wrappedRequestMessages,
         context,
         textCompletionService,
         formatterLoader: textCompletionStoryStringFormatterLoader,
@@ -427,6 +433,12 @@ export function createTrackerActions(options: {
             };
           };
         };
+        const textCompletionPromptBody = selectedApi === 'textgenerationwebui'
+          ? sanitizeMessagesForGeneration(requestMessages, {
+              userAlignmentMessage: context?.powerUserSettings?.instruct?.user_alignment_message,
+              userName: context?.name1,
+            })
+          : undefined;
         const sanitizedPrompt = sanitizeMessagesForGeneration(requestMessages, {
           inlineNamesIntoContent: selectedApi === 'textgenerationwebui',
           userAlignmentMessage:
@@ -451,6 +463,7 @@ export function createTrackerActions(options: {
               profile,
               selectedApiType: selectedApiMap?.type,
               requestMessages: sanitizedPrompt,
+              wrappedRequestMessages: textCompletionPromptBody,
               instructName: options.instructName,
               overridePayload: overideParams ?? {},
               maxTokens: settings.maxResponseToken,

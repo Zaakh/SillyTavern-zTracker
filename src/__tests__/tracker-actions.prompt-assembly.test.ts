@@ -599,9 +599,15 @@ describe('createTrackerActions prompt assembly', () => {
   });
 
   test('wraps leading text-completion system messages through the active story string before sending tracker requests', async () => {
-    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
-    const textCompletionConstructPrompt = jest.fn((prompt: Array<{ role: string; content: string }>) => {
-      return `BODY:${prompt.map((message) => `${message.role}:${message.content}`).join(' | ')}`;
+    buildPromptMock.mockResolvedValue({
+      result: [
+        { role: 'system', content: 'Existing system prompt' },
+        { role: 'user', content: 'Prior chat message', name: 'Tobias' },
+        { role: 'assistant', content: 'Prior assistant reply', name: 'Bar' },
+      ],
+    });
+    const textCompletionConstructPrompt = jest.fn((prompt: Array<{ role: string; content: string; name?: string }>) => {
+      return `BODY:${prompt.map((message) => `${message.name ?? message.role}:${message.content}`).join(' | ')}`;
     });
     const textCompletionCreateRequestData = jest.fn((requestData: Record<string, unknown>) => requestData);
     const textCompletionSendRequest = jest.fn(async () => ({ content: { time: '10:00:00' } }));
@@ -655,10 +661,20 @@ describe('createTrackerActions prompt assembly', () => {
 
     await actions.generateTracker(0);
 
+    expect(sanitizeMessagesForGenerationMock).toHaveBeenCalledTimes(2);
+    expect((sanitizeMessagesForGenerationMock as jest.Mock).mock.calls[0][1]).toEqual(expect.objectContaining({
+      userName: 'Tobias',
+    }));
+    expect((sanitizeMessagesForGenerationMock as jest.Mock).mock.calls[0][1]).not.toHaveProperty('inlineNamesIntoContent');
+    expect((sanitizeMessagesForGenerationMock as jest.Mock).mock.calls[1][1]).toEqual(expect.objectContaining({
+      inlineNamesIntoContent: true,
+      userName: 'Tobias',
+    }));
     expect(textCompletionStoryStringFormatterLoader).toHaveBeenCalled();
     expect(textCompletionConstructPrompt).toHaveBeenCalledWith(
       [
-        { role: 'user', content: 'Prior chat message' },
+        { role: 'user', content: 'Prior chat message', name: 'Tobias' },
+        { role: 'assistant', content: 'Prior assistant reply', name: 'Bar' },
         { role: 'user', content: 'Generate tracker JSON' },
       ],
       expect.objectContaining({
@@ -667,12 +683,12 @@ describe('createTrackerActions prompt assembly', () => {
       {},
     );
     expect(textCompletionCreateRequestData).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: 'WRAPPED:SYSTEM:Existing system prompt\nBODY:user:Prior chat message | user:Generate tracker JSON',
+      prompt: 'WRAPPED:SYSTEM:Existing system prompt\nBODY:Tobias:Prior chat message | Bar:Prior assistant reply | user:Generate tracker JSON',
       stop: ['</s>'],
       stopping_strings: ['</s>'],
     }));
     expect(textCompletionSendRequest).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: 'WRAPPED:SYSTEM:Existing system prompt\nBODY:user:Prior chat message | user:Generate tracker JSON',
+      prompt: 'WRAPPED:SYSTEM:Existing system prompt\nBODY:Tobias:Prior chat message | Bar:Prior assistant reply | user:Generate tracker JSON',
     }), true, expect.any(AbortSignal));
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
