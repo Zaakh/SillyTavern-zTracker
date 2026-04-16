@@ -446,15 +446,11 @@ describe('createTrackerActions prompt assembly', () => {
 
     const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
     expect(buildPromptOptions).toHaveProperty('instructName', 'Active Instruct');
-    expect(textCompletionProcessRequest).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.objectContaining({
-        instructName: 'Active Instruct',
-        presetName: profile.preset,
-      }),
-      true,
-      expect.any(AbortSignal),
-    );
+    expect(textCompletionProcessRequest).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), true, expect.any(AbortSignal));
+    expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).toMatchObject({
+      instructName: 'Active Instruct',
+    });
+    expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).not.toHaveProperty('presetName');
     expect(instructOptionDuringRequest).toBe('Active Instruct');
     expect(profileInstructDuringRequest).toBe('Profile Instruct');
     expect(profile.instruct).toBe('Profile Instruct');
@@ -494,16 +490,57 @@ describe('createTrackerActions prompt assembly', () => {
 
     const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
     expect(buildPromptOptions).not.toHaveProperty('instructName');
-    expect(textCompletionProcessRequest).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.objectContaining({
-        instructName: undefined,
-        presetName: profile.preset,
-      }),
-      true,
-      expect.any(AbortSignal),
-    );
+    expect(textCompletionProcessRequest).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), true, expect.any(AbortSignal));
+    expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).toMatchObject({
+      instructName: undefined,
+    });
+    expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).not.toHaveProperty('presetName');
     expect(profile.instruct).toBe('Profile Instruct');
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test('calls textgenerationwebui request transport with the live service as its this-context', async () => {
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const createRequestData = jest.fn((requestData: Record<string, unknown>) => requestData);
+    const processRequest = jest.fn(function (this: { createRequestData: typeof createRequestData }, requestData: Record<string, unknown>) {
+      this.createRequestData(requestData);
+      return Promise.resolve({ content: { time: '10:00:00' } });
+    });
+    const context = makeContext();
+    context.TextCompletionService = {
+      createRequestData,
+      processRequest,
+    };
+    installSillyTavernContext(context);
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile({ api: 'textgenerationwebui' })],
+          },
+        },
+        CONNECT_API_MAP: {
+          textgenerationwebui: { selected: 'textgenerationwebui', type: 'textgenerationwebui' },
+        },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ trackerSystemPromptMode: 'profile' }),
+      } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0);
+
+    expect(createRequestData).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: expect.any(Array),
+    }));
+    expect((processRequest as jest.Mock).mock.contexts[0]).toBe(context.TextCompletionService);
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 });

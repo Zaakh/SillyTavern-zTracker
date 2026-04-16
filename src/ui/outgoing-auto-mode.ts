@@ -236,7 +236,7 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
       };
     }
 
-    const shouldResumeHostGeneration = !state.observedHostGenerationStart || state.hostGenerationWasSuppressed;
+    const shouldResumeHostGeneration = state.hostGenerationWasSuppressed;
     reset();
     syncUi();
     return {

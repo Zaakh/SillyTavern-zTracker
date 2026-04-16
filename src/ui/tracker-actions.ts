@@ -97,8 +97,8 @@ export function createTrackerActions(options: {
         ) => Promise<ExtractedData | undefined>;
       };
     };
-    const processRequest = context?.TextCompletionService?.processRequest;
-    if (typeof processRequest !== 'function') {
+    const textCompletionService = context?.TextCompletionService;
+    if (typeof textCompletionService?.processRequest !== 'function') {
       throw new Error('SillyTavern text-completion request API is unavailable.');
     }
 
@@ -109,7 +109,8 @@ export function createTrackerActions(options: {
 
     try {
       beforeRequestStartHook?.();
-      return await processRequest(
+      return await textCompletionService.processRequest.call(
+        textCompletionService,
         {
           stream: false,
           prompt: options.requestMessages,
@@ -120,7 +121,6 @@ export function createTrackerActions(options: {
           ...(options.overridePayload ?? {}),
         },
         {
-          presetName: options.profile?.preset,
           instructName: options.instructName,
           instructSettings: {},
         },

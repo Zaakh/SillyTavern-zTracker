@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Text-completion tracker-generation requests now call SillyTavern's `TextCompletionService` with the correct service context and no longer forward stale connection-profile generation presets, preventing live `Tracker generation failed` errors such as `Cannot read properties of undefined (reading 'createRequestData')` and `Preset undefined not found` on text-completion profiles.
 - Outgoing auto mode now tags zTracker-owned tracker requests separately from the host reply lifecycle, so it no longer aborts its own tracker pass or resumes generation into a duplicate second assistant reply when the original host reply was never actually held.
 - Outgoing auto mode now keeps the pending-message "Generating tracker before reply" badge visible across SillyTavern message rerenders, even when the host replaces the message DOM without emitting a matching user-message render event.
 - While outgoing auto mode is generating a tracker before reply, the lower-right host send button now flips into a tracker-specific stop control and cancels the pending tracker run when clicked.

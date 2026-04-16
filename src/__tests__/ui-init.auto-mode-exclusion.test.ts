@@ -100,6 +100,53 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     expect(document.querySelector('.ztracker-auto-mode-status')).toBeNull();
   });
 
+  test('does not resume host generation after a tracker failure when the host reply was never suppressed', async () => {
+    document.body.innerHTML = buildMessage(0);
+    const handlers = new Map<string, (...args: any[]) => void>();
+    const hostContext = {
+      chat: [{ original_avatar: 'alice.png' }],
+      characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+      characterId: 0,
+      stopGeneration: jest.fn(() => false),
+      generate: jest.fn(async () => undefined),
+    };
+    const actions = {
+      renderExtensionTemplates: jest.fn(async () => undefined),
+      generateTracker: jest.fn(async () => false),
+      editTracker: jest.fn(),
+      deleteTracker: jest.fn(),
+      generateTrackerPart: jest.fn(),
+      generateTrackerArrayItem: jest.fn(),
+      generateTrackerArrayItemByName: jest.fn(),
+      generateTrackerArrayItemByIdentity: jest.fn(),
+      generateTrackerArrayItemField: jest.fn(),
+      generateTrackerArrayItemFieldByName: jest.fn(),
+      generateTrackerArrayItemFieldByIdentity: jest.fn(),
+    };
+
+    (globalThis as any).SillyTavern = { getContext: () => hostContext };
+
+    await initializeGlobalUI({
+      globalContext: {
+        chat: hostContext.chat,
+        saveChat: jest.fn(async () => undefined),
+        eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
+      },
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+      } as any,
+      actions: actions as any,
+      renderTrackerWithDeps: () => undefined,
+    });
+
+    handlers.get('MESSAGE_SENT')?.(0);
+    await Promise.resolve();
+
+    expect(hostContext.stopGeneration).toHaveBeenCalledTimes(1);
+    expect(hostContext.generate).not.toHaveBeenCalled();
+    expect(document.querySelector('.ztracker-auto-mode-status')).toBeNull();
+  });
+
   test('ignores zTracker-owned request starts while outgoing auto mode is holding the host reply', async () => {
     document.body.innerHTML = buildMessage(0);
     const handlers = new Map<string, (...args: any[]) => void>();
