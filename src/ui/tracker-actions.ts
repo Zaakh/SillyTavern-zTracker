@@ -263,6 +263,11 @@ export function createTrackerActions(options: {
     return `ztracker-local-${messageId}-${nextLocalRequestId}`;
   }
 
+  // Keep tracker instructions in the system block so host instruct wrappers do not label them as dialogue turns.
+  function insertTrackerInstructionMessage(messages: Message[], content: string): void {
+    messages.splice(0, messages.length, ...insertSystemPromptMessage(messages, content));
+  }
+
   /**
    * Sends text-completion tracker requests with a request-local instruct preset.
    * This currently depends on SillyTavern's internal TextCompletionService because
@@ -757,7 +762,7 @@ export function createTrackerActions(options: {
       let response: ExtractedData['content'];
 
       if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
-        messages.push({ content: settings.prompt, role: 'user' });
+        insertTrackerInstructionMessage(messages, settings.prompt);
         const result = await makeRequest(messages, {
           json_schema: { name: 'SceneTracker', strict: true, value: chatJsonValue },
         });
@@ -850,10 +855,10 @@ export function createTrackerActions(options: {
 
         let partResponse: any;
         if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
-          requestMessages.push({
-            role: 'user',
-            content: `${settings.prompt}\n\nGenerate ONLY the field "${partKey}". Return a single JSON object matching the provided schema.`,
-          } as any);
+          insertTrackerInstructionMessage(
+            requestMessages,
+            `${settings.prompt}\n\nGenerate ONLY the field "${partKey}". Return a single JSON object matching the provided schema.`,
+          );
           const result = await makeRequest(requestMessages, {
             json_schema: { name: 'SceneTrackerPart', strict: true, value: partSchema },
           });
@@ -941,10 +946,10 @@ export function createTrackerActions(options: {
 
       let partResponse: any;
       if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
-        messages.push({
-          role: 'user',
-          content: `${settings.prompt}\n\nGenerate ONLY the field "${partKey}". Return a single JSON object matching the provided schema.`,
-        } as any);
+        insertTrackerInstructionMessage(
+          messages,
+          `${settings.prompt}\n\nGenerate ONLY the field "${partKey}". Return a single JSON object matching the provided schema.`,
+        );
         const result = await makeRequest(messages, {
           json_schema: { name: 'SceneTrackerPart', strict: true, value: partSchema },
         });
@@ -1038,10 +1043,10 @@ export function createTrackerActions(options: {
 
       let itemResponse: any;
       if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
-        messages.push({
-          role: 'user',
-          content: `${settings.prompt}\n\nRegenerate ONLY ${partKey}[${index}] as an object under key "item". Return a single JSON object matching the provided schema. IMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
-        } as any);
+        insertTrackerInstructionMessage(
+          messages,
+          `${settings.prompt}\n\nRegenerate ONLY ${partKey}[${index}] as an object under key "item". Return a single JSON object matching the provided schema. IMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
+        );
         const result = await makeRequest(messages, {
           json_schema: { name: 'SceneTrackerItem', strict: true, value: itemSchema },
         });
@@ -1140,10 +1145,10 @@ export function createTrackerActions(options: {
         : '';
 
       if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
-        messages.push({
-          role: 'user',
-          content: `${settings.prompt}\n\nRegenerate ONLY the ${partKey} item with name "${name}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}\n\nIMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
-        } as any);
+        insertTrackerInstructionMessage(
+          messages,
+          `${settings.prompt}\n\nRegenerate ONLY the ${partKey} item with name "${name}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}\n\nIMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
+        );
         const result = await makeRequest(messages, {
           json_schema: { name: 'SceneTrackerItem', strict: true, value: itemSchema },
         });
@@ -1252,10 +1257,10 @@ export function createTrackerActions(options: {
         : '';
 
       if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
-        messages.push({
-          role: 'user',
-          content: `${settings.prompt}\n\nRegenerate ONLY the ${partKey} item with ${idKey} "${idValue}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}\n\nIMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
-        } as any);
+        insertTrackerInstructionMessage(
+          messages,
+          `${settings.prompt}\n\nRegenerate ONLY the ${partKey} item with ${idKey} "${idValue}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}\n\nIMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
+        );
         const result = await makeRequest(messages, {
           json_schema: { name: 'SceneTrackerItem', strict: true, value: itemSchema },
         });
@@ -1375,10 +1380,10 @@ export function createTrackerActions(options: {
       let fieldResponse: any;
 
       if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
-        messages.push({
-          role: 'user',
-          content: `${settings.prompt}\n\nRegenerate ONLY ${partKey}[${index}].${fieldKey}. Return a single JSON object with key "value" that matches the provided schema. Do not change or rename the array item; only update that field. IMPORTANT: Generate a fresh value; the previous value has been intentionally omitted and must not be repeated.`,
-        } as any);
+        insertTrackerInstructionMessage(
+          messages,
+          `${settings.prompt}\n\nRegenerate ONLY ${partKey}[${index}].${fieldKey}. Return a single JSON object with key "value" that matches the provided schema. Do not change or rename the array item; only update that field. IMPORTANT: Generate a fresh value; the previous value has been intentionally omitted and must not be repeated.`,
+        );
         const result = await makeRequest(messages, {
           json_schema: { name: 'SceneTrackerItemField', strict: true, value: fieldSchema },
         });

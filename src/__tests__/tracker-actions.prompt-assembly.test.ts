@@ -69,8 +69,8 @@ describe('createTrackerActions prompt assembly', () => {
     expect(sentMessages).toEqual([
       { role: 'system', content: 'Existing system prompt' },
       { role: 'system', content: 'Saved tracker system prompt' },
+      { role: 'system', content: 'Generate tracker JSON' },
       { role: 'user', content: 'Prior chat message' },
-      { role: 'user', content: 'Generate tracker JSON' },
     ]);
   });
 
@@ -109,8 +109,8 @@ describe('createTrackerActions prompt assembly', () => {
     const sentMessages = (context.TextCompletionService.processRequest as jest.Mock).mock.calls[0][0].prompt;
     expect(sentMessages).toEqual([
       { role: 'system', content: 'Existing system prompt' },
+      { role: 'system', content: 'Generate tracker JSON' },
       { role: 'user', content: 'Prior chat message' },
-      { role: 'user', content: 'Generate tracker JSON' },
     ]);
   });
 
@@ -676,7 +676,6 @@ describe('createTrackerActions prompt assembly', () => {
       [
         { role: 'user', content: 'Prior chat message', name: 'Tobias' },
         { role: 'assistant', content: 'Prior assistant reply', name: 'Bar' },
-        { role: 'user', content: 'Generate tracker JSON' },
       ],
       expect.objectContaining({
         preset: 'Active Instruct',
@@ -684,12 +683,12 @@ describe('createTrackerActions prompt assembly', () => {
       {},
     );
     expect(textCompletionCreateRequestData).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: 'WRAPPED:SYSTEM:Existing system prompt\nBODY:Tobias:Prior chat message | Bar:Prior assistant reply | user:Generate tracker JSON',
+      prompt: 'WRAPPED:SYSTEM:Existing system prompt\n\nGenerate tracker JSON\nBODY:Tobias:Prior chat message | Bar:Prior assistant reply',
       stop: ['</s>'],
       stopping_strings: ['</s>'],
     }));
     expect(textCompletionSendRequest).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: 'WRAPPED:SYSTEM:Existing system prompt\nBODY:Tobias:Prior chat message | Bar:Prior assistant reply | user:Generate tracker JSON',
+      prompt: 'WRAPPED:SYSTEM:Existing system prompt\n\nGenerate tracker JSON\nBODY:Tobias:Prior chat message | Bar:Prior assistant reply',
     }), true, expect.any(AbortSignal));
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });

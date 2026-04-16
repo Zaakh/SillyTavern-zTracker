@@ -177,10 +177,11 @@ describe('createTrackerActions prompt engineering', () => {
     });
 
     const sentMessages = generateRequest.mock.calls[0][0].prompt;
-    expect(sentMessages.at(-1)).toEqual({
-      role: 'user',
+    expect(sentMessages).toContainEqual({
+      role: 'system',
       content: 'TOON TEMPLATE\ntime\tstring',
     });
+    expect(sentMessages.at(-1)).toEqual({ role: 'user', content: 'Prior chat message' });
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 
@@ -219,10 +220,12 @@ describe('createTrackerActions prompt engineering', () => {
     await actions.generateTracker(0);
 
     const sentMessages = generateRequest.mock.calls[0][0].prompt;
-    expect(sentMessages.at(-1)).toEqual({
-      role: 'user',
+    expect(sentMessages).toContainEqual({
+      role: 'system',
       content: 'XML TEMPLATE\n<type>object</type>\n<time>string</time>',
     });
-    expect(sentMessages.at(-1).content).not.toContain('{\n  "type"');
+    expect(
+      sentMessages.find((message: { role: string; content: string }) => message.content.startsWith('XML TEMPLATE'))?.content,
+    ).not.toContain('{\n  "type"');
   });
 });

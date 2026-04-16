@@ -74,7 +74,7 @@ const MODE_SAMPLE_RESPONSE: Record<string, string> = {
 		'```toon\ntime: "09:13:00; 03/27/2026 (Friday)"\nlocation: "Atrium cafe, east window booth"\nsummary: "Alice greets a newly arrived customer near the front entrance."\n```',
 };
 
-const EXPECTED_PROMPT_ROLES = ['system', 'system', 'system', 'assistant', 'user', 'system', 'assistant', 'user', 'system', 'user'];
+const EXPECTED_PROMPT_ROLES = ['system', 'system', 'system', 'system', 'assistant', 'user', 'system', 'assistant', 'user', 'system'];
 
 /** Captures one live-like tracker-generation request for the requested prompt-engineering mode. */
 export async function captureTrackerContext(mode: (typeof PromptEngineeringMode)[keyof typeof PromptEngineeringMode]): Promise<CapturedTrackerContext> {
@@ -166,23 +166,23 @@ export function expectLiveLikeTrackerContext(
 			'Bar is the narrator in a simple scenario. It narrates the action of the environment and the dialogue of character other than Tobias.\n',
 		ignoreInstruct: true,
 	});
-	expect(promptMessages[5]).toEqual({
+	expect(promptMessages[6]).toEqual({
 		role: 'system',
 		content: expect.stringContaining('Scene details:\ntime: 14:23:07; 09/28/2025 (Tuesday)'),
 	});
-	expect(promptMessages[3]).toMatchObject({
+	expect(promptMessages[4]).toMatchObject({
 		role: 'assistant',
 		name: 'Bar',
 	});
-	expect(promptMessages[4]).toMatchObject({
+	expect(promptMessages[5]).toMatchObject({
 		role: 'user',
 		name: 'Tobias',
 	});
-	expect(promptMessages[6]).toMatchObject({
+	expect(promptMessages[7]).toMatchObject({
 		role: 'assistant',
 		name: 'Bar',
 	});
-	expect(promptMessages[7]).toMatchObject({
+	expect(promptMessages[8]).toMatchObject({
 		role: 'user',
 		name: 'Tobias',
 	});
@@ -198,19 +198,19 @@ export function expectLiveLikeTrackerContext(
 		expect(promptMessage).not.toHaveProperty('is_system');
 	}
 
-	const finalPrompt = promptMessages[promptMessages.length - 1];
-	expect(finalPrompt.role).toBe('user');
+	const trackerInstruction = promptMessages[3];
+	expect(trackerInstruction.role).toBe('system');
 	if (mode === PromptEngineeringMode.JSON) {
-		expect(finalPrompt.content).toEqual(expect.stringContaining('```json'));
+		expect(trackerInstruction.content).toEqual(expect.stringContaining('```json'));
 		return;
 	}
 	if (mode === PromptEngineeringMode.XML) {
-		expect(finalPrompt.content).toEqual(expect.stringContaining('```xml'));
-		expect(finalPrompt.content).toEqual(expect.stringContaining('EXAMPLE OF A PERFECT RESPONSE'));
+		expect(trackerInstruction.content).toEqual(expect.stringContaining('```xml'));
+		expect(trackerInstruction.content).toEqual(expect.stringContaining('EXAMPLE OF A PERFECT RESPONSE'));
 		return;
 	}
-	expect(finalPrompt.content).toEqual(expect.stringContaining('```toon'));
-	expect(finalPrompt.content).toEqual(expect.stringContaining('EXAMPLE OF A PERFECT RESPONSE'));
+	expect(trackerInstruction.content).toEqual(expect.stringContaining('```toon'));
+	expect(trackerInstruction.content).toEqual(expect.stringContaining('EXAMPLE OF A PERFECT RESPONSE'));
 }
 
 /** Prints one captured request with stable start and end markers for manual inspection. */
