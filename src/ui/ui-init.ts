@@ -160,6 +160,12 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
   const characterPanelButtons = createCharacterPanelButtonController({ settingsManager });
   const outgoingAutoMode = createOutgoingAutoModeController({ actions });
 
+  if ('setBeforeRequestStartHook' in actions && typeof actions.setBeforeRequestStartHook === 'function') {
+    actions.setBeforeRequestStartHook(() => {
+      outgoingAutoMode.noteTrackerRequestStart();
+    });
+  }
+
   installZTrackerThemeObserver();
   characterPanelButtons.scheduleSync();
   characterPanelButtons.installDomObserver();
@@ -202,7 +208,7 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
       }
 
       const runId = outgoingAutoMode.beginPendingMessage(messageId);
-      outgoingAutoMode.stopHostGeneration();
+      outgoingAutoMode.tryStopPendingHostGeneration();
 
       void (async () => {
         try {
@@ -211,7 +217,12 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
           console.error('zTracker auto mode failed to generate a tracker before reply.', error);
         }
 
-        if (!outgoingAutoMode.finishPendingMessage(messageId, runId)) {
+        const completion = outgoingAutoMode.finishPendingMessage(messageId, runId);
+        if (!completion.finished) {
+          return;
+        }
+
+        if (!completion.shouldResumeHostGeneration) {
           return;
         }
 

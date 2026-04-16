@@ -57,11 +57,13 @@ export function createTrackerActions(options: {
   pendingRequests: Map<number, string>;
   renderTrackerWithDeps: (messageId: number) => void;
   importMetaUrl: string;
+  beforeRequestStartHook?: () => void;
 }) {
   const { globalContext, settingsManager, generator, pendingRequests, renderTrackerWithDeps, importMetaUrl } = options;
   const pendingSequences = new Map<number, { cancelled: boolean }>();
   const localPendingRequestAborters = new Map<string, AbortController>();
   let nextLocalRequestId = 0;
+  let beforeRequestStartHook = options.beforeRequestStartHook;
   const { logPromptEngineeredRenderRollback, requestPromptEngineeredResponse } = createPromptEngineeringHelpers();
 
   function createLocalRequestId(messageId: number): string {
@@ -106,6 +108,7 @@ export function createTrackerActions(options: {
     localPendingRequestAborters.set(requestId, abortController);
 
     try {
+      beforeRequestStartHook?.();
       return await processRequest(
         {
           stream: false,
@@ -196,6 +199,7 @@ export function createTrackerActions(options: {
             return;
           }
 
+          beforeRequestStartHook?.();
           generator.generateRequest(
             {
               profileId: settings.profileId,
@@ -1319,6 +1323,10 @@ export function createTrackerActions(options: {
     generateTrackerArrayItemFieldByIdentity,
     modifyChatMetadata,
     renderExtensionTemplates,
+    /** Lets outgoing auto mode tag zTracker-owned request starts without affecting manual generation flows. */
+    setBeforeRequestStartHook(callback?: () => void) {
+      beforeRequestStartHook = callback;
+    },
   };
 }
 

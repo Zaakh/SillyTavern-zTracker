@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Outgoing auto mode now tags zTracker-owned tracker requests separately from the host reply lifecycle, so it no longer aborts its own tracker pass or resumes generation into a duplicate second assistant reply when the original host reply was never actually held.
 - Outgoing auto mode now keeps the pending-message "Generating tracker before reply" badge visible across SillyTavern message rerenders, even when the host replaces the message DOM without emitting a matching user-message render event.
 - While outgoing auto mode is generating a tracker before reply, the lower-right host send button now flips into a tracker-specific stop control and cancels the pending tracker run when clicked.
 

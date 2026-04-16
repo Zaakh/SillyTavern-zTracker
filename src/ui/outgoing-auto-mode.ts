@@ -9,6 +9,9 @@ type OutgoingAutoModeState = {
   pendingMessageId: number | null;
   allowNextGenerationStart: boolean;
   shouldBlockNextGenerationStart: boolean;
+  expectedTrackerGenerationStarts: number;
+  observedHostGenerationStart: boolean;
+  hostGenerationWasSuppressed: boolean;
   runId: number;
 };
 
@@ -19,6 +22,9 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
     pendingMessageId: null,
     allowNextGenerationStart: false,
     shouldBlockNextGenerationStart: false,
+    expectedTrackerGenerationStarts: 0,
+    observedHostGenerationStart: false,
+    hostGenerationWasSuppressed: false,
     runId: 0,
   };
 
@@ -27,6 +33,9 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
     state.pendingMessageId = null;
     state.allowNextGenerationStart = false;
     state.shouldBlockNextGenerationStart = false;
+    state.expectedTrackerGenerationStarts = 0;
+    state.observedHostGenerationStart = false;
+    state.hostGenerationWasSuppressed = false;
     if (options.invalidateRun) {
       state.runId += 1;
     }
@@ -177,6 +186,32 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
     }
   };
 
+  /** Marks that zTracker is about to dispatch one of its own tracker requests while the outgoing hold is active. */
+  const noteTrackerRequestStart = () => {
+    if (state.pendingMessageId === null) {
+      return;
+    }
+
+    state.expectedTrackerGenerationStarts += 1;
+  };
+
+  /** Attempts to stop the host reply immediately after send and records when the hold already succeeded. */
+  const tryStopPendingHostGeneration = () => {
+    if (state.pendingMessageId === null) {
+      return false;
+    }
+
+    const stopped = stopHostGeneration();
+    if (!stopped) {
+      return false;
+    }
+
+    state.observedHostGenerationStart = true;
+    state.hostGenerationWasSuppressed = true;
+    state.shouldBlockNextGenerationStart = false;
+    return true;
+  };
+
   /** Starts tracking a new outgoing auto-mode run and returns the current run token. */
   const beginPendingMessage = (messageId: number) => {
     if (state.pendingMessageId !== null && state.pendingMessageId !== messageId) {
@@ -195,12 +230,19 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
   /** Clears the pending state only if the completion belongs to the current run token. */
   const finishPendingMessage = (messageId: number, runId: number) => {
     if (state.pendingMessageId !== messageId || state.runId !== runId) {
-      return false;
+      return {
+        finished: false,
+        shouldResumeHostGeneration: false,
+      };
     }
 
+    const shouldResumeHostGeneration = !state.observedHostGenerationStart || state.hostGenerationWasSuppressed;
     reset();
     syncUi();
-    return true;
+    return {
+      finished: true,
+      shouldResumeHostGeneration,
+    };
   };
 
   /** Refreshes the badge when the pending message is rerendered by the host. */
@@ -223,12 +265,20 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
       return;
     }
 
+    if (state.expectedTrackerGenerationStarts > 0) {
+      state.expectedTrackerGenerationStarts -= 1;
+      return;
+    }
+
     if (!state.shouldBlockNextGenerationStart) {
       return;
     }
 
     state.shouldBlockNextGenerationStart = false;
-    stopHostGeneration();
+    state.observedHostGenerationStart = true;
+    if (stopHostGeneration()) {
+      state.hostGenerationWasSuppressed = true;
+    }
   };
 
   /** Installs the DOM observer and stop-button capture handler used by outgoing auto mode. */
@@ -247,6 +297,10 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
 
         const stopButton = target.closest('#send_but');
         if (!(stopButton instanceof HTMLElement)) {
+          return;
+        }
+
+        if (typeof actions.cancelTracker !== 'function') {
           return;
         }
 
@@ -288,6 +342,7 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
     handleGenerationStarted,
     handleUserMessageRendered,
     installDocumentHandlers,
+    noteTrackerRequestStart,
     resetAndSync(options: { invalidateRun?: boolean } = {}) {
       reset(options);
       syncUi();
@@ -295,5 +350,6 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
     resumeHostGeneration,
     stopHostGeneration,
     syncUi,
+    tryStopPendingHostGeneration,
   };
 }

@@ -47,6 +47,114 @@ async function flushDomObservers(): Promise<void> {
 }
 
 describe('initializeGlobalUI auto-mode exclusion guards', () => {
+  test('does not resume host generation when the original reply already started and could not be stopped', async () => {
+    document.body.innerHTML = buildMessage(0);
+    let resolveTracker: (value: boolean) => void = () => undefined;
+    const trackerPromise = new Promise<boolean>((resolve) => {
+      resolveTracker = resolve;
+    });
+    const handlers = new Map<string, (...args: any[]) => void>();
+    const hostContext = {
+      chat: [{ original_avatar: 'alice.png' }],
+      characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+      characterId: 0,
+      stopGeneration: jest.fn(() => false),
+      generate: jest.fn(async () => undefined),
+    };
+    const actions = {
+      renderExtensionTemplates: jest.fn(async () => undefined),
+      generateTracker: jest.fn(() => trackerPromise),
+      editTracker: jest.fn(),
+      deleteTracker: jest.fn(),
+      generateTrackerPart: jest.fn(),
+      generateTrackerArrayItem: jest.fn(),
+      generateTrackerArrayItemByName: jest.fn(),
+      generateTrackerArrayItemByIdentity: jest.fn(),
+      generateTrackerArrayItemField: jest.fn(),
+      generateTrackerArrayItemFieldByName: jest.fn(),
+      generateTrackerArrayItemFieldByIdentity: jest.fn(),
+    };
+
+    (globalThis as any).SillyTavern = { getContext: () => hostContext };
+
+    await initializeGlobalUI({
+      globalContext: {
+        chat: hostContext.chat,
+        saveChat: jest.fn(async () => undefined),
+        eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
+      },
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+      } as any,
+      actions: actions as any,
+      renderTrackerWithDeps: () => undefined,
+    });
+
+    handlers.get('MESSAGE_SENT')?.(0);
+    handlers.get('GENERATION_STARTED')?.();
+
+    resolveTracker(true);
+    await trackerPromise;
+
+    expect(hostContext.generate).not.toHaveBeenCalled();
+    expect(document.querySelector('.ztracker-auto-mode-status')).toBeNull();
+  });
+
+  test('ignores zTracker-owned request starts while outgoing auto mode is holding the host reply', async () => {
+    document.body.innerHTML = buildMessage(0);
+    const handlers = new Map<string, (...args: any[]) => void>();
+    let beforeRequestStartHook: (() => void) | undefined;
+    const hostContext = {
+      chat: [{ original_avatar: 'alice.png' }],
+      characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+      characterId: 0,
+      stopGeneration: jest.fn(() => true),
+      generate: jest.fn(async () => undefined),
+    };
+    const actions = {
+      renderExtensionTemplates: jest.fn(async () => undefined),
+      generateTracker: jest.fn(async () => {
+        beforeRequestStartHook?.();
+        handlers.get('GENERATION_STARTED')?.();
+        return true;
+      }),
+      editTracker: jest.fn(),
+      deleteTracker: jest.fn(),
+      generateTrackerPart: jest.fn(),
+      generateTrackerArrayItem: jest.fn(),
+      generateTrackerArrayItemByName: jest.fn(),
+      generateTrackerArrayItemByIdentity: jest.fn(),
+      generateTrackerArrayItemField: jest.fn(),
+      generateTrackerArrayItemFieldByName: jest.fn(),
+      generateTrackerArrayItemFieldByIdentity: jest.fn(),
+      setBeforeRequestStartHook: jest.fn((callback?: () => void) => {
+        beforeRequestStartHook = callback;
+      }),
+    };
+
+    (globalThis as any).SillyTavern = { getContext: () => hostContext };
+
+    await initializeGlobalUI({
+      globalContext: {
+        chat: hostContext.chat,
+        saveChat: jest.fn(async () => undefined),
+        eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
+      },
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+      } as any,
+      actions: actions as any,
+      renderTrackerWithDeps: () => undefined,
+    });
+
+    handlers.get('MESSAGE_SENT')?.(0);
+    await Promise.resolve();
+
+    expect(actions.setBeforeRequestStartHook).toHaveBeenCalledWith(expect.any(Function));
+    expect(hostContext.stopGeneration).toHaveBeenCalledTimes(1);
+    expect(hostContext.generate).toHaveBeenCalledWith(undefined, { automatic_trigger: true });
+  });
+
   test('waits for tracker generation to finish before resuming normal generation for outgoing auto mode', async () => {
     document.body.innerHTML = buildMessage(0);
     let resolveTracker: (value: boolean) => void = () => undefined;
@@ -97,7 +205,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
 
     handlers.get('GENERATION_STARTED')?.();
     handlers.get('GENERATION_STARTED')?.();
-    expect(hostContext.stopGeneration).toHaveBeenCalledTimes(2);
+    expect(hostContext.stopGeneration).toHaveBeenCalledTimes(1);
     expect(hostContext.generate).not.toHaveBeenCalled();
 
     resolveTracker(true);
@@ -155,7 +263,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     handlers.get('GENERATION_STARTED')?.();
     handlers.get('GENERATION_STARTED')?.();
 
-    expect(hostContext.stopGeneration).toHaveBeenCalledTimes(2);
+    expect(hostContext.stopGeneration).toHaveBeenCalledTimes(1);
 
     resolveTracker(true);
     await trackerPromise;
