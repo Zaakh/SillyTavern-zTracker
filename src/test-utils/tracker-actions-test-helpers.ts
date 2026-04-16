@@ -153,6 +153,7 @@ export function makeContext(options: {
   includeSavedPromptPreset?: boolean;
   powerUserSettings?: Record<string, unknown>;
   getPresetManager?: (apiId?: string) => unknown;
+  textCompletionProcessRequest?: jest.Mock;
 } = {}) {
   const savedPromptPreset = {
     getCompletionPresetByName: (name?: string) =>
@@ -166,6 +167,10 @@ export function makeContext(options: {
       prefer_character_prompt: true,
       sysprompt: { name: 'Neutral - Chat' },
       ...(options.powerUserSettings ?? {}),
+    },
+    TextCompletionService: {
+      processRequest:
+        options.textCompletionProcessRequest ?? jest.fn(async () => ({ content: { time: '10:00:00' } })),
     },
     getPresetManager:
       options.getPresetManager ??

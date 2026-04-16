@@ -33,8 +33,13 @@ jest.unstable_mockModule('../tracker.js', () => ({
 
 const { initializeGlobalUI } = await import('../ui/ui-init.js');
 
+function buildMessage(messageId: number): string {
+  return `<div class="mes" mesid="${messageId}"><div class="mes_text">Message ${messageId}</div></div>`;
+}
+
 describe('initializeGlobalUI auto-mode exclusion guards', () => {
   test('waits for tracker generation to finish before resuming normal generation for outgoing auto mode', async () => {
+    document.body.innerHTML = buildMessage(0);
     let resolveTracker: (value: boolean) => void = () => undefined;
     const trackerPromise = new Promise<boolean>((resolve) => {
       resolveTracker = resolve;
@@ -78,7 +83,10 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
 
     handlers.get('MESSAGE_SENT')?.(0);
     expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true });
+  expect(document.querySelector('.mes[mesid="0"]')?.classList.contains('ztracker-auto-mode-hold')).toBe(true);
+  expect(document.querySelector('.ztracker-auto-mode-status')?.textContent).toContain('Generating tracker before reply');
 
+    handlers.get('GENERATION_STARTED')?.();
     handlers.get('GENERATION_STARTED')?.();
     expect(hostContext.stopGeneration).toHaveBeenCalledTimes(2);
     expect(hostContext.generate).not.toHaveBeenCalled();
@@ -87,9 +95,123 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     await trackerPromise;
 
     expect(hostContext.generate).toHaveBeenCalledWith(undefined, { automatic_trigger: true });
+    expect(document.querySelector('.ztracker-auto-mode-status')).toBeNull();
+    expect(document.querySelector('.mes[mesid="0"]')?.classList.contains('ztracker-auto-mode-hold')).toBe(false);
+  });
+
+  test('does not keep stopping unrelated generation starts after the initial outgoing auto-mode suppression', async () => {
+    document.body.innerHTML = buildMessage(0);
+    let resolveTracker: (value: boolean) => void = () => undefined;
+    const trackerPromise = new Promise<boolean>((resolve) => {
+      resolveTracker = resolve;
+    });
+    const handlers = new Map<string, (...args: any[]) => void>();
+    const hostContext = {
+      chat: [{ original_avatar: 'alice.png' }],
+      characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+      characterId: 0,
+      stopGeneration: jest.fn(() => true),
+      generate: jest.fn(async () => undefined),
+    };
+    const actions = {
+      renderExtensionTemplates: jest.fn(async () => undefined),
+      generateTracker: jest.fn(() => trackerPromise),
+      editTracker: jest.fn(),
+      deleteTracker: jest.fn(),
+      generateTrackerPart: jest.fn(),
+      generateTrackerArrayItem: jest.fn(),
+      generateTrackerArrayItemByName: jest.fn(),
+      generateTrackerArrayItemByIdentity: jest.fn(),
+      generateTrackerArrayItemField: jest.fn(),
+      generateTrackerArrayItemFieldByName: jest.fn(),
+      generateTrackerArrayItemFieldByIdentity: jest.fn(),
+    };
+
+    (globalThis as any).SillyTavern = { getContext: () => hostContext };
+
+    await initializeGlobalUI({
+      globalContext: {
+        chat: hostContext.chat,
+        saveChat: jest.fn(async () => undefined),
+        eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
+      },
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+      } as any,
+      actions: actions as any,
+      renderTrackerWithDeps: () => undefined,
+    });
+
+    handlers.get('MESSAGE_SENT')?.(0);
+    handlers.get('GENERATION_STARTED')?.();
+    handlers.get('GENERATION_STARTED')?.();
+
+    expect(hostContext.stopGeneration).toHaveBeenCalledTimes(2);
+
+    resolveTracker(true);
+    await trackerPromise;
+
+    expect(hostContext.generate).toHaveBeenCalledWith(undefined, { automatic_trigger: true });
+  });
+
+  test('reapplies the hold indicator when the pending user message renders after MESSAGE_SENT', async () => {
+    const handlers = new Map<string, (...args: any[]) => void>();
+    let resolveTracker: (value: boolean) => void = () => undefined;
+    const trackerPromise = new Promise<boolean>((resolve) => {
+      resolveTracker = resolve;
+    });
+    const hostContext = {
+      chat: [{ original_avatar: 'alice.png' }],
+      characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+      characterId: 0,
+      stopGeneration: jest.fn(() => true),
+      generate: jest.fn(async () => undefined),
+    };
+    const actions = {
+      renderExtensionTemplates: jest.fn(async () => undefined),
+      generateTracker: jest.fn(() => trackerPromise),
+      editTracker: jest.fn(),
+      deleteTracker: jest.fn(),
+      generateTrackerPart: jest.fn(),
+      generateTrackerArrayItem: jest.fn(),
+      generateTrackerArrayItemByName: jest.fn(),
+      generateTrackerArrayItemByIdentity: jest.fn(),
+      generateTrackerArrayItemField: jest.fn(),
+      generateTrackerArrayItemFieldByName: jest.fn(),
+      generateTrackerArrayItemFieldByIdentity: jest.fn(),
+    };
+
+    document.body.innerHTML = '';
+    (globalThis as any).SillyTavern = { getContext: () => hostContext };
+
+    await initializeGlobalUI({
+      globalContext: {
+        chat: hostContext.chat,
+        saveChat: jest.fn(async () => undefined),
+        eventSource: { on: (eventName: string, handler: (...args: any[]) => void) => handlers.set(eventName, handler) },
+      },
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'inputs', includeLastXZTrackerMessages: 1 })),
+      } as any,
+      actions: actions as any,
+      renderTrackerWithDeps: () => undefined,
+    });
+
+    handlers.get('MESSAGE_SENT')?.(0);
+    expect(document.querySelector('.ztracker-auto-mode-status')).toBeNull();
+
+    document.body.innerHTML = buildMessage(0);
+    handlers.get('USER_MESSAGE_RENDERED')?.(0);
+
+    expect(document.querySelector('.mes[mesid="0"]')?.classList.contains('ztracker-auto-mode-hold')).toBe(true);
+    expect(document.querySelector('.ztracker-auto-mode-status')?.textContent).toContain('Generating tracker before reply');
+
+    resolveTracker(true);
+    await trackerPromise;
   });
 
   test('resumes normal generation when tracker generation fails', async () => {
+    document.body.innerHTML = buildMessage(0);
     const handlers = new Map<string, (...args: any[]) => void>();
     const hostContext = {
       chat: [{ original_avatar: 'alice.png' }],
@@ -131,9 +253,11 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     await Promise.resolve();
 
     expect(hostContext.generate).toHaveBeenCalledWith(undefined, { automatic_trigger: true });
+    expect(document.querySelector('.ztracker-auto-mode-status')).toBeNull();
   });
 
   test('resumes normal generation when tracker generation throws', async () => {
+    document.body.innerHTML = buildMessage(0);
     const handlers = new Map<string, (...args: any[]) => void>();
     const hostContext = {
       chat: [{ original_avatar: 'alice.png' }],
@@ -180,6 +304,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
 
     expect(consoleErrorSpy).toHaveBeenCalledWith('zTracker auto mode failed to generate a tracker before reply.', expect.any(Error));
     expect(hostContext.generate).toHaveBeenCalledWith(undefined, { automatic_trigger: true });
+    expect(document.querySelector('.ztracker-auto-mode-status')).toBeNull();
 
     consoleErrorSpy.mockRestore();
   });

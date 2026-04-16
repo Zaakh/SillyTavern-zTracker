@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Text-completion tracker-generation requests now pass the active instruct preset as request-local transport state instead of temporarily mutating the selected connection profile, avoiding cross-request races when multiple generations overlap.
+- Outgoing auto mode now blocks only the first host auto-reply start after a user message while tracker generation is pending, instead of continuing to stop every later generation-start event until the tracker run finishes.
+- Outgoing auto mode now marks the pending user message while its reply is on hold, showing a message-local "Generating tracker before reply" status until the tracker pass completes or fails.
+
 ## [1.7.1] - 2026-04-15
 
 ### Fixed

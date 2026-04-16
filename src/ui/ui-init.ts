@@ -239,7 +239,55 @@ export async function initializeGlobalUI(options: {
   const outgoingAutoModeState = {
     pendingMessageId: null as number | null,
     allowNextGenerationStart: false,
+    shouldBlockNextGenerationStart: false,
     runId: 0,
+  };
+
+  /** Keeps the outgoing auto-mode hold badge attached to the current pending user message even if the DOM rerenders. */
+  const syncOutgoingAutoModeHoldIndicator = () => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    document.querySelectorAll('.ztracker-auto-mode-hold').forEach((element) => {
+      element.classList.remove('ztracker-auto-mode-hold');
+    });
+    document.querySelectorAll('.ztracker-auto-mode-status').forEach((element) => {
+      element.remove();
+    });
+
+    if (outgoingAutoModeState.pendingMessageId === null) {
+      return;
+    }
+
+    const messageBlock = document.querySelector(`.mes[mesid="${outgoingAutoModeState.pendingMessageId}"]`);
+    if (!(messageBlock instanceof HTMLElement)) {
+      return;
+    }
+
+    messageBlock.classList.add('ztracker-auto-mode-hold');
+
+    const status = document.createElement('div');
+    status.className = 'ztracker-auto-mode-status';
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+
+    const icon = document.createElement('span');
+    icon.className = 'ztracker-auto-mode-status-icon fa-solid fa-truck-fast';
+    icon.setAttribute('aria-hidden', 'true');
+
+    const text = document.createElement('span');
+    text.className = 'ztracker-auto-mode-status-text';
+    text.textContent = 'Generating tracker before reply';
+
+    status.append(icon, text);
+
+    const messageText = messageBlock.querySelector('.mes_text');
+    if (messageText) {
+      messageText.before(status);
+    } else {
+      messageBlock.prepend(status);
+    }
   };
 
   type AutoModeHostContext = {
@@ -465,6 +513,7 @@ export async function initializeGlobalUI(options: {
   });
 
   await actions.renderExtensionTemplates();
+  syncOutgoingAutoModeHoldIndicator();
 
   globalContext.eventSource.on(
     EventNames.CHARACTER_MESSAGE_RENDERED,
@@ -480,6 +529,13 @@ export async function initializeGlobalUI(options: {
       actions.generateTracker(messageId, { silent: true });
     },
   );
+  globalContext.eventSource.on(EventNames.USER_MESSAGE_RENDERED, (messageId: number) => {
+    if (messageId !== outgoingAutoModeState.pendingMessageId) {
+      return;
+    }
+
+    syncOutgoingAutoModeHoldIndicator();
+  });
   globalContext.eventSource.on(
     EventNames.MESSAGE_SENT,
     (messageId: number) => {
@@ -491,9 +547,16 @@ export async function initializeGlobalUI(options: {
         return;
       }
 
+      if (outgoingAutoModeState.pendingMessageId !== null && outgoingAutoModeState.pendingMessageId !== messageId) {
+        outgoingAutoModeState.pendingMessageId = null;
+        syncOutgoingAutoModeHoldIndicator();
+      }
+
       const runId = ++outgoingAutoModeState.runId;
       outgoingAutoModeState.pendingMessageId = messageId;
       outgoingAutoModeState.allowNextGenerationStart = false;
+      outgoingAutoModeState.shouldBlockNextGenerationStart = true;
+      syncOutgoingAutoModeHoldIndicator();
 
       stopHostGeneration();
 
@@ -509,6 +572,8 @@ export async function initializeGlobalUI(options: {
         }
 
         outgoingAutoModeState.pendingMessageId = null;
+        outgoingAutoModeState.shouldBlockNextGenerationStart = false;
+        syncOutgoingAutoModeHoldIndicator();
         await resumeHostGeneration();
       })();
     },
@@ -524,10 +589,16 @@ export async function initializeGlobalUI(options: {
       return;
     }
 
+    if (!outgoingAutoModeState.shouldBlockNextGenerationStart) {
+      return;
+    }
+
+    outgoingAutoModeState.shouldBlockNextGenerationStart = false;
     stopHostGeneration();
   });
 
   globalContext.eventSource.on(EventNames.CHAT_CHANGED, () => {
+    syncOutgoingAutoModeHoldIndicator();
     scheduleCharacterPanelButtonSync();
     const { saveChat } = globalContext;
     let chatModified = false;

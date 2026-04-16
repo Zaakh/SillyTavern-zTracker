@@ -74,7 +74,8 @@ describe('createTrackerActions prompt assembly', () => {
   });
 
   test('passes the saved tracker system prompt through buildPrompt for textgenerationwebui profiles', async () => {
-    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+    const context = makeContext({ includeSavedPromptPreset: true });
+    installSillyTavernContext(context);
 
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
     const generateRequest = makeGenerateRequest();
@@ -102,7 +103,8 @@ describe('createTrackerActions prompt assembly', () => {
     const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
     expect(buildPromptOptions).toHaveProperty('syspromptName', 'zTracker');
 
-    const sentMessages = generateRequest.mock.calls[0][0].prompt;
+    expect(generateRequest).not.toHaveBeenCalled();
+    const sentMessages = (context.TextCompletionService.processRequest as jest.Mock).mock.calls[0][0].prompt;
     expect(sentMessages).toEqual([
       { role: 'system', content: 'Existing system prompt' },
       { role: 'user', content: 'Prior chat message' },
@@ -397,7 +399,16 @@ describe('createTrackerActions prompt assembly', () => {
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 
-  test('temporarily mirrors the active instruct preset into the textgenerationwebui profile during request transport', async () => {
+  test('passes the active instruct preset to textgenerationwebui request transport without mutating the shared profile', async () => {
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const profile = makeProfile({ api: 'textgenerationwebui', instruct: 'Profile Instruct' });
+    let instructOptionDuringRequest: string | undefined;
+    let profileInstructDuringRequest: string | undefined;
+    const textCompletionProcessRequest = jest.fn(async (_requestData: unknown, requestOptions: { instructName?: string }) => {
+      instructOptionDuringRequest = requestOptions.instructName;
+      profileInstructDuringRequest = profile.instruct;
+      return { content: { time: '10:00:00' } };
+    });
     installSillyTavernContext(
       makeContext({
         powerUserSettings: {
@@ -405,22 +416,9 @@ describe('createTrackerActions prompt assembly', () => {
             preset: 'Active Instruct',
           },
         },
+        textCompletionProcessRequest,
       }),
     );
-
-    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
-    const profile = makeProfile({ api: 'textgenerationwebui', instruct: 'Profile Instruct' });
-    let instructDuringRequest: string | undefined;
-    let instructAfterFinish: string | undefined;
-    const generateRequest = jest.fn((
-      _request: any,
-      hooks: { onStart: (requestId: string) => void; onFinish: (requestId: string, data: unknown, error: unknown) => void },
-    ) => {
-      instructDuringRequest = profile.instruct;
-      hooks.onStart('request-1');
-      hooks.onFinish('request-1', { content: { time: '10:00:00' } }, null);
-      instructAfterFinish = profile.instruct;
-    });
 
     const actions = createTrackerActions({
       globalContext: {
@@ -432,13 +430,13 @@ describe('createTrackerActions prompt assembly', () => {
           },
         },
         CONNECT_API_MAP: {
-          textgenerationwebui: { selected: 'textgenerationwebui' },
+          textgenerationwebui: { selected: 'textgenerationwebui', type: 'textgenerationwebui' },
         },
       },
       settingsManager: {
         getSettings: () => makeSettings({ trackerSystemPromptMode: 'profile' }),
       } as any,
-      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
       pendingRequests: new Map(),
       renderTrackerWithDeps: renderTrackerWithDepsMock,
       importMetaUrl: TEST_IMPORT_META_URL,
@@ -448,28 +446,27 @@ describe('createTrackerActions prompt assembly', () => {
 
     const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
     expect(buildPromptOptions).toHaveProperty('instructName', 'Active Instruct');
-    expect(instructDuringRequest).toBe('Active Instruct');
-    expect(instructAfterFinish).toBe('Profile Instruct');
+    expect(textCompletionProcessRequest).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        instructName: 'Active Instruct',
+        presetName: profile.preset,
+      }),
+      true,
+      expect.any(AbortSignal),
+    );
+    expect(instructOptionDuringRequest).toBe('Active Instruct');
+    expect(profileInstructDuringRequest).toBe('Profile Instruct');
     expect(profile.instruct).toBe('Profile Instruct');
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 
-  test('temporarily clears a stale profile instruct preset during textgenerationwebui request transport when no active instruct is selected', async () => {
-    installSillyTavernContext(makeContext());
+  test('clears stale profile instruct transport state by omitting the request-local instruct preset when none is active', async () => {
+    const textCompletionProcessRequest = jest.fn(async () => ({ content: { time: '10:00:00' } }));
+    installSillyTavernContext(makeContext({ textCompletionProcessRequest }));
 
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
     const profile = makeProfile({ api: 'textgenerationwebui', instruct: 'Profile Instruct' });
-    let instructDuringRequest: string | undefined;
-    let instructAfterFinish: string | undefined;
-    const generateRequest = jest.fn((
-      _request: any,
-      hooks: { onStart: (requestId: string) => void; onFinish: (requestId: string, data: unknown, error: unknown) => void },
-    ) => {
-      instructDuringRequest = profile.instruct;
-      hooks.onStart('request-1');
-      hooks.onFinish('request-1', { content: { time: '10:00:00' } }, null);
-      instructAfterFinish = profile.instruct;
-    });
 
     const actions = createTrackerActions({
       globalContext: {
@@ -481,13 +478,13 @@ describe('createTrackerActions prompt assembly', () => {
           },
         },
         CONNECT_API_MAP: {
-          textgenerationwebui: { selected: 'textgenerationwebui' },
+          textgenerationwebui: { selected: 'textgenerationwebui', type: 'textgenerationwebui' },
         },
       },
       settingsManager: {
         getSettings: () => makeSettings({ trackerSystemPromptMode: 'profile' }),
       } as any,
-      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
       pendingRequests: new Map(),
       renderTrackerWithDeps: renderTrackerWithDepsMock,
       importMetaUrl: TEST_IMPORT_META_URL,
@@ -497,8 +494,15 @@ describe('createTrackerActions prompt assembly', () => {
 
     const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
     expect(buildPromptOptions).not.toHaveProperty('instructName');
-    expect(instructDuringRequest).toBeUndefined();
-    expect(instructAfterFinish).toBe('Profile Instruct');
+    expect(textCompletionProcessRequest).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        instructName: undefined,
+        presetName: profile.preset,
+      }),
+      true,
+      expect.any(AbortSignal),
+    );
     expect(profile.instruct).toBe('Profile Instruct');
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
