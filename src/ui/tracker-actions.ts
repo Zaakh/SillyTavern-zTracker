@@ -173,8 +173,21 @@ export function createTrackerActions(options: {
         const profile = globalContext.extensionSettings?.connectionManager?.profiles?.find((p: any) => p.id === settings.profileId);
         const selectedApiMap = profile?.api ? globalContext.CONNECT_API_MAP?.[profile.api] : undefined;
         const selectedApi = selectedApiMap?.selected;
+        const context = SillyTavern.getContext() as {
+          name1?: string;
+          powerUserSettings?: {
+            instruct?: {
+              user_alignment_message?: string;
+            };
+          };
+        };
         const sanitizedPrompt = sanitizeMessagesForGeneration(requestMessages, {
           inlineNamesIntoContent: selectedApi === 'textgenerationwebui',
+          userAlignmentMessage:
+            selectedApi === 'textgenerationwebui'
+              ? context?.powerUserSettings?.instruct?.user_alignment_message
+              : undefined,
+          userName: selectedApi === 'textgenerationwebui' ? context?.name1 : undefined,
         });
         captureTrackerRequestDebugSnapshot(settingsManager, {
           messageId,

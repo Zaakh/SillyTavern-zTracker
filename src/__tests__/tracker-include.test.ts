@@ -439,4 +439,81 @@ describe('includeZTrackerMessages', () => {
       },
     ]);
   });
+
+  it('inserts the active user-alignment message before assistant-opening text-completion prompts', () => {
+    const messages = [
+      {
+        role: 'system',
+        content: 'You are a structured data extraction assistant.',
+      },
+      {
+        role: 'assistant',
+        content: 'As you enter the bar you realize you are the only customer.',
+        source: {
+          name: 'Bar',
+        },
+      },
+      {
+        role: 'user',
+        content: 'Just water, please.',
+        source: {
+          name: 'Tobias',
+        },
+      },
+    ] as any;
+
+    expect(sanitizeMessagesForGeneration(messages, {
+      inlineNamesIntoContent: true,
+      userAlignmentMessage: 'Let\'s get started. Please respond based on the information and instructions provided above.',
+      userName: 'Tobias',
+    })).toEqual([
+      {
+        role: 'system',
+        content: 'You are a structured data extraction assistant.',
+      },
+      {
+        role: 'user',
+        content: 'Tobias: Let\'s get started. Please respond based on the information and instructions provided above.',
+      },
+      {
+        role: 'assistant',
+        content: 'Bar: As you enter the bar you realize you are the only customer.',
+      },
+      {
+        role: 'user',
+        content: 'Tobias: Just water, please.',
+      },
+    ]);
+  });
+
+  it('does not insert the active user-alignment message when the prompt already starts with a user turn', () => {
+    const messages = [
+      {
+        role: 'system',
+        content: 'You are a structured data extraction assistant.',
+      },
+      {
+        role: 'user',
+        content: 'Just water, please.',
+        source: {
+          name: 'Tobias',
+        },
+      },
+    ] as any;
+
+    expect(sanitizeMessagesForGeneration(messages, {
+      inlineNamesIntoContent: true,
+      userAlignmentMessage: 'Let\'s get started. Please respond based on the information and instructions provided above.',
+      userName: 'Tobias',
+    })).toEqual([
+      {
+        role: 'system',
+        content: 'You are a structured data extraction assistant.',
+      },
+      {
+        role: 'user',
+        content: 'Tobias: Just water, please.',
+      },
+    ]);
+  });
 });

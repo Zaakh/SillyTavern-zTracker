@@ -15,6 +15,7 @@ import {
   makeSettings,
   renderTrackerWithDepsMock,
   resetTrackerActionTestState,
+  sanitizeMessagesForGenerationMock,
   TEST_IMPORT_META_URL,
 } from '../test-utils/tracker-actions-test-helpers.js';
 
@@ -541,6 +542,59 @@ describe('createTrackerActions prompt assembly', () => {
       prompt: expect.any(Array),
     }));
     expect((processRequest as jest.Mock).mock.contexts[0]).toBe(context.TextCompletionService);
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test('passes the active user-alignment message into textgenerationwebui prompt sanitization', async () => {
+    buildPromptMock.mockResolvedValue({
+      result: [
+        { role: 'system', content: 'Existing system prompt' },
+        { role: 'assistant', content: 'Opening reply', name: 'Bar' },
+      ],
+    });
+    installSillyTavernContext(
+      makeContext({
+        powerUserSettings: {
+          instruct: {
+            preset: 'Active Instruct',
+            user_alignment_message: 'Let\'s get started. Please respond based on the information and instructions provided above.',
+          },
+        },
+      }),
+    );
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile({ api: 'textgenerationwebui' })],
+          },
+        },
+        CONNECT_API_MAP: {
+          textgenerationwebui: { selected: 'textgenerationwebui', type: 'textgenerationwebui' },
+        },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ trackerSystemPromptMode: 'profile' }),
+      } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0);
+
+    expect(sanitizeMessagesForGenerationMock).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({
+        inlineNamesIntoContent: true,
+        userAlignmentMessage: 'Let\'s get started. Please respond based on the information and instructions provided above.',
+        userName: 'Tobias',
+      }),
+    );
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 });

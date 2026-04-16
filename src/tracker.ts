@@ -257,6 +257,43 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
   return copyMessages;
 }
 
+// Mirrors SillyTavern's assistant-opening alignment behavior so instruct-mode
+// text-completion prompts still begin with a user turn after leading system text.
+function insertUserAlignmentMessage<
+  T extends {
+    role: string;
+    content: string;
+    name?: string;
+  },
+>(
+  messages: T[],
+  options: {
+    userAlignmentMessage?: string;
+    userName?: string;
+  },
+): T[] {
+  const alignmentMessage = options.userAlignmentMessage?.trim();
+  if (!alignmentMessage) {
+    return messages;
+  }
+
+  const firstNonSystemIndex = messages.findIndex((message) => message.role !== 'system');
+  if (firstNonSystemIndex === -1 || messages[firstNonSystemIndex].role !== 'assistant') {
+    return messages;
+  }
+
+  const userName = options.userName?.trim();
+  return [
+    ...messages.slice(0, firstNonSystemIndex),
+    {
+      role: 'user',
+      content: alignmentMessage,
+      ...(userName ? { name: userName } : {}),
+    } as T,
+    ...messages.slice(firstNonSystemIndex),
+  ];
+}
+
 /**
  * Reduces prompt messages to the fields the generator request actually needs.
  * This keeps SillyTavern/UI metadata and zTracker's temporary discovery markers
@@ -274,9 +311,13 @@ export function sanitizeMessagesForGeneration<
   messages: T[],
   options: {
     inlineNamesIntoContent?: boolean;
+    userAlignmentMessage?: string;
+    userName?: string;
   } = {},
 ): Array<{ role: string; content: string; name?: string; ignoreInstruct?: boolean }> {
-  return messages.map((message) => {
+  const alignedMessages = insertUserAlignmentMessage(messages, options);
+
+  return alignedMessages.map((message) => {
     const name = typeof message.name === 'string' && message.name.trim()
       ? message.name
       : typeof message.source?.name === 'string' && message.source.name.trim()

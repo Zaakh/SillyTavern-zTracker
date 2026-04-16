@@ -4,6 +4,7 @@ import { jest } from '@jest/globals';
 export const buildPromptMock = jest.fn<() => Promise<{ result: Array<{ role: string; content: string }> }>>();
 export const applyTrackerUpdateAndRenderMock = jest.fn();
 export const renderTrackerWithDepsMock = jest.fn();
+export const sanitizeMessagesForGenerationMock = jest.fn((messages: Array<unknown>) => [...messages]);
 export const stEchoMock = jest.fn();
 
 jest.unstable_mockModule('sillytavern-utils-lib', () => ({
@@ -52,7 +53,7 @@ jest.unstable_mockModule('../tracker.js', () => ({
   CHAT_MESSAGE_SCHEMA_VALUE_KEY: 'schemaValue',
   CHAT_MESSAGE_PARTS_ORDER_KEY: 'partsOrder',
   includeZTrackerMessages: jest.fn((messages: Array<unknown>) => [...messages]),
-  sanitizeMessagesForGeneration: jest.fn((messages: Array<unknown>) => [...messages]),
+  sanitizeMessagesForGeneration: sanitizeMessagesForGenerationMock,
 }));
 
 jest.unstable_mockModule('../tracker-parts.js', () => ({
@@ -163,6 +164,8 @@ export function makeContext(options: {
 
   return {
     chatMetadata: {},
+    name1: 'Tobias',
+    name2: 'Bar',
     powerUserSettings: {
       prefer_character_prompt: true,
       sysprompt: { name: 'Neutral - Chat' },
@@ -212,6 +215,8 @@ export function resetTrackerActionTestState(): void {
   buildPromptMock.mockReset();
   applyTrackerUpdateAndRenderMock.mockReset();
   renderTrackerWithDepsMock.mockReset();
+  sanitizeMessagesForGenerationMock.mockReset();
+  sanitizeMessagesForGenerationMock.mockImplementation((messages: Array<unknown>) => [...messages]);
   stEchoMock.mockReset();
   document.body.innerHTML = '<div id="extensionsMenu"></div>';
 }
