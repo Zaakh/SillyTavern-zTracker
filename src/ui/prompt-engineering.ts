@@ -5,6 +5,7 @@ import type { ExtensionSettings } from '../config.js';
 import { PromptEngineeringMode } from '../config.js';
 import { parseResponse } from '../parser.js';
 import { schemaToExample, schemaToPromptSchema } from '../schema-to-example.js';
+import { expandZTrackerMacrosInText } from '../tracker-macro.js';
 
 /** Defines the supported prompt-engineering payload formats for tracker generation. */
 export type PromptEngineeredFormat = 'json' | 'xml' | 'toon';
@@ -115,7 +116,8 @@ export function createPromptEngineeringHelpers() {
     const promptTemplate = getPromptEngineeringTemplate(settings, format);
     const exampleResponse = schemaToExample(schema, format);
     const promptSchema = schemaToPromptSchema(schema, format);
-    const finalPrompt = Handlebars.compile(promptTemplate, { noEscape: true, strict: true })({
+    const expandedPromptTemplate = expandZTrackerMacrosInText(promptTemplate, requestMessages as any, settings);
+    const finalPrompt = Handlebars.compile(expandedPromptTemplate, { noEscape: true, strict: true })({
       schema: promptSchema,
       example_response: exampleResponse,
     });

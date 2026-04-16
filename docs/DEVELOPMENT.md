@@ -20,6 +20,16 @@ Test boundaries to remember:
 - Use jsdom for DOM behavior and lightweight injected context objects for host-state dependent helpers.
 - Register any custom Handlebars helpers explicitly in tests that need them.
 
+### Prompt Macros
+
+The `{{zTracker}}` macro is registered in `src/tracker-macro.ts`. Because different versions of SillyTavern initialize their macro systems at different times, the registration logic is **registry-agnostic**:
+
+1. It first attempts to use the modern `macros.register()` API.
+2. It falls back to the legacy `registerMacro()` API if the modern one is unavailable.
+3. If called during the initial load before SillyTavern is fully ready, it automatically retries registration on the `APP_READY` event.
+
+When testing macro logic, prefer using the existing `src/__tests__/tracker-macro.test.ts` which mocks the host context to verify both registration paths and the deterministic expansion of snapshots.
+
 ## AI agent split
 
 For GitHub Copilot or other coding agents:

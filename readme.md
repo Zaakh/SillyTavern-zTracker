@@ -99,6 +99,16 @@ You can customize (or remove) the embedded snapshot header via **Embed snapshot 
 - **Minimal (top-level properties)**: embeds one line per top-level property (newline-separated).
 - **TOON (compact)**: embeds tracker snapshots as tab-delimited TOON for lower-token structured context while preserving arrays and nested objects.
 
+## Manual prompt injection via macro
+
+For fine-grained control over where the tracker appears in your prompt, you can use the `{{zTracker}}` macro. This allows you to manually place the most recent tracker snapshot anywhere that SillyTavern supports macro expansion (e.g., in a System Prompt, Character Note, or World Info entry).
+
+- **Syntax**: `{{zTracker}}`
+- **Behavior**: Expands to the latest tracker snapshot found in the current chat history, using your configured **Embed snapshot header** and **Embed snapshot transform preset**.
+- **Use Case**: Especially useful if you want to bypass the automatic message injection in favor of a specific template location, or if downstream request handlers are stripping injected chat messages.
+
+When using the macro, we recommend setting **Include Last X zTracker Messages** to `0` to avoid redundant tracker information in the prompt.
+
 
 ## Versioning
 

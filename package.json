@@ -1,6 +1,6 @@
 {
     "name": "sillytavern-ztracker",
-    "version": "1.7.0",
+    "version": "1.7.1",
     "description": "SillyTavern zTracker extension.",
     "type": "module",
     "main": "src/scripts/main.js",
@@ -47,6 +47,7 @@
         "ts-jest": "^29.2.5",
         "ts-loader": "^9.5.2",
         "typescript": "^5.7.3",
+        "webpack": "^5.106.2",
         "webpack-cli": "^5.1.4"
     },
     "dependencies": {

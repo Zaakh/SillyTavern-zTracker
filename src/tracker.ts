@@ -3,14 +3,22 @@ import type { Message } from 'sillytavern-utils-lib';
 import type { ChatMessage } from 'sillytavern-utils-lib/types';
 import { DEFAULT_EMBED_SNAPSHOT_HEADER } from './config.js';
 import type { ExtensionSettings } from './config.js';
-import { EXTENSION_KEY } from './extension-metadata.js';
+import {
+  EXTENSION_KEY,
+  CHAT_METADATA_SCHEMA_PRESET_KEY,
+  CHAT_MESSAGE_SCHEMA_VALUE_KEY,
+  CHAT_MESSAGE_SCHEMA_HTML_KEY,
+  CHAT_MESSAGE_PARTS_ORDER_KEY,
+  CHAT_MESSAGE_PARTS_META_KEY
+} from './extension-metadata.js';
+export {
+  CHAT_METADATA_SCHEMA_PRESET_KEY,
+  CHAT_MESSAGE_SCHEMA_VALUE_KEY,
+  CHAT_MESSAGE_SCHEMA_HTML_KEY,
+  CHAT_MESSAGE_PARTS_ORDER_KEY,
+  CHAT_MESSAGE_PARTS_META_KEY
+};
 import { formatEmbeddedTrackerSnapshot } from './embed-snapshot-transform.js';
-
-export const CHAT_METADATA_SCHEMA_PRESET_KEY = 'schemaKey';
-export const CHAT_MESSAGE_SCHEMA_VALUE_KEY = 'value';
-export const CHAT_MESSAGE_SCHEMA_HTML_KEY = 'html';
-export const CHAT_MESSAGE_PARTS_ORDER_KEY = 'partsOrder';
-export const CHAT_MESSAGE_PARTS_META_KEY = 'partsMeta';
 
 function escapeHtmlAttr(value: string): string {
   return String(value)

@@ -8,6 +8,7 @@ import { migrateLegacyPromptTemplates } from './config.js';
 import { createTrackerActions } from './ui/tracker-actions.js';
 import { initializeGlobalUI } from './ui/ui-init.js';
 import { ensureZTrackerSystemPromptPresetInstalled } from './system-prompt.js';
+import { registerZTrackerMacro } from './tracker-macro.js';
 import {
   renderTracker,
 } from './tracker.js';

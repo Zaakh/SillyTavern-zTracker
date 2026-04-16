@@ -25,6 +25,7 @@ These are “living” per-change specs. Each spec tracks its current status and
 - [19-virtual-character-tracker-injection.md](19-virtual-character-tracker-injection.md)
 - [20-settings-two-section-layout.md](20-settings-two-section-layout.md)
 - [21-per-character-auto-mode-exclusion.md](21-per-character-auto-mode-exclusion.md)
+- [22-ztracker-macro.md](22-ztracker-macro.md)
 
 ## Status workflow
 - **Open**: not implemented yet; questions unresolved.

@@ -6,6 +6,7 @@ import { EventNames } from 'sillytavern-utils-lib/types';
 import type { ExtensionSettingsManager } from 'sillytavern-utils-lib';
 import type { TrackerActions } from './tracker-actions.js';
 import { includeZTrackerMessages } from '../tracker.js';
+import { registerZTrackerMacro } from '../tracker-macro.js';
 import { st_echo } from 'sillytavern-utils-lib/config';
 import {
   shouldAutoGenerateForCharacterMessage,
@@ -427,6 +428,26 @@ export async function initializeGlobalUI(options: {
   });
 
   await actions.renderExtensionTemplates();
+
+  const tryRegister = () => {
+    const didRegisterMacro = registerZTrackerMacro(
+      () => globalContext,
+      () => settingsManager.getSettings(),
+    );
+    if (didRegisterMacro) {
+      console.log('[zTracker] Macro registered successfully.');
+    }
+    return didRegisterMacro;
+  };
+
+  if (!tryRegister()) {
+    console.log('[zTracker] Modern macro API not ready, waiting for APP_READY...');
+    globalContext.eventSource.on(EventNames.APP_READY, () => {
+      console.log('[zTracker] APP_READY fired, retrying macro registration...');
+      tryRegister();
+    });
+  }
+
 
   globalContext.eventSource.on(
     EventNames.CHARACTER_MESSAGE_RENDERED,

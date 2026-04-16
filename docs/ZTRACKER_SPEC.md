@@ -14,6 +14,7 @@ See: [specs/README.md](specs/README.md)
 - Add a root-level `CHANGELOG.md`.
 - Make tracker snapshot injection into LLM context configurable.
 - Support multiple connection profiles.
+- Add a zTracker macro for manual prompt injection when automatic embedding is not enough.
 
 ## Notes
 - Track implementation status and open questions inside the per-change spec files.
