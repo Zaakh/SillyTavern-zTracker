@@ -14,8 +14,8 @@ These instructions apply to all files in this repository.
 - The extension generates structured “tracker” data for chat messages (via an LLM connection profile), stores it in chat history (`message.extra.zTracker.*`), and renders it above the message.
 
 ## Changelog and versioning
-- **Any new feature or bugfix must be mentioned in `CHANGELOG.md`** (add it under `Unreleased`, then move into a release section when versioning).
-- Follow SemVer and Keep a Changelog.
+- **Any new feature or bugfix must be mentioned in `CHANGELOG.md`** (add it under `Unreleased`, then move into a release section when versioning). The changelog is meant to be read by humans, keep it concise.
+- Follow SemVer and "Keep a Changelog".
 - Canonical version lives in `package.json`.
 	- `manifest.json` is derived; do not manually edit its version.
 	- Use `npm version <patch|minor|major>` for releases.

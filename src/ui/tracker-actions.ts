@@ -52,6 +52,7 @@ import {
 import { captureTrackerRequestDebugSnapshot, debugLog, isDebugLoggingEnabled } from './debug.js';
 import {
   CONTEXT_MENU_STATUS_CLASS,
+  FULL_TRACKER_STATUS_CLASS,
   withMessageStatusIndicator,
 } from './message-status-indicator.js';
 
@@ -262,6 +263,14 @@ export function createTrackerActions(options: {
   const textCompletionStoryStringFormatterLoader = options.textCompletionStoryStringFormatterLoader;
   const { logPromptEngineeredRenderRollback, requestPromptEngineeredResponse } = createPromptEngineeringHelpers();
   const contextMenuIndicatorText = 'Updating tracker from menu';
+  const fullTrackerIndicatorText = 'Updating tracker';
+
+  /** Shows the manual full-tracker status badge while a full message generation or regeneration is running. */
+  const withFullTrackerStatusIndicator = <T>(messageId: number, callback: () => Promise<T>) =>
+    withMessageStatusIndicator(
+      { messageId, text: fullTrackerIndicatorText, statusClassName: FULL_TRACKER_STATUS_CLASS },
+      callback,
+    );
 
   function createLocalRequestId(messageId: number): string {
     nextLocalRequestId += 1;
@@ -755,50 +764,52 @@ export function createTrackerActions(options: {
       mainButton?.classList.add('spinning');
       regenerateButton?.classList.add('spinning');
 
-      const { message, settings, chatJsonValue, chatHtmlValue, messages, existingTracker, transportInstructName } = await prepareTrackerGeneration(id);
-      if (token.cancelled) {
-        return false;
-      }
+      return await withFullTrackerStatusIndicator(id, async () => {
+        const { message, settings, chatJsonValue, chatHtmlValue, messages, existingTracker, transportInstructName } = await prepareTrackerGeneration(id);
+        if (token.cancelled) {
+          return false;
+        }
 
-      const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
-      const partsMeta = buildPartsMeta(chatJsonValue);
-      const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
+        const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
+        const partsMeta = buildPartsMeta(chatJsonValue);
+        const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
 
-      let response: ExtractedData['content'];
+        let response: ExtractedData['content'];
 
-      if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
-        insertTrackerInstructionMessage(messages, settings.prompt);
-        const result = await makeRequest(messages, {
-          json_schema: { name: 'SceneTracker', strict: true, value: chatJsonValue },
-        });
-        // @ts-ignore
-        response = result?.content;
-      } else {
-        // @ts-ignore
-        response = await requestPromptEngineeredResponse(makeRequest, messages, settings, chatJsonValue);
-      }
+        if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
+          insertTrackerInstructionMessage(messages, settings.prompt);
+          const result = await makeRequest(messages, {
+            json_schema: { name: 'SceneTracker', strict: true, value: chatJsonValue },
+          });
+          // @ts-ignore
+          response = result?.content;
+        } else {
+          // @ts-ignore
+          response = await requestPromptEngineeredResponse(makeRequest, messages, settings, chatJsonValue);
+        }
 
-      if (token.cancelled) {
-        return false;
-      }
+        if (token.cancelled) {
+          return false;
+        }
 
-      if (!response || Object.keys(response as any).length === 0) throw new Error('Empty response from zTracker.');
+        if (!response || Object.keys(response as any).length === 0) throw new Error('Empty response from zTracker.');
 
-      try {
-        applyTrackerUpdateAndRender(message as any, {
-          trackerData: response,
-          trackerHtml: chatHtmlValue,
-          extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
-          render: () => renderTrackerWithDeps(id),
-        });
-        restoreDetailsState(id, detailsState);
-        await saveChat();
-        return true;
-      } catch {
-        logPromptEngineeredRenderRollback(response, new Error('Generated data failed to render with the current template. Not saved.'));
-        renderTrackerWithDeps(id);
-        throw new Error(`Generated data failed to render with the current template. Not saved.`);
-      }
+        try {
+          applyTrackerUpdateAndRender(message as any, {
+            trackerData: response,
+            trackerHtml: chatHtmlValue,
+            extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
+            render: () => renderTrackerWithDeps(id),
+          });
+          restoreDetailsState(id, detailsState);
+          await saveChat();
+          return true;
+        } catch {
+          logPromptEngineeredRenderRollback(response, new Error('Generated data failed to render with the current template. Not saved.'));
+          renderTrackerWithDeps(id);
+          throw new Error(`Generated data failed to render with the current template. Not saved.`);
+        }
+      });
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Error generating tracker:', error);
@@ -828,81 +839,83 @@ export function createTrackerActions(options: {
       mainButton?.classList.add('spinning');
       regenerateButton?.classList.add('spinning');
 
-      const { message, settings, chatJsonValue, chatHtmlValue, messages, existingTracker, transportInstructName } = await prepareTrackerGeneration(id);
-      if (token.cancelled) {
-        return false;
-      }
+      return await withFullTrackerStatusIndicator(id, async () => {
+        const { message, settings, chatJsonValue, chatHtmlValue, messages, existingTracker, transportInstructName } = await prepareTrackerGeneration(id);
+        if (token.cancelled) {
+          return false;
+        }
 
-      const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
-      const partsMeta = buildPartsMeta(chatJsonValue);
-      if (partsOrder.length === 0) {
-        throw new Error('Schema has no top-level properties to generate.');
-      }
+        const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
+        const partsMeta = buildPartsMeta(chatJsonValue);
+        if (partsOrder.length === 0) {
+          throw new Error('Schema has no top-level properties to generate.');
+        }
 
-      const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
-      const baseMessages = structuredClone(messages) as Message[];
-      let trackerData: any = {};
+        const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
+        const baseMessages = structuredClone(messages) as Message[];
+        let trackerData: any = {};
 
-      for (const partKey of partsOrder) {
-        if (token.cancelled) break;
+        for (const partKey of partsOrder) {
+          if (token.cancelled) break;
 
-        const partSchema = buildTopLevelPartSchema(chatJsonValue, partKey);
-        const requestMessages = structuredClone(baseMessages) as Message[];
+          const partSchema = buildTopLevelPartSchema(chatJsonValue, partKey);
+          const requestMessages = structuredClone(baseMessages) as Message[];
 
-        // Provide current partial state so parts can depend on previously generated parts.
-        if (trackerData && Object.keys(trackerData).length > 0) {
-          appendCurrentTrackerSnapshot(
-            requestMessages,
+          // Provide current partial state so parts can depend on previously generated parts.
+          if (trackerData && Object.keys(trackerData).length > 0) {
+            appendCurrentTrackerSnapshot(
+              requestMessages,
+              trackerData,
+              'Tracker so far in this sequential run (keep consistent and build on it):',
+            );
+          }
+
+          let partResponse: any;
+          if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
+            insertTrackerInstructionMessage(
+              requestMessages,
+              `${settings.prompt}\n\nGenerate ONLY the field "${partKey}". Return a single JSON object matching the provided schema.`,
+            );
+            const result = await makeRequest(requestMessages, {
+              json_schema: { name: 'SceneTrackerPart', strict: true, value: partSchema },
+            });
+            // @ts-ignore
+            partResponse = result?.content;
+          } else {
+            partResponse = await requestPromptEngineeredResponse(makeRequest, requestMessages, settings, partSchema);
+          }
+
+          if (!partResponse || Object.keys(partResponse as any).length === 0) {
+            throw new Error(`Empty response while generating part: ${partKey}`);
+          }
+
+          trackerData = mergeTrackerPart(trackerData, partKey, partResponse);
+        }
+
+        if (token.cancelled) {
+          return false;
+        }
+
+        if (!trackerData || Object.keys(trackerData).length === 0) {
+          throw new Error('Empty response from zTracker.');
+        }
+
+        try {
+          applyTrackerUpdateAndRender(message as any, {
             trackerData,
-            'Tracker so far in this sequential run (keep consistent and build on it):',
-          );
-        }
-
-        let partResponse: any;
-        if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
-          insertTrackerInstructionMessage(
-            requestMessages,
-            `${settings.prompt}\n\nGenerate ONLY the field "${partKey}". Return a single JSON object matching the provided schema.`,
-          );
-          const result = await makeRequest(requestMessages, {
-            json_schema: { name: 'SceneTrackerPart', strict: true, value: partSchema },
+            trackerHtml: chatHtmlValue,
+            extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
+            render: () => renderTrackerWithDeps(id),
           });
-          // @ts-ignore
-          partResponse = result?.content;
-        } else {
-          partResponse = await requestPromptEngineeredResponse(makeRequest, requestMessages, settings, partSchema);
+          restoreDetailsState(id, detailsState);
+          await saveChat();
+          return true;
+        } catch {
+          logPromptEngineeredRenderRollback(trackerData, new Error('Generated data failed to render with the current template. Not saved.'));
+          renderTrackerWithDeps(id);
+          throw new Error(`Generated data failed to render with the current template. Not saved.`);
         }
-
-        if (!partResponse || Object.keys(partResponse as any).length === 0) {
-          throw new Error(`Empty response while generating part: ${partKey}`);
-        }
-
-        trackerData = mergeTrackerPart(trackerData, partKey, partResponse);
-      }
-
-      if (token.cancelled) {
-        return false;
-      }
-
-      if (!trackerData || Object.keys(trackerData).length === 0) {
-        throw new Error('Empty response from zTracker.');
-      }
-
-      try {
-        applyTrackerUpdateAndRender(message as any, {
-          trackerData,
-          trackerHtml: chatHtmlValue,
-          extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
-          render: () => renderTrackerWithDeps(id),
-        });
-        restoreDetailsState(id, detailsState);
-        await saveChat();
-        return true;
-      } catch {
-        logPromptEngineeredRenderRollback(trackerData, new Error('Generated data failed to render with the current template. Not saved.'));
-        renderTrackerWithDeps(id);
-        throw new Error(`Generated data failed to render with the current template. Not saved.`);
-      }
+      });
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Error generating tracker (sequential):', error);

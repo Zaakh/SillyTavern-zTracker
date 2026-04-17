@@ -3,6 +3,7 @@
 export const AUTO_MODE_HOLD_CLASS = 'ztracker-auto-mode-hold';
 export const AUTO_MODE_STATUS_CLASS = 'ztracker-auto-mode-status';
 export const CONTEXT_MENU_STATUS_CLASS = 'ztracker-context-menu-status';
+export const FULL_TRACKER_STATUS_CLASS = 'ztracker-full-tracker-status';
 export const MESSAGE_STATUS_BASE_CLASS = 'ztracker-message-status';
 
 type MessageStatusIndicatorOptions = {
@@ -16,8 +17,24 @@ type MessageStatusIndicatorOptions = {
 export function clearMessageStatusIndicator(options: {
   statusClassName: string;
   holdClassName?: string;
+  messageId?: number | null;
 }): void {
   if (typeof document === 'undefined') {
+    return;
+  }
+
+  if (options.messageId !== undefined && options.messageId !== null) {
+    const messageBlock = document.querySelector(`.mes[mesid="${options.messageId}"]`);
+    if (messageBlock instanceof HTMLElement) {
+      messageBlock.querySelectorAll(`.${options.statusClassName}`).forEach((element) => {
+        element.remove();
+      });
+
+      if (options.holdClassName) {
+        messageBlock.classList.remove(options.holdClassName);
+      }
+    }
+
     return;
   }
 
@@ -41,6 +58,7 @@ export function syncMessageStatusIndicator(options: MessageStatusIndicatorOption
   clearMessageStatusIndicator({
     statusClassName: options.statusClassName,
     holdClassName: options.holdClassName,
+    messageId: options.messageId,
   });
 
   if (typeof document === 'undefined' || options.messageId === null) {
@@ -92,6 +110,7 @@ export async function withMessageStatusIndicator<T>(
     clearMessageStatusIndicator({
       statusClassName: options.statusClassName,
       holdClassName: options.holdClassName,
+      messageId: options.messageId,
     });
   }
 }

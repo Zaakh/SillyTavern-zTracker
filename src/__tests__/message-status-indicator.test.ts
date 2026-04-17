@@ -77,4 +77,24 @@ describe('message status indicator helper', () => {
 
     expect(document.querySelector('.ztracker-context-menu-status')).toBeNull();
   });
+
+  test('clears only the targeted message when a message id is provided', () => {
+    document.body.innerHTML = `${buildMessage(0)}${buildMessage(1)}`;
+
+    syncMessageStatusIndicator({
+      messageId: 0,
+      text: 'Updating tracker from menu',
+      statusClassName: CONTEXT_MENU_STATUS_CLASS,
+    });
+    syncMessageStatusIndicator({
+      messageId: 1,
+      text: 'Updating tracker from menu',
+      statusClassName: CONTEXT_MENU_STATUS_CLASS,
+    });
+
+    clearMessageStatusIndicator({ statusClassName: CONTEXT_MENU_STATUS_CLASS, messageId: 0 });
+
+    expect(document.querySelector('.mes[mesid="0"] .ztracker-context-menu-status')).toBeNull();
+    expect(document.querySelector('.mes[mesid="1"] .ztracker-context-menu-status')).not.toBeNull();
+  });
 });

@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Parts-menu tracker regeneration now shows a message-local status badge while the selected part, item, or field is being regenerated, so menu-triggered updates are as visible as the existing outgoing auto-mode tracker hold.
+- Manual tracker updates now show a message-local status badge during full tracker generation, full regeneration, and parts-menu part/item/field updates, keeping the active tracker job visible without reusing the outgoing auto-mode stop-button flow.
 
 ## [1.7.2] - 2026-04-17
 
