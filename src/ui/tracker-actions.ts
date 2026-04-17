@@ -265,12 +265,27 @@ export function createTrackerActions(options: {
   const contextMenuIndicatorText = 'Updating tracker from menu';
   const fullTrackerIndicatorText = 'Updating tracker';
 
+  type GenerateTrackerOptions = {
+    silent?: boolean;
+    showStatusIndicator?: boolean;
+  };
+
   /** Shows the manual full-tracker status badge while a full message generation or regeneration is running. */
-  const withFullTrackerStatusIndicator = <T>(messageId: number, callback: () => Promise<T>) =>
-    withMessageStatusIndicator(
+  const runWithFullTrackerStatusIndicator = <T>(
+    messageId: number,
+    options: GenerateTrackerOptions | undefined,
+    callback: () => Promise<T>,
+  ) => {
+    const shouldShowStatusIndicator = options?.showStatusIndicator ?? !options?.silent;
+    if (!shouldShowStatusIndicator) {
+      return callback();
+    }
+
+    return withMessageStatusIndicator(
       { messageId, text: fullTrackerIndicatorText, statusClassName: FULL_TRACKER_STATUS_CLASS },
       callback,
     );
+  };
 
   function createLocalRequestId(messageId: number): string {
     nextLocalRequestId += 1;
@@ -661,7 +676,6 @@ export function createTrackerActions(options: {
       chatJsonValue,
       chatHtmlValue,
       messages,
-      existingTracker,
       transportInstructName: promptPresetSelections.instructName,
     };
   }
@@ -742,7 +756,7 @@ export function createTrackerActions(options: {
     }
   }
 
-  async function generateTrackerFull(id: number) {
+  async function generateTrackerFull(id: number, options?: GenerateTrackerOptions) {
     if (cancelIfPending(id)) return false;
 
     const { saveChat } = globalContext;
@@ -764,8 +778,8 @@ export function createTrackerActions(options: {
       mainButton?.classList.add('spinning');
       regenerateButton?.classList.add('spinning');
 
-      return await withFullTrackerStatusIndicator(id, async () => {
-        const { message, settings, chatJsonValue, chatHtmlValue, messages, existingTracker, transportInstructName } = await prepareTrackerGeneration(id);
+      return await runWithFullTrackerStatusIndicator(id, options, async () => {
+        const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
         if (token.cancelled) {
           return false;
         }
@@ -823,7 +837,7 @@ export function createTrackerActions(options: {
     }
   }
 
-  async function generateTrackerSequential(id: number) {
+  async function generateTrackerSequential(id: number, options?: GenerateTrackerOptions) {
     if (cancelIfPending(id)) return false;
 
     const { saveChat } = globalContext;
@@ -839,8 +853,8 @@ export function createTrackerActions(options: {
       mainButton?.classList.add('spinning');
       regenerateButton?.classList.add('spinning');
 
-      return await withFullTrackerStatusIndicator(id, async () => {
-        const { message, settings, chatJsonValue, chatHtmlValue, messages, existingTracker, transportInstructName } = await prepareTrackerGeneration(id);
+      return await runWithFullTrackerStatusIndicator(id, options, async () => {
+        const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
         if (token.cancelled) {
           return false;
         }
@@ -1502,16 +1516,16 @@ export function createTrackerActions(options: {
   }
 
   /** Dispatches full tracker generation while enforcing the shared skip-first-messages guard for manual and auto flows. */
-  async function generateTracker(id: number, options?: { silent?: boolean }) {
+  async function generateTracker(id: number, options?: GenerateTrackerOptions) {
     const settings = settingsManager.getSettings();
     if (shouldSkipTrackerGeneration(id, settings, (message) => st_echo('info', message), options?.silent)) {
       return false;
     }
 
     if (settings.sequentialPartGeneration) {
-      return generateTrackerSequential(id);
+      return generateTrackerSequential(id, options);
     }
-    return generateTrackerFull(id);
+    return generateTrackerFull(id, options);
   }
 
   async function renderExtensionTemplates() {

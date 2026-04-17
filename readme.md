@@ -66,7 +66,7 @@ When a tracker is rendered on a message, use the tracker controls:
 - **Regenerate Tracker** (rotate icon) regenerates the whole tracker.
 - **Parts menu** (list icon) lets you regenerate an individual top-level field (e.g. `time`, `location`, `topics`) without regenerating everything.
 
-While a full tracker generation or regeneration is running, zTracker shows a message-local `Updating tracker` badge above the target message.
+While a manual full tracker generation or regeneration is running, zTracker shows a message-local `Updating tracker` badge above the target message. Auto Mode keeps using its existing `Generating tracker before reply` hold indicator instead.
 
 For array parts (e.g. `characters`), the parts menu also exposes:
 - Per-item regeneration (by stable identity when available).

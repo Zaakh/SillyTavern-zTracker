@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Manual tracker updates now show a message-local status badge during full tracker generation, full regeneration, and parts-menu part/item/field updates, keeping the active tracker job visible without reusing the outgoing auto-mode stop-button flow.
+- Manual tracker updates now show a message-local status badge during full tracker generation, full regeneration, and parts-menu part/item/field updates, while silent auto-mode generations continue using only their existing outgoing hold indicator.
 
 ## [1.7.2] - 2026-04-17
 
