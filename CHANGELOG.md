@@ -6,16 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-04-17
+
 ### Fixed
 
-- Text-completion tracker-generation requests now route leading tracker system messages through SillyTavern's active story-string and instruct wrappers, so openings such as `[INST] ... [/INST]Understood.</s>` are preserved instead of sending the initial tracker system block as raw text.
-- Tracker-generation instruction prompts now stay as trailing system messages instead of late user turns, keeping the tracker prompt/schema at the end of the request while preventing stray labels such as `[INST]user:` on text-completion profiles.
-- Text-completion tracker-generation requests now keep speaker `name` metadata on the wrapped chat body that follows the tracker story-string preamble without asking SillyTavern prompt assembly to pre-inline those same names, preventing malformed instruct turns and duplicated prefixes during tracker generation.
-- Field-level array-item regeneration now forwards the active text-completion instruct preset through the request transport, so per-field tracker refreshes use the same live SillyTavern prompt wrapper as full, part, and item regeneration.
-- Text-completion tracker-generation requests now call SillyTavern's `TextCompletionService` with the correct service context and no longer forward stale connection-profile generation presets, preventing live `Tracker generation failed` errors such as `Cannot read properties of undefined (reading 'createRequestData')` and `Preset undefined not found` on text-completion profiles.
-- Outgoing auto mode now tags zTracker-owned tracker requests separately from the host reply lifecycle, so it no longer aborts its own tracker pass or resumes generation into a duplicate second assistant reply when the original host reply was never actually held.
-- Outgoing auto mode now keeps the pending-message "Generating tracker before reply" badge visible across SillyTavern message rerenders, even when the host replaces the message DOM without emitting a matching user-message render event.
-- While outgoing auto mode is generating a tracker before reply, the lower-right host send button now flips into a tracker-specific stop control and cancels the pending tracker run when clicked.
+- Text-completion tracker generation now follows SillyTavern's live instruct and story-string wrapper behavior end-to-end, preserves speaker attribution, keeps tracker instructions at the end of the request, and applies the same prompt handling to field-level regeneration so malformed labels, duplicated prefixes, and wrapper drift no longer break tracker prompts.
+- Text-completion tracker requests now use the live `TextCompletionService` context together with request-local active prompt state, preventing stale profile preset leakage and runtime failures such as `Preset undefined not found` and `Cannot read properties of undefined (reading 'createRequestData')`.
+- Outgoing auto mode now cleanly pauses the host reply while zTracker generates, avoids aborting its own tracker requests or producing duplicate replies, keeps the pending tracker badge visible across rerenders, and exposes a tracker-specific stop control while the hold is active.
 
 ## [1.7.1] - 2026-04-16
 
