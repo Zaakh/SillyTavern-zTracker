@@ -44,7 +44,7 @@
   transition: opacity 0.2s ease-in-out;
 }
 
-.ztracker-auto-mode-status {
+.ztracker-message-status {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -60,12 +60,12 @@
   max-width: 100%;
 }
 
-.ztracker-auto-mode-status-icon {
+.ztracker-message-status-icon {
   animation: spin 1.6s linear infinite;
   font-size: 0.95em;
 }
 
-.ztracker-auto-mode-status-text {
+.ztracker-message-status-text {
   white-space: normal;
 }
 

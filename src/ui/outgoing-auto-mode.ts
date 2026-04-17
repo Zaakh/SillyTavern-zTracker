@@ -1,4 +1,10 @@
 import type { TrackerActions } from './tracker-actions.js';
+import {
+  AUTO_MODE_HOLD_CLASS,
+  AUTO_MODE_STATUS_CLASS,
+  MESSAGE_STATUS_BASE_CLASS,
+  syncMessageStatusIndicator,
+} from './message-status-indicator.js';
 
 type AutoModeHostContext = {
   generate?: (type?: string, options?: { automatic_trigger?: boolean }) => Promise<unknown>;
@@ -101,49 +107,12 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
 
   /** Keeps the pending-message badge attached even when SillyTavern rerenders the message DOM. */
   const syncHoldIndicator = () => {
-    if (typeof document === 'undefined') {
-      return;
-    }
-
-    document.querySelectorAll('.ztracker-auto-mode-hold').forEach((element) => {
-      element.classList.remove('ztracker-auto-mode-hold');
+    syncMessageStatusIndicator({
+      messageId: state.pendingMessageId,
+      text: 'Generating tracker before reply',
+      statusClassName: AUTO_MODE_STATUS_CLASS,
+      holdClassName: AUTO_MODE_HOLD_CLASS,
     });
-    document.querySelectorAll('.ztracker-auto-mode-status').forEach((element) => {
-      element.remove();
-    });
-
-    if (state.pendingMessageId === null) {
-      return;
-    }
-
-    const messageBlock = document.querySelector(`.mes[mesid="${state.pendingMessageId}"]`);
-    if (!(messageBlock instanceof HTMLElement)) {
-      return;
-    }
-
-    messageBlock.classList.add('ztracker-auto-mode-hold');
-
-    const status = document.createElement('div');
-    status.className = 'ztracker-auto-mode-status';
-    status.setAttribute('role', 'status');
-    status.setAttribute('aria-live', 'polite');
-
-    const icon = document.createElement('span');
-    icon.className = 'ztracker-auto-mode-status-icon fa-solid fa-truck-fast';
-    icon.setAttribute('aria-hidden', 'true');
-
-    const text = document.createElement('span');
-    text.className = 'ztracker-auto-mode-status-text';
-    text.textContent = 'Generating tracker before reply';
-
-    status.append(icon, text);
-
-    const messageText = messageBlock.querySelector('.mes_text');
-    if (messageText) {
-      messageText.before(status);
-    } else {
-      messageBlock.prepend(status);
-    }
   };
 
   /** Aligns the hold badge and host send-button state to the same pending-message source of truth. */
@@ -156,7 +125,7 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
   const isIndicatorOnlyMutation = (mutation: MutationRecord) => {
     const changedNodes = [...mutation.addedNodes, ...mutation.removedNodes];
     return changedNodes.length > 0 && changedNodes.every((node) =>
-      node instanceof Element && node.classList.contains('ztracker-auto-mode-status')
+      node instanceof Element && node.classList.contains(MESSAGE_STATUS_BASE_CLASS)
     );
   };
 
