@@ -459,6 +459,75 @@ describe('createTrackerActions prompt assembly', () => {
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 
+  test('passes the active instruct preset to field-level textgenerationwebui regeneration requests', async () => {
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const profile = makeProfile({ api: 'textgenerationwebui', instruct: 'Profile Instruct' });
+    let instructOptionDuringRequest: string | undefined;
+    const originalStructuredClone = globalThis.structuredClone;
+    globalThis.structuredClone = originalStructuredClone ?? ((value: unknown) => JSON.parse(JSON.stringify(value)));
+    const textCompletionProcessRequest = jest.fn(async (_requestData: unknown, requestOptions: { instructName?: string }) => {
+      instructOptionDuringRequest = requestOptions.instructName;
+      return { content: { value: 'updated status' } };
+    });
+    installSillyTavernContext(
+      makeContext({
+        powerUserSettings: {
+          instruct: {
+            preset: 'Active Instruct',
+          },
+        },
+        textCompletionProcessRequest,
+      }),
+    );
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [
+          {
+            original_avatar: 'avatar.png',
+            extra: {
+              zTracker: {
+                schemaValue: {
+                  characters: [{ name: 'Alice', status: 'old status' }],
+                },
+              },
+            },
+          },
+        ],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [profile],
+          },
+        },
+        CONNECT_API_MAP: {
+          textgenerationwebui: { selected: 'textgenerationwebui', type: 'textgenerationwebui' },
+        },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ trackerSystemPromptMode: 'profile' }),
+      } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    try {
+      await actions.generateTrackerArrayItemField(0, 'characters', 0, 'status');
+    } finally {
+      globalThis.structuredClone = originalStructuredClone;
+    }
+
+    expect(textCompletionProcessRequest).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), true, expect.any(AbortSignal));
+    expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).toMatchObject({
+      instructName: 'Active Instruct',
+    });
+    expect(instructOptionDuringRequest).toBe('Active Instruct');
+    expect(profile.instruct).toBe('Profile Instruct');
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
   test('clears stale profile instruct transport state by omitting the request-local instruct preset when none is active', async () => {
     const textCompletionProcessRequest = jest.fn(async () => ({ content: { time: '10:00:00' } }));
     installSillyTavernContext(makeContext({ textCompletionProcessRequest }));

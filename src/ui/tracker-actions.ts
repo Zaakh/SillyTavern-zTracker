@@ -1326,7 +1326,7 @@ export function createTrackerActions(options: {
     try {
       fieldButton?.classList.add('spinning');
 
-      const { message, settings, chatJsonValue, chatHtmlValue, messages } = await prepareTrackerGeneration(id);
+      const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
       const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
       if (!currentTracker || typeof currentTracker !== 'object') {
         throw new Error('No existing tracker found for this message. Generate a full tracker first.');
@@ -1358,7 +1358,7 @@ export function createTrackerActions(options: {
       const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
       const partsMeta = buildPartsMeta(chatJsonValue);
       const fieldSchema = buildArrayItemFieldSchema(chatJsonValue, partKey, fieldKey);
-      const makeRequest = makeRequestFactory(id, settings);
+      const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
 
       appendCurrentTrackerSnapshot(
         messages as any,
