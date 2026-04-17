@@ -6,7 +6,7 @@
     "js": "dist/index.js",
     "css": "dist/style.css",
     "author": "Zaakh",
-    "version": "1.7.1",
+    "version": "1.7.2",
     "minimum_client_version": "1.17.0",
     "homePage": "https://github.com/Zaakh/SillyTavern-zTracker",
     "generate_interceptor": "ztrackerGenerateInterceptor"
