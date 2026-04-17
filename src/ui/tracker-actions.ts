@@ -263,9 +263,9 @@ export function createTrackerActions(options: {
     return `ztracker-local-${messageId}-${nextLocalRequestId}`;
   }
 
-  // Keep tracker instructions in the system block so host instruct wrappers do not label them as dialogue turns.
+  // Keep tracker instructions as trailing system messages so they stay non-dialogue and remain at the end of the prompt.
   function insertTrackerInstructionMessage(messages: Message[], content: string): void {
-    messages.splice(0, messages.length, ...insertSystemPromptMessage(messages, content));
+    messages.push({ role: 'system', content } as Message);
   }
 
   /**

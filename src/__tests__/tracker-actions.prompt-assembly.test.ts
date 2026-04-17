@@ -69,8 +69,8 @@ describe('createTrackerActions prompt assembly', () => {
     expect(sentMessages).toEqual([
       { role: 'system', content: 'Existing system prompt' },
       { role: 'system', content: 'Saved tracker system prompt' },
-      { role: 'system', content: 'Generate tracker JSON' },
       { role: 'user', content: 'Prior chat message' },
+      { role: 'system', content: 'Generate tracker JSON' },
     ]);
   });
 
@@ -109,8 +109,8 @@ describe('createTrackerActions prompt assembly', () => {
     const sentMessages = (context.TextCompletionService.processRequest as jest.Mock).mock.calls[0][0].prompt;
     expect(sentMessages).toEqual([
       { role: 'system', content: 'Existing system prompt' },
-      { role: 'system', content: 'Generate tracker JSON' },
       { role: 'user', content: 'Prior chat message' },
+      { role: 'system', content: 'Generate tracker JSON' },
     ]);
   });
 
@@ -608,7 +608,11 @@ describe('createTrackerActions prompt assembly', () => {
       ],
     });
     const textCompletionConstructPrompt = jest.fn((prompt: Array<{ role: string; content: string; name?: string }>) => {
-      return `BODY:${prompt.map((message) => `${message.name ?? message.role}:${message.content}`).join(' | ')}`;
+      const dialogueMessages = prompt.filter((message) => message.role !== 'system');
+      const trailingSystemMessages = prompt.filter((message) => message.role === 'system');
+      const dialogueBody = dialogueMessages.map((message) => `${message.name ?? message.role}:${message.content}`).join(' | ');
+      const systemTail = trailingSystemMessages.map((message) => message.content).join('\n\n');
+      return `BODY:${dialogueBody}${systemTail ? `\n\n${systemTail}` : ''}`;
     });
     const textCompletionCreateRequestData = jest.fn((requestData: Record<string, unknown>) => requestData);
     const textCompletionSendRequest = jest.fn(async () => ({ content: { time: '10:00:00' } }));
@@ -676,6 +680,7 @@ describe('createTrackerActions prompt assembly', () => {
       [
         { role: 'user', content: 'Prior chat message', name: 'Tobias' },
         { role: 'assistant', content: 'Prior assistant reply', name: 'Bar' },
+        { role: 'system', content: 'Generate tracker JSON' },
       ],
       expect.objectContaining({
         preset: 'Active Instruct',
@@ -683,12 +688,12 @@ describe('createTrackerActions prompt assembly', () => {
       {},
     );
     expect(textCompletionCreateRequestData).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: 'WRAPPED:SYSTEM:Existing system prompt\n\nGenerate tracker JSON\nBODY:Tobias:Prior chat message | Bar:Prior assistant reply',
+      prompt: 'WRAPPED:SYSTEM:Existing system prompt\nBODY:Tobias:Prior chat message | Bar:Prior assistant reply\n\nGenerate tracker JSON',
       stop: ['</s>'],
       stopping_strings: ['</s>'],
     }));
     expect(textCompletionSendRequest).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: 'WRAPPED:SYSTEM:Existing system prompt\n\nGenerate tracker JSON\nBODY:Tobias:Prior chat message | Bar:Prior assistant reply',
+      prompt: 'WRAPPED:SYSTEM:Existing system prompt\nBODY:Tobias:Prior chat message | Bar:Prior assistant reply\n\nGenerate tracker JSON',
     }), true, expect.any(AbortSignal));
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });

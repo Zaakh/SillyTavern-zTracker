@@ -5,7 +5,6 @@ import type { ExtensionSettings } from '../config.js';
 import { PromptEngineeringMode } from '../config.js';
 import { parseResponse } from '../parser.js';
 import { schemaToExample, schemaToPromptSchema } from '../schema-to-example.js';
-import { insertSystemPromptMessage } from '../system-prompt.js';
 
 /** Defines the supported prompt-engineering payload formats for tracker generation. */
 export type PromptEngineeredFormat = 'json' | 'xml' | 'toon';
@@ -121,7 +120,7 @@ export function createPromptEngineeringHelpers() {
       example_response: exampleResponse,
     });
 
-    requestMessages.splice(0, requestMessages.length, ...insertSystemPromptMessage(requestMessages, `${finalPrompt}${suffix}`));
+    requestMessages.push({ role: 'system', content: `${finalPrompt}${suffix}` });
 
     const response = await makeRequest(requestMessages);
     if (!response?.content) {
