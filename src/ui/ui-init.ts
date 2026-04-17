@@ -115,11 +115,11 @@ function installTrackerActionClickHandler(options: {
     }
 
     if (target.classList.contains('mes_ztracker_button')) {
-      actions.generateTracker(messageId);
+      actions.generateTracker(messageId, { showStatusIndicator: true });
     } else if (target.classList.contains('ztracker-edit-button')) {
       actions.editTracker(messageId);
     } else if (target.classList.contains('ztracker-regenerate-button')) {
-      actions.generateTracker(messageId);
+      actions.generateTracker(messageId, { showStatusIndicator: true });
     } else if (target.classList.contains('ztracker-delete-button')) {
       actions.deleteTracker(messageId);
     }
@@ -190,7 +190,7 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
         return;
       }
 
-      actions.generateTracker(messageId, { silent: true });
+      actions.generateTracker(messageId, { silent: true, showStatusIndicator: false });
     },
   );
   globalContext.eventSource.on(EventNames.USER_MESSAGE_RENDERED, (messageId: number) => {
@@ -212,7 +212,7 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
 
       void (async () => {
         try {
-          await actions.generateTracker(messageId, { silent: true });
+          await actions.generateTracker(messageId, { silent: true, showStatusIndicator: false });
         } catch (error) {
           console.error('zTracker auto mode failed to generate a tracker before reply.', error);
         }

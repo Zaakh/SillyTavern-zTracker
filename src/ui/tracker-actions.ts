@@ -270,13 +270,24 @@ export function createTrackerActions(options: {
     showStatusIndicator?: boolean;
   };
 
-  /** Shows the manual full-tracker status badge while a full message generation or regeneration is running. */
+  type PersistTrackerUpdateOptions = {
+    messageId: number;
+    message: unknown;
+    trackerData: unknown;
+    trackerHtml: string;
+    partsOrder: string[];
+    partsMeta: unknown;
+    detailsState: boolean[];
+    successMessage?: string;
+  };
+
+  /** Shows the full-tracker badge only when the caller explicitly opts into that manual UI. */
   const runWithFullTrackerStatusIndicator = <T>(
     messageId: number,
     options: GenerateTrackerOptions | undefined,
     callback: () => Promise<T>,
   ) => {
-    const shouldShowStatusIndicator = options?.showStatusIndicator ?? !options?.silent;
+    const shouldShowStatusIndicator = options?.showStatusIndicator ?? false;
     if (!shouldShowStatusIndicator) {
       return callback();
     }
@@ -285,6 +296,55 @@ export function createTrackerActions(options: {
       { messageId, text: fullTrackerIndicatorText, statusClassName: FULL_TRACKER_STATUS_CLASS },
       callback,
     );
+  };
+
+  /** Persists a generated tracker update and restores the rendered tracker state if the save can complete. */
+  const persistTrackerUpdate = async (options: PersistTrackerUpdateOptions) => {
+    try {
+      applyTrackerUpdateAndRender(options.message as any, {
+        trackerData: options.trackerData,
+        trackerHtml: options.trackerHtml,
+        extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: options.partsOrder, partsMeta: options.partsMeta },
+        render: () => renderTrackerWithDeps(options.messageId),
+      });
+      restoreDetailsState(options.messageId, options.detailsState);
+      await globalContext.saveChat();
+      if (options.successMessage) {
+        st_echo('success', options.successMessage);
+      }
+    } catch {
+      logPromptEngineeredRenderRollback(
+        options.trackerData,
+        new Error('Generated data failed to render with the current template. Not saved.'),
+      );
+      renderTrackerWithDeps(options.messageId);
+      throw new Error('Generated data failed to render with the current template. Not saved.');
+    }
+  };
+
+  /** Runs one context-menu regeneration action with the shared badge, spinner, and error handling. */
+  const runContextMenuTrackerUpdate = async (
+    options: {
+      messageId: number;
+      button: Element | null | undefined;
+      errorContext: string;
+      callback: () => Promise<void>;
+    },
+  ) => {
+    try {
+      options.button?.classList.add('spinning');
+      await withMessageStatusIndicator(
+        { messageId: options.messageId, text: contextMenuIndicatorText, statusClassName: CONTEXT_MENU_STATUS_CLASS },
+        options.callback,
+      );
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error(`Error ${options.errorContext}:`, error);
+        st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
+      }
+    } finally {
+      options.button?.classList.remove('spinning');
+    }
   };
 
   function createLocalRequestId(messageId: number): string {
@@ -808,21 +868,16 @@ export function createTrackerActions(options: {
 
         if (!response || Object.keys(response as any).length === 0) throw new Error('Empty response from zTracker.');
 
-        try {
-          applyTrackerUpdateAndRender(message as any, {
-            trackerData: response,
-            trackerHtml: chatHtmlValue,
-            extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
-            render: () => renderTrackerWithDeps(id),
-          });
-          restoreDetailsState(id, detailsState);
-          await saveChat();
-          return true;
-        } catch {
-          logPromptEngineeredRenderRollback(response, new Error('Generated data failed to render with the current template. Not saved.'));
-          renderTrackerWithDeps(id);
-          throw new Error(`Generated data failed to render with the current template. Not saved.`);
-        }
+        await persistTrackerUpdate({
+          messageId: id,
+          message,
+          trackerData: response,
+          trackerHtml: chatHtmlValue,
+          partsOrder,
+          partsMeta,
+          detailsState,
+        });
+        return true;
       });
     } catch (error: any) {
       if (error.name !== 'AbortError') {
@@ -914,21 +969,16 @@ export function createTrackerActions(options: {
           throw new Error('Empty response from zTracker.');
         }
 
-        try {
-          applyTrackerUpdateAndRender(message as any, {
-            trackerData,
-            trackerHtml: chatHtmlValue,
-            extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
-            render: () => renderTrackerWithDeps(id),
-          });
-          restoreDetailsState(id, detailsState);
-          await saveChat();
-          return true;
-        } catch {
-          logPromptEngineeredRenderRollback(trackerData, new Error('Generated data failed to render with the current template. Not saved.'));
-          renderTrackerWithDeps(id);
-          throw new Error(`Generated data failed to render with the current template. Not saved.`);
-        }
+        await persistTrackerUpdate({
+          messageId: id,
+          message,
+          trackerData,
+          trackerHtml: chatHtmlValue,
+          partsOrder,
+          partsMeta,
+          detailsState,
+        });
+        return true;
       });
     } catch (error: any) {
       if (error.name !== 'AbortError') {
@@ -946,7 +996,6 @@ export function createTrackerActions(options: {
   async function generateTrackerPart(id: number, partKey: string) {
     if (cancelIfPending(id)) return;
 
-    const { saveChat } = globalContext;
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const partButton = messageBlock?.querySelector(
       `.ztracker-part-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"]`,
@@ -954,11 +1003,11 @@ export function createTrackerActions(options: {
 
     const detailsState = captureDetailsState(id);
 
-    try {
-      partButton?.classList.add('spinning');
-      await withMessageStatusIndicator(
-        { messageId: id, text: contextMenuIndicatorText, statusClassName: CONTEXT_MENU_STATUS_CLASS },
-        async () => {
+    await runContextMenuTrackerUpdate({
+      messageId: id,
+      button: partButton,
+      errorContext: 'generating tracker part',
+      callback: async () => {
           const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
 
           const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
@@ -999,37 +1048,23 @@ export function createTrackerActions(options: {
 
           const nextTracker = mergeTrackerPart(currentTracker, partKey, partResponse);
 
-          try {
-            applyTrackerUpdateAndRender(message as any, {
-              trackerData: nextTracker,
-              trackerHtml: chatHtmlValue,
-              extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
-              render: () => renderTrackerWithDeps(id),
-            });
-            restoreDetailsState(id, detailsState);
-            await saveChat();
-            st_echo('success', `Updated: ${partKey}`);
-          } catch {
-            logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
-            renderTrackerWithDeps(id);
-            throw new Error(`Generated data failed to render with the current template. Not saved.`);
-          }
+          await persistTrackerUpdate({
+            messageId: id,
+            message,
+            trackerData: nextTracker,
+            trackerHtml: chatHtmlValue,
+            partsOrder,
+            partsMeta,
+            detailsState,
+            successMessage: `Updated: ${partKey}`,
+          });
         },
-      );
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('Error generating tracker part:', error);
-        st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
-      }
-    } finally {
-      partButton?.classList.remove('spinning');
-    }
+    });
   }
 
   async function generateTrackerArrayItem(id: number, partKey: string, index: number) {
     if (cancelIfPending(id)) return;
 
-    const { saveChat } = globalContext;
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const itemButton = messageBlock?.querySelector(
       `.ztracker-array-item-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"][data-ztracker-index="${index}"]`,
@@ -1037,11 +1072,11 @@ export function createTrackerActions(options: {
 
     const detailsState = captureDetailsState(id);
 
-    try {
-      itemButton?.classList.add('spinning');
-      await withMessageStatusIndicator(
-        { messageId: id, text: contextMenuIndicatorText, statusClassName: CONTEXT_MENU_STATUS_CLASS },
-        async () => {
+    await runContextMenuTrackerUpdate({
+      messageId: id,
+      button: itemButton,
+      errorContext: 'generating tracker array item',
+      callback: async () => {
           const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
           const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
           if (!currentTracker || typeof currentTracker !== 'object') {
@@ -1101,37 +1136,23 @@ export function createTrackerActions(options: {
 
           const nextTracker = replaceTrackerArrayItem(currentTracker, partKey, index, item);
 
-          try {
-            applyTrackerUpdateAndRender(message as any, {
-              trackerData: nextTracker,
-              trackerHtml: chatHtmlValue,
-              extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
-              render: () => renderTrackerWithDeps(id),
-            });
-            restoreDetailsState(id, detailsState);
-            await saveChat();
-            st_echo('success', `Updated: ${partKey}[${index}]`);
-          } catch {
-            logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
-            renderTrackerWithDeps(id);
-            throw new Error(`Generated data failed to render with the current template. Not saved.`);
-          }
+          await persistTrackerUpdate({
+            messageId: id,
+            message,
+            trackerData: nextTracker,
+            trackerHtml: chatHtmlValue,
+            partsOrder,
+            partsMeta,
+            detailsState,
+            successMessage: `Updated: ${partKey}[${index}]`,
+          });
         },
-      );
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('Error generating tracker array item:', error);
-        st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
-      }
-    } finally {
-      itemButton?.classList.remove('spinning');
-    }
+    });
   }
 
   async function generateTrackerArrayItemByName(id: number, partKey: string, name: string) {
     if (cancelIfPending(id)) return;
 
-    const { saveChat } = globalContext;
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const itemButton = messageBlock?.querySelector(
       `.ztracker-array-item-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"][data-ztracker-name="${CSS.escape(name)}"]`,
@@ -1139,11 +1160,11 @@ export function createTrackerActions(options: {
 
     const detailsState = captureDetailsState(id);
 
-    try {
-      itemButton?.classList.add('spinning');
-      await withMessageStatusIndicator(
-        { messageId: id, text: contextMenuIndicatorText, statusClassName: CONTEXT_MENU_STATUS_CLASS },
-        async () => {
+    await runContextMenuTrackerUpdate({
+      messageId: id,
+      button: itemButton,
+      errorContext: 'generating tracker array item (by name)',
+      callback: async () => {
           const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
           const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
           if (!currentTracker || typeof currentTracker !== 'object') {
@@ -1217,37 +1238,23 @@ export function createTrackerActions(options: {
 
           const nextTracker = replaceTrackerArrayItem(currentTracker, partKey, index, item);
 
-          try {
-            applyTrackerUpdateAndRender(message as any, {
-              trackerData: nextTracker,
-              trackerHtml: chatHtmlValue,
-              extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
-              render: () => renderTrackerWithDeps(id),
-            });
-            restoreDetailsState(id, detailsState);
-            await saveChat();
-            st_echo('success', `Updated: ${partKey} (${name})`);
-          } catch {
-            logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
-            renderTrackerWithDeps(id);
-            throw new Error(`Generated data failed to render with the current template. Not saved.`);
-          }
+          await persistTrackerUpdate({
+            messageId: id,
+            message,
+            trackerData: nextTracker,
+            trackerHtml: chatHtmlValue,
+            partsOrder,
+            partsMeta,
+            detailsState,
+            successMessage: `Updated: ${partKey} (${name})`,
+          });
         },
-      );
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('Error generating tracker array item (by name):', error);
-        st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
-      }
-    } finally {
-      itemButton?.classList.remove('spinning');
-    }
+    });
   }
 
   async function generateTrackerArrayItemByIdentity(id: number, partKey: string, idKey: string, idValue: string) {
     if (cancelIfPending(id)) return;
 
-    const { saveChat } = globalContext;
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const itemButton = messageBlock?.querySelector(
       `.ztracker-array-item-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"][data-ztracker-idkey="${CSS.escape(idKey)}"][data-ztracker-idvalue="${CSS.escape(idValue)}"]`,
@@ -1255,11 +1262,11 @@ export function createTrackerActions(options: {
 
     const detailsState = captureDetailsState(id);
 
-    try {
-      itemButton?.classList.add('spinning');
-      await withMessageStatusIndicator(
-        { messageId: id, text: contextMenuIndicatorText, statusClassName: CONTEXT_MENU_STATUS_CLASS },
-        async () => {
+    await runContextMenuTrackerUpdate({
+      messageId: id,
+      button: itemButton,
+      errorContext: 'generating tracker array item (by identity)',
+      callback: async () => {
           const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
           const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
           if (!currentTracker || typeof currentTracker !== 'object') {
@@ -1333,37 +1340,23 @@ export function createTrackerActions(options: {
 
           const nextTracker = replaceTrackerArrayItem(currentTracker, partKey, index, item);
 
-          try {
-            applyTrackerUpdateAndRender(message as any, {
-              trackerData: nextTracker,
-              trackerHtml: chatHtmlValue,
-              extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
-              render: () => renderTrackerWithDeps(id),
-            });
-            restoreDetailsState(id, detailsState);
-            await saveChat();
-            st_echo('success', `Updated: ${partKey} (${idKey}=${idValue})`);
-          } catch {
-            logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
-            renderTrackerWithDeps(id);
-            throw new Error(`Generated data failed to render with the current template. Not saved.`);
-          }
+          await persistTrackerUpdate({
+            messageId: id,
+            message,
+            trackerData: nextTracker,
+            trackerHtml: chatHtmlValue,
+            partsOrder,
+            partsMeta,
+            detailsState,
+            successMessage: `Updated: ${partKey} (${idKey}=${idValue})`,
+          });
         },
-      );
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('Error generating tracker array item (by identity):', error);
-        st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
-      }
-    } finally {
-      itemButton?.classList.remove('spinning');
-    }
+    });
   }
 
   async function generateTrackerArrayItemField(id: number, partKey: string, index: number, fieldKey: string) {
     if (cancelIfPending(id)) return;
 
-    const { saveChat } = globalContext;
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const fieldButton = messageBlock?.querySelector(
       `.ztracker-array-item-field-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"][data-ztracker-index="${index}"][data-ztracker-field="${CSS.escape(fieldKey)}"]`,
@@ -1371,11 +1364,11 @@ export function createTrackerActions(options: {
 
     const detailsState = captureDetailsState(id);
 
-    try {
-      fieldButton?.classList.add('spinning');
-      await withMessageStatusIndicator(
-        { messageId: id, text: contextMenuIndicatorText, statusClassName: CONTEXT_MENU_STATUS_CLASS },
-        async () => {
+    await runContextMenuTrackerUpdate({
+      messageId: id,
+      button: fieldButton,
+      errorContext: 'generating tracker array item field',
+      callback: async () => {
           const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
           const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
           if (!currentTracker || typeof currentTracker !== 'object') {
@@ -1450,31 +1443,18 @@ export function createTrackerActions(options: {
 
           const nextTracker = replaceTrackerArrayItemField(currentTracker, partKey, index, fieldKey, value);
 
-          try {
-            applyTrackerUpdateAndRender(message as any, {
-              trackerData: nextTracker,
-              trackerHtml: chatHtmlValue,
-              extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
-              render: () => renderTrackerWithDeps(id),
-            });
-            restoreDetailsState(id, detailsState);
-            await saveChat();
-            st_echo('success', `Updated: ${partKey}[${index}].${fieldKey}`);
-          } catch {
-            logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
-            renderTrackerWithDeps(id);
-            throw new Error(`Generated data failed to render with the current template. Not saved.`);
-          }
+          await persistTrackerUpdate({
+            messageId: id,
+            message,
+            trackerData: nextTracker,
+            trackerHtml: chatHtmlValue,
+            partsOrder,
+            partsMeta,
+            detailsState,
+            successMessage: `Updated: ${partKey}[${index}].${fieldKey}`,
+          });
         },
-      );
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('Error generating tracker array item field:', error);
-        st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
-      }
-    } finally {
-      fieldButton?.classList.remove('spinning');
-    }
+    });
   }
 
   async function generateTrackerArrayItemFieldByName(id: number, partKey: string, name: string, fieldKey: string) {

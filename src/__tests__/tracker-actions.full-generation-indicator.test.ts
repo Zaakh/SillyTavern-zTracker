@@ -84,7 +84,7 @@ describe('createTrackerActions full generation indicator', () => {
       importMetaUrl: TEST_IMPORT_META_URL,
     });
 
-    const pending = actions.generateTracker(0);
+    const pending = actions.generateTracker(0, { showStatusIndicator: true });
     await flushAsyncWork();
 
     expect(document.querySelector('.ztracker-full-tracker-status')?.textContent).toContain('Updating tracker');
@@ -122,7 +122,7 @@ describe('createTrackerActions full generation indicator', () => {
       importMetaUrl: TEST_IMPORT_META_URL,
     });
 
-    const pending = actions.generateTracker(0);
+    const pending = actions.generateTracker(0, { showStatusIndicator: true });
     await flushAsyncWork();
 
     expect(document.querySelector('.ztracker-full-tracker-status')?.textContent).toContain('Updating tracker');
