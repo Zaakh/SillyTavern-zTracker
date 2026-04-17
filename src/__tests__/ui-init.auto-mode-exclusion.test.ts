@@ -246,7 +246,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     });
 
     handlers.get('MESSAGE_SENT')?.(0);
-    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true });
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true, showStatusIndicator: false });
     expect(document.querySelector('.mes[mesid="0"]')?.classList.contains('ztracker-auto-mode-hold')).toBe(true);
     expect(document.querySelector('.ztracker-auto-mode-status')?.textContent).toContain('Generating tracker before reply');
 
@@ -630,7 +630,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     });
 
     handlers.get('MESSAGE_SENT')?.(0);
-    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true });
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true, showStatusIndicator: false });
   });
 
   test('skips auto-generation for excluded character-rendered messages', async () => {

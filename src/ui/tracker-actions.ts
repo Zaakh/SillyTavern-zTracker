@@ -50,6 +50,11 @@ import {
   shouldSkipTrackerGeneration,
 } from './tracker-action-helpers.js';
 import { captureTrackerRequestDebugSnapshot, debugLog, isDebugLoggingEnabled } from './debug.js';
+import {
+  CONTEXT_MENU_STATUS_CLASS,
+  FULL_TRACKER_STATUS_CLASS,
+  withMessageStatusIndicator,
+} from './message-status-indicator.js';
 
 interface TextCompletionStoryStringFormatter {
   renderStoryString: (
@@ -257,6 +262,90 @@ export function createTrackerActions(options: {
   let beforeRequestStartHook = options.beforeRequestStartHook;
   const textCompletionStoryStringFormatterLoader = options.textCompletionStoryStringFormatterLoader;
   const { logPromptEngineeredRenderRollback, requestPromptEngineeredResponse } = createPromptEngineeringHelpers();
+  const contextMenuIndicatorText = 'Updating tracker from menu';
+  const fullTrackerIndicatorText = 'Updating tracker';
+
+  type GenerateTrackerOptions = {
+    silent?: boolean;
+    showStatusIndicator?: boolean;
+  };
+
+  type PersistTrackerUpdateOptions = {
+    messageId: number;
+    message: unknown;
+    trackerData: unknown;
+    trackerHtml: string;
+    partsOrder: string[];
+    partsMeta: unknown;
+    detailsState: boolean[];
+    successMessage?: string;
+  };
+
+  /** Shows the full-tracker badge only when the caller explicitly opts into that manual UI. */
+  const runWithFullTrackerStatusIndicator = <T>(
+    messageId: number,
+    options: GenerateTrackerOptions | undefined,
+    callback: () => Promise<T>,
+  ) => {
+    const shouldShowStatusIndicator = options?.showStatusIndicator ?? false;
+    if (!shouldShowStatusIndicator) {
+      return callback();
+    }
+
+    return withMessageStatusIndicator(
+      { messageId, text: fullTrackerIndicatorText, statusClassName: FULL_TRACKER_STATUS_CLASS },
+      callback,
+    );
+  };
+
+  /** Persists a generated tracker update and restores the rendered tracker state if the save can complete. */
+  const persistTrackerUpdate = async (options: PersistTrackerUpdateOptions) => {
+    try {
+      applyTrackerUpdateAndRender(options.message as any, {
+        trackerData: options.trackerData,
+        trackerHtml: options.trackerHtml,
+        extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: options.partsOrder, partsMeta: options.partsMeta },
+        render: () => renderTrackerWithDeps(options.messageId),
+      });
+      restoreDetailsState(options.messageId, options.detailsState);
+      await globalContext.saveChat();
+      if (options.successMessage) {
+        st_echo('success', options.successMessage);
+      }
+    } catch {
+      logPromptEngineeredRenderRollback(
+        options.trackerData,
+        new Error('Generated data failed to render with the current template. Not saved.'),
+      );
+      renderTrackerWithDeps(options.messageId);
+      throw new Error('Generated data failed to render with the current template. Not saved.');
+    }
+  };
+
+  /** Runs one context-menu regeneration action with the shared badge, spinner, and error handling. */
+  const runContextMenuTrackerUpdate = async (
+    options: {
+      messageId: number;
+      button: Element | null | undefined;
+      errorContext: string;
+      callback: () => Promise<void>;
+    },
+  ) => {
+    try {
+      options.button?.classList.add('spinning');
+      await withMessageStatusIndicator(
+        { messageId: options.messageId, text: contextMenuIndicatorText, statusClassName: CONTEXT_MENU_STATUS_CLASS },
+        options.callback,
+      );
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error(`Error ${options.errorContext}:`, error);
+        st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
+      }
+    } finally {
+      options.button?.classList.remove('spinning');
+    }
+  };
 
   function createLocalRequestId(messageId: number): string {
     nextLocalRequestId += 1;
@@ -647,7 +736,6 @@ export function createTrackerActions(options: {
       chatJsonValue,
       chatHtmlValue,
       messages,
-      existingTracker,
       transportInstructName: promptPresetSelections.instructName,
     };
   }
@@ -728,7 +816,7 @@ export function createTrackerActions(options: {
     }
   }
 
-  async function generateTrackerFull(id: number) {
+  async function generateTrackerFull(id: number, options?: GenerateTrackerOptions) {
     if (cancelIfPending(id)) return false;
 
     const { saveChat } = globalContext;
@@ -750,50 +838,47 @@ export function createTrackerActions(options: {
       mainButton?.classList.add('spinning');
       regenerateButton?.classList.add('spinning');
 
-      const { message, settings, chatJsonValue, chatHtmlValue, messages, existingTracker, transportInstructName } = await prepareTrackerGeneration(id);
-      if (token.cancelled) {
-        return false;
-      }
+      return await runWithFullTrackerStatusIndicator(id, options, async () => {
+        const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
+        if (token.cancelled) {
+          return false;
+        }
 
-      const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
-      const partsMeta = buildPartsMeta(chatJsonValue);
-      const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
+        const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
+        const partsMeta = buildPartsMeta(chatJsonValue);
+        const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
 
-      let response: ExtractedData['content'];
+        let response: ExtractedData['content'];
 
-      if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
-        insertTrackerInstructionMessage(messages, settings.prompt);
-        const result = await makeRequest(messages, {
-          json_schema: { name: 'SceneTracker', strict: true, value: chatJsonValue },
-        });
-        // @ts-ignore
-        response = result?.content;
-      } else {
-        // @ts-ignore
-        response = await requestPromptEngineeredResponse(makeRequest, messages, settings, chatJsonValue);
-      }
+        if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
+          insertTrackerInstructionMessage(messages, settings.prompt);
+          const result = await makeRequest(messages, {
+            json_schema: { name: 'SceneTracker', strict: true, value: chatJsonValue },
+          });
+          // @ts-ignore
+          response = result?.content;
+        } else {
+          // @ts-ignore
+          response = await requestPromptEngineeredResponse(makeRequest, messages, settings, chatJsonValue);
+        }
 
-      if (token.cancelled) {
-        return false;
-      }
+        if (token.cancelled) {
+          return false;
+        }
 
-      if (!response || Object.keys(response as any).length === 0) throw new Error('Empty response from zTracker.');
+        if (!response || Object.keys(response as any).length === 0) throw new Error('Empty response from zTracker.');
 
-      try {
-        applyTrackerUpdateAndRender(message as any, {
+        await persistTrackerUpdate({
+          messageId: id,
+          message,
           trackerData: response,
           trackerHtml: chatHtmlValue,
-          extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
-          render: () => renderTrackerWithDeps(id),
+          partsOrder,
+          partsMeta,
+          detailsState,
         });
-        restoreDetailsState(id, detailsState);
-        await saveChat();
         return true;
-      } catch {
-        logPromptEngineeredRenderRollback(response, new Error('Generated data failed to render with the current template. Not saved.'));
-        renderTrackerWithDeps(id);
-        throw new Error(`Generated data failed to render with the current template. Not saved.`);
-      }
+      });
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Error generating tracker:', error);
@@ -807,7 +892,7 @@ export function createTrackerActions(options: {
     }
   }
 
-  async function generateTrackerSequential(id: number) {
+  async function generateTrackerSequential(id: number, options?: GenerateTrackerOptions) {
     if (cancelIfPending(id)) return false;
 
     const { saveChat } = globalContext;
@@ -823,81 +908,78 @@ export function createTrackerActions(options: {
       mainButton?.classList.add('spinning');
       regenerateButton?.classList.add('spinning');
 
-      const { message, settings, chatJsonValue, chatHtmlValue, messages, existingTracker, transportInstructName } = await prepareTrackerGeneration(id);
-      if (token.cancelled) {
-        return false;
-      }
-
-      const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
-      const partsMeta = buildPartsMeta(chatJsonValue);
-      if (partsOrder.length === 0) {
-        throw new Error('Schema has no top-level properties to generate.');
-      }
-
-      const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
-      const baseMessages = structuredClone(messages) as Message[];
-      let trackerData: any = {};
-
-      for (const partKey of partsOrder) {
-        if (token.cancelled) break;
-
-        const partSchema = buildTopLevelPartSchema(chatJsonValue, partKey);
-        const requestMessages = structuredClone(baseMessages) as Message[];
-
-        // Provide current partial state so parts can depend on previously generated parts.
-        if (trackerData && Object.keys(trackerData).length > 0) {
-          appendCurrentTrackerSnapshot(
-            requestMessages,
-            trackerData,
-            'Tracker so far in this sequential run (keep consistent and build on it):',
-          );
+      return await runWithFullTrackerStatusIndicator(id, options, async () => {
+        const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
+        if (token.cancelled) {
+          return false;
         }
 
-        let partResponse: any;
-        if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
-          insertTrackerInstructionMessage(
-            requestMessages,
-            `${settings.prompt}\n\nGenerate ONLY the field "${partKey}". Return a single JSON object matching the provided schema.`,
-          );
-          const result = await makeRequest(requestMessages, {
-            json_schema: { name: 'SceneTrackerPart', strict: true, value: partSchema },
-          });
-          // @ts-ignore
-          partResponse = result?.content;
-        } else {
-          partResponse = await requestPromptEngineeredResponse(makeRequest, requestMessages, settings, partSchema);
+        const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
+        const partsMeta = buildPartsMeta(chatJsonValue);
+        if (partsOrder.length === 0) {
+          throw new Error('Schema has no top-level properties to generate.');
         }
 
-        if (!partResponse || Object.keys(partResponse as any).length === 0) {
-          throw new Error(`Empty response while generating part: ${partKey}`);
+        const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
+        const baseMessages = structuredClone(messages) as Message[];
+        let trackerData: any = {};
+
+        for (const partKey of partsOrder) {
+          if (token.cancelled) break;
+
+          const partSchema = buildTopLevelPartSchema(chatJsonValue, partKey);
+          const requestMessages = structuredClone(baseMessages) as Message[];
+
+          // Provide current partial state so parts can depend on previously generated parts.
+          if (trackerData && Object.keys(trackerData).length > 0) {
+            appendCurrentTrackerSnapshot(
+              requestMessages,
+              trackerData,
+              'Tracker so far in this sequential run (keep consistent and build on it):',
+            );
+          }
+
+          let partResponse: any;
+          if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
+            insertTrackerInstructionMessage(
+              requestMessages,
+              `${settings.prompt}\n\nGenerate ONLY the field "${partKey}". Return a single JSON object matching the provided schema.`,
+            );
+            const result = await makeRequest(requestMessages, {
+              json_schema: { name: 'SceneTrackerPart', strict: true, value: partSchema },
+            });
+            // @ts-ignore
+            partResponse = result?.content;
+          } else {
+            partResponse = await requestPromptEngineeredResponse(makeRequest, requestMessages, settings, partSchema);
+          }
+
+          if (!partResponse || Object.keys(partResponse as any).length === 0) {
+            throw new Error(`Empty response while generating part: ${partKey}`);
+          }
+
+          trackerData = mergeTrackerPart(trackerData, partKey, partResponse);
         }
 
-        trackerData = mergeTrackerPart(trackerData, partKey, partResponse);
-      }
+        if (token.cancelled) {
+          return false;
+        }
 
-      if (token.cancelled) {
-        return false;
-      }
+        if (!trackerData || Object.keys(trackerData).length === 0) {
+          throw new Error('Empty response from zTracker.');
+        }
 
-      if (!trackerData || Object.keys(trackerData).length === 0) {
-        throw new Error('Empty response from zTracker.');
-      }
-
-      try {
-        applyTrackerUpdateAndRender(message as any, {
+        await persistTrackerUpdate({
+          messageId: id,
+          message,
           trackerData,
           trackerHtml: chatHtmlValue,
-          extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
-          render: () => renderTrackerWithDeps(id),
+          partsOrder,
+          partsMeta,
+          detailsState,
         });
-        restoreDetailsState(id, detailsState);
-        await saveChat();
         return true;
-      } catch {
-        logPromptEngineeredRenderRollback(trackerData, new Error('Generated data failed to render with the current template. Not saved.'));
-        renderTrackerWithDeps(id);
-        throw new Error(`Generated data failed to render with the current template. Not saved.`);
-      }
+      });
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Error generating tracker (sequential):', error);
@@ -914,7 +996,6 @@ export function createTrackerActions(options: {
   async function generateTrackerPart(id: number, partKey: string) {
     if (cancelIfPending(id)) return;
 
-    const { saveChat } = globalContext;
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const partButton = messageBlock?.querySelector(
       `.ztracker-part-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"]`,
@@ -922,78 +1003,68 @@ export function createTrackerActions(options: {
 
     const detailsState = captureDetailsState(id);
 
-    try {
-      partButton?.classList.add('spinning');
+    await runContextMenuTrackerUpdate({
+      messageId: id,
+      button: partButton,
+      errorContext: 'generating tracker part',
+      callback: async () => {
+          const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
 
-      const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
+          const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
+          if (!currentTracker || typeof currentTracker !== 'object') {
+            throw new Error('No existing tracker found for this message. Generate a full tracker first.');
+          }
 
-      const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
-      if (!currentTracker || typeof currentTracker !== 'object') {
-        throw new Error('No existing tracker found for this message. Generate a full tracker first.');
-      }
+          const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
+          const partsMeta = buildPartsMeta(chatJsonValue);
+          const partSchema = buildTopLevelPartSchema(chatJsonValue, partKey);
+          const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
 
-      const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
-      const partsMeta = buildPartsMeta(chatJsonValue);
-      const partSchema = buildTopLevelPartSchema(chatJsonValue, partKey);
-      const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
+          const redactedTracker = redactTrackerPartValue(currentTracker, partKey);
+          appendCurrentTrackerSnapshot(
+            messages as any,
+            redactedTracker,
+            'Current tracker for this message (target part omitted for freshness; keep everything else consistent):',
+          );
 
-      const redactedTracker = redactTrackerPartValue(currentTracker, partKey);
-      appendCurrentTrackerSnapshot(
-        messages as any,
-        redactedTracker,
-        'Current tracker for this message (target part omitted for freshness; keep everything else consistent):',
-      );
+          let partResponse: any;
+          if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
+            insertTrackerInstructionMessage(
+              messages,
+              `${settings.prompt}\n\nGenerate ONLY the field "${partKey}". Return a single JSON object matching the provided schema.`,
+            );
+            const result = await makeRequest(messages, {
+              json_schema: { name: 'SceneTrackerPart', strict: true, value: partSchema },
+            });
+            // @ts-ignore
+            partResponse = result?.content;
+          } else {
+            partResponse = await requestPromptEngineeredResponse(makeRequest, messages, settings, partSchema);
+          }
 
-      let partResponse: any;
-      if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
-        insertTrackerInstructionMessage(
-          messages,
-          `${settings.prompt}\n\nGenerate ONLY the field "${partKey}". Return a single JSON object matching the provided schema.`,
-        );
-        const result = await makeRequest(messages, {
-          json_schema: { name: 'SceneTrackerPart', strict: true, value: partSchema },
-        });
-        // @ts-ignore
-        partResponse = result?.content;
-      } else {
-        partResponse = await requestPromptEngineeredResponse(makeRequest, messages, settings, partSchema);
-      }
+          if (!partResponse || Object.keys(partResponse as any).length === 0) {
+            throw new Error(`Empty response while generating part: ${partKey}`);
+          }
 
-      if (!partResponse || Object.keys(partResponse as any).length === 0) {
-        throw new Error(`Empty response while generating part: ${partKey}`);
-      }
+          const nextTracker = mergeTrackerPart(currentTracker, partKey, partResponse);
 
-      const nextTracker = mergeTrackerPart(currentTracker, partKey, partResponse);
-
-      try {
-        applyTrackerUpdateAndRender(message as any, {
-          trackerData: nextTracker,
-          trackerHtml: chatHtmlValue,
-          extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
-          render: () => renderTrackerWithDeps(id),
-        });
-        restoreDetailsState(id, detailsState);
-        await saveChat();
-        st_echo('success', `Updated: ${partKey}`);
-      } catch {
-        logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
-        renderTrackerWithDeps(id);
-        throw new Error(`Generated data failed to render with the current template. Not saved.`);
-      }
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('Error generating tracker part:', error);
-        st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
-      }
-    } finally {
-      partButton?.classList.remove('spinning');
-    }
+          await persistTrackerUpdate({
+            messageId: id,
+            message,
+            trackerData: nextTracker,
+            trackerHtml: chatHtmlValue,
+            partsOrder,
+            partsMeta,
+            detailsState,
+            successMessage: `Updated: ${partKey}`,
+          });
+        },
+    });
   }
 
   async function generateTrackerArrayItem(id: number, partKey: string, index: number) {
     if (cancelIfPending(id)) return;
 
-    const { saveChat } = globalContext;
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const itemButton = messageBlock?.querySelector(
       `.ztracker-array-item-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"][data-ztracker-index="${index}"]`,
@@ -1001,97 +1072,87 @@ export function createTrackerActions(options: {
 
     const detailsState = captureDetailsState(id);
 
-    try {
-      itemButton?.classList.add('spinning');
+    await runContextMenuTrackerUpdate({
+      messageId: id,
+      button: itemButton,
+      errorContext: 'generating tracker array item',
+      callback: async () => {
+          const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
+          const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
+          if (!currentTracker || typeof currentTracker !== 'object') {
+            throw new Error('No existing tracker found for this message. Generate a full tracker first.');
+          }
 
-      const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
-      const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
-      if (!currentTracker || typeof currentTracker !== 'object') {
-        throw new Error('No existing tracker found for this message. Generate a full tracker first.');
-      }
+          const currentArr = (currentTracker as any)?.[partKey];
+          if (!Array.isArray(currentArr)) {
+            throw new Error(`Tracker field is not an array: ${partKey}`);
+          }
+          if (index < 0 || index >= currentArr.length) {
+            throw new Error(`Array index out of range for ${partKey}: ${index}`);
+          }
 
-      const currentArr = (currentTracker as any)?.[partKey];
-      if (!Array.isArray(currentArr)) {
-        throw new Error(`Tracker field is not an array: ${partKey}`);
-      }
-      if (index < 0 || index >= currentArr.length) {
-        throw new Error(`Array index out of range for ${partKey}: ${index}`);
-      }
+          const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
+          const partsMeta = buildPartsMeta(chatJsonValue);
+          const itemSchema = buildArrayItemSchema(chatJsonValue, partKey);
+          const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
 
-      const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
-      const partsMeta = buildPartsMeta(chatJsonValue);
-      const itemSchema = buildArrayItemSchema(chatJsonValue, partKey);
-      const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
+          const idKey = getArrayItemIdentityKey(chatJsonValue, partKey);
+          const idValue =
+            currentArr[index] && typeof currentArr[index] === 'object' && typeof (currentArr[index] as any)[idKey] === 'string'
+              ? String((currentArr[index] as any)[idKey])
+              : '';
+          const redactedTracker = redactTrackerArrayItemValue(currentTracker, partKey, index);
 
-      const idKey = getArrayItemIdentityKey(chatJsonValue, partKey);
-      const idValue =
-        currentArr[index] && typeof currentArr[index] === 'object' && typeof (currentArr[index] as any)[idKey] === 'string'
-          ? String((currentArr[index] as any)[idKey])
-          : '';
-      const redactedTracker = redactTrackerArrayItemValue(currentTracker, partKey, index);
+          appendCurrentTrackerSnapshot(
+            messages as any,
+            redactedTracker,
+            'Current tracker for this message (target item omitted for freshness; keep everything else consistent):',
+          );
+          appendCurrentTrackerSnapshot(
+            messages as any,
+            { part: partKey, index, ...(idKey && idValue ? { idKey, idValue } : {}) },
+            'Regenerate ONLY this array item (previous item intentionally omitted):',
+          );
 
-      appendCurrentTrackerSnapshot(
-        messages as any,
-        redactedTracker,
-        'Current tracker for this message (target item omitted for freshness; keep everything else consistent):',
-      );
-      appendCurrentTrackerSnapshot(
-        messages as any,
-        { part: partKey, index, ...(idKey && idValue ? { idKey, idValue } : {}) },
-        'Regenerate ONLY this array item (previous item intentionally omitted):',
-      );
+          let itemResponse: any;
+          if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
+            insertTrackerInstructionMessage(
+              messages,
+              `${settings.prompt}\n\nRegenerate ONLY ${partKey}[${index}] as an object under key "item". Return a single JSON object matching the provided schema. IMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
+            );
+            const result = await makeRequest(messages, {
+              json_schema: { name: 'SceneTrackerItem', strict: true, value: itemSchema },
+            });
+            // @ts-ignore
+            itemResponse = result?.content;
+          } else {
+            itemResponse = await requestPromptEngineeredResponse(makeRequest, messages, settings, itemSchema);
+          }
 
-      let itemResponse: any;
-      if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
-        insertTrackerInstructionMessage(
-          messages,
-          `${settings.prompt}\n\nRegenerate ONLY ${partKey}[${index}] as an object under key "item". Return a single JSON object matching the provided schema. IMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
-        );
-        const result = await makeRequest(messages, {
-          json_schema: { name: 'SceneTrackerItem', strict: true, value: itemSchema },
-        });
-        // @ts-ignore
-        itemResponse = result?.content;
-      } else {
-        itemResponse = await requestPromptEngineeredResponse(makeRequest, messages, settings, itemSchema);
-      }
+          const item = itemResponse?.item;
+          if (item === undefined) {
+            throw new Error('Item response missing key: item');
+          }
 
-      const item = itemResponse?.item;
-      if (item === undefined) {
-        throw new Error('Item response missing key: item');
-      }
+          const nextTracker = replaceTrackerArrayItem(currentTracker, partKey, index, item);
 
-      const nextTracker = replaceTrackerArrayItem(currentTracker, partKey, index, item);
-
-      try {
-        applyTrackerUpdateAndRender(message as any, {
-          trackerData: nextTracker,
-          trackerHtml: chatHtmlValue,
-          extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
-          render: () => renderTrackerWithDeps(id),
-        });
-        restoreDetailsState(id, detailsState);
-        await saveChat();
-        st_echo('success', `Updated: ${partKey}[${index}]`);
-      } catch {
-        logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
-        renderTrackerWithDeps(id);
-        throw new Error(`Generated data failed to render with the current template. Not saved.`);
-      }
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('Error generating tracker array item:', error);
-        st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
-      }
-    } finally {
-      itemButton?.classList.remove('spinning');
-    }
+          await persistTrackerUpdate({
+            messageId: id,
+            message,
+            trackerData: nextTracker,
+            trackerHtml: chatHtmlValue,
+            partsOrder,
+            partsMeta,
+            detailsState,
+            successMessage: `Updated: ${partKey}[${index}]`,
+          });
+        },
+    });
   }
 
   async function generateTrackerArrayItemByName(id: number, partKey: string, name: string) {
     if (cancelIfPending(id)) return;
 
-    const { saveChat } = globalContext;
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const itemButton = messageBlock?.querySelector(
       `.ztracker-array-item-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"][data-ztracker-name="${CSS.escape(name)}"]`,
@@ -1099,111 +1160,101 @@ export function createTrackerActions(options: {
 
     const detailsState = captureDetailsState(id);
 
-    try {
-      itemButton?.classList.add('spinning');
+    await runContextMenuTrackerUpdate({
+      messageId: id,
+      button: itemButton,
+      errorContext: 'generating tracker array item (by name)',
+      callback: async () => {
+          const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
+          const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
+          if (!currentTracker || typeof currentTracker !== 'object') {
+            throw new Error('No existing tracker found for this message. Generate a full tracker first.');
+          }
 
-      const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
-      const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
-      if (!currentTracker || typeof currentTracker !== 'object') {
-        throw new Error('No existing tracker found for this message. Generate a full tracker first.');
-      }
+          const currentArr = (currentTracker as any)?.[partKey];
+          if (!Array.isArray(currentArr)) {
+            throw new Error(`Tracker field is not an array: ${partKey}`);
+          }
 
-      const currentArr = (currentTracker as any)?.[partKey];
-      if (!Array.isArray(currentArr)) {
-        throw new Error(`Tracker field is not an array: ${partKey}`);
-      }
+          const index = findArrayItemIndexByName(currentArr, name);
+          if (index === -1) {
+            throw new Error(`No array item found by name in ${partKey}: ${name}`);
+          }
 
-      const index = findArrayItemIndexByName(currentArr, name);
-      if (index === -1) {
-        throw new Error(`No array item found by name in ${partKey}: ${name}`);
-      }
+          const currentItem = currentArr[index];
+          const shouldPreserveName =
+            currentItem && typeof currentItem === 'object' && typeof (currentItem as any).name === 'string';
 
-      const currentItem = currentArr[index];
-      const shouldPreserveName =
-        currentItem && typeof currentItem === 'object' && typeof (currentItem as any).name === 'string';
+          const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
+          const partsMeta = buildPartsMeta(chatJsonValue);
+          const itemSchema = buildArrayItemSchema(chatJsonValue, partKey);
+          const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
 
-      const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
-      const partsMeta = buildPartsMeta(chatJsonValue);
-      const itemSchema = buildArrayItemSchema(chatJsonValue, partKey);
-      const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
+          const redactedTracker = redactTrackerArrayItemValue(currentTracker, partKey, index);
+          appendCurrentTrackerSnapshot(
+            messages as any,
+            redactedTracker,
+            'Current tracker for this message (target item omitted for freshness; keep everything else consistent):',
+          );
+          appendCurrentTrackerSnapshot(
+            messages as any,
+            { part: partKey, matchBy: 'name', name, index },
+            'Regenerate ONLY this array item (matched by name; previous values intentionally omitted):',
+          );
 
-      const redactedTracker = redactTrackerArrayItemValue(currentTracker, partKey, index);
-      appendCurrentTrackerSnapshot(
-        messages as any,
-        redactedTracker,
-        'Current tracker for this message (target item omitted for freshness; keep everything else consistent):',
-      );
-      appendCurrentTrackerSnapshot(
-        messages as any,
-        { part: partKey, matchBy: 'name', name, index },
-        'Regenerate ONLY this array item (matched by name; previous values intentionally omitted):',
-      );
+          let itemResponse: any;
+          const preserveLine = shouldPreserveName
+            ? `\n\nIMPORTANT: Preserve the item name exactly as "${name}".`
+            : '';
 
-      let itemResponse: any;
-      const preserveLine = shouldPreserveName
-        ? `\n\nIMPORTANT: Preserve the item name exactly as "${name}".`
-        : '';
+          if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
+            insertTrackerInstructionMessage(
+              messages,
+              `${settings.prompt}\n\nRegenerate ONLY the ${partKey} item with name "${name}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}\n\nIMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
+            );
+            const result = await makeRequest(messages, {
+              json_schema: { name: 'SceneTrackerItem', strict: true, value: itemSchema },
+            });
+            // @ts-ignore
+            itemResponse = result?.content;
+          } else {
+            itemResponse = await requestPromptEngineeredResponse(
+              makeRequest,
+              messages,
+              settings,
+              itemSchema,
+              preserveLine,
+            );
+          }
 
-      if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
-        insertTrackerInstructionMessage(
-          messages,
-          `${settings.prompt}\n\nRegenerate ONLY the ${partKey} item with name "${name}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}\n\nIMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
-        );
-        const result = await makeRequest(messages, {
-          json_schema: { name: 'SceneTrackerItem', strict: true, value: itemSchema },
-        });
-        // @ts-ignore
-        itemResponse = result?.content;
-      } else {
-        itemResponse = await requestPromptEngineeredResponse(
-          makeRequest,
-          messages,
-          settings,
-          itemSchema,
-          preserveLine,
-        );
-      }
+          let item = itemResponse?.item;
+          if (item === undefined) {
+            throw new Error('Item response missing key: item');
+          }
 
-      let item = itemResponse?.item;
-      if (item === undefined) {
-        throw new Error('Item response missing key: item');
-      }
+          if (shouldPreserveName && item && typeof item === 'object') {
+            (item as any).name = name;
+          }
 
-      if (shouldPreserveName && item && typeof item === 'object') {
-        (item as any).name = name;
-      }
+          const nextTracker = replaceTrackerArrayItem(currentTracker, partKey, index, item);
 
-      const nextTracker = replaceTrackerArrayItem(currentTracker, partKey, index, item);
-
-      try {
-        applyTrackerUpdateAndRender(message as any, {
-          trackerData: nextTracker,
-          trackerHtml: chatHtmlValue,
-          extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
-          render: () => renderTrackerWithDeps(id),
-        });
-        restoreDetailsState(id, detailsState);
-        await saveChat();
-        st_echo('success', `Updated: ${partKey} (${name})`);
-      } catch {
-        logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
-        renderTrackerWithDeps(id);
-        throw new Error(`Generated data failed to render with the current template. Not saved.`);
-      }
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('Error generating tracker array item (by name):', error);
-        st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
-      }
-    } finally {
-      itemButton?.classList.remove('spinning');
-    }
+          await persistTrackerUpdate({
+            messageId: id,
+            message,
+            trackerData: nextTracker,
+            trackerHtml: chatHtmlValue,
+            partsOrder,
+            partsMeta,
+            detailsState,
+            successMessage: `Updated: ${partKey} (${name})`,
+          });
+        },
+    });
   }
 
   async function generateTrackerArrayItemByIdentity(id: number, partKey: string, idKey: string, idValue: string) {
     if (cancelIfPending(id)) return;
 
-    const { saveChat } = globalContext;
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const itemButton = messageBlock?.querySelector(
       `.ztracker-array-item-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"][data-ztracker-idkey="${CSS.escape(idKey)}"][data-ztracker-idvalue="${CSS.escape(idValue)}"]`,
@@ -1211,111 +1262,101 @@ export function createTrackerActions(options: {
 
     const detailsState = captureDetailsState(id);
 
-    try {
-      itemButton?.classList.add('spinning');
+    await runContextMenuTrackerUpdate({
+      messageId: id,
+      button: itemButton,
+      errorContext: 'generating tracker array item (by identity)',
+      callback: async () => {
+          const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
+          const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
+          if (!currentTracker || typeof currentTracker !== 'object') {
+            throw new Error('No existing tracker found for this message. Generate a full tracker first.');
+          }
 
-      const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
-      const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
-      if (!currentTracker || typeof currentTracker !== 'object') {
-        throw new Error('No existing tracker found for this message. Generate a full tracker first.');
-      }
+          const currentArr = (currentTracker as any)?.[partKey];
+          if (!Array.isArray(currentArr)) {
+            throw new Error(`Tracker field is not an array: ${partKey}`);
+          }
 
-      const currentArr = (currentTracker as any)?.[partKey];
-      if (!Array.isArray(currentArr)) {
-        throw new Error(`Tracker field is not an array: ${partKey}`);
-      }
+          const index = findArrayItemIndexByIdentity(currentArr, idKey, idValue);
+          if (index === -1) {
+            throw new Error(`No array item found by ${idKey} in ${partKey}: ${idValue}`);
+          }
 
-      const index = findArrayItemIndexByIdentity(currentArr, idKey, idValue);
-      if (index === -1) {
-        throw new Error(`No array item found by ${idKey} in ${partKey}: ${idValue}`);
-      }
+          const currentItem = currentArr[index];
+          const shouldPreserveIdentity =
+            currentItem && typeof currentItem === 'object' && typeof (currentItem as any)[idKey] === 'string';
 
-      const currentItem = currentArr[index];
-      const shouldPreserveIdentity =
-        currentItem && typeof currentItem === 'object' && typeof (currentItem as any)[idKey] === 'string';
+          const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
+          const partsMeta = buildPartsMeta(chatJsonValue);
+          const itemSchema = buildArrayItemSchema(chatJsonValue, partKey);
+          const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
 
-      const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
-      const partsMeta = buildPartsMeta(chatJsonValue);
-      const itemSchema = buildArrayItemSchema(chatJsonValue, partKey);
-      const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
+          const redactedTracker = redactTrackerArrayItemValue(currentTracker, partKey, index);
+          appendCurrentTrackerSnapshot(
+            messages as any,
+            redactedTracker,
+            'Current tracker for this message (target item omitted for freshness; keep everything else consistent):',
+          );
+          appendCurrentTrackerSnapshot(
+            messages as any,
+            { part: partKey, matchBy: idKey, idValue, index },
+            'Regenerate ONLY this array item (matched by identity; previous values intentionally omitted):',
+          );
 
-      const redactedTracker = redactTrackerArrayItemValue(currentTracker, partKey, index);
-      appendCurrentTrackerSnapshot(
-        messages as any,
-        redactedTracker,
-        'Current tracker for this message (target item omitted for freshness; keep everything else consistent):',
-      );
-      appendCurrentTrackerSnapshot(
-        messages as any,
-        { part: partKey, matchBy: idKey, idValue, index },
-        'Regenerate ONLY this array item (matched by identity; previous values intentionally omitted):',
-      );
+          let itemResponse: any;
+          const preserveLine = shouldPreserveIdentity
+            ? `\n\nIMPORTANT: Preserve the identity field ${idKey} exactly as "${idValue}".`
+            : '';
 
-      let itemResponse: any;
-      const preserveLine = shouldPreserveIdentity
-        ? `\n\nIMPORTANT: Preserve the identity field ${idKey} exactly as "${idValue}".`
-        : '';
+          if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
+            insertTrackerInstructionMessage(
+              messages,
+              `${settings.prompt}\n\nRegenerate ONLY the ${partKey} item with ${idKey} "${idValue}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}\n\nIMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
+            );
+            const result = await makeRequest(messages, {
+              json_schema: { name: 'SceneTrackerItem', strict: true, value: itemSchema },
+            });
+            // @ts-ignore
+            itemResponse = result?.content;
+          } else {
+            itemResponse = await requestPromptEngineeredResponse(
+              makeRequest,
+              messages,
+              settings,
+              itemSchema,
+              preserveLine,
+            );
+          }
 
-      if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
-        insertTrackerInstructionMessage(
-          messages,
-          `${settings.prompt}\n\nRegenerate ONLY the ${partKey} item with ${idKey} "${idValue}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}\n\nIMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
-        );
-        const result = await makeRequest(messages, {
-          json_schema: { name: 'SceneTrackerItem', strict: true, value: itemSchema },
-        });
-        // @ts-ignore
-        itemResponse = result?.content;
-      } else {
-        itemResponse = await requestPromptEngineeredResponse(
-          makeRequest,
-          messages,
-          settings,
-          itemSchema,
-          preserveLine,
-        );
-      }
+          let item = itemResponse?.item;
+          if (item === undefined) {
+            throw new Error('Item response missing key: item');
+          }
 
-      let item = itemResponse?.item;
-      if (item === undefined) {
-        throw new Error('Item response missing key: item');
-      }
+          if (shouldPreserveIdentity && item && typeof item === 'object') {
+            (item as any)[idKey] = idValue;
+          }
 
-      if (shouldPreserveIdentity && item && typeof item === 'object') {
-        (item as any)[idKey] = idValue;
-      }
+          const nextTracker = replaceTrackerArrayItem(currentTracker, partKey, index, item);
 
-      const nextTracker = replaceTrackerArrayItem(currentTracker, partKey, index, item);
-
-      try {
-        applyTrackerUpdateAndRender(message as any, {
-          trackerData: nextTracker,
-          trackerHtml: chatHtmlValue,
-          extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
-          render: () => renderTrackerWithDeps(id),
-        });
-        restoreDetailsState(id, detailsState);
-        await saveChat();
-        st_echo('success', `Updated: ${partKey} (${idKey}=${idValue})`);
-      } catch {
-        logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
-        renderTrackerWithDeps(id);
-        throw new Error(`Generated data failed to render with the current template. Not saved.`);
-      }
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('Error generating tracker array item (by identity):', error);
-        st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
-      }
-    } finally {
-      itemButton?.classList.remove('spinning');
-    }
+          await persistTrackerUpdate({
+            messageId: id,
+            message,
+            trackerData: nextTracker,
+            trackerHtml: chatHtmlValue,
+            partsOrder,
+            partsMeta,
+            detailsState,
+            successMessage: `Updated: ${partKey} (${idKey}=${idValue})`,
+          });
+        },
+    });
   }
 
   async function generateTrackerArrayItemField(id: number, partKey: string, index: number, fieldKey: string) {
     if (cancelIfPending(id)) return;
 
-    const { saveChat } = globalContext;
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const fieldButton = messageBlock?.querySelector(
       `.ztracker-array-item-field-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"][data-ztracker-index="${index}"][data-ztracker-field="${CSS.escape(fieldKey)}"]`,
@@ -1323,106 +1364,97 @@ export function createTrackerActions(options: {
 
     const detailsState = captureDetailsState(id);
 
-    try {
-      fieldButton?.classList.add('spinning');
+    await runContextMenuTrackerUpdate({
+      messageId: id,
+      button: fieldButton,
+      errorContext: 'generating tracker array item field',
+      callback: async () => {
+          const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
+          const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
+          if (!currentTracker || typeof currentTracker !== 'object') {
+            throw new Error('No existing tracker found for this message. Generate a full tracker first.');
+          }
 
-      const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
-      const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
-      if (!currentTracker || typeof currentTracker !== 'object') {
-        throw new Error('No existing tracker found for this message. Generate a full tracker first.');
-      }
+          const currentArr = (currentTracker as any)?.[partKey];
+          if (!Array.isArray(currentArr)) {
+            throw new Error(`Tracker field is not an array: ${partKey}`);
+          }
+          if (index < 0 || index >= currentArr.length) {
+            throw new Error(`Array index out of range for ${partKey}: ${index}`);
+          }
 
-      const currentArr = (currentTracker as any)?.[partKey];
-      if (!Array.isArray(currentArr)) {
-        throw new Error(`Tracker field is not an array: ${partKey}`);
-      }
-      if (index < 0 || index >= currentArr.length) {
-        throw new Error(`Array index out of range for ${partKey}: ${index}`);
-      }
+          const currentItem = currentArr[index];
+          if (!currentItem || typeof currentItem !== 'object' || Array.isArray(currentItem)) {
+            throw new Error(`Array item is not an object at ${partKey}[${index}]`);
+          }
 
-      const currentItem = currentArr[index];
-      if (!currentItem || typeof currentItem !== 'object' || Array.isArray(currentItem)) {
-        throw new Error(`Array item is not an object at ${partKey}[${index}]`);
-      }
+          const idKey = getArrayItemIdentityKey(chatJsonValue, partKey);
+          const idValue = typeof (currentItem as any)?.[idKey] === 'string' ? String((currentItem as any)[idKey]) : '';
 
-      const idKey = getArrayItemIdentityKey(chatJsonValue, partKey);
-      const idValue = typeof (currentItem as any)?.[idKey] === 'string' ? String((currentItem as any)[idKey]) : '';
+          const itemContext = structuredClone(currentItem);
+          if (fieldKey in (itemContext as any)) {
+            delete (itemContext as any)[fieldKey];
+          }
 
-      const itemContext = structuredClone(currentItem);
-      if (fieldKey in (itemContext as any)) {
-        delete (itemContext as any)[fieldKey];
-      }
+          const redactedTracker = redactTrackerArrayItemFieldValue(currentTracker, partKey, index, fieldKey);
 
-      const redactedTracker = redactTrackerArrayItemFieldValue(currentTracker, partKey, index, fieldKey);
+          const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
+          const partsMeta = buildPartsMeta(chatJsonValue);
+          const fieldSchema = buildArrayItemFieldSchema(chatJsonValue, partKey, fieldKey);
+          const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
 
-      const partsOrder = resolveTopLevelPartsOrder(chatJsonValue);
-      const partsMeta = buildPartsMeta(chatJsonValue);
-      const fieldSchema = buildArrayItemFieldSchema(chatJsonValue, partKey, fieldKey);
-      const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
+          appendCurrentTrackerSnapshot(
+            messages as any,
+            redactedTracker,
+            'Current tracker for this message (target field omitted for freshness; keep everything else consistent):',
+          );
+          appendCurrentTrackerSnapshot(
+            messages as any,
+            {
+              part: partKey,
+              index,
+              ...(idKey && idValue ? { idKey, idValue } : {}),
+              field: fieldKey,
+              itemContext,
+            },
+            'Regenerate ONLY this field within this array item (field value intentionally omitted):',
+          );
 
-      appendCurrentTrackerSnapshot(
-        messages as any,
-        redactedTracker,
-        'Current tracker for this message (target field omitted for freshness; keep everything else consistent):',
-      );
-      appendCurrentTrackerSnapshot(
-        messages as any,
-        {
-          part: partKey,
-          index,
-          ...(idKey && idValue ? { idKey, idValue } : {}),
-          field: fieldKey,
-          itemContext,
+          let fieldResponse: any;
+
+          if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
+            insertTrackerInstructionMessage(
+              messages,
+              `${settings.prompt}\n\nRegenerate ONLY ${partKey}[${index}].${fieldKey}. Return a single JSON object with key "value" that matches the provided schema. Do not change or rename the array item; only update that field. IMPORTANT: Generate a fresh value; the previous value has been intentionally omitted and must not be repeated.`,
+            );
+            const result = await makeRequest(messages, {
+              json_schema: { name: 'SceneTrackerItemField', strict: true, value: fieldSchema },
+            });
+            // @ts-ignore
+            fieldResponse = result?.content;
+          } else {
+            fieldResponse = await requestPromptEngineeredResponse(makeRequest, messages, settings, fieldSchema);
+          }
+
+          const value = fieldResponse?.value;
+          if (value === undefined) {
+            throw new Error('Field response missing key: value');
+          }
+
+          const nextTracker = replaceTrackerArrayItemField(currentTracker, partKey, index, fieldKey, value);
+
+          await persistTrackerUpdate({
+            messageId: id,
+            message,
+            trackerData: nextTracker,
+            trackerHtml: chatHtmlValue,
+            partsOrder,
+            partsMeta,
+            detailsState,
+            successMessage: `Updated: ${partKey}[${index}].${fieldKey}`,
+          });
         },
-        'Regenerate ONLY this field within this array item (field value intentionally omitted):',
-      );
-
-      let fieldResponse: any;
-
-      if (settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
-        insertTrackerInstructionMessage(
-          messages,
-          `${settings.prompt}\n\nRegenerate ONLY ${partKey}[${index}].${fieldKey}. Return a single JSON object with key "value" that matches the provided schema. Do not change or rename the array item; only update that field. IMPORTANT: Generate a fresh value; the previous value has been intentionally omitted and must not be repeated.`,
-        );
-        const result = await makeRequest(messages, {
-          json_schema: { name: 'SceneTrackerItemField', strict: true, value: fieldSchema },
-        });
-        // @ts-ignore
-        fieldResponse = result?.content;
-      } else {
-        fieldResponse = await requestPromptEngineeredResponse(makeRequest, messages, settings, fieldSchema);
-      }
-
-      const value = fieldResponse?.value;
-      if (value === undefined) {
-        throw new Error('Field response missing key: value');
-      }
-
-      const nextTracker = replaceTrackerArrayItemField(currentTracker, partKey, index, fieldKey, value);
-
-      try {
-        applyTrackerUpdateAndRender(message as any, {
-          trackerData: nextTracker,
-          trackerHtml: chatHtmlValue,
-          extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: partsOrder, partsMeta },
-          render: () => renderTrackerWithDeps(id),
-        });
-        restoreDetailsState(id, detailsState);
-        await saveChat();
-        st_echo('success', `Updated: ${partKey}[${index}].${fieldKey}`);
-      } catch {
-        logPromptEngineeredRenderRollback(nextTracker, new Error('Generated data failed to render with the current template. Not saved.'));
-        renderTrackerWithDeps(id);
-        throw new Error(`Generated data failed to render with the current template. Not saved.`);
-      }
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('Error generating tracker array item field:', error);
-        st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
-      }
-    } finally {
-      fieldButton?.classList.remove('spinning');
-    }
+    });
   }
 
   async function generateTrackerArrayItemFieldByName(id: number, partKey: string, name: string, fieldKey: string) {
@@ -1464,16 +1496,16 @@ export function createTrackerActions(options: {
   }
 
   /** Dispatches full tracker generation while enforcing the shared skip-first-messages guard for manual and auto flows. */
-  async function generateTracker(id: number, options?: { silent?: boolean }) {
+  async function generateTracker(id: number, options?: GenerateTrackerOptions) {
     const settings = settingsManager.getSettings();
     if (shouldSkipTrackerGeneration(id, settings, (message) => st_echo('info', message), options?.silent)) {
       return false;
     }
 
     if (settings.sequentialPartGeneration) {
-      return generateTrackerSequential(id);
+      return generateTrackerSequential(id, options);
     }
-    return generateTrackerFull(id);
+    return generateTrackerFull(id, options);
   }
 
   async function renderExtensionTemplates() {

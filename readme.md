@@ -11,6 +11,7 @@ Forked from [SillyTavern WTracker](https://github.com/bmen25124/SillyTavern-WTra
 - Optional **Sequential generation** (generate trackers in smaller steps).
 - The extension settings are grouped into **Tracker Generation** and **Tracker Injection** sections so generation tuning and prompt-context embedding are easier to find.
 - **Regenerate only what you need** from the parts menu (one section, one list item like a character, or even one field).
+- Manual tracker generation now shows a message-local status badge while the full tracker or a parts-menu update is in flight, so the active tracker job stays visible even if the initiating control scrolls away.
 - **Filter World Info used for tracker generation** (allow only selected lorebooks/entries when needed).
 - **Exclude specific characters from Auto Mode** directly from the character panel when you do not want zTracker to auto-generate trackers for them.
 - Optional **embed recent tracker snapshots** into normal generations for better continuity (either full JSON or a compact plain-text format).
@@ -65,9 +66,13 @@ When a tracker is rendered on a message, use the tracker controls:
 - **Regenerate Tracker** (rotate icon) regenerates the whole tracker.
 - **Parts menu** (list icon) lets you regenerate an individual top-level field (e.g. `time`, `location`, `topics`) without regenerating everything.
 
+While a manual full tracker generation or regeneration is running, zTracker shows a message-local `Updating tracker` badge above the target message. Auto Mode keeps using its existing `Generating tracker before reply` hold indicator instead.
+
 For array parts (e.g. `characters`), the parts menu also exposes:
 - Per-item regeneration (by stable identity when available).
 - Per-field regeneration inside an item (e.g. regenerate `characters (Silvia).outfit`).
+
+While one of those menu actions is running, zTracker shows a message-local `Updating tracker from menu` badge above the target message. This keeps the active job visible without hijacking the main send button or implying that normal chat generation is paused.
 
 Optional (advanced): you can annotate your JSON schema preset to help zTracker keep interdependent sections ordered and array items stable:
 - `x-ztracker-dependsOn`: top-level part ordering hints for sequential generation.
