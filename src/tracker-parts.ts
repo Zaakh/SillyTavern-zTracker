@@ -91,6 +91,25 @@ export function getArrayItemIdentityKey(schema: any, partKey: string): string {
   return typeof key === 'string' && key.trim() ? key.trim() : 'name';
 }
 
+/** Filters array-item field names down to user-meaningful tracker fields. */
+export function sanitizeArrayItemFieldKeys(
+  fieldKeys: unknown[],
+  idKey: string,
+  schemaFieldKeys?: string[],
+): string[] {
+  const allowedFieldKeys = Array.isArray(schemaFieldKeys) && schemaFieldKeys.length > 0 ? new Set(schemaFieldKeys) : undefined;
+
+  return fieldKeys.filter(
+    (fieldKey): fieldKey is string =>
+      typeof fieldKey === 'string' &&
+      fieldKey.trim().length > 0 &&
+      fieldKey !== 'name' &&
+      fieldKey !== idKey &&
+      fieldKey !== 'required' &&
+      (!allowedFieldKeys || allowedFieldKeys.has(fieldKey)),
+  );
+}
+
 export function buildTopLevelPartSchema(schema: any, partKey: string): any {
   const partDef = schema?.properties?.[partKey];
   if (!partDef) {

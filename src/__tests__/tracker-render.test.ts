@@ -103,6 +103,36 @@ describe('renderTracker', () => {
     expect(outfitButtons).toEqual(['outfit', 'outfit']);
   });
 
+  it('does not render required as a per-field regeneration button from stale partsMeta or item keys', () => {
+    const context: TrackerContext = {
+      chat: [
+        {
+          extra: {
+            [EXTENSION_KEY]: {
+              [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+                time: '10:00',
+                characters: [{ name: 'Alice', outfit: 'o1', required: ['outfit'] }],
+              },
+              [CHAT_MESSAGE_SCHEMA_HTML_KEY]: template,
+              [CHAT_MESSAGE_PARTS_META_KEY]: {
+                characters: { idKey: 'name', fields: ['required', 'outfit'] },
+              },
+            },
+          },
+        } as any,
+      ],
+    };
+
+    renderTracker(0, { context, document, handlebars: Handlebars });
+
+    const fieldButtons = Array.from(
+      document.querySelectorAll('.ztracker-array-item-field-regenerate-button[data-ztracker-part="characters"]'),
+    ).map((el) => (el as HTMLElement).textContent);
+
+    expect(fieldButtons).toEqual(['outfit']);
+    expect(fieldButtons).not.toContain('required');
+  });
+
   it('renders per-field regeneration buttons without partsMeta (fallback from item keys)', () => {
     const context: TrackerContext = {
       chat: [

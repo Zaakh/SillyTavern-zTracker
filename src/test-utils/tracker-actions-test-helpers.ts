@@ -91,6 +91,19 @@ jest.unstable_mockModule('../tracker-parts.js', () => ({
   replaceTrackerArrayItem: jest.fn(),
   replaceTrackerArrayItemField: jest.fn(),
   redactTrackerArrayItemFieldValue: jest.fn(),
+  sanitizeArrayItemFieldKeys: jest.fn((fieldKeys: Array<unknown>, idKey: string, schemaFieldKeys?: string[]) => {
+    const allowedFieldKeys = Array.isArray(schemaFieldKeys) && schemaFieldKeys.length > 0 ? new Set(schemaFieldKeys) : undefined;
+
+    return fieldKeys.filter(
+      (fieldKey): fieldKey is string =>
+        typeof fieldKey === 'string' &&
+        fieldKey.trim().length > 0 &&
+        fieldKey !== 'name' &&
+        fieldKey !== idKey &&
+        fieldKey !== 'required' &&
+        (!allowedFieldKeys || allowedFieldKeys.has(fieldKey)),
+    );
+  }),
 }));
 
 jest.unstable_mockModule('../ui/templates.js', () => ({

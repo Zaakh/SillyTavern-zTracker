@@ -5,6 +5,7 @@ import { DEFAULT_EMBED_SNAPSHOT_HEADER } from './config.js';
 import type { ExtensionSettings } from './config.js';
 import { EXTENSION_KEY } from './extension-metadata.js';
 import { formatEmbeddedTrackerSnapshot } from './embed-snapshot-transform.js';
+import { sanitizeArrayItemFieldKeys } from './tracker-parts.js';
 
 export const CHAT_METADATA_SCHEMA_PRESET_KEY = 'schemaKey';
 export const CHAT_MESSAGE_SCHEMA_VALUE_KEY = 'value';
@@ -46,13 +47,11 @@ function deriveArrayItemFieldsFallback(items: unknown[], idKey: string): string[
     if (!it || typeof it !== 'object' || Array.isArray(it)) continue;
     for (const key of Object.keys(it)) {
       if (!key) continue;
-      if (key === 'name') continue;
-      if (idKey && key === idKey) continue;
       fields.add(key);
     }
   }
 
-  return Array.from(fields).sort((a, b) => a.localeCompare(b));
+  return sanitizeArrayItemFieldKeys(Array.from(fields), idKey).sort((a, b) => a.localeCompare(b));
 }
 
 function getPendingRedactionTargets(extra: Record<string, any> | undefined): Array<Record<string, any>> {
@@ -195,9 +194,10 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
               const itemTitle = `${title}${pendingItemKeys.has(pendingItemKey) ? ' (pending recreation)' : ''}`;
 
               const fieldsFromMeta: string[] = Array.isArray(partsMeta?.[k]?.fields) ? partsMeta[k].fields : [];
+              const sanitizedFieldsFromMeta = sanitizeArrayItemFieldKeys(fieldsFromMeta, idKey);
               const fields: string[] =
-                fieldsFromMeta.length > 0
-                  ? fieldsFromMeta
+                sanitizedFieldsFromMeta.length > 0
+                  ? sanitizedFieldsFromMeta
                   : item && typeof item === 'object' && !Array.isArray(item)
                     ? deriveArrayItemFieldsFallback(value, idKey)
                     : [];

@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Added a tracker cleanup flow that lets you clear selected parts, array items, or item fields before optionally recreating them in one pass, with pending markers so partially cleared targets stay visible and retryable.
 
+### Fixed
+
+- Array-item context menus now filter out JSON Schema `required` metadata, so stale tracker field metadata can no longer surface `required` as a selectable target in either per-field regeneration or tracker cleanup.
+
 ## [1.8.0] - 2026-04-17
 
 ### Added

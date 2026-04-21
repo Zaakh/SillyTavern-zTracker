@@ -4,6 +4,7 @@ import {
   getArrayItemIdentityKey,
   getPendingRedactionTargets,
   normalizeTrackerCleanupTargets,
+  sanitizeArrayItemFieldKeys,
   type TrackerCleanupTarget,
 } from '../tracker-parts.js';
 
@@ -84,14 +85,7 @@ export function buildCleanupPopupRows(options: {
       (fieldKey) => fieldKey !== 'name' && fieldKey !== idKey,
     );
     const fieldKeysFromMeta: string[] = Array.isArray(options.partsMeta?.[partKey]?.fields)
-      ? options.partsMeta[partKey].fields.filter(
-          (fieldKey: unknown): fieldKey is string =>
-            typeof fieldKey === 'string' &&
-            fieldKey.trim().length > 0 &&
-            fieldKey !== 'name' &&
-            fieldKey !== idKey &&
-            (schemaFieldKeys.length === 0 || schemaFieldKeys.includes(fieldKey)),
-        )
+      ? sanitizeArrayItemFieldKeys(options.partsMeta[partKey].fields, idKey, schemaFieldKeys)
       : [];
 
     items.forEach((item: unknown, index: number) => {
