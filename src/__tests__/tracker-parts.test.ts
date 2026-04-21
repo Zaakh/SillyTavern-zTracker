@@ -7,6 +7,7 @@ import {
   findArrayItemIndexByIdentity,
   findArrayItemIndexByName,
   getArrayItemIdentityKey,
+  getPendingRedactionSchemaPresetKey,
   getPendingRedactionTargets,
   getTopLevelSchemaKeys,
   mergeTrackerPart,
@@ -257,5 +258,38 @@ describe('tracker parts helpers', () => {
       version: 1,
       targets: [{ kind: 'part', partKey: 'time' }],
     });
+  });
+
+  it('removes descendant pending targets when a broader target is regenerated', () => {
+    const pending = buildPendingRedactions(
+      [
+        { kind: 'part', partKey: 'time' },
+        { kind: 'array-item', partKey: 'characters', index: 0, idKey: 'name', idValue: 'Alice' },
+        { kind: 'array-item-field', partKey: 'characters', index: 0, fieldKey: 'outfit', idKey: 'name', idValue: 'Alice' },
+      ],
+      { schemaPresetKey: 'default' },
+    );
+
+    const remaining = removePendingRedactionTargets(pending, [{ kind: 'part', partKey: 'characters' }]);
+
+    expect(remaining).toEqual({
+      version: 1,
+      schemaPresetKey: 'default',
+      targets: [{ kind: 'part', partKey: 'time' }],
+    });
+  });
+
+  it('matches pending array targets by stable identity before index', () => {
+    const pending = buildPendingRedactions(
+      [{ kind: 'array-item-field', partKey: 'characters', index: 0, fieldKey: 'outfit', idKey: 'name', idValue: 'Alice' }],
+      { schemaPresetKey: 'default' },
+    );
+
+    const remaining = removePendingRedactionTargets(pending, [
+      { kind: 'array-item', partKey: 'characters', index: 3, idKey: 'name', idValue: 'Alice' },
+    ]);
+
+    expect(remaining).toBeUndefined();
+    expect(getPendingRedactionSchemaPresetKey(pending)).toBe('default');
   });
 });

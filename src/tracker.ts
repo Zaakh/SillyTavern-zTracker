@@ -5,9 +5,11 @@ import { DEFAULT_EMBED_SNAPSHOT_HEADER } from './config.js';
 import type { ExtensionSettings } from './config.js';
 import { EXTENSION_KEY } from './extension-metadata.js';
 import { formatEmbeddedTrackerSnapshot } from './embed-snapshot-transform.js';
-import { sanitizeArrayItemFieldKeys } from './tracker-parts.js';
+import { toShortTrackerLabel } from './tracker-helpers.js';
+import { isSameTrackerCleanupTarget, sanitizeArrayItemFieldKeys } from './tracker-parts.js';
 
 export const CHAT_METADATA_SCHEMA_PRESET_KEY = 'schemaKey';
+export const CHAT_MESSAGE_SCHEMA_PRESET_KEY = 'schemaKey';
 export const CHAT_MESSAGE_SCHEMA_VALUE_KEY = 'value';
 export const CHAT_MESSAGE_SCHEMA_HTML_KEY = 'html';
 export const CHAT_MESSAGE_PARTS_ORDER_KEY = 'partsOrder';
@@ -21,20 +23,6 @@ function escapeHtmlAttr(value: string): string {
     .replaceAll("'", '&#39;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;');
-}
-
-function toShortLabel(value: unknown, maxLen = 28): string {
-  let text: string;
-  if (typeof value === 'string') {
-    text = value;
-  } else if (value && typeof value === 'object') {
-    const name = (value as any).name;
-    text = typeof name === 'string' && name.trim() ? name : '[object]';
-  } else {
-    text = String(value);
-  }
-  text = text.replaceAll('\n', ' ').trim();
-  return text.length > maxLen ? `${text.slice(0, maxLen - 1)}…` : text;
 }
 
 function deriveArrayItemFieldsFallback(items: unknown[], idKey: string): string[] {
@@ -57,14 +45,6 @@ function deriveArrayItemFieldsFallback(items: unknown[], idKey: string): string[
 function getPendingRedactionTargets(extra: Record<string, any> | undefined): Array<Record<string, any>> {
   const targets = extra?.[CHAT_MESSAGE_PENDING_REDACTIONS_KEY]?.targets;
   return Array.isArray(targets) ? targets : [];
-}
-
-function getItemPendingKey(partKey: string, index: number): string {
-  return `${partKey}:${index}`;
-}
-
-function getFieldPendingKey(partKey: string, index: number, fieldKey: string): string {
-  return `${partKey}:${index}:${fieldKey}`;
 }
 
 function isBlankPendingLabelValue(value: unknown): boolean {
@@ -125,73 +105,43 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
     (extra?.[CHAT_MESSAGE_PARTS_ORDER_KEY] as any) ?? Object.keys(trackerData ?? {});
   const partsMeta: Record<string, any> = (extra?.[CHAT_MESSAGE_PARTS_META_KEY] as any) ?? {};
   const pendingTargets = getPendingRedactionTargets(extra);
-  const pendingPartKeys = new Set(
-    pendingTargets
-      .filter((target) => target?.kind === 'part' && typeof target.partKey === 'string')
-      .map((target) => target.partKey),
-  );
-  const pendingItemKeys = new Set(
-    pendingTargets
-      .filter(
-        (target) =>
-          target &&
-          target.kind === 'array-item' &&
-          typeof target.partKey === 'string' &&
-          Number.isInteger(target.index),
-      )
-      .map((target) => getItemPendingKey(target.partKey, target.index)),
-  );
-  const pendingFieldKeys = new Set(
-    pendingTargets
-      .filter(
-        (target) =>
-          target &&
-          target.kind === 'array-item-field' &&
-          typeof target.partKey === 'string' &&
-          Number.isInteger(target.index) &&
-          typeof target.fieldKey === 'string',
-      )
-      .map((target) => getFieldPendingKey(target.partKey, target.index, target.fieldKey)),
-  );
-  const pendingItemLabels = new Map(
-    pendingTargets
-      .filter(
-        (target) =>
-          target &&
-          typeof target.displayLabel === 'string' &&
-          typeof target.partKey === 'string' &&
-          Number.isInteger(target.index),
-      )
-      .map((target) => [getItemPendingKey(target.partKey, target.index), target.displayLabel]),
-  );
   const partsButtons = partsOrder
     .map((k) => {
       const safeKey = escapeHtmlAttr(k);
       const value = (trackerData as any)?.[k];
-      const partPendingClass = pendingPartKeys.has(k) ? ' is-pending-redaction' : '';
-      const partPendingText = pendingPartKeys.has(k) ? ' (pending recreation)' : '';
+      const partTarget = { kind: 'part' as const, partKey: k };
+      const isPartPending = pendingTargets.some((target) => isSameTrackerCleanupTarget(target as any, partTarget));
+      const partPendingClass = isPartPending ? ' is-pending-redaction' : '';
+      const partPendingText = isPartPending ? ' (pending recreation)' : '';
       const arrayItems = Array.isArray(value)
         ? `<div class="ztracker-part-items" title="Regenerate individual items">${value
             .map((item: any, index: number) => {
-              const pendingItemKey = getItemPendingKey(k, index);
-              const fallbackLabel = pendingItemLabels.get(pendingItemKey);
-              const label = escapeHtmlAttr(
-                fallbackLabel && isBlankPendingLabelValue(item) ? fallbackLabel : toShortLabel(item),
-              );
-              const itemName = item && typeof item === 'object' && typeof item.name === 'string' ? item.name : '';
-              const safeName = itemName ? ` data-ztracker-name="${escapeHtmlAttr(itemName)}"` : '';
               const idKey =
                 typeof partsMeta?.[k]?.idKey === 'string' && partsMeta[k].idKey.trim() ? partsMeta[k].idKey.trim() : 'name';
               const idValue = item && typeof item === 'object' && typeof item[idKey] === 'string' ? item[idKey] : '';
+              const itemTarget = {
+                kind: 'array-item' as const,
+                partKey: k,
+                index,
+                ...(idKey && idValue ? { idKey, idValue } : {}),
+              };
+              const pendingItemTarget = pendingTargets.find((target) => isSameTrackerCleanupTarget(target as any, itemTarget));
+              const label = escapeHtmlAttr(
+                typeof pendingItemTarget?.displayLabel === 'string' && isBlankPendingLabelValue(item)
+                  ? pendingItemTarget.displayLabel
+                  : toShortTrackerLabel(item),
+              );
+              const itemName = item && typeof item === 'object' && typeof item.name === 'string' ? item.name : '';
+              const safeName = itemName ? ` data-ztracker-name="${escapeHtmlAttr(itemName)}"` : '';
               const safeId =
                 idKey && idValue
                   ? ` data-ztracker-idkey="${escapeHtmlAttr(idKey)}" data-ztracker-idvalue="${escapeHtmlAttr(idValue)}"`
                   : '';
-              const itemPendingClass = pendingItemKeys.has(pendingItemKey) ? ' is-pending-redaction' : '';
+              const itemPendingClass = pendingItemTarget ? ' is-pending-redaction' : '';
               const title = itemName
                 ? `Regenerate ${safeKey} (${escapeHtmlAttr(itemName)})`
                 : `Regenerate ${safeKey}[${index}]`;
-              const itemTitle = `${title}${pendingItemKeys.has(pendingItemKey) ? ' (pending recreation)' : ''}`;
+              const itemTitle = `${title}${pendingItemTarget ? ' (pending recreation)' : ''}`;
 
               const fieldsFromMeta: string[] = Array.isArray(partsMeta?.[k]?.fields) ? partsMeta[k].fields : [];
               const sanitizedFieldsFromMeta = sanitizeArrayItemFieldKeys(fieldsFromMeta, idKey);
@@ -204,12 +154,19 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
               const fieldButtons = fields
                 .map((fieldKey: string) => {
                   const safeField = escapeHtmlAttr(fieldKey);
-                  const pendingFieldKey = getFieldPendingKey(k, index, fieldKey);
-                  const fieldPendingClass = pendingFieldKeys.has(pendingFieldKey) ? ' is-pending-redaction' : '';
+                  const fieldTarget = {
+                    kind: 'array-item-field' as const,
+                    partKey: k,
+                    index,
+                    fieldKey,
+                    ...(idKey && idValue ? { idKey, idValue } : {}),
+                  };
+                  const isFieldPending = pendingTargets.some((target) => isSameTrackerCleanupTarget(target as any, fieldTarget));
+                  const fieldPendingClass = isFieldPending ? ' is-pending-redaction' : '';
                   const fieldTitle = itemName
                     ? `Regenerate ${safeKey} (${escapeHtmlAttr(itemName)}).${safeField}`
                     : `Regenerate ${safeKey}[${index}].${safeField}`;
-                  return `<div class="ztracker-array-item-field-regenerate-button${fieldPendingClass}" data-ztracker-part="${safeKey}" data-ztracker-index="${index}" data-ztracker-field="${safeField}"${safeName}${safeId} title="${fieldTitle}${pendingFieldKeys.has(pendingFieldKey) ? ' (pending recreation)' : ''}">${safeField}</div>`;
+                  return `<div class="ztracker-array-item-field-regenerate-button${fieldPendingClass}" data-ztracker-part="${safeKey}" data-ztracker-index="${index}" data-ztracker-field="${safeField}"${safeName}${safeId} title="${fieldTitle}${isFieldPending ? ' (pending recreation)' : ''}">${safeField}</div>`;
                 })
                 .join('');
 
@@ -479,6 +436,11 @@ export function applyTrackerUpdateAndRender(
 
   if (options.extensionData) {
     for (const [key, value] of Object.entries(options.extensionData)) {
+      if (value === undefined) {
+        delete message.extra[EXTENSION_KEY][key];
+        continue;
+      }
+
       message.extra[EXTENSION_KEY][key] = value;
     }
   }

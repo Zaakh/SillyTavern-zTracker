@@ -1,3 +1,5 @@
+import { getArrayItemIdentityKey } from './tracker-helpers.js';
+
 export function getTopLevelSchemaKeys(schema: any): string[] {
   const props = schema?.properties;
   if (!props || typeof props !== 'object') {
@@ -21,10 +23,13 @@ export type { TrackerCleanupTarget, TrackerPendingRedactions } from './tracker-c
 export {
   buildPendingRedactions,
   clearTrackerCleanupTargets,
+  getPendingRedactionSchemaPresetKey,
   getPendingRedactionTargets,
+  isSameTrackerCleanupTarget,
   normalizeTrackerCleanupTargets,
   removePendingRedactionTargets,
 } from './tracker-cleanup.js';
+export { getArrayItemIdentityKey } from './tracker-helpers.js';
 
 /**
  * Resolves a stable top-level generation order, honoring optional schema annotations.
@@ -83,12 +88,6 @@ export function resolveTopLevelPartsOrder(schema: any): string[] {
   // Cycle or disconnected graph with remaining nodes -> fallback for safety.
   if (out.length !== baseOrder.length) return baseOrder;
   return out;
-}
-
-export function getArrayItemIdentityKey(schema: any, partKey: string): string {
-  const partDef = schema?.properties?.[partKey];
-  const key = partDef?.['x-ztracker-idKey'];
-  return typeof key === 'string' && key.trim() ? key.trim() : 'name';
 }
 
 /** Filters array-item field names down to user-meaningful tracker fields. */

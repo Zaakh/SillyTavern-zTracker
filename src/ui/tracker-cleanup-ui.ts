@@ -3,10 +3,12 @@ import { CHAT_MESSAGE_PENDING_REDACTIONS_KEY } from '../tracker.js';
 import {
   getArrayItemIdentityKey,
   getPendingRedactionTargets,
+  isSameTrackerCleanupTarget,
   normalizeTrackerCleanupTargets,
   sanitizeArrayItemFieldKeys,
   type TrackerCleanupTarget,
 } from '../tracker-parts.js';
+import { toShortTrackerLabel } from '../tracker-helpers.js';
 
 /** Describes one selectable cleanup row inside the tracker cleanup popup. */
 export interface TrackerCleanupPopupRow {
@@ -14,21 +16,6 @@ export interface TrackerCleanupPopupRow {
   label: string;
   level: number;
   pending: boolean;
-}
-
-function toShortCleanupLabel(value: unknown, maxLen = 28): string {
-  let text: string;
-  if (typeof value === 'string') {
-    text = value;
-  } else if (value && typeof value === 'object') {
-    const name = (value as any).name;
-    text = typeof name === 'string' && name.trim() ? name : '[object]';
-  } else {
-    text = String(value);
-  }
-
-  text = text.replaceAll('\n', ' ').trim();
-  return text.length > maxLen ? `${text.slice(0, maxLen - 1)}…` : text;
 }
 
 /** Reads the normalized pending-redaction targets currently stored on a message. */
@@ -45,34 +32,14 @@ export function buildCleanupPopupRows(options: {
   pendingTargets: TrackerCleanupTarget[];
 }): TrackerCleanupPopupRow[] {
   const rows: TrackerCleanupPopupRow[] = [];
-  const pendingPartKeys = new Set(
-    options.pendingTargets.filter((target) => target.kind === 'part').map((target) => target.partKey),
-  );
-  const pendingItemLabels = new Map(
-    options.pendingTargets
-      .filter(
-        (
-          target,
-        ): target is Extract<TrackerCleanupTarget, { kind: 'array-item' }> & { displayLabel: string } =>
-          target.kind === 'array-item' && typeof target.displayLabel === 'string',
-      )
-      .map((target) => [`${target.partKey}:${target.index}`, target.displayLabel as string]),
-  );
-  const pendingFieldKeys = new Set(
-    options.pendingTargets
-      .filter((target) => target.kind === 'array-item-field')
-      .map((target) => `${target.partKey}:${target.index}:${target.fieldKey}`),
-  );
-  const pendingItemKeys = new Set(
-    options.pendingTargets.filter((target) => target.kind === 'array-item').map((target) => `${target.partKey}:${target.index}`),
-  );
 
   for (const partKey of options.partsOrder) {
+    const partTarget = { kind: 'part' as const, partKey };
     rows.push({
-      target: { kind: 'part', partKey },
+      target: partTarget,
       label: partKey,
       level: 0,
-      pending: pendingPartKeys.has(partKey),
+      pending: options.pendingTargets.some((target) => isSameTrackerCleanupTarget(target, partTarget)),
     });
 
     const items = options.trackerData?.[partKey];
@@ -89,20 +56,27 @@ export function buildCleanupPopupRows(options: {
       : [];
 
     items.forEach((item: unknown, index: number) => {
-      const itemKey = `${partKey}:${index}`;
-      const displayLabel = pendingItemLabels.get(itemKey) ?? toShortCleanupLabel(item);
       const idValue = item && typeof item === 'object' && !Array.isArray(item) ? (item as any)[idKey] : undefined;
+      const itemTarget = {
+        kind: 'array-item' as const,
+        partKey,
+        index,
+        ...(typeof idValue === 'string' && idValue ? { idKey, idValue } : {}),
+      };
+      const pendingItemTarget = options.pendingTargets.find((target) => isSameTrackerCleanupTarget(target, itemTarget));
+      const displayLabel =
+        pendingItemTarget?.kind === 'array-item' && typeof pendingItemTarget.displayLabel === 'string'
+          ? pendingItemTarget.displayLabel
+          : toShortTrackerLabel(item);
+
       rows.push({
         target: {
-          kind: 'array-item',
-          partKey,
-          index,
+          ...itemTarget,
           displayLabel,
-          ...(typeof idValue === 'string' && idValue ? { idKey, idValue } : {}),
         },
         label: displayLabel,
         level: 1,
-        pending: pendingItemKeys.has(itemKey),
+        pending: !!pendingItemTarget,
       });
 
       if (!item || typeof item !== 'object' || Array.isArray(item)) {
@@ -111,18 +85,21 @@ export function buildCleanupPopupRows(options: {
 
       const fieldKeys = (fieldKeysFromMeta.length > 0 ? fieldKeysFromMeta : schemaFieldKeys).filter(Boolean);
       fieldKeys.forEach((fieldKey) => {
+        const fieldTarget = {
+          kind: 'array-item-field' as const,
+          partKey,
+          index,
+          fieldKey,
+          ...(typeof idValue === 'string' && idValue ? { idKey, idValue } : {}),
+        };
         rows.push({
           target: {
-            kind: 'array-item-field',
-            partKey,
-            index,
-            fieldKey,
+            ...fieldTarget,
             displayLabel,
-            ...(typeof idValue === 'string' && idValue ? { idKey, idValue } : {}),
           },
           label: `${displayLabel}.${fieldKey}`,
           level: 2,
-          pending: pendingFieldKeys.has(`${partKey}:${index}:${fieldKey}`),
+          pending: options.pendingTargets.some((target) => isSameTrackerCleanupTarget(target, fieldTarget)),
         });
       });
     });

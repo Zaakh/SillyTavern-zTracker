@@ -51,6 +51,7 @@ jest.unstable_mockModule('../tracker.js', () => ({
   CHAT_METADATA_SCHEMA_PRESET_KEY: 'schemaPreset',
   CHAT_MESSAGE_SCHEMA_HTML_KEY: 'schemaHtml',
   CHAT_MESSAGE_PENDING_REDACTIONS_KEY: 'pendingRedactions',
+  CHAT_MESSAGE_SCHEMA_PRESET_KEY: 'schemaPreset',
   CHAT_MESSAGE_SCHEMA_VALUE_KEY: 'schemaValue',
   CHAT_MESSAGE_PARTS_ORDER_KEY: 'partsOrder',
   extractLeadingSystemPrompt: jest.fn((messages: Array<{ role: string; content: string }>) => {
@@ -75,13 +76,37 @@ jest.unstable_mockModule('../tracker.js', () => ({
 jest.unstable_mockModule('../tracker-parts.js', () => ({
   buildArrayItemFieldSchema: jest.fn(),
   buildArrayItemSchema: jest.fn(),
-  buildPendingRedactions: jest.fn((targets: Array<unknown>) => ({ version: 1, targets })),
+  buildPendingRedactions: jest.fn((targets: Array<unknown>, options?: { schemaPresetKey?: string }) => ({
+    version: 1,
+    targets,
+    ...(options?.schemaPresetKey ? { schemaPresetKey: options.schemaPresetKey } : {}),
+  })),
   buildTopLevelPartSchema: jest.fn(),
   clearTrackerCleanupTargets: jest.fn((currentTracker: Record<string, unknown>) => ({ ...currentTracker })),
   findArrayItemIndexByIdentity: jest.fn(),
   findArrayItemIndexByName: jest.fn(),
   getArrayItemIdentityKey: jest.fn(() => 'name'),
+  getPendingRedactionSchemaPresetKey: jest.fn((value: { schemaPresetKey?: string } | undefined) => value?.schemaPresetKey),
   getPendingRedactionTargets: jest.fn((value: { targets?: Array<unknown> } | undefined) => value?.targets ?? []),
+  isSameTrackerCleanupTarget: jest.fn((left: Record<string, unknown>, right: Record<string, unknown>) => {
+    if (left?.kind !== right?.kind || left?.partKey !== right?.partKey) {
+      return false;
+    }
+
+    if (left?.kind === 'part') {
+      return true;
+    }
+
+    const leftIdKey = typeof left?.idKey === 'string' ? left.idKey : undefined;
+    const rightIdKey = typeof right?.idKey === 'string' ? right.idKey : undefined;
+    const leftIdValue = typeof left?.idValue === 'string' ? left.idValue : undefined;
+    const rightIdValue = typeof right?.idValue === 'string' ? right.idValue : undefined;
+    if (leftIdKey && rightIdKey && leftIdValue && rightIdValue) {
+      return leftIdKey === rightIdKey && leftIdValue === rightIdValue && left?.fieldKey === right?.fieldKey;
+    }
+
+    return left?.index === right?.index && left?.fieldKey === right?.fieldKey;
+  }),
   resolveTopLevelPartsOrder: jest.fn(() => ['time']),
   mergeTrackerPart: jest.fn(),
   normalizeTrackerCleanupTargets: jest.fn((targets: Array<unknown>) => targets),

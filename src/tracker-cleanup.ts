@@ -1,3 +1,5 @@
+import { getArrayItemIdentityKey } from './tracker-helpers.js';
+
 /** Handles render-safe tracker cleanup targets and pending-redaction metadata. */
 
 export type TrackerCleanupTarget =
@@ -26,12 +28,17 @@ export type TrackerCleanupTarget =
 export interface TrackerPendingRedactions {
   version: 1;
   targets: TrackerCleanupTarget[];
+  schemaPresetKey?: string;
 }
 
-function getArrayItemIdentityKey(schema: any, partKey: string): string {
-  const partDef = schema?.properties?.[partKey];
-  const key = partDef?.['x-ztracker-idKey'];
-  return typeof key === 'string' && key.trim() ? key.trim() : 'name';
+function getTrackerCleanupIdentity(target: TrackerCleanupTarget): { idKey: string; idValue: string } | undefined {
+  if (target.kind === 'part') {
+    return undefined;
+  }
+
+  return typeof target.idKey === 'string' && target.idKey && typeof target.idValue === 'string' && target.idValue
+    ? { idKey: target.idKey, idValue: target.idValue }
+    : undefined;
 }
 
 function getSchemaType(schema: any): string | undefined {
@@ -84,7 +91,20 @@ function buildBlankValueFromSchema(schema: any): unknown {
   }
 }
 
-function isSameTrackerCleanupTarget(left: TrackerCleanupTarget, right: TrackerCleanupTarget): boolean {
+function isSameTrackerCleanupItemTarget(
+  left: Extract<TrackerCleanupTarget, { kind: 'array-item' | 'array-item-field' }>,
+  right: Extract<TrackerCleanupTarget, { kind: 'array-item' | 'array-item-field' }>,
+): boolean {
+  const leftIdentity = getTrackerCleanupIdentity(left);
+  const rightIdentity = getTrackerCleanupIdentity(right);
+  if (leftIdentity && rightIdentity) {
+    return leftIdentity.idKey === rightIdentity.idKey && leftIdentity.idValue === rightIdentity.idValue;
+  }
+
+  return left.index === right.index;
+}
+
+export function isSameTrackerCleanupTarget(left: TrackerCleanupTarget, right: TrackerCleanupTarget): boolean {
   if (left.kind !== right.kind || left.partKey !== right.partKey) {
     return false;
   }
@@ -96,7 +116,7 @@ function isSameTrackerCleanupTarget(left: TrackerCleanupTarget, right: TrackerCl
   const leftIndexed = left as Extract<TrackerCleanupTarget, { kind: 'array-item' | 'array-item-field' }>;
   const rightIndexed = right as Extract<TrackerCleanupTarget, { kind: 'array-item' | 'array-item-field' }>;
 
-  if (leftIndexed.index !== rightIndexed.index) {
+  if (!isSameTrackerCleanupItemTarget(leftIndexed, rightIndexed)) {
     return false;
   }
 
@@ -115,10 +135,18 @@ function isTrackerCleanupAncestor(ancestor: TrackerCleanupTarget, target: Tracke
   }
 
   if (ancestor.kind === 'array-item') {
-    return target.kind === 'array-item-field' && ancestor.partKey === target.partKey && ancestor.index === target.index;
+    return (
+      target.kind === 'array-item-field' &&
+      ancestor.partKey === target.partKey &&
+      isSameTrackerCleanupItemTarget(ancestor, target)
+    );
   }
 
   return false;
+}
+
+function isTrackerCleanupTargetResolved(currentTarget: TrackerCleanupTarget, resolvedTarget: TrackerCleanupTarget): boolean {
+  return isSameTrackerCleanupTarget(currentTarget, resolvedTarget) || isTrackerCleanupAncestor(resolvedTarget, currentTarget);
 }
 
 function applyPartCleanupTarget(nextTracker: any, schema: any, target: Extract<TrackerCleanupTarget, { kind: 'part' }>): void {
@@ -219,8 +247,17 @@ export function getPendingRedactionTargets(value: unknown): TrackerCleanupTarget
   );
 }
 
+/** Reads the persisted schema preset key for pending cleanup targets when present. */
+export function getPendingRedactionSchemaPresetKey(value: unknown): string | undefined {
+  const schemaPresetKey = (value as TrackerPendingRedactions | undefined)?.schemaPresetKey;
+  return typeof schemaPresetKey === 'string' && schemaPresetKey.trim().length > 0 ? schemaPresetKey : undefined;
+}
+
 /** Builds the persisted pending-redaction payload or returns undefined when no targets remain. */
-export function buildPendingRedactions(targets: TrackerCleanupTarget[]): TrackerPendingRedactions | undefined {
+export function buildPendingRedactions(
+  targets: TrackerCleanupTarget[],
+  options?: { schemaPresetKey?: string },
+): TrackerPendingRedactions | undefined {
   const normalized = normalizeTrackerCleanupTargets(targets);
   if (normalized.length === 0) {
     return undefined;
@@ -229,6 +266,9 @@ export function buildPendingRedactions(targets: TrackerCleanupTarget[]): Tracker
   return {
     version: 1,
     targets: normalized,
+    ...(typeof options?.schemaPresetKey === 'string' && options.schemaPresetKey.trim().length > 0
+      ? { schemaPresetKey: options.schemaPresetKey }
+      : {}),
   };
 }
 
@@ -243,10 +283,12 @@ export function removePendingRedactionTargets(
   }
 
   const remainingTargets = currentTargets.filter(
-    (currentTarget) => !resolvedTargets.some((resolvedTarget) => isSameTrackerCleanupTarget(currentTarget, resolvedTarget)),
+    (currentTarget) => !resolvedTargets.some((resolvedTarget) => isTrackerCleanupTargetResolved(currentTarget, resolvedTarget)),
   );
 
-  return buildPendingRedactions(remainingTargets);
+  return buildPendingRedactions(remainingTargets, {
+    schemaPresetKey: getPendingRedactionSchemaPresetKey(value),
+  });
 }
 
 /** Applies render-safe blank values for the selected cleanup targets. */

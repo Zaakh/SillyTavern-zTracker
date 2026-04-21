@@ -19,6 +19,7 @@ import {
   CHAT_METADATA_SCHEMA_PRESET_KEY,
   CHAT_MESSAGE_SCHEMA_HTML_KEY,
   CHAT_MESSAGE_PENDING_REDACTIONS_KEY,
+  CHAT_MESSAGE_SCHEMA_PRESET_KEY,
   CHAT_MESSAGE_SCHEMA_VALUE_KEY,
   CHAT_MESSAGE_PARTS_ORDER_KEY,
   extractLeadingSystemPrompt,
@@ -34,6 +35,7 @@ import {
   findArrayItemIndexByIdentity,
   findArrayItemIndexByName,
   getArrayItemIdentityKey,
+  getPendingRedactionSchemaPresetKey,
   normalizeTrackerCleanupTargets,
   removePendingRedactionTargets,
   resolveTopLevelPartsOrder,
@@ -286,6 +288,7 @@ export function createTrackerActions(options: {
   type PersistTrackerUpdateOptions = {
     messageId: number;
     message: unknown;
+    schemaPresetKey: string;
     trackerData: unknown;
     trackerHtml: string;
     partsOrder: string[];
@@ -294,6 +297,53 @@ export function createTrackerActions(options: {
     successMessage?: string;
     extensionData?: Record<string, unknown>;
   };
+
+  function resolveSchemaPreset(settings: ExtensionSettings, requestedKey?: string) {
+    const presetKeys = Object.keys(settings.schemaPresets ?? {});
+    if (presetKeys.length === 0) {
+      throw new Error('No schema presets are configured.');
+    }
+
+    const fallbackKey = settings.schemaPresets[settings.schemaPreset] ? settings.schemaPreset : presetKeys[0];
+    const schemaPresetKey = requestedKey && settings.schemaPresets[requestedKey] ? requestedKey : fallbackKey;
+    return {
+      schemaPresetKey,
+      schemaPreset: settings.schemaPresets[schemaPresetKey],
+    };
+  }
+
+  function getMessageSchemaPresetKey(message: any): string | undefined {
+    const messageSchemaPresetKey = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_PRESET_KEY];
+    if (typeof messageSchemaPresetKey === 'string' && messageSchemaPresetKey.trim().length > 0) {
+      return messageSchemaPresetKey;
+    }
+
+    return getPendingRedactionSchemaPresetKey(message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PENDING_REDACTIONS_KEY]);
+  }
+
+  function buildPendingRedactionExtensionData(
+    message: any,
+    options: {
+      clearAll?: boolean;
+      nextPending?: unknown;
+      resolvedTargets?: TrackerCleanupTarget[];
+    } = {},
+  ): Record<string, unknown> {
+    const hasExplicitNextPending = Object.prototype.hasOwnProperty.call(options, 'nextPending');
+    let pendingRedactions = hasExplicitNextPending
+      ? options.nextPending
+      : message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PENDING_REDACTIONS_KEY];
+
+    if (options.clearAll) {
+      pendingRedactions = undefined;
+    } else if (!hasExplicitNextPending && options.resolvedTargets) {
+      pendingRedactions = removePendingRedactionTargets(pendingRedactions, options.resolvedTargets);
+    }
+
+    return {
+      [CHAT_MESSAGE_PENDING_REDACTIONS_KEY]: pendingRedactions,
+    };
+  }
 
   /** Shows the full-tracker badge only when the caller explicitly opts into that manual UI. */
   const runWithFullTrackerStatusIndicator = <T>(
@@ -319,6 +369,7 @@ export function createTrackerActions(options: {
         trackerData: options.trackerData,
         trackerHtml: options.trackerHtml,
         extensionData: {
+          [CHAT_MESSAGE_SCHEMA_PRESET_KEY]: options.schemaPresetKey,
           [CHAT_MESSAGE_PARTS_ORDER_KEY]: options.partsOrder,
           partsMeta: options.partsMeta,
           ...(options.extensionData ?? {}),
@@ -374,10 +425,10 @@ export function createTrackerActions(options: {
     }
 
     const settings = settingsManager.getSettings();
+    const { schemaPresetKey, schemaPreset } = resolveSchemaPreset(settings, getMessageSchemaPresetKey(message));
     const currentTracker = message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_VALUE_KEY];
-    const chatJsonValue = settings.schemaPresets[settings.schemaPreset].value;
-    const trackerHtml =
-      message.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_HTML_KEY] ?? settings.schemaPresets[settings.schemaPreset].html;
+    const chatJsonValue = schemaPreset.value;
+    const trackerHtml = message.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_HTML_KEY] ?? schemaPreset.html;
     const partsOrder =
       message.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PARTS_ORDER_KEY] ?? resolveTopLevelPartsOrder(chatJsonValue);
     const partsMeta = buildPartsMeta(chatJsonValue);
@@ -385,6 +436,7 @@ export function createTrackerActions(options: {
 
     return {
       message,
+      schemaPresetKey,
       currentTracker,
       chatJsonValue,
       trackerHtml,
@@ -643,7 +695,7 @@ export function createTrackerActions(options: {
     };
   }
 
-  async function prepareTrackerGeneration(messageId: number) {
+  async function prepareTrackerGeneration(messageId: number, options?: { schemaPresetKey?: string }) {
     const message = globalContext.chat[messageId];
     if (!message) {
       throw new Error(`Message with ID ${messageId} not found.`);
@@ -662,8 +714,9 @@ export function createTrackerActions(options: {
     chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] =
       chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] || settings.schemaPreset;
 
-    const chatJsonValue = settings.schemaPresets[settings.schemaPreset].value;
-    const chatHtmlValue = settings.schemaPresets[settings.schemaPreset].html;
+    const { schemaPresetKey, schemaPreset } = resolveSchemaPreset(settings, options?.schemaPresetKey ?? settings.schemaPreset);
+    const chatJsonValue = schemaPreset.value;
+    const chatHtmlValue = schemaPreset.html;
 
     const profile = extensionSettings.connectionManager?.profiles?.find((p: any) => p.id === settings.profileId);
     if (!profile) {
@@ -780,6 +833,7 @@ export function createTrackerActions(options: {
     return {
       message,
       settings,
+      schemaPresetKey,
       chatJsonValue,
       chatHtmlValue,
       messages,
@@ -884,7 +938,7 @@ export function createTrackerActions(options: {
       regenerateButton?.classList.add('spinning');
 
       return await runWithFullTrackerStatusIndicator(id, options, async () => {
-        const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
+        const { message, settings, schemaPresetKey, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
         if (token.cancelled) {
           return false;
         }
@@ -916,11 +970,13 @@ export function createTrackerActions(options: {
         await persistTrackerUpdate({
           messageId: id,
           message,
+          schemaPresetKey,
           trackerData: response,
           trackerHtml: chatHtmlValue,
           partsOrder,
           partsMeta,
           detailsState,
+          extensionData: buildPendingRedactionExtensionData(message, { clearAll: true }),
         });
         return true;
       });
@@ -952,7 +1008,7 @@ export function createTrackerActions(options: {
       regenerateButton?.classList.add('spinning');
 
       return await runWithFullTrackerStatusIndicator(id, options, async () => {
-        const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
+        const { message, settings, schemaPresetKey, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
         if (token.cancelled) {
           return false;
         }
@@ -1015,11 +1071,13 @@ export function createTrackerActions(options: {
         await persistTrackerUpdate({
           messageId: id,
           message,
+          schemaPresetKey,
           trackerData,
           trackerHtml: chatHtmlValue,
           partsOrder,
           partsMeta,
           detailsState,
+          extensionData: buildPendingRedactionExtensionData(message, { clearAll: true }),
         });
         return true;
       });
@@ -1051,7 +1109,9 @@ export function createTrackerActions(options: {
       button: partButton,
       errorContext: 'generating tracker part',
       callback: async () => {
-          const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
+          const { schemaPresetKey: messageSchemaPresetKey } = getTrackerSchemaAndRenderState(id);
+          const { message, settings, schemaPresetKey, chatJsonValue, chatHtmlValue, messages, transportInstructName } =
+            await prepareTrackerGeneration(id, { schemaPresetKey: messageSchemaPresetKey });
 
           const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
           if (!currentTracker || typeof currentTracker !== 'object') {
@@ -1090,21 +1150,19 @@ export function createTrackerActions(options: {
           }
 
           const nextTracker = mergeTrackerPart(currentTracker, partKey, partResponse);
-          const nextPending = removePendingRedactionTargets(
-            message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PENDING_REDACTIONS_KEY],
-            [{ kind: 'part', partKey }],
-          );
-
           await persistTrackerUpdate({
             messageId: id,
             message,
+            schemaPresetKey,
             trackerData: nextTracker,
             trackerHtml: chatHtmlValue,
             partsOrder,
             partsMeta,
             detailsState,
             successMessage: `Updated: ${partKey}`,
-            extensionData: { [CHAT_MESSAGE_PENDING_REDACTIONS_KEY]: nextPending },
+            extensionData: buildPendingRedactionExtensionData(message, {
+              resolvedTargets: [{ kind: 'part', partKey }],
+            }),
           });
         },
     });
@@ -1125,7 +1183,9 @@ export function createTrackerActions(options: {
       button: itemButton,
       errorContext: 'generating tracker array item',
       callback: async () => {
-          const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
+          const { schemaPresetKey: messageSchemaPresetKey } = getTrackerSchemaAndRenderState(id);
+          const { message, settings, schemaPresetKey, chatJsonValue, chatHtmlValue, messages, transportInstructName } =
+            await prepareTrackerGeneration(id, { schemaPresetKey: messageSchemaPresetKey });
           const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
           if (!currentTracker || typeof currentTracker !== 'object') {
             throw new Error('No existing tracker found for this message. Generate a full tracker first.');
@@ -1183,21 +1243,19 @@ export function createTrackerActions(options: {
           }
 
           const nextTracker = replaceTrackerArrayItem(currentTracker, partKey, index, item);
-          const nextPending = removePendingRedactionTargets(
-            message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PENDING_REDACTIONS_KEY],
-            [{ kind: 'array-item', partKey, index }],
-          );
-
           await persistTrackerUpdate({
             messageId: id,
             message,
+            schemaPresetKey,
             trackerData: nextTracker,
             trackerHtml: chatHtmlValue,
             partsOrder,
             partsMeta,
             detailsState,
             successMessage: `Updated: ${partKey}[${index}]`,
-            extensionData: { [CHAT_MESSAGE_PENDING_REDACTIONS_KEY]: nextPending },
+            extensionData: buildPendingRedactionExtensionData(message, {
+              resolvedTargets: [{ kind: 'array-item', partKey, index, ...(idKey && idValue ? { idKey, idValue } : {}) }],
+            }),
           });
         },
     });
@@ -1218,7 +1276,9 @@ export function createTrackerActions(options: {
       button: itemButton,
       errorContext: 'generating tracker array item (by name)',
       callback: async () => {
-          const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
+          const { schemaPresetKey: messageSchemaPresetKey } = getTrackerSchemaAndRenderState(id);
+          const { message, settings, schemaPresetKey, chatJsonValue, chatHtmlValue, messages, transportInstructName } =
+            await prepareTrackerGeneration(id, { schemaPresetKey: messageSchemaPresetKey });
           const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
           if (!currentTracker || typeof currentTracker !== 'object') {
             throw new Error('No existing tracker found for this message. Generate a full tracker first.');
@@ -1290,21 +1350,19 @@ export function createTrackerActions(options: {
           }
 
           const nextTracker = replaceTrackerArrayItem(currentTracker, partKey, index, item);
-          const nextPending = removePendingRedactionTargets(
-            message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PENDING_REDACTIONS_KEY],
-            [{ kind: 'array-item', partKey, index }],
-          );
-
           await persistTrackerUpdate({
             messageId: id,
             message,
+            schemaPresetKey,
             trackerData: nextTracker,
             trackerHtml: chatHtmlValue,
             partsOrder,
             partsMeta,
             detailsState,
             successMessage: `Updated: ${partKey} (${name})`,
-            extensionData: { [CHAT_MESSAGE_PENDING_REDACTIONS_KEY]: nextPending },
+            extensionData: buildPendingRedactionExtensionData(message, {
+              resolvedTargets: [{ kind: 'array-item', partKey, index, idKey: 'name', idValue: name }],
+            }),
           });
         },
     });
@@ -1325,7 +1383,9 @@ export function createTrackerActions(options: {
       button: itemButton,
       errorContext: 'generating tracker array item (by identity)',
       callback: async () => {
-          const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
+          const { schemaPresetKey: messageSchemaPresetKey } = getTrackerSchemaAndRenderState(id);
+          const { message, settings, schemaPresetKey, chatJsonValue, chatHtmlValue, messages, transportInstructName } =
+            await prepareTrackerGeneration(id, { schemaPresetKey: messageSchemaPresetKey });
           const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
           if (!currentTracker || typeof currentTracker !== 'object') {
             throw new Error('No existing tracker found for this message. Generate a full tracker first.');
@@ -1397,21 +1457,19 @@ export function createTrackerActions(options: {
           }
 
           const nextTracker = replaceTrackerArrayItem(currentTracker, partKey, index, item);
-          const nextPending = removePendingRedactionTargets(
-            message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PENDING_REDACTIONS_KEY],
-            [{ kind: 'array-item', partKey, index }],
-          );
-
           await persistTrackerUpdate({
             messageId: id,
             message,
+            schemaPresetKey,
             trackerData: nextTracker,
             trackerHtml: chatHtmlValue,
             partsOrder,
             partsMeta,
             detailsState,
             successMessage: `Updated: ${partKey} (${idKey}=${idValue})`,
-            extensionData: { [CHAT_MESSAGE_PENDING_REDACTIONS_KEY]: nextPending },
+            extensionData: buildPendingRedactionExtensionData(message, {
+              resolvedTargets: [{ kind: 'array-item', partKey, index, idKey, idValue }],
+            }),
           });
         },
     });
@@ -1432,7 +1490,9 @@ export function createTrackerActions(options: {
       button: fieldButton,
       errorContext: 'generating tracker array item field',
       callback: async () => {
-          const { message, settings, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
+          const { schemaPresetKey: messageSchemaPresetKey } = getTrackerSchemaAndRenderState(id);
+          const { message, settings, schemaPresetKey, chatJsonValue, chatHtmlValue, messages, transportInstructName } =
+            await prepareTrackerGeneration(id, { schemaPresetKey: messageSchemaPresetKey });
           const currentTracker = message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
           if (!currentTracker || typeof currentTracker !== 'object') {
             throw new Error('No existing tracker found for this message. Generate a full tracker first.');
@@ -1505,21 +1565,19 @@ export function createTrackerActions(options: {
           }
 
           const nextTracker = replaceTrackerArrayItemField(currentTracker, partKey, index, fieldKey, value);
-          const nextPending = removePendingRedactionTargets(
-            message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PENDING_REDACTIONS_KEY],
-            [{ kind: 'array-item-field', partKey, index, fieldKey }],
-          );
-
           await persistTrackerUpdate({
             messageId: id,
             message,
+            schemaPresetKey,
             trackerData: nextTracker,
             trackerHtml: chatHtmlValue,
             partsOrder,
             partsMeta,
             detailsState,
             successMessage: `Updated: ${partKey}[${index}].${fieldKey}`,
-            extensionData: { [CHAT_MESSAGE_PENDING_REDACTIONS_KEY]: nextPending },
+            extensionData: buildPendingRedactionExtensionData(message, {
+              resolvedTargets: [{ kind: 'array-item-field', partKey, index, fieldKey, ...(idKey && idValue ? { idKey, idValue } : {}) }],
+            }),
           });
         },
     });
@@ -1582,22 +1640,23 @@ export function createTrackerActions(options: {
       return [];
     }
 
-    const { message, currentTracker, chatJsonValue, trackerHtml, partsOrder, partsMeta, pendingTargets } =
+    const { message, schemaPresetKey, currentTracker, chatJsonValue, trackerHtml, partsOrder, partsMeta, pendingTargets } =
       getTrackerSchemaAndRenderState(messageId);
     const detailsState = captureDetailsState(messageId);
     const nextTracker = clearTrackerCleanupTargets(currentTracker, chatJsonValue, normalizedTargets);
-    const nextPending = buildPendingRedactions([...pendingTargets, ...normalizedTargets]);
+    const nextPending = buildPendingRedactions([...pendingTargets, ...normalizedTargets], { schemaPresetKey });
 
     await persistTrackerUpdate({
       messageId,
       message,
+      schemaPresetKey,
       trackerData: nextTracker,
       trackerHtml,
       partsOrder,
       partsMeta,
       detailsState,
       successMessage: `Cleared ${normalizedTargets.length} tracker ${normalizedTargets.length === 1 ? 'target' : 'targets'}.`,
-      extensionData: { [CHAT_MESSAGE_PENDING_REDACTIONS_KEY]: nextPending },
+      extensionData: buildPendingRedactionExtensionData(message, { nextPending }),
     });
 
     return normalizedTargets;
@@ -1608,7 +1667,13 @@ export function createTrackerActions(options: {
       return !!(await generateTrackerPart(messageId, target.partKey));
     }
     if (target.kind === 'array-item') {
+      if (typeof target.idKey === 'string' && target.idKey && typeof target.idValue === 'string' && target.idValue) {
+        return !!(await generateTrackerArrayItemByIdentity(messageId, target.partKey, target.idKey, target.idValue));
+      }
       return !!(await generateTrackerArrayItem(messageId, target.partKey, target.index));
+    }
+    if (typeof target.idKey === 'string' && target.idKey && typeof target.idValue === 'string' && target.idValue) {
+      return !!(await generateTrackerArrayItemFieldByIdentity(messageId, target.partKey, target.idKey, target.idValue, target.fieldKey));
     }
     return !!(await generateTrackerArrayItemField(messageId, target.partKey, target.index, target.fieldKey));
   }

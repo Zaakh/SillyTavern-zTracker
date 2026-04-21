@@ -151,9 +151,117 @@ describe('createTrackerActions cleanup flow', () => {
       expect.any(Object),
       expect.objectContaining({
         extensionData: expect.objectContaining({
+          schemaPreset: 'default',
           pendingRedactions: undefined,
         }),
       }),
     );
+  });
+
+  test('clears all pending metadata after successful full tracker regeneration', async () => {
+    document.body.innerHTML = '<div id="extensionsMenu"></div><div class="mes" mesid="0"><div class="mes_ztracker_button"></div><div class="ztracker-regenerate-button"></div><div class="mes_text"></div></div>';
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [
+          {
+            original_avatar: 'avatar.png',
+            extra: {
+              zTracker: {
+                schemaValue: { time: '09:00:00' },
+                schemaHtml: '<div></div>',
+                pendingRedactions: { version: 1, targets: [{ kind: 'part', partKey: 'time' }] },
+              },
+            },
+          },
+        ],
+        saveChat: async () => undefined,
+        extensionSettings: { connectionManager: { profiles: [makeProfile()] } },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: { getSettings: () => makeSettings() } as any,
+      generator: { generateRequest: jest.fn((_request, hooks) => {
+        hooks.onStart('request-1');
+        hooks.onFinish('request-1', { content: { time: '10:00:00' } }, null);
+      }), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0);
+
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        extensionData: expect.objectContaining({
+          schemaPreset: 'default',
+          pendingRedactions: undefined,
+        }),
+      }),
+    );
+  });
+
+  test('uses the message schema preset for targeted regeneration instead of the currently selected preset', async () => {
+    document.body.innerHTML = `
+      <div id="extensionsMenu"></div>
+      <div class="mes" mesid="0">
+        <div class="mes_text">Message 0</div>
+        <div class="ztracker-part-regenerate-button" data-ztracker-part="time"></div>
+      </div>
+    `;
+
+    const generateRequest = jest.fn((_request, hooks) => {
+      hooks.onStart('request-1');
+      hooks.onFinish('request-1', { content: { time: '10:00:00' } }, null);
+    });
+
+    const defaultSchema = {
+      type: 'object',
+      properties: { time: { type: 'string' } },
+      required: ['time'],
+    };
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [
+          {
+            original_avatar: 'avatar.png',
+            extra: {
+              zTracker: {
+                schemaPreset: 'default',
+                schemaValue: { time: '09:00:00' },
+                schemaHtml: '<div></div>',
+              },
+            },
+          },
+        ],
+        saveChat: async () => undefined,
+        extensionSettings: { connectionManager: { profiles: [makeProfile()] } },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () =>
+          makeSettings({
+            schemaPreset: 'alternate',
+            schemaPresets: {
+              default: { name: 'Default', value: defaultSchema, html: '<div></div>' },
+              alternate: {
+                name: 'Alternate',
+                value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
+                html: '<div></div>',
+              },
+            },
+          }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTrackerPart(0, 'time');
+
+    expect(trackerPartsModule.buildTopLevelPartSchema).toHaveBeenCalledWith(defaultSchema, 'time');
   });
 });
