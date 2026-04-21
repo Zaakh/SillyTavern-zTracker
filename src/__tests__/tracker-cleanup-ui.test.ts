@@ -1,4 +1,4 @@
-import { buildCleanupPopupRows } from '../ui/tracker-cleanup.js';
+import { buildCleanupPopupRows } from '../ui/tracker-cleanup-ui.js';
 
 describe('tracker cleanup UI', () => {
   it('does not surface schema required metadata as a cleanup target', () => {

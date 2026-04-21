@@ -67,7 +67,7 @@ import {
   buildCleanupPopupRows,
   getCurrentPendingRedactions,
   sortCleanupTargets,
-} from './tracker-cleanup.js';
+} from './tracker-cleanup-ui.js';
 
 interface TextCompletionStoryStringFormatter {
   renderStoryString: (
