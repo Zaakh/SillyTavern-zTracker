@@ -60,6 +60,33 @@ describe('schemaToExample', () => {
     expect(result).toContain('description: Title text');
   });
 
+  it('renders JSON prompt schema from the normalized schema shape while preserving required fields', () => {
+    const result = JSON.parse(
+      schemaToPromptSchema(
+        {
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: 'Title text' },
+          },
+          required: ['title'],
+          additionalProperties: false,
+          example: { title: 'ignored example' },
+        },
+        'json',
+      ),
+    );
+
+    expect(result).toEqual({
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Title text' },
+      },
+      required: ['title'],
+    });
+    expect(result).not.toHaveProperty('additionalProperties');
+    expect(result).not.toHaveProperty('example');
+  });
+
   it('produces TOON samples for deeply nested schemas', () => {
     const nestedSchema = {
       type: 'object',

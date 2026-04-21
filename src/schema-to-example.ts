@@ -101,7 +101,7 @@ export function schemaToPromptSchema(schema: any, format: StructuredFormat): str
     return encode(promptSchema, { delimiter: '\t' });
   }
 
-  return JSON.stringify(schema, null, 2);
+  return JSON.stringify(promptSchema, null, 2);
 }
 
 export function schemaToExample(schema: any, format: StructuredFormat): string {
