@@ -1,4 +1,5 @@
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
+import { repairCorruptedRequiredMetadata } from './schema-repair.js';
 export { extensionName, EXTENSION_KEY } from './extension-metadata.js';
 
 export enum PromptEngineeringMode {
@@ -329,6 +330,28 @@ export function migrateLegacyPromptTemplates(settings: Pick<ExtensionSettings, '
   const promptToon = (settings.promptToon ?? '').trim();
   if (promptToon === LEGACY_PROMPT_TOON.trim() || promptToon === PREVIOUS_DEFAULT_PROMPT_TOON.trim()) {
     settings.promptToon = DEFAULT_PROMPT_TOON;
+    changed = true;
+  }
+
+  return changed;
+}
+
+/** Repairs malformed saved schema presets whose `required` arrays were moved into `properties.required`. */
+export function migrateCorruptedSchemaPresetRequiredMetadata(settings: Pick<ExtensionSettings, 'schemaPresets'>): boolean {
+  let changed = false;
+
+  for (const [key, preset] of Object.entries(settings.schemaPresets ?? {})) {
+    const repairedValue = repairCorruptedRequiredMetadata(preset.value);
+    const originalSerialized = JSON.stringify(preset.value);
+    const repairedSerialized = JSON.stringify(repairedValue);
+    if (originalSerialized === repairedSerialized) {
+      continue;
+    }
+
+    settings.schemaPresets[key] = {
+      ...preset,
+      value: repairedValue as object,
+    };
     changed = true;
   }
 

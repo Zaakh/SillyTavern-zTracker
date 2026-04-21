@@ -118,6 +118,41 @@ describe('schemaToExample', () => {
     expect(result.meta).not.toHaveProperty('required');
   });
 
+  it('repairs misplaced properties.required arrays before rendering schema and example blocks', () => {
+    const corruptedSchema = {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Title text' },
+        required: ['title', 'meta'],
+        meta: {
+          type: 'object',
+          properties: {
+            count: { type: 'number' },
+            required: { 0: 'count' },
+          },
+          required: [],
+        },
+      },
+      required: [],
+    };
+
+    const promptSchema = JSON.parse(schemaToPromptSchema(corruptedSchema, 'json'));
+    const example = JSON.parse(schemaToExample(corruptedSchema, 'json'));
+
+    expect(promptSchema.required).toEqual(['title', 'meta']);
+    expect(promptSchema.properties).not.toHaveProperty('required');
+    expect(promptSchema.properties.meta.required).toEqual(['count']);
+    expect(promptSchema.properties.meta.properties).not.toHaveProperty('required');
+
+    expect(example).toEqual({
+      title: 'Title text',
+      meta: {
+        count: 0,
+      },
+    });
+    expect(example).not.toHaveProperty('required');
+  });
+
   it('produces TOON samples for deeply nested schemas', () => {
     const nestedSchema = {
       type: 'object',

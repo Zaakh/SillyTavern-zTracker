@@ -4,7 +4,7 @@ import { settingsManager, ZTrackerSettings } from './components/Settings.js';
 import Handlebars from 'handlebars';
 import { Generator } from 'sillytavern-utils-lib';
 import { st_echo } from 'sillytavern-utils-lib/config';
-import { migrateLegacyAutoMode, migrateLegacyPromptTemplates } from './config.js';
+import { migrateCorruptedSchemaPresetRequiredMetadata, migrateLegacyAutoMode, migrateLegacyPromptTemplates } from './config.js';
 import { createTrackerActions } from './ui/tracker-actions.js';
 import { initializeGlobalUI } from './ui/ui-init.js';
 import { ensureZTrackerSystemPromptPresetInstalled } from './system-prompt.js';
@@ -60,6 +60,7 @@ async function main() {
   const didMigrateLegacySettings = [
     migrateLegacyAutoMode(settings),
     migrateLegacyPromptTemplates(settings),
+    migrateCorruptedSchemaPresetRequiredMetadata(settings),
   ].some(Boolean);
 
   if (didMigrateLegacySettings) {

@@ -1,4 +1,5 @@
 import { encode } from '@toon-format/toon';
+import { repairCorruptedRequiredMetadata } from './schema-repair.js';
 
 export type StructuredFormat = 'json' | 'xml' | 'toon';
 
@@ -91,7 +92,7 @@ function normalizeSchemaForPrompt(schema: any): any {
 }
 
 export function schemaToPromptSchema(schema: any, format: StructuredFormat): string {
-  const promptSchema = normalizeSchemaForPrompt(schema);
+  const promptSchema = normalizeSchemaForPrompt(repairCorruptedRequiredMetadata(schema));
 
   if (format === 'xml') {
     return objectToXml(promptSchema).trim();
@@ -105,7 +106,7 @@ export function schemaToPromptSchema(schema: any, format: StructuredFormat): str
 }
 
 export function schemaToExample(schema: any, format: StructuredFormat): string {
-  const example = generateExample(schema);
+  const example = generateExample(repairCorruptedRequiredMetadata(schema));
   if (format === 'xml') {
     return objectToXml(example).trim();
   }

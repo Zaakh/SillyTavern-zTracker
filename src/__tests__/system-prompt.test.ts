@@ -19,6 +19,7 @@ import {
   PREVIOUS_DEFAULT_PROMPT_TOON,
   DEFAULT_PROMPT_XML,
   PREVIOUS_DEFAULT_PROMPT_XML,
+  migrateCorruptedSchemaPresetRequiredMetadata,
   migrateLegacyAutoMode,
   migrateLegacyPromptTemplates,
 } from '../config.js';
@@ -299,6 +300,30 @@ describe('system prompt helpers', () => {
     expect(migrateLegacyAutoMode(settings as any)).toBe(true);
     expect(settings.autoMode).toBe(AutoModeOptions.INPUT);
     expect(migrateLegacyAutoMode(settings as any)).toBe(false);
+  });
+
+  test('repairs corrupted schema presets that stored required arrays under properties.required', () => {
+    const settings = {
+      schemaPresets: {
+        default: {
+          name: 'Default',
+          value: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              required: ['title'],
+            },
+            required: [],
+          },
+          html: '<div></div>',
+        },
+      },
+    } as any;
+
+    expect(migrateCorruptedSchemaPresetRequiredMetadata(settings)).toBe(true);
+    expect(settings.schemaPresets.default.value.required).toEqual(['title']);
+    expect(settings.schemaPresets.default.value.properties.required).toBeUndefined();
+    expect(migrateCorruptedSchemaPresetRequiredMetadata(settings)).toBe(false);
   });
 
   test('ships a TOON prompt that explicitly forbids JSON-like output and wrapper objects', () => {
