@@ -24,7 +24,11 @@ describe('tracker cleanup UI', () => {
         required: ['characters'],
       },
       partsOrder: ['characters'],
-      partsMeta: {},
+      partsMeta: {
+        characters: {
+          fields: ['required', 'outfit'],
+        },
+      },
       pendingTargets: [],
     });
 

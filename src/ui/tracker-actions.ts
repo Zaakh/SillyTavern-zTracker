@@ -380,7 +380,7 @@ export function createTrackerActions(options: {
       message.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_HTML_KEY] ?? settings.schemaPresets[settings.schemaPreset].html;
     const partsOrder =
       message.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PARTS_ORDER_KEY] ?? resolveTopLevelPartsOrder(chatJsonValue);
-    const partsMeta = message.extra?.[EXTENSION_KEY]?.partsMeta ?? buildPartsMeta(chatJsonValue);
+    const partsMeta = buildPartsMeta(chatJsonValue);
     const pendingTargets = getCurrentPendingRedactions(message);
 
     return {

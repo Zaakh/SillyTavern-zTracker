@@ -80,12 +80,19 @@ export function buildCleanupPopupRows(options: {
     }
 
     const idKey = getArrayItemIdentityKey(options.schema, partKey);
-    const fieldKeysFromMeta: string[] = Array.isArray(options.partsMeta?.[partKey]?.fields)
-      ? options.partsMeta[partKey].fields
-      : [];
     const schemaFieldKeys = Object.keys(options.schema?.properties?.[partKey]?.items?.properties ?? {}).filter(
       (fieldKey) => fieldKey !== 'name' && fieldKey !== idKey,
     );
+    const fieldKeysFromMeta: string[] = Array.isArray(options.partsMeta?.[partKey]?.fields)
+      ? options.partsMeta[partKey].fields.filter(
+          (fieldKey: unknown): fieldKey is string =>
+            typeof fieldKey === 'string' &&
+            fieldKey.trim().length > 0 &&
+            fieldKey !== 'name' &&
+            fieldKey !== idKey &&
+            (schemaFieldKeys.length === 0 || schemaFieldKeys.includes(fieldKey)),
+        )
+      : [];
 
     items.forEach((item: unknown, index: number) => {
       const itemKey = `${partKey}:${index}`;
