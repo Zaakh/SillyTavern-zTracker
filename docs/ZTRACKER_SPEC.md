@@ -5,7 +5,7 @@ Date: 2026-01-21
 This is the umbrella overview for the zTracker fork. Detailed “living” specs live under `docs/specs/`.
 
 ## Specs index
-See: [specs/README.md](specs/README.md)
+See: [specs/specs-index.md](specs/specs-index.md)
 
 ## Goals
 - Rename the extension to **zTracker** (user-facing + internal keys).
