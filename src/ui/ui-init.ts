@@ -116,6 +116,9 @@ function installTrackerActionClickHandler(options: {
 
     if (target.classList.contains('mes_ztracker_button')) {
       actions.generateTracker(messageId, { showStatusIndicator: true });
+    } else if (target.classList.contains('ztracker-cleanup-button') && 'openTrackerCleanup' in actions) {
+      // @ts-ignore - optional capability depending on build/version.
+      actions.openTrackerCleanup(messageId);
     } else if (target.classList.contains('ztracker-edit-button')) {
       actions.editTracker(messageId);
     } else if (target.classList.contains('ztracker-regenerate-button')) {

@@ -1,14 +1,19 @@
 import {
+  buildPendingRedactions,
   buildArrayItemFieldSchema,
   buildArrayItemSchema,
   buildTopLevelPartSchema,
+  clearTrackerCleanupTargets,
   findArrayItemIndexByIdentity,
   findArrayItemIndexByName,
   getArrayItemIdentityKey,
+  getPendingRedactionTargets,
   getTopLevelSchemaKeys,
   mergeTrackerPart,
+  normalizeTrackerCleanupTargets,
   redactTrackerArrayItemValue,
   redactTrackerPartValue,
+  removePendingRedactionTargets,
   replaceTrackerArrayItem,
   replaceTrackerArrayItemField,
   redactTrackerArrayItemFieldValue,
@@ -189,5 +194,68 @@ describe('tracker parts helpers', () => {
     expect(findArrayItemIndexByIdentity(arr as any, 'id', 'B2')).toBe(1);
     expect(findArrayItemIndexByIdentity(arr as any, 'id', 'a1')).toBe(0);
     expect(findArrayItemIndexByIdentity(arr as any, 'id', 'Missing')).toBe(-1);
+  });
+
+  it('drops descendant cleanup targets when a parent target is selected', () => {
+    const normalized = normalizeTrackerCleanupTargets([
+      { kind: 'array-item-field', partKey: 'characters', index: 0, fieldKey: 'outfit' },
+      { kind: 'part', partKey: 'characters' },
+      { kind: 'array-item', partKey: 'characters', index: 0 },
+    ]);
+
+    expect(normalized).toEqual([{ kind: 'part', partKey: 'characters' }]);
+  });
+
+  it('clears selected cleanup targets with render-safe placeholder values', () => {
+    const tracker = {
+      time: '09:00',
+      characters: [{ name: 'Alice', outfit: 'dress', status: 'happy' }],
+    };
+    const cleanupSchema = {
+      type: 'object',
+      properties: {
+        time: { type: 'string' },
+        characters: {
+          type: 'array',
+          'x-ztracker-idKey': 'name',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              outfit: { type: 'string' },
+              status: { type: 'string' },
+            },
+          },
+        },
+      },
+    };
+
+    const cleared = clearTrackerCleanupTargets(tracker, cleanupSchema, [
+      { kind: 'part', partKey: 'time' },
+      { kind: 'array-item', partKey: 'characters', index: 0 },
+    ]);
+
+    expect(cleared).toEqual({
+      time: '',
+      characters: [{ name: 'Alice', outfit: '', status: '' }],
+    });
+  });
+
+  it('stores and removes pending cleanup targets by exact target identity', () => {
+    const pending = buildPendingRedactions([
+      { kind: 'part', partKey: 'time' },
+      { kind: 'array-item-field', partKey: 'characters', index: 0, fieldKey: 'outfit', displayLabel: 'Alice' },
+    ]);
+
+    expect(getPendingRedactionTargets(pending)).toHaveLength(2);
+
+    const remaining = removePendingRedactionTargets(pending, [
+      { kind: 'array-item-field', partKey: 'characters', index: 0, fieldKey: 'outfit' },
+    ]);
+
+    expect(remaining).toEqual({
+      version: 1,
+      targets: [{ kind: 'part', partKey: 'time' }],
+    });
   });
 });

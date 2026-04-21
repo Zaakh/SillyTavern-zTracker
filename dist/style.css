@@ -69,6 +69,22 @@
   white-space: normal;
 }
 
+.ztracker-pending-redactions-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 196, 0, 0.24);
+  background: rgba(255, 196, 0, 0.12);
+  color: var(--text_color);
+  font-size: 0.86em;
+  line-height: 1.2;
+  width: fit-content;
+  max-width: 100%;
+}
+
 /*
  * Parts menu styles must apply even when the menu is portaled to <body>
  * (to avoid being clipped by chat/message overflow).
@@ -183,6 +199,14 @@
   background: var(--ztracker-menu-hover-bg, rgba(255, 255, 255, 0.1));
 }
 
+.ztracker-part-regenerate-button.is-pending-redaction,
+.ztracker-array-item-regenerate-button.is-pending-redaction,
+.ztracker-array-item-field-regenerate-button.is-pending-redaction {
+  border-color: rgba(255, 196, 0, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(255, 196, 0, 0.18);
+  opacity: 1;
+}
+
 .mes_ztracker {
   position: relative;
   z-index: 50;
@@ -197,6 +221,7 @@
   z-index: 5000;
 }
 .mes_ztracker .ztracker-controls .ztracker-regenerate-button,
+.mes_ztracker .ztracker-controls .ztracker-cleanup-button,
 .mes_ztracker .ztracker-controls .ztracker-edit-button,
 .mes_ztracker .ztracker-controls .ztracker-delete-button,
 .mes_ztracker .ztracker-controls .ztracker-parts-summary {
@@ -212,6 +237,7 @@
   transition: opacity 0.2s ease-in-out;
 }
 .mes_ztracker .ztracker-controls .ztracker-regenerate-button:hover,
+.mes_ztracker .ztracker-controls .ztracker-cleanup-button:hover,
 .mes_ztracker .ztracker-controls .ztracker-edit-button:hover,
 .mes_ztracker .ztracker-controls .ztracker-delete-button:hover,
 .mes_ztracker .ztracker-controls .ztracker-parts-summary:hover {

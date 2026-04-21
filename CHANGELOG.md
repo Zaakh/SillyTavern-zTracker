@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Added a tracker cleanup flow that lets you clear selected parts, array items, or item fields before optionally recreating them in one pass, with pending markers so partially cleared targets stay visible and retryable.
+
 ## [1.8.0] - 2026-04-17
 
 ### Added

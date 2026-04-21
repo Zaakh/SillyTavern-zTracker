@@ -27,6 +27,7 @@ These are “living” per-change specs. Each spec tracks its current status and
 - [21-per-character-auto-mode-exclusion.md](21-per-character-auto-mode-exclusion.md)
 - [22-instruct-template-in-tracker-generation.md](22-instruct-template-in-tracker-generation.md)
 - [23-context-menu-generation-indicator.md](23-context-menu-generation-indicator.md)
+- [24-partial-tracker-data-deletion.md](24-partial-tracker-data-deletion.md)
 
 ## Status workflow
 - **Open**: not implemented yet; questions unresolved.

@@ -18,6 +18,7 @@ import {
   applyTrackerUpdateAndRender,
   CHAT_METADATA_SCHEMA_PRESET_KEY,
   CHAT_MESSAGE_SCHEMA_HTML_KEY,
+  CHAT_MESSAGE_PENDING_REDACTIONS_KEY,
   CHAT_MESSAGE_SCHEMA_VALUE_KEY,
   CHAT_MESSAGE_PARTS_ORDER_KEY,
   extractLeadingSystemPrompt,
@@ -28,9 +29,13 @@ import {
   buildArrayItemFieldSchema,
   buildArrayItemSchema,
   buildTopLevelPartSchema,
+  buildPendingRedactions,
+  clearTrackerCleanupTargets,
   findArrayItemIndexByIdentity,
   findArrayItemIndexByName,
   getArrayItemIdentityKey,
+  normalizeTrackerCleanupTargets,
+  removePendingRedactionTargets,
   resolveTopLevelPartsOrder,
   mergeTrackerPart,
   redactTrackerArrayItemValue,
@@ -38,6 +43,7 @@ import {
   replaceTrackerArrayItem,
   replaceTrackerArrayItemField,
   redactTrackerArrayItemFieldValue,
+  type TrackerCleanupTarget,
 } from '../tracker-parts.js';
 import { createPromptEngineeringHelpers } from './prompt-engineering.js';
 import { checkTemplateUrl, getExtensionRoot, getTemplateUrl } from './templates.js';
@@ -55,6 +61,13 @@ import {
   FULL_TRACKER_STATUS_CLASS,
   withMessageStatusIndicator,
 } from './message-status-indicator.js';
+import {
+  bindCleanupPopupSummary,
+  buildCleanupPopupContent,
+  buildCleanupPopupRows,
+  getCurrentPendingRedactions,
+  sortCleanupTargets,
+} from './tracker-cleanup.js';
 
 interface TextCompletionStoryStringFormatter {
   renderStoryString: (
@@ -279,6 +292,7 @@ export function createTrackerActions(options: {
     partsMeta: unknown;
     detailsState: boolean[];
     successMessage?: string;
+    extensionData?: Record<string, unknown>;
   };
 
   /** Shows the full-tracker badge only when the caller explicitly opts into that manual UI. */
@@ -304,7 +318,11 @@ export function createTrackerActions(options: {
       applyTrackerUpdateAndRender(options.message as any, {
         trackerData: options.trackerData,
         trackerHtml: options.trackerHtml,
-        extensionData: { [CHAT_MESSAGE_PARTS_ORDER_KEY]: options.partsOrder, partsMeta: options.partsMeta },
+        extensionData: {
+          [CHAT_MESSAGE_PARTS_ORDER_KEY]: options.partsOrder,
+          partsMeta: options.partsMeta,
+          ...(options.extensionData ?? {}),
+        },
         render: () => renderTrackerWithDeps(options.messageId),
       });
       restoreDetailsState(options.messageId, options.detailsState);
@@ -330,22 +348,51 @@ export function createTrackerActions(options: {
       errorContext: string;
       callback: () => Promise<void>;
     },
-  ) => {
+  ): Promise<boolean> => {
     try {
       options.button?.classList.add('spinning');
       await withMessageStatusIndicator(
         { messageId: options.messageId, text: contextMenuIndicatorText, statusClassName: CONTEXT_MENU_STATUS_CLASS },
         options.callback,
       );
+      return true;
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error(`Error ${options.errorContext}:`, error);
         st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
       }
+      return false;
     } finally {
       options.button?.classList.remove('spinning');
     }
   };
+
+  function getTrackerSchemaAndRenderState(messageId: number) {
+    const message = globalContext.chat[messageId];
+    if (!message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY]) {
+      throw new Error('No existing tracker found for this message. Generate a full tracker first.');
+    }
+
+    const settings = settingsManager.getSettings();
+    const currentTracker = message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_VALUE_KEY];
+    const chatJsonValue = settings.schemaPresets[settings.schemaPreset].value;
+    const trackerHtml =
+      message.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_HTML_KEY] ?? settings.schemaPresets[settings.schemaPreset].html;
+    const partsOrder =
+      message.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PARTS_ORDER_KEY] ?? resolveTopLevelPartsOrder(chatJsonValue);
+    const partsMeta = message.extra?.[EXTENSION_KEY]?.partsMeta ?? buildPartsMeta(chatJsonValue);
+    const pendingTargets = getCurrentPendingRedactions(message);
+
+    return {
+      message,
+      currentTracker,
+      chatJsonValue,
+      trackerHtml,
+      partsOrder,
+      partsMeta,
+      pendingTargets,
+    };
+  }
 
   function createLocalRequestId(messageId: number): string {
     nextLocalRequestId += 1;
@@ -819,8 +866,6 @@ export function createTrackerActions(options: {
   async function generateTrackerFull(id: number, options?: GenerateTrackerOptions) {
     if (cancelIfPending(id)) return false;
 
-    const { saveChat } = globalContext;
-
     debugLog(settingsManager, 'generateTracker start', {
       mesId: id,
       mode: settingsManager.getSettings().promptEngineeringMode,
@@ -894,8 +939,6 @@ export function createTrackerActions(options: {
 
   async function generateTrackerSequential(id: number, options?: GenerateTrackerOptions) {
     if (cancelIfPending(id)) return false;
-
-    const { saveChat } = globalContext;
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const mainButton = messageBlock?.querySelector('.mes_ztracker_button');
     const regenerateButton = messageBlock?.querySelector('.ztracker-regenerate-button');
@@ -994,7 +1037,7 @@ export function createTrackerActions(options: {
   }
 
   async function generateTrackerPart(id: number, partKey: string) {
-    if (cancelIfPending(id)) return;
+    if (cancelIfPending(id)) return false;
 
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const partButton = messageBlock?.querySelector(
@@ -1003,7 +1046,7 @@ export function createTrackerActions(options: {
 
     const detailsState = captureDetailsState(id);
 
-    await runContextMenuTrackerUpdate({
+    return runContextMenuTrackerUpdate({
       messageId: id,
       button: partButton,
       errorContext: 'generating tracker part',
@@ -1047,6 +1090,10 @@ export function createTrackerActions(options: {
           }
 
           const nextTracker = mergeTrackerPart(currentTracker, partKey, partResponse);
+          const nextPending = removePendingRedactionTargets(
+            message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PENDING_REDACTIONS_KEY],
+            [{ kind: 'part', partKey }],
+          );
 
           await persistTrackerUpdate({
             messageId: id,
@@ -1057,13 +1104,14 @@ export function createTrackerActions(options: {
             partsMeta,
             detailsState,
             successMessage: `Updated: ${partKey}`,
+            extensionData: { [CHAT_MESSAGE_PENDING_REDACTIONS_KEY]: nextPending },
           });
         },
     });
   }
 
   async function generateTrackerArrayItem(id: number, partKey: string, index: number) {
-    if (cancelIfPending(id)) return;
+    if (cancelIfPending(id)) return false;
 
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const itemButton = messageBlock?.querySelector(
@@ -1072,7 +1120,7 @@ export function createTrackerActions(options: {
 
     const detailsState = captureDetailsState(id);
 
-    await runContextMenuTrackerUpdate({
+    return runContextMenuTrackerUpdate({
       messageId: id,
       button: itemButton,
       errorContext: 'generating tracker array item',
@@ -1135,6 +1183,10 @@ export function createTrackerActions(options: {
           }
 
           const nextTracker = replaceTrackerArrayItem(currentTracker, partKey, index, item);
+          const nextPending = removePendingRedactionTargets(
+            message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PENDING_REDACTIONS_KEY],
+            [{ kind: 'array-item', partKey, index }],
+          );
 
           await persistTrackerUpdate({
             messageId: id,
@@ -1145,13 +1197,14 @@ export function createTrackerActions(options: {
             partsMeta,
             detailsState,
             successMessage: `Updated: ${partKey}[${index}]`,
+            extensionData: { [CHAT_MESSAGE_PENDING_REDACTIONS_KEY]: nextPending },
           });
         },
     });
   }
 
   async function generateTrackerArrayItemByName(id: number, partKey: string, name: string) {
-    if (cancelIfPending(id)) return;
+    if (cancelIfPending(id)) return false;
 
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const itemButton = messageBlock?.querySelector(
@@ -1160,7 +1213,7 @@ export function createTrackerActions(options: {
 
     const detailsState = captureDetailsState(id);
 
-    await runContextMenuTrackerUpdate({
+    return runContextMenuTrackerUpdate({
       messageId: id,
       button: itemButton,
       errorContext: 'generating tracker array item (by name)',
@@ -1237,6 +1290,10 @@ export function createTrackerActions(options: {
           }
 
           const nextTracker = replaceTrackerArrayItem(currentTracker, partKey, index, item);
+          const nextPending = removePendingRedactionTargets(
+            message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PENDING_REDACTIONS_KEY],
+            [{ kind: 'array-item', partKey, index }],
+          );
 
           await persistTrackerUpdate({
             messageId: id,
@@ -1247,13 +1304,14 @@ export function createTrackerActions(options: {
             partsMeta,
             detailsState,
             successMessage: `Updated: ${partKey} (${name})`,
+            extensionData: { [CHAT_MESSAGE_PENDING_REDACTIONS_KEY]: nextPending },
           });
         },
     });
   }
 
   async function generateTrackerArrayItemByIdentity(id: number, partKey: string, idKey: string, idValue: string) {
-    if (cancelIfPending(id)) return;
+    if (cancelIfPending(id)) return false;
 
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const itemButton = messageBlock?.querySelector(
@@ -1262,7 +1320,7 @@ export function createTrackerActions(options: {
 
     const detailsState = captureDetailsState(id);
 
-    await runContextMenuTrackerUpdate({
+    return runContextMenuTrackerUpdate({
       messageId: id,
       button: itemButton,
       errorContext: 'generating tracker array item (by identity)',
@@ -1339,6 +1397,10 @@ export function createTrackerActions(options: {
           }
 
           const nextTracker = replaceTrackerArrayItem(currentTracker, partKey, index, item);
+          const nextPending = removePendingRedactionTargets(
+            message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PENDING_REDACTIONS_KEY],
+            [{ kind: 'array-item', partKey, index }],
+          );
 
           await persistTrackerUpdate({
             messageId: id,
@@ -1349,13 +1411,14 @@ export function createTrackerActions(options: {
             partsMeta,
             detailsState,
             successMessage: `Updated: ${partKey} (${idKey}=${idValue})`,
+            extensionData: { [CHAT_MESSAGE_PENDING_REDACTIONS_KEY]: nextPending },
           });
         },
     });
   }
 
   async function generateTrackerArrayItemField(id: number, partKey: string, index: number, fieldKey: string) {
-    if (cancelIfPending(id)) return;
+    if (cancelIfPending(id)) return false;
 
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const fieldButton = messageBlock?.querySelector(
@@ -1364,7 +1427,7 @@ export function createTrackerActions(options: {
 
     const detailsState = captureDetailsState(id);
 
-    await runContextMenuTrackerUpdate({
+    return runContextMenuTrackerUpdate({
       messageId: id,
       button: fieldButton,
       errorContext: 'generating tracker array item field',
@@ -1442,6 +1505,10 @@ export function createTrackerActions(options: {
           }
 
           const nextTracker = replaceTrackerArrayItemField(currentTracker, partKey, index, fieldKey, value);
+          const nextPending = removePendingRedactionTargets(
+            message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PENDING_REDACTIONS_KEY],
+            [{ kind: 'array-item-field', partKey, index, fieldKey }],
+          );
 
           await persistTrackerUpdate({
             messageId: id,
@@ -1452,6 +1519,7 @@ export function createTrackerActions(options: {
             partsMeta,
             detailsState,
             successMessage: `Updated: ${partKey}[${index}].${fieldKey}`,
+            extensionData: { [CHAT_MESSAGE_PENDING_REDACTIONS_KEY]: nextPending },
           });
         },
     });
@@ -1506,6 +1574,117 @@ export function createTrackerActions(options: {
       return generateTrackerSequential(id, options);
     }
     return generateTrackerFull(id, options);
+  }
+
+  async function clearTrackerTargetsOnly(messageId: number, targets: TrackerCleanupTarget[]): Promise<TrackerCleanupTarget[]> {
+    const normalizedTargets = normalizeTrackerCleanupTargets(targets);
+    if (normalizedTargets.length === 0) {
+      return [];
+    }
+
+    const { message, currentTracker, chatJsonValue, trackerHtml, partsOrder, partsMeta, pendingTargets } =
+      getTrackerSchemaAndRenderState(messageId);
+    const detailsState = captureDetailsState(messageId);
+    const nextTracker = clearTrackerCleanupTargets(currentTracker, chatJsonValue, normalizedTargets);
+    const nextPending = buildPendingRedactions([...pendingTargets, ...normalizedTargets]);
+
+    await persistTrackerUpdate({
+      messageId,
+      message,
+      trackerData: nextTracker,
+      trackerHtml,
+      partsOrder,
+      partsMeta,
+      detailsState,
+      successMessage: `Cleared ${normalizedTargets.length} tracker ${normalizedTargets.length === 1 ? 'target' : 'targets'}.`,
+      extensionData: { [CHAT_MESSAGE_PENDING_REDACTIONS_KEY]: nextPending },
+    });
+
+    return normalizedTargets;
+  }
+
+  async function recreateCleanupTarget(messageId: number, target: TrackerCleanupTarget): Promise<boolean> {
+    if (target.kind === 'part') {
+      return !!(await generateTrackerPart(messageId, target.partKey));
+    }
+    if (target.kind === 'array-item') {
+      return !!(await generateTrackerArrayItem(messageId, target.partKey, target.index));
+    }
+    return !!(await generateTrackerArrayItemField(messageId, target.partKey, target.index, target.fieldKey));
+  }
+
+  async function clearAndRecreateTrackerTargets(messageId: number, targets: TrackerCleanupTarget[]): Promise<void> {
+    const normalizedTargets = await clearTrackerTargetsOnly(messageId, targets);
+    if (normalizedTargets.length === 0) {
+      return;
+    }
+
+    let successCount = 0;
+    for (const target of sortCleanupTargets(normalizedTargets)) {
+      if (await recreateCleanupTarget(messageId, target)) {
+        successCount += 1;
+      }
+    }
+
+    if (successCount === normalizedTargets.length) {
+      st_echo('success', `Recreated ${successCount} cleared tracker ${successCount === 1 ? 'target' : 'targets'}.`);
+      return;
+    }
+
+    st_echo(
+      'info',
+      `Recreated ${successCount}/${normalizedTargets.length} cleared tracker ${normalizedTargets.length === 1 ? 'target' : 'targets'}. Remaining targets stay pending.`,
+    );
+  }
+
+  async function openTrackerCleanup(messageId: number) {
+    const { currentTracker, chatJsonValue, partsOrder, partsMeta, pendingTargets } = getTrackerSchemaAndRenderState(messageId);
+    const rows = buildCleanupPopupRows({
+      trackerData: currentTracker,
+      schema: chatJsonValue,
+      partsOrder,
+      partsMeta,
+      pendingTargets,
+    });
+
+    if (rows.length === 0) {
+      st_echo('info', 'No cleanup targets are available for this tracker.');
+      return;
+    }
+
+    const popupContent = buildCleanupPopupContent(rows);
+    globalContext.callGenericPopup(popupContent, POPUP_TYPE.CONFIRM, 'Tracker Cleanup', {
+      okButton: 'Apply',
+      onClose: async (popup: any) => {
+        if (popup.result !== POPUP_RESULT.AFFIRMATIVE) {
+          return;
+        }
+
+        const selectedTargets = Array.from(
+          popup.content.querySelectorAll('[data-ztracker-cleanup-target-index]:checked') as NodeListOf<HTMLInputElement>,
+        )
+          .map((input) => rows[Number(input.getAttribute('data-ztracker-cleanup-target-index') ?? '-1')]?.target)
+          .filter((target): target is TrackerCleanupTarget => !!target);
+        const normalizedTargets = normalizeTrackerCleanupTargets(selectedTargets);
+        if (normalizedTargets.length === 0) {
+          st_echo('error', 'Select at least one tracker target to clear.');
+          return;
+        }
+
+        const mode =
+          (popup.content.querySelector('input[name="ztracker-cleanup-mode"]:checked') as HTMLInputElement | null)?.value ??
+          'clear-and-recreate';
+
+        if (mode === 'clear-only') {
+          await clearTrackerTargetsOnly(messageId, normalizedTargets);
+          return;
+        }
+
+        await clearAndRecreateTrackerTargets(messageId, normalizedTargets);
+      },
+    });
+
+    bindCleanupPopupSummary(rows);
   }
 
   async function renderExtensionTemplates() {
@@ -1624,6 +1803,7 @@ export function createTrackerActions(options: {
     deleteTracker,
     editTracker,
     generateTracker,
+    openTrackerCleanup,
     generateTrackerPart,
     generateTrackerArrayItem,
     generateTrackerArrayItemByName,

@@ -17,6 +17,15 @@ function normalizeDependsOn(value: unknown): string[] {
   return [];
 }
 
+export type { TrackerCleanupTarget, TrackerPendingRedactions } from './tracker-cleanup.js';
+export {
+  buildPendingRedactions,
+  clearTrackerCleanupTargets,
+  getPendingRedactionTargets,
+  normalizeTrackerCleanupTargets,
+  removePendingRedactionTargets,
+} from './tracker-cleanup.js';
+
 /**
  * Resolves a stable top-level generation order, honoring optional schema annotations.
  *

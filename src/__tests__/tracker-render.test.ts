@@ -8,6 +8,7 @@ import {
   CHAT_MESSAGE_SCHEMA_VALUE_KEY,
   CHAT_MESSAGE_SCHEMA_HTML_KEY,
   CHAT_MESSAGE_PARTS_META_KEY,
+  CHAT_MESSAGE_PENDING_REDACTIONS_KEY,
   TrackerContext,
 } from '../tracker.js';
 import { EXTENSION_KEY } from '../extension-metadata.js';
@@ -140,5 +141,41 @@ describe('renderTracker', () => {
     renderTracker(0, { context, document, handlebars: Handlebars });
 
     expect(document.querySelector('.mes_ztracker')).toBeNull();
+  });
+
+  it('renders the cleanup control and persisted pending-redaction markers', () => {
+    const context: TrackerContext = {
+      chat: [
+        {
+          extra: {
+            [EXTENSION_KEY]: {
+              [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+                time: '10:00',
+                charactersPresent: [''],
+              },
+              [CHAT_MESSAGE_SCHEMA_HTML_KEY]: template,
+              [CHAT_MESSAGE_PENDING_REDACTIONS_KEY]: {
+                version: 1,
+                targets: [
+                  { kind: 'part', partKey: 'charactersPresent' },
+                  { kind: 'array-item', partKey: 'charactersPresent', index: 0, displayLabel: 'Alice' },
+                ],
+              },
+            },
+          },
+        } as any,
+      ],
+    };
+
+    renderTracker(0, { context, document, handlebars: Handlebars });
+
+    expect(document.querySelector('.ztracker-cleanup-button')).not.toBeNull();
+    expect(document.querySelector('.ztracker-pending-redactions-status')?.textContent).toContain('2 tracker targets cleared');
+    expect(
+      document
+        .querySelector('.ztracker-part-regenerate-button[data-ztracker-part="charactersPresent"]')
+        ?.classList.contains('is-pending-redaction'),
+    ).toBe(true);
+    expect(document.querySelector('.ztracker-array-item-regenerate-button')?.textContent).toBe('Alice');
   });
 });
