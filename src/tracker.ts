@@ -296,6 +296,34 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
   return copyMessages;
 }
 
+/**
+ * Rewrites only conversation turns for tracker-generation requests while preserving
+ * system messages and any speaker attribution stored on the message objects.
+ */
+export function normalizeTrackerGenerationConversationRoles<
+  T extends {
+    role: string;
+  },
+>(
+  messages: T[],
+  settings: Pick<ExtensionSettings, 'trackerGenerationConversationRoleMode'>,
+): T[] {
+  if ((settings.trackerGenerationConversationRoleMode ?? 'preserve') !== 'all_assistant') {
+    return messages;
+  }
+
+  return messages.map((message) => {
+    if (message.role !== 'user') {
+      return message;
+    }
+
+    return {
+      ...message,
+      role: 'assistant',
+    } as T;
+  });
+}
+
 // Mirrors SillyTavern's assistant-opening alignment behavior so instruct-mode
 // text-completion prompts still begin with a user turn after leading system text.
 function insertUserAlignmentMessage<

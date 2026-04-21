@@ -114,6 +114,101 @@ describe('createTrackerActions prompt assembly', () => {
     ]);
   });
 
+  test('normalizes user chat turns to assistant for chat-completion tracker generation when configured', async () => {
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const generateRequest = makeGenerateRequest();
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile()],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ trackerGenerationConversationRoleMode: 'all_assistant' }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0);
+
+    const sentMessages = generateRequest.mock.calls[0][0].prompt;
+    expect(sentMessages).toEqual([
+      { role: 'system', content: 'Existing system prompt' },
+      { role: 'system', content: 'Saved tracker system prompt' },
+      { role: 'assistant', content: 'Prior chat message' },
+      { role: 'system', content: 'Generate tracker JSON' },
+    ]);
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test('normalizes user chat turns to assistant before text-completion prompt sanitization when configured', async () => {
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    installSillyTavernContext(makeContext());
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile({ api: 'textgenerationwebui' })],
+          },
+        },
+        CONNECT_API_MAP: {
+          textgenerationwebui: { selected: 'textgenerationwebui', type: 'textgenerationwebui' },
+        },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({
+          trackerSystemPromptMode: 'profile',
+          trackerGenerationConversationRoleMode: 'all_assistant',
+        }),
+      } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0);
+
+    expect(sanitizeMessagesForGenerationMock).toHaveBeenNthCalledWith(
+      1,
+      [
+        { role: 'system', content: 'Existing system prompt' },
+        { role: 'assistant', content: 'Prior chat message' },
+        { role: 'system', content: 'Generate tracker JSON' },
+      ],
+      expect.objectContaining({
+        userName: 'Tobias',
+      }),
+    );
+    expect(sanitizeMessagesForGenerationMock).toHaveBeenNthCalledWith(
+      2,
+      [
+        { role: 'system', content: 'Existing system prompt' },
+        { role: 'assistant', content: 'Prior chat message' },
+        { role: 'system', content: 'Generate tracker JSON' },
+      ],
+      expect.objectContaining({
+        inlineNamesIntoContent: true,
+        userName: 'Tobias',
+      }),
+    );
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
   test('keeps character-card prompt fields by default during tracker generation', async () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
 

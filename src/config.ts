@@ -17,6 +17,8 @@ export enum TrackerWorldInfoPolicyMode {
 
 export type TrackerSystemPromptMode = 'profile' | 'saved';
 
+export type TrackerGenerationConversationRoleMode = 'preserve' | 'all_assistant';
+
 export interface Schema {
   name: string;
   value: object;
@@ -66,6 +68,8 @@ export interface ExtensionSettings {
   includeLastXMessages: number; // 0 means all messages
   /** When true, tracker generation omits character-card prompt fields such as description, personality, and scenario. */
   skipCharacterCardInTrackerGeneration: boolean;
+  /** Controls how user/assistant chat turns are labeled before tracker-generation requests are sent. */
+  trackerGenerationConversationRoleMode: TrackerGenerationConversationRoleMode;
   includeLastXZTrackerMessages: number; // 0 means none
   /**
    * Role to use when embedding zTracker snapshots into the generation chat array.
@@ -543,6 +547,7 @@ export const defaultSettings: ExtensionSettings = {
   skipFirstXMessages: 0,
   includeLastXMessages: 0,
   skipCharacterCardInTrackerGeneration: false,
+  trackerGenerationConversationRoleMode: 'preserve',
   includeLastXZTrackerMessages: 1,
   embedZTrackerRole: 'user',
   embedZTrackerAsCharacter: false,

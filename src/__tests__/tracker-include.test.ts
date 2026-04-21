@@ -2,6 +2,7 @@ import type { ExtensionSettings } from '../config.js';
 import {
   extractLeadingSystemPrompt,
   includeZTrackerMessages,
+  normalizeTrackerGenerationConversationRoles,
   sanitizeMessagesForGeneration,
   CHAT_MESSAGE_SCHEMA_VALUE_KEY,
 } from '../tracker.js';
@@ -535,5 +536,33 @@ describe('includeZTrackerMessages', () => {
         content: 'Tobias: Just water, please.',
       },
     ]);
+  });
+
+  it('normalizes user turns to assistant for tracker generation when configured', () => {
+    const messages = [
+      { role: 'system', content: 'Tracker instructions' },
+      { role: 'user', content: 'Just water, please.', name: 'Tobias' },
+      { role: 'assistant', content: 'The barkeeper nods.', name: 'Bar' },
+    ] as any;
+
+    expect(normalizeTrackerGenerationConversationRoles(messages, {
+      trackerGenerationConversationRoleMode: 'all_assistant',
+    } as ExtensionSettings)).toEqual([
+      { role: 'system', content: 'Tracker instructions' },
+      { role: 'assistant', content: 'Just water, please.', name: 'Tobias' },
+      { role: 'assistant', content: 'The barkeeper nods.', name: 'Bar' },
+    ]);
+  });
+
+  it('leaves tracker-generation roles unchanged when preservation mode is active', () => {
+    const messages = [
+      { role: 'system', content: 'Tracker instructions' },
+      { role: 'user', content: 'Just water, please.' },
+      { role: 'assistant', content: 'The barkeeper nods.' },
+    ] as any;
+
+    expect(normalizeTrackerGenerationConversationRoles(messages, {
+      trackerGenerationConversationRoleMode: 'preserve',
+    } as ExtensionSettings)).toEqual(messages);
   });
 });

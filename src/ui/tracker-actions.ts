@@ -24,6 +24,7 @@ import {
   CHAT_MESSAGE_PARTS_ORDER_KEY,
   extractLeadingSystemPrompt,
   includeZTrackerMessages,
+  normalizeTrackerGenerationConversationRoles,
   sanitizeMessagesForGeneration,
 } from '../tracker.js';
 import {
@@ -995,7 +996,9 @@ export function createTrackerActions(options: {
     });
 
     let messages = includeZTrackerMessages(promptResult.result, settings);
+    messages = normalizeTrackerGenerationConversationRoles(messages, settings);
     debugLog(settingsManager, 'prompt built', {
+      trackerGenerationConversationRoleMode: settings.trackerGenerationConversationRoleMode ?? 'preserve',
       skipCharacterCardInTrackerGeneration,
       ignoreWorldInfo,
       messageCount: messages.length,

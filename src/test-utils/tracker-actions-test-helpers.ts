@@ -70,6 +70,16 @@ jest.unstable_mockModule('../tracker.js', () => ({
     };
   }),
   includeZTrackerMessages: jest.fn((messages: Array<unknown>) => [...messages]),
+  normalizeTrackerGenerationConversationRoles: jest.fn(
+    (
+      messages: Array<{ role?: string }>,
+      settings: { trackerGenerationConversationRoleMode?: 'preserve' | 'all_assistant' },
+    ) => messages.map((message) => (
+      settings?.trackerGenerationConversationRoleMode === 'all_assistant' && message?.role === 'user'
+        ? { ...message, role: 'assistant' }
+        : message
+    )),
+  ),
   sanitizeMessagesForGeneration: sanitizeMessagesForGenerationMock,
 }));
 
@@ -220,6 +230,7 @@ export function makeSettings(overrides: Record<string, unknown> = {}) {
     skipFirstXMessages: 0,
     includeLastXMessages: 0,
     skipCharacterCardInTrackerGeneration: false,
+    trackerGenerationConversationRoleMode: 'preserve',
     includeLastXZTrackerMessages: 0,
     embedZTrackerAsCharacter: false,
     sequentialPartGeneration: false,
