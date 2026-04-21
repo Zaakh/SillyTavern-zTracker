@@ -6,7 +6,13 @@ import type { ExtensionSettings } from './config.js';
 import { EXTENSION_KEY } from './extension-metadata.js';
 import { formatEmbeddedTrackerSnapshot } from './embed-snapshot-transform.js';
 import { toShortTrackerLabel } from './tracker-helpers.js';
-import { isSameTrackerCleanupTarget, sanitizeArrayItemFieldKeys } from './tracker-parts.js';
+import {
+  buildArrayItemCleanupTarget,
+  buildArrayItemFieldCleanupTarget,
+  findTrackerCleanupTarget,
+  hasTrackerCleanupTarget,
+  sanitizeArrayItemFieldKeys,
+} from './tracker-parts.js';
 
 export const CHAT_METADATA_SCHEMA_PRESET_KEY = 'schemaKey';
 export const CHAT_MESSAGE_SCHEMA_PRESET_KEY = 'schemaKey';
@@ -110,7 +116,7 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
       const safeKey = escapeHtmlAttr(k);
       const value = (trackerData as any)?.[k];
       const partTarget = { kind: 'part' as const, partKey: k };
-      const isPartPending = pendingTargets.some((target) => isSameTrackerCleanupTarget(target as any, partTarget));
+      const isPartPending = hasTrackerCleanupTarget(pendingTargets as any, partTarget as any);
       const partPendingClass = isPartPending ? ' is-pending-redaction' : '';
       const partPendingText = isPartPending ? ' (pending recreation)' : '';
       const arrayItems = Array.isArray(value)
@@ -119,16 +125,15 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
               const idKey =
                 typeof partsMeta?.[k]?.idKey === 'string' && partsMeta[k].idKey.trim() ? partsMeta[k].idKey.trim() : 'name';
               const idValue = item && typeof item === 'object' && typeof item[idKey] === 'string' ? item[idKey] : '';
-              const itemTarget = {
-                kind: 'array-item' as const,
-                partKey: k,
-                index,
-                ...(idKey && idValue ? { idKey, idValue } : {}),
-              };
-              const pendingItemTarget = pendingTargets.find((target) => isSameTrackerCleanupTarget(target as any, itemTarget));
-              const label = escapeHtmlAttr(
-                typeof pendingItemTarget?.displayLabel === 'string' && isBlankPendingLabelValue(item)
+              const itemTarget = buildArrayItemCleanupTarget(k, index, idKey && idValue ? { idKey, idValue } : undefined);
+              const pendingItemTarget = findTrackerCleanupTarget(pendingTargets as any, itemTarget as any);
+              const pendingItemLabel =
+                pendingItemTarget?.kind === 'array-item' && typeof pendingItemTarget.displayLabel === 'string'
                   ? pendingItemTarget.displayLabel
+                  : undefined;
+              const label = escapeHtmlAttr(
+                pendingItemLabel && isBlankPendingLabelValue(item)
+                  ? pendingItemLabel
                   : toShortTrackerLabel(item),
               );
               const itemName = item && typeof item === 'object' && typeof item.name === 'string' ? item.name : '';
@@ -154,14 +159,13 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
               const fieldButtons = fields
                 .map((fieldKey: string) => {
                   const safeField = escapeHtmlAttr(fieldKey);
-                  const fieldTarget = {
-                    kind: 'array-item-field' as const,
-                    partKey: k,
+                  const fieldTarget = buildArrayItemFieldCleanupTarget(
+                    k,
                     index,
                     fieldKey,
-                    ...(idKey && idValue ? { idKey, idValue } : {}),
-                  };
-                  const isFieldPending = pendingTargets.some((target) => isSameTrackerCleanupTarget(target as any, fieldTarget));
+                    idKey && idValue ? { idKey, idValue } : undefined,
+                  );
+                  const isFieldPending = hasTrackerCleanupTarget(pendingTargets as any, fieldTarget as any);
                   const fieldPendingClass = isFieldPending ? ' is-pending-redaction' : '';
                   const fieldTitle = itemName
                     ? `Regenerate ${safeKey} (${escapeHtmlAttr(itemName)}).${safeField}`

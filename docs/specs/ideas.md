@@ -1,1 +1,2 @@
 - TOON has as required field which looks weird.
+- new mode for tracker generation to ease the "mental load" for the LLM what messages are important and how to weight them: All character chats (including those from the user) are sent as Assistant messages. Only the instructions how the tracker is to be generated are sent as System Messages. Because from trackers point-of-view it should be irrelevant if user or assistant said something, it should only care about the content. 

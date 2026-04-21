@@ -31,6 +31,52 @@ export interface TrackerPendingRedactions {
   schemaPresetKey?: string;
 }
 
+type TrackerCleanupIdentityOptions = {
+  idKey?: string;
+  idValue?: string;
+  displayLabel?: string;
+};
+
+function getTrackerCleanupIdentityOptions(options?: TrackerCleanupIdentityOptions): TrackerCleanupIdentityOptions {
+  return typeof options?.idKey === 'string' && options.idKey && typeof options?.idValue === 'string' && options.idValue
+    ? {
+        idKey: options.idKey,
+        idValue: options.idValue,
+        ...(typeof options.displayLabel === 'string' && options.displayLabel ? { displayLabel: options.displayLabel } : {}),
+      }
+    : typeof options?.displayLabel === 'string' && options.displayLabel
+      ? { displayLabel: options.displayLabel }
+      : {};
+}
+
+export function buildArrayItemCleanupTarget(
+  partKey: string,
+  index: number,
+  options?: TrackerCleanupIdentityOptions,
+): Extract<TrackerCleanupTarget, { kind: 'array-item' }> {
+  return {
+    kind: 'array-item',
+    partKey,
+    index,
+    ...getTrackerCleanupIdentityOptions(options),
+  };
+}
+
+export function buildArrayItemFieldCleanupTarget(
+  partKey: string,
+  index: number,
+  fieldKey: string,
+  options?: TrackerCleanupIdentityOptions,
+): Extract<TrackerCleanupTarget, { kind: 'array-item-field' }> {
+  return {
+    kind: 'array-item-field',
+    partKey,
+    index,
+    fieldKey,
+    ...getTrackerCleanupIdentityOptions(options),
+  };
+}
+
 function getTrackerCleanupIdentity(target: TrackerCleanupTarget): { idKey: string; idValue: string } | undefined {
   if (target.kind === 'part') {
     return undefined;
@@ -127,6 +173,17 @@ export function isSameTrackerCleanupTarget(left: TrackerCleanupTarget, right: Tr
   const leftFieldTarget = left as Extract<TrackerCleanupTarget, { kind: 'array-item-field' }>;
   const rightFieldTarget = right as Extract<TrackerCleanupTarget, { kind: 'array-item-field' }>;
   return leftFieldTarget.fieldKey === rightFieldTarget.fieldKey;
+}
+
+export function findTrackerCleanupTarget(
+  targets: TrackerCleanupTarget[],
+  target: TrackerCleanupTarget,
+): TrackerCleanupTarget | undefined {
+  return targets.find((existing) => isSameTrackerCleanupTarget(existing, target));
+}
+
+export function hasTrackerCleanupTarget(targets: TrackerCleanupTarget[], target: TrackerCleanupTarget): boolean {
+  return !!findTrackerCleanupTarget(targets, target);
 }
 
 function isTrackerCleanupAncestor(ancestor: TrackerCleanupTarget, target: TrackerCleanupTarget): boolean {

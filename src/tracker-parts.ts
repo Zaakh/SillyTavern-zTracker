@@ -21,15 +21,40 @@ function normalizeDependsOn(value: unknown): string[] {
 
 export type { TrackerCleanupTarget, TrackerPendingRedactions } from './tracker-cleanup.js';
 export {
+  buildArrayItemCleanupTarget,
+  buildArrayItemFieldCleanupTarget,
   buildPendingRedactions,
   clearTrackerCleanupTargets,
+  findTrackerCleanupTarget,
   getPendingRedactionSchemaPresetKey,
   getPendingRedactionTargets,
+  hasTrackerCleanupTarget,
   isSameTrackerCleanupTarget,
   normalizeTrackerCleanupTargets,
   removePendingRedactionTargets,
 } from './tracker-cleanup.js';
 export { getArrayItemIdentityKey } from './tracker-helpers.js';
+
+function buildWrappedSchema(schema: any, titleSuffix: string, propertyName: string, propertySchema: any): any {
+  const wrappedSchema: any = {
+    $schema: schema?.$schema ?? 'http://json-schema.org/draft-07/schema#',
+    title: `${schema?.title ?? 'SceneTracker'}${titleSuffix}`,
+    type: 'object',
+    properties: {
+      [propertyName]: propertySchema,
+    },
+    required: [propertyName],
+  };
+
+  if (schema?.definitions) {
+    wrappedSchema.definitions = schema.definitions;
+  }
+  if (schema?.$defs) {
+    wrappedSchema.$defs = schema.$defs;
+  }
+
+  return wrappedSchema;
+}
 
 /**
  * Resolves a stable top-level generation order, honoring optional schema annotations.
@@ -115,25 +140,7 @@ export function buildTopLevelPartSchema(schema: any, partKey: string): any {
     throw new Error(`Unknown schema part: ${partKey}`);
   }
 
-  const partSchema: any = {
-    $schema: schema?.$schema ?? 'http://json-schema.org/draft-07/schema#',
-    title: `${schema?.title ?? 'SceneTracker'}Part`,
-    type: 'object',
-    properties: {
-      [partKey]: partDef,
-    },
-    required: [partKey],
-  };
-
-  // Preserve definitions when present (future-proofing for presets that rely on them).
-  if (schema?.definitions) {
-    partSchema.definitions = schema.definitions;
-  }
-  if (schema?.$defs) {
-    partSchema.$defs = schema.$defs;
-  }
-
-  return partSchema;
+  return buildWrappedSchema(schema, 'Part', partKey, partDef);
 }
 
 export function buildArrayItemSchema(schema: any, partKey: string): any {
@@ -147,24 +154,7 @@ export function buildArrayItemSchema(schema: any, partKey: string): any {
     throw new Error(`Schema part is not an array with items: ${partKey}`);
   }
 
-  const itemSchema: any = {
-    $schema: schema?.$schema ?? 'http://json-schema.org/draft-07/schema#',
-    title: `${schema?.title ?? 'SceneTracker'}${partKey}Item`,
-    type: 'object',
-    properties: {
-      item: itemsDef,
-    },
-    required: ['item'],
-  };
-
-  if (schema?.definitions) {
-    itemSchema.definitions = schema.definitions;
-  }
-  if (schema?.$defs) {
-    itemSchema.$defs = schema.$defs;
-  }
-
-  return itemSchema;
+  return buildWrappedSchema(schema, `${partKey}Item`, 'item', itemsDef);
 }
 
 export function buildArrayItemFieldSchema(schema: any, partKey: string, fieldKey: string): any {
@@ -190,24 +180,7 @@ export function buildArrayItemFieldSchema(schema: any, partKey: string, fieldKey
     throw new Error(`Unknown array item field: ${partKey}.${fieldKey}`);
   }
 
-  const fieldSchema: any = {
-    $schema: schema?.$schema ?? 'http://json-schema.org/draft-07/schema#',
-    title: `${schema?.title ?? 'SceneTracker'}${partKey}Item${fieldKey}Field`,
-    type: 'object',
-    properties: {
-      value: fieldDef,
-    },
-    required: ['value'],
-  };
-
-  if (schema?.definitions) {
-    fieldSchema.definitions = schema.definitions;
-  }
-  if (schema?.$defs) {
-    fieldSchema.$defs = schema.$defs;
-  }
-
-  return fieldSchema;
+  return buildWrappedSchema(schema, `${partKey}Item${fieldKey}Field`, 'value', fieldDef);
 }
 
 export function mergeTrackerPart(currentTracker: any, partKey: string, partObject: any): any {

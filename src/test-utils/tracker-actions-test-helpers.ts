@@ -74,7 +74,20 @@ jest.unstable_mockModule('../tracker.js', () => ({
 }));
 
 jest.unstable_mockModule('../tracker-parts.js', () => ({
+  buildArrayItemCleanupTarget: jest.fn((partKey: string, index: number, options?: Record<string, unknown>) => ({
+    kind: 'array-item',
+    partKey,
+    index,
+    ...(options ?? {}),
+  })),
   buildArrayItemFieldSchema: jest.fn(),
+  buildArrayItemFieldCleanupTarget: jest.fn((partKey: string, index: number, fieldKey: string, options?: Record<string, unknown>) => ({
+    kind: 'array-item-field',
+    partKey,
+    index,
+    fieldKey,
+    ...(options ?? {}),
+  })),
   buildArrayItemSchema: jest.fn(),
   buildPendingRedactions: jest.fn((targets: Array<unknown>, options?: { schemaPresetKey?: string }) => ({
     version: 1,
@@ -85,9 +98,51 @@ jest.unstable_mockModule('../tracker-parts.js', () => ({
   clearTrackerCleanupTargets: jest.fn((currentTracker: Record<string, unknown>) => ({ ...currentTracker })),
   findArrayItemIndexByIdentity: jest.fn(),
   findArrayItemIndexByName: jest.fn(),
+  findTrackerCleanupTarget: jest.fn((targets: Array<Record<string, unknown>>, target: Record<string, unknown>) =>
+    targets.find((existing) => {
+      if (existing?.kind !== target?.kind || existing?.partKey !== target?.partKey) {
+        return false;
+      }
+
+      if (existing?.kind === 'part') {
+        return true;
+      }
+
+      const existingIdKey = typeof existing?.idKey === 'string' ? existing.idKey : undefined;
+      const targetIdKey = typeof target?.idKey === 'string' ? target.idKey : undefined;
+      const existingIdValue = typeof existing?.idValue === 'string' ? existing.idValue : undefined;
+      const targetIdValue = typeof target?.idValue === 'string' ? target.idValue : undefined;
+      if (existingIdKey && targetIdKey && existingIdValue && targetIdValue) {
+        return existingIdKey === targetIdKey && existingIdValue === targetIdValue && existing?.fieldKey === target?.fieldKey;
+      }
+
+      return existing?.index === target?.index && existing?.fieldKey === target?.fieldKey;
+    }),
+  ),
   getArrayItemIdentityKey: jest.fn(() => 'name'),
   getPendingRedactionSchemaPresetKey: jest.fn((value: { schemaPresetKey?: string } | undefined) => value?.schemaPresetKey),
   getPendingRedactionTargets: jest.fn((value: { targets?: Array<unknown> } | undefined) => value?.targets ?? []),
+  hasTrackerCleanupTarget: jest.fn((targets: Array<Record<string, unknown>>, target: Record<string, unknown>) =>
+    targets.some((existing) => {
+      if (existing?.kind !== target?.kind || existing?.partKey !== target?.partKey) {
+        return false;
+      }
+
+      if (existing?.kind === 'part') {
+        return true;
+      }
+
+      const existingIdKey = typeof existing?.idKey === 'string' ? existing.idKey : undefined;
+      const targetIdKey = typeof target?.idKey === 'string' ? target.idKey : undefined;
+      const existingIdValue = typeof existing?.idValue === 'string' ? existing.idValue : undefined;
+      const targetIdValue = typeof target?.idValue === 'string' ? target.idValue : undefined;
+      if (existingIdKey && targetIdKey && existingIdValue && targetIdValue) {
+        return existingIdKey === targetIdKey && existingIdValue === targetIdValue && existing?.fieldKey === target?.fieldKey;
+      }
+
+      return existing?.index === target?.index && existing?.fieldKey === target?.fieldKey;
+    }),
+  ),
   isSameTrackerCleanupTarget: jest.fn((left: Record<string, unknown>, right: Record<string, unknown>) => {
     if (left?.kind !== right?.kind || left?.partKey !== right?.partKey) {
       return false;

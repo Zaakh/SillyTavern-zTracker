@@ -28,6 +28,7 @@ These are “living” per-change specs. Each spec tracks its current status and
 - [22-instruct-template-in-tracker-generation.md](22-instruct-template-in-tracker-generation.md)
 - [23-context-menu-generation-indicator.md](23-context-menu-generation-indicator.md)
 - [24-partial-tracker-data-deletion.md](24-partial-tracker-data-deletion.md)
+- [25-consolidate-schema-metadata-helpers.md](25-consolidate-schema-metadata-helpers.md)
 
 ## Status workflow
 - **Open**: not implemented yet; questions unresolved.

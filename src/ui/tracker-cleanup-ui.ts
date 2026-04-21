@@ -1,9 +1,12 @@
 import { EXTENSION_KEY } from '../config.js';
 import { CHAT_MESSAGE_PENDING_REDACTIONS_KEY } from '../tracker.js';
 import {
+  buildArrayItemCleanupTarget,
+  buildArrayItemFieldCleanupTarget,
+  findTrackerCleanupTarget,
   getArrayItemIdentityKey,
   getPendingRedactionTargets,
-  isSameTrackerCleanupTarget,
+  hasTrackerCleanupTarget,
   normalizeTrackerCleanupTargets,
   sanitizeArrayItemFieldKeys,
   type TrackerCleanupTarget,
@@ -39,7 +42,7 @@ export function buildCleanupPopupRows(options: {
       target: partTarget,
       label: partKey,
       level: 0,
-      pending: options.pendingTargets.some((target) => isSameTrackerCleanupTarget(target, partTarget)),
+      pending: hasTrackerCleanupTarget(options.pendingTargets, partTarget),
     });
 
     const items = options.trackerData?.[partKey];
@@ -57,13 +60,12 @@ export function buildCleanupPopupRows(options: {
 
     items.forEach((item: unknown, index: number) => {
       const idValue = item && typeof item === 'object' && !Array.isArray(item) ? (item as any)[idKey] : undefined;
-      const itemTarget = {
-        kind: 'array-item' as const,
+      const itemTarget = buildArrayItemCleanupTarget(
         partKey,
         index,
-        ...(typeof idValue === 'string' && idValue ? { idKey, idValue } : {}),
-      };
-      const pendingItemTarget = options.pendingTargets.find((target) => isSameTrackerCleanupTarget(target, itemTarget));
+        typeof idValue === 'string' && idValue ? { idKey, idValue } : undefined,
+      );
+      const pendingItemTarget = findTrackerCleanupTarget(options.pendingTargets, itemTarget);
       const displayLabel =
         pendingItemTarget?.kind === 'array-item' && typeof pendingItemTarget.displayLabel === 'string'
           ? pendingItemTarget.displayLabel
@@ -85,13 +87,12 @@ export function buildCleanupPopupRows(options: {
 
       const fieldKeys = (fieldKeysFromMeta.length > 0 ? fieldKeysFromMeta : schemaFieldKeys).filter(Boolean);
       fieldKeys.forEach((fieldKey) => {
-        const fieldTarget = {
-          kind: 'array-item-field' as const,
+        const fieldTarget = buildArrayItemFieldCleanupTarget(
           partKey,
           index,
           fieldKey,
-          ...(typeof idValue === 'string' && idValue ? { idKey, idValue } : {}),
-        };
+          typeof idValue === 'string' && idValue ? { idKey, idValue } : undefined,
+        );
         rows.push({
           target: {
             ...fieldTarget,
@@ -99,7 +100,7 @@ export function buildCleanupPopupRows(options: {
           },
           label: `${displayLabel}.${fieldKey}`,
           level: 2,
-          pending: options.pendingTargets.some((target) => isSameTrackerCleanupTarget(target, fieldTarget)),
+          pending: hasTrackerCleanupTarget(options.pendingTargets, fieldTarget),
         });
       });
     });
