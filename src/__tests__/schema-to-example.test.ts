@@ -87,6 +87,37 @@ describe('schemaToExample', () => {
     expect(result).not.toHaveProperty('example');
   });
 
+  it('does not leak schema required metadata into JSON example output', () => {
+    const result = JSON.parse(
+      schemaToExample(
+        {
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: 'Title text' },
+            meta: {
+              type: 'object',
+              properties: {
+                count: { type: 'number' },
+              },
+              required: ['count'],
+            },
+          },
+          required: ['title', 'meta'],
+        },
+        'json',
+      ),
+    );
+
+    expect(result).toEqual({
+      title: 'Title text',
+      meta: {
+        count: 0,
+      },
+    });
+    expect(result).not.toHaveProperty('required');
+    expect(result.meta).not.toHaveProperty('required');
+  });
+
   it('produces TOON samples for deeply nested schemas', () => {
     const nestedSchema = {
       type: 'object',

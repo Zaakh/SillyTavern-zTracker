@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Array-item context menus now filter out JSON Schema `required` metadata, so stale tracker field metadata can no longer surface `required` as a selectable target in either per-field regeneration or tracker cleanup.
+- Prompt-engineering tracker generation now keeps JSON Schema `required` arrays in the schema block while omitting schema metadata from the example response block, so the prompt no longer shows bogus `required` example fields or empty/null placeholders.
 
 ## [1.8.0] - 2026-04-17
 
