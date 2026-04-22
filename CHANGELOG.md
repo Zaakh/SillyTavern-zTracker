@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Text-completion tracker-generation transport now omits an inactive request-local instruct preset instead of forwarding `instructName: undefined`, avoiding live `Preset undefined not found` console errors during tracker regeneration.
+
 ## [1.10.0] - 2026-04-22
 
 ### Added

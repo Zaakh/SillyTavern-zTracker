@@ -769,8 +769,9 @@ describe('createTrackerActions prompt assembly', () => {
     const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
     expect(buildPromptOptions).not.toHaveProperty('instructName');
     expect(textCompletionProcessRequest).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), true, expect.any(AbortSignal));
+    expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).not.toHaveProperty('instructName');
     expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).toMatchObject({
-      instructName: undefined,
+      instructSettings: {},
     });
     expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).not.toHaveProperty('presetName');
     expect(profile.instruct).toBe('Profile Instruct');

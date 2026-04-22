@@ -776,6 +776,11 @@ export function createTrackerActions(options: {
       }
 
       beforeRequestStartHook?.();
+      const requestOptions = {
+        instructSettings: {},
+        ...(options.instructName ? { instructName: options.instructName } : {}),
+      };
+
       return await textCompletionService.processRequest.call(
         textCompletionService,
         {
@@ -787,10 +792,7 @@ export function createTrackerActions(options: {
           api_server: options.profile?.['api-url'],
           ...(options.overridePayload ?? {}),
         },
-        {
-          instructName: options.instructName,
-          instructSettings: {},
-        },
+        requestOptions,
         true,
         abortController.signal,
       );
