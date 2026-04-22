@@ -9,6 +9,19 @@ export const stEchoMock = jest.fn();
 export const includeZTrackerMessagesMock = jest.fn((messages: Array<unknown>) => [...messages]);
 const embeddedTrackerSnapshotMarker = Symbol('embeddedTrackerSnapshot');
 
+function normalizeTrackerGenerationConversationRolesImpl(
+  messages: Array<{ role?: string }>,
+  settings: { trackerGenerationConversationRoleMode?: 'preserve' | 'all_assistant' },
+) {
+  return messages.map((message) => (
+    settings?.trackerGenerationConversationRoleMode === 'all_assistant'
+      && message?.role === 'user'
+      && !(message as any)[embeddedTrackerSnapshotMarker]
+      ? { ...message, role: 'assistant' }
+      : message
+  ));
+}
+
 export function markEmbeddedTrackerSnapshot<T extends object>(message: T): T {
   Object.defineProperty(message, embeddedTrackerSnapshotMarker, {
     value: true,
@@ -16,18 +29,7 @@ export function markEmbeddedTrackerSnapshot<T extends object>(message: T): T {
   return message;
 }
 
-export const normalizeTrackerGenerationConversationRolesMock = jest.fn(
-  (
-    messages: Array<{ role?: string }>,
-    settings: { trackerGenerationConversationRoleMode?: 'preserve' | 'all_assistant' },
-  ) => messages.map((message) => (
-    settings?.trackerGenerationConversationRoleMode === 'all_assistant'
-      && message?.role === 'user'
-      && !(message as any)[embeddedTrackerSnapshotMarker]
-      ? { ...message, role: 'assistant' }
-      : message
-  )),
-);
+export const normalizeTrackerGenerationConversationRolesMock = jest.fn(normalizeTrackerGenerationConversationRolesImpl);
 
 jest.unstable_mockModule('sillytavern-utils-lib', () => ({
   buildPrompt: buildPromptMock,
@@ -361,18 +363,7 @@ export function resetTrackerActionTestState(): void {
   includeZTrackerMessagesMock.mockReset();
   includeZTrackerMessagesMock.mockImplementation((messages: Array<unknown>) => [...messages]);
   normalizeTrackerGenerationConversationRolesMock.mockReset();
-  normalizeTrackerGenerationConversationRolesMock.mockImplementation(
-    (
-      messages: Array<{ role?: string }>,
-      settings: { trackerGenerationConversationRoleMode?: 'preserve' | 'all_assistant' },
-    ) => messages.map((message) => (
-      settings?.trackerGenerationConversationRoleMode === 'all_assistant'
-        && message?.role === 'user'
-        && !(message as any)[embeddedTrackerSnapshotMarker]
-        ? { ...message, role: 'assistant' }
-        : message
-    )),
-  );
+  normalizeTrackerGenerationConversationRolesMock.mockImplementation(normalizeTrackerGenerationConversationRolesImpl);
   renderTrackerWithDepsMock.mockReset();
   sanitizeMessagesForGenerationMock.mockReset();
   sanitizeMessagesForGenerationMock.mockImplementation((messages: Array<unknown>) => [...messages]);

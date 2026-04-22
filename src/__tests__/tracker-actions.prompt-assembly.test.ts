@@ -22,8 +22,15 @@ import {
 } from '../test-utils/tracker-actions-test-helpers.js';
 
 describe('createTrackerActions prompt assembly', () => {
+  const originalCss = globalThis.CSS;
+
   beforeEach(() => {
     resetTrackerActionTestState();
+    globalThis.CSS = originalCss ?? ({ escape: (value: string) => value } as typeof CSS);
+  });
+
+  afterEach(() => {
+    globalThis.CSS = originalCss;
   });
 
   test('injects the saved prompt without mutating prefer_character_prompt', async () => {
@@ -256,6 +263,61 @@ describe('createTrackerActions prompt assembly', () => {
         userName: 'Tobias',
       }),
     );
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test('normalizes user chat turns during part regeneration when configured', async () => {
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const generateRequest = makeGenerateRequest({ content: { time: '10:00:00' } });
+
+    document.body.innerHTML = [
+      '<div id="extensionsMenu"></div>',
+      '<div class="mes" mesid="0">',
+      '<div class="ztracker-part-regenerate-button" data-ztracker-part="time"></div>',
+      '<div class="mes_text"></div>',
+      '</div>',
+    ].join('');
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [
+          {
+            original_avatar: 'avatar.png',
+            extra: {
+              zTracker: {
+                schemaValue: { time: '09:00:00' },
+                schemaHtml: '<div></div>',
+              },
+            },
+          },
+        ],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile()],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ trackerGenerationConversationRoleMode: 'all_assistant' }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTrackerPart(0, 'time');
+
+    const sentMessages = generateRequest.mock.calls[0][0].prompt;
+    expect(sentMessages).toEqual(expect.arrayContaining([
+      { role: 'assistant', content: 'Prior chat message' },
+    ]));
+    expect(sentMessages).not.toEqual(expect.arrayContaining([
+      { role: 'user', content: 'Prior chat message' },
+    ]));
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 
