@@ -61,6 +61,8 @@ If you want to avoid low-context tracker updates at the start of a chat, set **S
 
 If character-card prose is adding noise to extraction, enable **Skip character card in tracker generation** in **Extensions → zTracker**. The setting is off by default, and when enabled it makes tracker generation ignore character-card prompt fields such as description, personality, and scenario.
 
+If the model seems to over-weight who said a line instead of the scene content itself, change **Conversation role handling** in **Extensions → zTracker** from **Preserve user and assistant roles** to **Treat all chat turns as assistant**. This only changes how zTracker labels chat turns during tracker-generation requests; it does not affect normal chat generation or tracker snapshot injection.
+
 If a specific character should never trigger zTracker automatically, open that character's panel and click the zTracker truck toggle in the avatar action row. This excludes that character from **Auto Mode** only; manual tracker generation from message controls still works.
 
 When a tracker is rendered on a message, use the tracker controls:

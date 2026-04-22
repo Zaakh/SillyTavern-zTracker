@@ -6,6 +6,30 @@ export const applyTrackerUpdateAndRenderMock = jest.fn();
 export const renderTrackerWithDepsMock = jest.fn();
 export const sanitizeMessagesForGenerationMock = jest.fn((messages: Array<unknown>) => [...messages]);
 export const stEchoMock = jest.fn();
+export const includeZTrackerMessagesMock = jest.fn((messages: Array<unknown>) => [...messages]);
+const embeddedTrackerSnapshotMarker = Symbol('embeddedTrackerSnapshot');
+
+function normalizeTrackerGenerationConversationRolesImpl(
+  messages: Array<{ role?: string }>,
+  settings: { trackerGenerationConversationRoleMode?: 'preserve' | 'all_assistant' },
+) {
+  return messages.map((message) => (
+    settings?.trackerGenerationConversationRoleMode === 'all_assistant'
+      && message?.role === 'user'
+      && !(message as any)[embeddedTrackerSnapshotMarker]
+      ? { ...message, role: 'assistant' }
+      : message
+  ));
+}
+
+export function markEmbeddedTrackerSnapshot<T extends object>(message: T): T {
+  Object.defineProperty(message, embeddedTrackerSnapshotMarker, {
+    value: true,
+  });
+  return message;
+}
+
+export const normalizeTrackerGenerationConversationRolesMock = jest.fn(normalizeTrackerGenerationConversationRolesImpl);
 
 jest.unstable_mockModule('sillytavern-utils-lib', () => ({
   buildPrompt: buildPromptMock,
@@ -69,7 +93,8 @@ jest.unstable_mockModule('../tracker.js', () => ({
       remainingMessages: firstNonSystemIndex === -1 ? [] : messages.slice(firstNonSystemIndex),
     };
   }),
-  includeZTrackerMessages: jest.fn((messages: Array<unknown>) => [...messages]),
+  includeZTrackerMessages: includeZTrackerMessagesMock,
+  normalizeTrackerGenerationConversationRoles: normalizeTrackerGenerationConversationRolesMock,
   sanitizeMessagesForGeneration: sanitizeMessagesForGenerationMock,
 }));
 
@@ -220,6 +245,7 @@ export function makeSettings(overrides: Record<string, unknown> = {}) {
     skipFirstXMessages: 0,
     includeLastXMessages: 0,
     skipCharacterCardInTrackerGeneration: false,
+    trackerGenerationConversationRoleMode: 'preserve',
     includeLastXZTrackerMessages: 0,
     embedZTrackerAsCharacter: false,
     sequentialPartGeneration: false,
@@ -334,6 +360,10 @@ export function resetTrackerActionTestState(): void {
   jest.clearAllMocks();
   buildPromptMock.mockReset();
   applyTrackerUpdateAndRenderMock.mockReset();
+  includeZTrackerMessagesMock.mockReset();
+  includeZTrackerMessagesMock.mockImplementation((messages: Array<unknown>) => [...messages]);
+  normalizeTrackerGenerationConversationRolesMock.mockReset();
+  normalizeTrackerGenerationConversationRolesMock.mockImplementation(normalizeTrackerGenerationConversationRolesImpl);
   renderTrackerWithDepsMock.mockReset();
   sanitizeMessagesForGenerationMock.mockReset();
   sanitizeMessagesForGenerationMock.mockImplementation((messages: Array<unknown>) => [...messages]);

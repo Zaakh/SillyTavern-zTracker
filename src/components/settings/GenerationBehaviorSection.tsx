@@ -1,5 +1,6 @@
 import { FC } from 'react';
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
+import type { TrackerGenerationConversationRoleMode } from '../../config.js';
 import type { SettingsSectionProps } from './settings-shared.js';
 
 // Renders the core tracker-generation behavior controls that affect timing, prompt mode, and context size.
@@ -98,6 +99,25 @@ export const GenerationBehaviorSection: FC<SettingsSectionProps> = ({ settings, 
             })
           }
         />
+      </div>
+
+      <div className="setting-row">
+        <label title="Controls how recent chat messages are labeled during tracker generation. This only affects zTracker's tracker request, not normal chat generation or tracker injection.">
+          Conversation role handling
+        </label>
+        <select
+          className="text_pole"
+          title="Controls how recent chat messages are labeled during tracker generation. This only affects zTracker's tracker request, not normal chat generation or tracker injection."
+          value={settings.trackerGenerationConversationRoleMode ?? 'preserve'}
+          onChange={(e) =>
+            updateAndRefresh((s) => {
+              s.trackerGenerationConversationRoleMode = e.target.value as TrackerGenerationConversationRoleMode;
+            })
+          }
+        >
+          <option value="preserve">Preserve user and assistant roles</option>
+          <option value="all_assistant">Treat all chat turns as assistant</option>
+        </select>
       </div>
 
       <div className="setting-row">
