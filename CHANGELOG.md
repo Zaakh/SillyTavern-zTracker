@@ -6,9 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-04-22
+
 ### Added
 
 - Added a tracker-generation `Conversation role handling` setting that can optionally relabel user chat turns as assistant turns before zTracker sends tracker-generation requests, while leaving normal chat generation and tracker injection unchanged.
+
+### Fixed
+
+- Tracker-generation conversation-role normalization now leaves embedded tracker snapshot roles unchanged, so injected tracker context keeps its configured role semantics while only real chat turns are relabeled.
 
 ## [1.9.0] - 2026-04-21
 
