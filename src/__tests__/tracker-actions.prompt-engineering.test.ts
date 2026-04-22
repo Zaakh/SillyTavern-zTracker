@@ -185,6 +185,51 @@ describe('createTrackerActions prompt engineering', () => {
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 
+  test('normalizes user chat turns before prompt-engineered JSON tracker generation when configured', async () => {
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    (schemaToExample as jest.Mock).mockReturnValue('{"time":"10:00:00"}');
+    (schemaToPromptSchema as jest.Mock).mockReturnValue('{"type":"object"}');
+    (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
+    const generateRequest = makeGenerateRequest({ content: '```json\n{"time":"10:00:00"}\n```' });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile()],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({
+          promptEngineeringMode: PromptEngineeringMode.JSON,
+          promptJson: 'JSON TEMPLATE\n{{schema}}\n{{example_response}}',
+          trackerGenerationConversationRoleMode: 'all_assistant',
+        }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0);
+
+    const sentMessages = generateRequest.mock.calls[0][0].prompt;
+    expect(sentMessages).toEqual([
+      { role: 'system', content: 'Existing system prompt' },
+      { role: 'system', content: 'Saved tracker system prompt' },
+      { role: 'assistant', content: 'Prior chat message' },
+      { role: 'system', content: 'JSON TEMPLATE\n{"type":"object"}\n{"time":"10:00:00"}' },
+    ]);
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
   test('injects the translated XML schema instead of raw JSON when XML prompt-engineering is selected', async () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
 
