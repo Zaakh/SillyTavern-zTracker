@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Text-completion tracker generation now passes the active SillyTavern context preset into prompt assembly and omits inactive request-local instruct overrides, avoiding live `Preset undefined not found` console errors during tracker regeneration.
+
 ## [1.10.0] - 2026-04-22
 
 ### Added

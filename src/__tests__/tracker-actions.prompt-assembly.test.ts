@@ -391,12 +391,16 @@ describe('createTrackerActions prompt assembly', () => {
   });
 
   test.each([
-    { api: 'openai', expectedSyspromptName: undefined },
-    { api: 'textgenerationwebui', expectedSyspromptName: 'Neutral - Chat' },
+    { api: 'openai', expectedSyspromptName: undefined, expectedContextName: undefined },
+    { api: 'textgenerationwebui', expectedSyspromptName: 'Neutral - Chat', expectedContextName: 'Active Context' },
   ])(
     'omits stored preset/context slots and uses active runtime prompt state for $api profiles',
-    async ({ api, expectedSyspromptName }) => {
-      installSillyTavernContext(makeContext());
+    async ({ api, expectedSyspromptName, expectedContextName }) => {
+      installSillyTavernContext(makeContext({
+        powerUserSettings: expectedContextName
+          ? { context: { preset: expectedContextName } }
+          : undefined,
+      }));
 
       buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
       const generateRequest = makeGenerateRequest();
@@ -428,8 +432,12 @@ describe('createTrackerActions prompt assembly', () => {
       expect(buildPromptMock).toHaveBeenCalledWith(api, expect.any(Object));
       const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
       expect(buildPromptOptions).not.toHaveProperty('presetName');
-      expect(buildPromptOptions).not.toHaveProperty('contextName');
       expect(buildPromptOptions).not.toHaveProperty('instructName');
+      if (expectedContextName) {
+        expect(buildPromptOptions).toHaveProperty('contextName', expectedContextName);
+      } else {
+        expect(buildPromptOptions).not.toHaveProperty('contextName');
+      }
       if (expectedSyspromptName) {
         expect(buildPromptOptions).toHaveProperty('syspromptName', expectedSyspromptName);
       } else {
@@ -666,6 +674,47 @@ describe('createTrackerActions prompt assembly', () => {
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 
+  test('passes the active context preset to textgenerationwebui prompt assembly', async () => {
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    installSillyTavernContext(
+      makeContext({
+        powerUserSettings: {
+          context: {
+            preset: 'Active Context',
+          },
+        },
+      }),
+    );
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile({ api: 'textgenerationwebui', context: 'Profile Context' })],
+          },
+        },
+        CONNECT_API_MAP: {
+          textgenerationwebui: { selected: 'textgenerationwebui', type: 'textgenerationwebui' },
+        },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ trackerSystemPromptMode: 'profile' }),
+      } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0);
+
+    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    expect(buildPromptOptions).toHaveProperty('contextName', 'Active Context');
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
   test('passes the active instruct preset to field-level textgenerationwebui regeneration requests', async () => {
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
     const profile = makeProfile({ api: 'textgenerationwebui', instruct: 'Profile Instruct' });
@@ -769,8 +818,9 @@ describe('createTrackerActions prompt assembly', () => {
     const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
     expect(buildPromptOptions).not.toHaveProperty('instructName');
     expect(textCompletionProcessRequest).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), true, expect.any(AbortSignal));
+    expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).not.toHaveProperty('instructName');
     expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).toMatchObject({
-      instructName: undefined,
+      instructSettings: {},
     });
     expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).not.toHaveProperty('presetName');
     expect(profile.instruct).toBe('Profile Instruct');
