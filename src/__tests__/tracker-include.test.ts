@@ -554,6 +554,29 @@ describe('includeZTrackerMessages', () => {
     ]);
   });
 
+  it('leaves embedded tracker snapshot roles unchanged during normalization', () => {
+    const messages = includeZTrackerMessages([
+      buildMessageWithTracker({ id: 7 }),
+      { content: 'Current turn', role: 'user' },
+    ] as any, makeSettings(1)) as any[];
+
+    expect(normalizeTrackerGenerationConversationRoles(messages, {
+      trackerGenerationConversationRoleMode: 'all_assistant',
+    } as ExtensionSettings)).toEqual([
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'base',
+      }),
+      expect.objectContaining({
+        role: 'user',
+      }),
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'Current turn',
+      }),
+    ]);
+  });
+
   it('leaves tracker-generation roles unchanged when preservation mode is active', () => {
     const messages = [
       { role: 'system', content: 'Tracker instructions' },

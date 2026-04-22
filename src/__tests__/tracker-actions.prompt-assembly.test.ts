@@ -7,7 +7,9 @@ import {
   applyTrackerUpdateAndRenderMock,
   buildPromptMock,
   createTrackerActions,
+  includeZTrackerMessagesMock,
   installSillyTavernContext,
+  markEmbeddedTrackerSnapshot,
   makeBuiltPromptResult,
   makeContext,
   makeGenerateRequest,
@@ -150,6 +152,54 @@ describe('createTrackerActions prompt assembly', () => {
       { role: 'system', content: 'Generate tracker JSON' },
     ]);
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test('preserves embedded tracker snapshot roles while normalizing chat turns', async () => {
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+
+    includeZTrackerMessagesMock.mockImplementationOnce((messages: Array<any>) => [
+      ...messages,
+      markEmbeddedTrackerSnapshot({
+        role: 'user',
+        content: 'Tracker:\n```json\n{"time":"09:00:00"}\n```',
+      }),
+    ]);
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const generateRequest = makeGenerateRequest();
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile()],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ trackerGenerationConversationRoleMode: 'all_assistant' }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0);
+
+    const sentMessages = generateRequest.mock.calls[0][0].prompt;
+    expect(sentMessages).toEqual([
+      { role: 'system', content: 'Existing system prompt' },
+      { role: 'system', content: 'Saved tracker system prompt' },
+      { role: 'assistant', content: 'Prior chat message' },
+      {
+        role: 'user',
+        content: 'Tracker:\n```json\n{"time":"09:00:00"}\n```',
+      },
+      { role: 'system', content: 'Generate tracker JSON' },
+    ]);
   });
 
   test('normalizes user chat turns to assistant before text-completion prompt sanitization when configured', async () => {

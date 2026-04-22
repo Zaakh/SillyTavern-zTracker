@@ -223,6 +223,8 @@ function deriveEmbeddedTrackerSpeakerName(settings: ExtensionSettings): string {
   return trimmedLabel || 'Tracker';
 }
 
+const EMBEDDED_TRACKER_SNAPSHOT_MARKER = Symbol('embeddedTrackerSnapshot');
+
 export function includeZTrackerMessages<T extends Message | ChatMessage>(
   messages: T[],
   settings: ExtensionSettings,
@@ -277,18 +279,24 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
           ? `${prefix}\`\`\`${lang}\n${text}\n\`\`\``
           : `${prefix}${text}`;
         const speakerName = useCharacterName ? deriveEmbeddedTrackerSpeakerName(settings) : undefined;
+        const embeddedTrackerMessage = {
+          content,
+          role: embedRole,
+          // These flags are used by SillyTavern Message objects; harmless for ChatMessage.
+          is_user: embedRole === 'user',
+          is_system: embedRole === 'system',
+          ...(speakerName ? { name: speakerName } : {}),
+          mes: content,
+        } as unknown as T;
+        // Keep the marker off the serialized payload while still letting
+        // tracker-generation-only role normalization distinguish injected snapshots.
+        Object.defineProperty(embeddedTrackerMessage, EMBEDDED_TRACKER_SNAPSHOT_MARKER, {
+          value: true,
+        });
         copyMessages.splice(
           foundIndex + 1,
           0,
-          {
-            content,
-            role: embedRole,
-            // These flags are used by SillyTavern Message objects; harmless for ChatMessage.
-            is_user: embedRole === 'user',
-            is_system: embedRole === 'system',
-            ...(speakerName ? { name: speakerName } : {}),
-            mes: content,
-          } as unknown as T,
+          embeddedTrackerMessage,
         );
       }
     }
@@ -313,7 +321,7 @@ export function normalizeTrackerGenerationConversationRoles<
   }
 
   return messages.map((message) => {
-    if (message.role !== 'user') {
+    if (message.role !== 'user' || (message as any)[EMBEDDED_TRACKER_SNAPSHOT_MARKER] === true) {
       return message;
     }
 
