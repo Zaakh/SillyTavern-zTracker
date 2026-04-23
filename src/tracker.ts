@@ -227,8 +227,9 @@ const EMBEDDED_TRACKER_SNAPSHOT_MARKER = Symbol('embeddedTrackerSnapshot');
 
 type IncludeZTrackerMessagesOptions = {
   /**
-   * Text-completion instruct templates only allow system text at the very start.
-   * Rewriting mid-chat tracker snapshots to user turns preserves valid turn framing.
+   * Text-completion instruct templates only allow cleanly alternating dialogue turns.
+   * Inline tracker snapshots into user messages when a standalone injected turn would
+   * break SillyTavern's prompt framing.
    */
   preserveTextCompletionTurnAlternation?: boolean;
 };
@@ -291,15 +292,32 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
             ? (foundMessage as Message).source?.extra
             : (foundMessage as ChatMessage).extra;
         const trackerValue = extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY] || {};
-        const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(trackerValue, settings);
-
-        const header = settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER;
         const useCharacterName = settings.embedZTrackerAsCharacter ?? false;
+        const header = settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER;
+        const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(trackerValue, settings);
+        const speakerName = useCharacterName ? deriveEmbeddedTrackerSpeakerName(settings) : undefined;
         const prefix = !useCharacterName && header ? `${header}\n` : '';
         const content = wrapInCodeFence
           ? `${prefix}\`\`\`${lang}\n${text}\n\`\`\``
           : `${prefix}${text}`;
-        const speakerName = useCharacterName ? deriveEmbeddedTrackerSpeakerName(settings) : undefined;
+
+        if (options.preserveTextCompletionTurnAlternation && (foundMessage as { role?: string }).role === 'user') {
+          const inlineHeader = useCharacterName ? `${speakerName ?? 'Tracker'}:\n` : prefix;
+          const inlineContent = wrapInCodeFence
+            ? `${inlineHeader}\`\`\`${lang}\n${text}\n\`\`\``
+            : `${inlineHeader}${text}`;
+          const existingContent = typeof (foundMessage as any).content === 'string' ? (foundMessage as any).content.trimEnd() : '';
+          const mergedContent = existingContent.length > 0
+            ? `${existingContent}\n\n${inlineContent}`
+            : inlineContent;
+
+          (copyMessages[foundIndex] as any).content = mergedContent;
+          if (typeof (copyMessages[foundIndex] as any).mes === 'string') {
+            (copyMessages[foundIndex] as any).mes = mergedContent;
+          }
+          continue;
+        }
+
         const embeddedTrackerMessage = {
           content,
           role: embedRole,
