@@ -245,7 +245,10 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
   });
 
   (globalThis as any).ztrackerGenerateInterceptor = (chat: ChatMessage[]) => {
-    const newChat = includeZTrackerMessages(chat, settingsManager.getSettings());
+    const textCompletionSafeContext = SillyTavern.getContext() as { mainApi?: string };
+    const newChat = includeZTrackerMessages(chat, settingsManager.getSettings(), {
+      preserveTextCompletionTurnAlternation: textCompletionSafeContext?.mainApi === 'textgenerationwebui',
+    });
     chat.length = 0;
     chat.push(...newChat);
   };

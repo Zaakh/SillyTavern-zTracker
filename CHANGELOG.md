@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Mid-chat tracker snapshots injected into text-completion prompts now avoid `system` turns during live chat generation, so virtual-character and header-based tracker context stays inside valid `[INST]...[/INST]` framing instead of producing malformed `[/INST] ... </s>[/INST]` sequences.
+
 ## [1.10.1] - 2026-04-22
 
 ### Fixed
