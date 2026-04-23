@@ -187,6 +187,25 @@ describe('includeZTrackerMessages', () => {
     expect(result[1]).not.toHaveProperty('name');
   });
 
+  it('rewrites system snapshot injections to user turns for text-completion-safe prompt assembly', () => {
+    const messages = [
+      buildMessageWithTracker({ id: 1 }),
+      { content: 'current', role: 'assistant' },
+    ];
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      makeSettings(1, 'system', true, 'Scene details:'),
+      { preserveTextCompletionTurnAlternation: true },
+    ) as any[];
+
+    expect(result).toHaveLength(3);
+    expect(result[1].role).toBe('user');
+    expect(result[1].name).toBe('Scene details');
+    expect(result[1].is_user).toBe(true);
+    expect(result[1].is_system).toBe(false);
+  });
+
   it('can embed snapshots as assistant messages', () => {
     const messages = [
       buildMessageWithTracker({ id: 1 }),

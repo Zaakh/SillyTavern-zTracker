@@ -225,9 +225,30 @@ function deriveEmbeddedTrackerSpeakerName(settings: ExtensionSettings): string {
 
 const EMBEDDED_TRACKER_SNAPSHOT_MARKER = Symbol('embeddedTrackerSnapshot');
 
+type IncludeZTrackerMessagesOptions = {
+  /**
+   * Text-completion instruct templates only allow system text at the very start.
+   * Rewriting mid-chat tracker snapshots to user turns preserves valid turn framing.
+   */
+  preserveTextCompletionTurnAlternation?: boolean;
+};
+
+function resolveEmbeddedTrackerRole(
+  settings: ExtensionSettings,
+  options: IncludeZTrackerMessagesOptions,
+): ExtensionSettings['embedZTrackerRole'] {
+  const configuredRole = settings.embedZTrackerRole ?? 'user';
+  if (!options.preserveTextCompletionTurnAlternation || configuredRole !== 'system') {
+    return configuredRole;
+  }
+
+  return 'user';
+}
+
 export function includeZTrackerMessages<T extends Message | ChatMessage>(
   messages: T[],
   settings: ExtensionSettings,
+  options: IncludeZTrackerMessagesOptions = {},
 ): T[] {
   // SillyTavern sometimes keeps speaker attribution only on source.name.
   // Promote it onto cloned chat turns so instruct-mode prompt assembly can still emit named dialogue.
@@ -243,7 +264,7 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
       ? ({ ...message, name: fallbackName } as T)
       : message;
   });
-  const embedRole = settings.embedZTrackerRole ?? 'user';
+  const embedRole = resolveEmbeddedTrackerRole(settings, options);
 
   if (settings.includeLastXZTrackerMessages > 0) {
     for (let i = 0; i < settings.includeLastXZTrackerMessages; i++) {
