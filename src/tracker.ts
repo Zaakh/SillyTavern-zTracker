@@ -246,6 +246,10 @@ function resolveEmbeddedTrackerRole(
   return 'user';
 }
 
+function isUserConversationTurn(message: { role?: string; is_user?: boolean }): boolean {
+  return message.role === 'user' || message.is_user === true;
+}
+
 export function includeZTrackerMessages<T extends Message | ChatMessage>(
   messages: T[],
   settings: ExtensionSettings,
@@ -301,7 +305,7 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
           ? `${prefix}\`\`\`${lang}\n${text}\n\`\`\``
           : `${prefix}${text}`;
 
-        if (options.preserveTextCompletionTurnAlternation && (foundMessage as { role?: string }).role === 'user') {
+        if (options.preserveTextCompletionTurnAlternation && isUserConversationTurn(foundMessage as { role?: string; is_user?: boolean })) {
           const inlineHeader = useCharacterName ? `${speakerName ?? 'Tracker'}:\n` : prefix;
           const inlineContent = wrapInCodeFence
             ? `${inlineHeader}\`\`\`${lang}\n${text}\n\`\`\``
