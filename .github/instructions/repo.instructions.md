@@ -81,6 +81,7 @@ These instructions apply to all files in this repository.
 - Keep new logic import-safe and testable (prefer small helpers in modules like `src/parser.ts`, `src/tracker.ts`, etc.).
 - Avoid importing `src/index.tsx` in Jest tests (it wires browser/SillyTavern side effects). Test helpers instead.
 - When a live smoke test reveals a mishaped tracker reply, add the captured reply as test data whenever it is safe to repair so parser repair coverage keeps improving.
+- Testing e2e in SillyTavern requires a build, a commit and manual extension update!
 
 ## Rendering and schema safety
 - Tracker HTML rendering uses Handlebars compiled with `{ strict: true, noEscape: true }`.

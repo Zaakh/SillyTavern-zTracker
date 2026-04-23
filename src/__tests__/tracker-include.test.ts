@@ -236,6 +236,36 @@ describe('includeZTrackerMessages', () => {
     expect(result[0].content).toContain('Customer entered the bar and ordered a drink.');
   });
 
+  it('inlines text-completion-safe tracker snapshots into live is_user chat turns', () => {
+    const messages = [
+      {
+        content: '"A drink, please."',
+        is_user: true,
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer entered the bar and ordered a drink.',
+            },
+          },
+        },
+      },
+    ];
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      makeSettings(1, 'system', true, 'Scene details:'),
+      { preserveTextCompletionTurnAlternation: true },
+    ) as any[];
+
+    expect(result).toHaveLength(1);
+    expect(result[0].is_user).toBe(true);
+    expect(result[0].content).toContain('"A drink, please."\n\nScene details:\n');
+    expect(result[0].content).toContain('18:30:00; 09/15/2023 (Friday)');
+    expect(result[0].content).toContain('Customer entered the bar and ordered a drink.');
+  });
+
   it('can embed snapshots as assistant messages', () => {
     const messages = [
       buildMessageWithTracker({ id: 1 }),
