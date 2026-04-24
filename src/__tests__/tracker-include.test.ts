@@ -335,6 +335,7 @@ describe('includeZTrackerMessages', () => {
     expect(result[2]).not.toHaveProperty('name');
     expect(result[2].content).toContain('Scene details:\n');
     expect(result[2].content).toContain('time: 18:30:00; 09/15/2023 (Friday)');
+    expect(result[2].content).toMatch(/\nBar:$/);
   });
 
   it('can embed snapshots as assistant messages', () => {
