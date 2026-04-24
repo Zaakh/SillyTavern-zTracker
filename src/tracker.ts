@@ -265,15 +265,8 @@ function isAssistantConversationTurn(message: { role?: string; is_user?: boolean
 function canInlineEmbeddedTracker(
   message: { role?: string; is_user?: boolean; is_system?: boolean },
   embedRole: ExtensionSettings['embedZTrackerRole'],
-  options: {
-    isTerminalConversationTurn: boolean;
-  },
 ): boolean {
   if (embedRole === 'assistant') {
-    if (options.isTerminalConversationTurn && isUserConversationTurn(message)) {
-      return true;
-    }
-
     return isAssistantConversationTurn(message);
   }
 
@@ -350,15 +343,17 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
         const content = wrapInCodeFence
           ? `${prefix}\`\`\`${lang}\n${text}\n\`\`\``
           : `${prefix}${text}`;
+        const needsRawTerminalAssistantSnapshot =
+          options.preserveTextCompletionTurnAlternation
+          && embedRole === 'assistant'
+          && foundIndex === copyMessages.length - 1
+          && isUserConversationTurn(foundMessage as { role?: string; is_user?: boolean });
 
         if (
           options.preserveTextCompletionTurnAlternation
           && canInlineEmbeddedTracker(
             foundMessage as { role?: string; is_user?: boolean; is_system?: boolean },
             embedRole,
-            {
-              isTerminalConversationTurn: foundIndex === copyMessages.length - 1,
-            },
           )
         ) {
           const inlineHeader = useCharacterName ? `${speakerName ?? 'Tracker'}:\n` : prefix;
@@ -377,14 +372,23 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
           continue;
         }
 
+        const rawTerminalAssistantHeader = speakerName ? `${speakerName}:` : header || 'Tracker:';
+        const rawTerminalAssistantPrefix = speakerName ? `${speakerName}:\n` : prefix || 'Tracker:\n';
+        const rawTerminalAssistantContent = needsRawTerminalAssistantSnapshot
+          ? wrapInCodeFence
+            ? `${rawTerminalAssistantHeader}\n\`\`\`${lang}\n${text}\n\`\`\``
+            : `${rawTerminalAssistantPrefix}${text}`
+          : undefined;
+
         const embeddedTrackerMessage = {
-          content,
+          content: rawTerminalAssistantContent ?? content,
           role: embedRole,
           // These flags are used by SillyTavern Message objects; harmless for ChatMessage.
           is_user: embedRole === 'user',
           is_system: embedRole === 'system',
-          ...(speakerName ? { name: speakerName } : {}),
-          mes: content,
+          ...(!needsRawTerminalAssistantSnapshot && speakerName ? { name: speakerName } : {}),
+          ...(needsRawTerminalAssistantSnapshot ? { ignoreInstruct: true } : {}),
+          mes: rawTerminalAssistantContent ?? content,
         } as unknown as T;
         // Keep the marker off the serialized payload while still letting
         // tracker-generation-only role normalization distinguish injected snapshots.
