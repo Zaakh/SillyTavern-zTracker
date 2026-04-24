@@ -390,6 +390,48 @@ describe('includeZTrackerMessages', () => {
     expect(result[4]).toMatchObject({ role: 'assistant', name: 'Bar', content: '' });
   });
 
+  it('keeps terminal assistant virtual-character snapshots as assistant turns in normal chats', () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'As you enter the bar you realize you are the only customer.',
+        name: 'Bar',
+      },
+      {
+        is_user: true,
+        mes: '"A drink, please."',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer entered the bar and ordered a drink.',
+            },
+          },
+        },
+      },
+    ];
+
+    const settings = makeSettings(1, 'assistant', true, 'Scene tracker:');
+    settings.embedZTrackerSnapshotTransformPreset = 'minimal';
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      settings,
+      { preserveTextCompletionTurnAlternation: true },
+    ) as any[];
+
+    expect(result).toHaveLength(3);
+    expect(result[1].is_user).toBe(true);
+    expect(result[1].mes).toBe('"A drink, please."');
+    expect(result[2].role).toBe('assistant');
+    expect(result[2].ignoreInstruct).toBe(true);
+    expect(result[2]).not.toHaveProperty('name');
+    expect(result[2].content).toContain('Scene tracker:\n');
+    expect(result[2].content).toContain('time: 18:30:00; 09/15/2023 (Friday)');
+    expect(result[2].content).toMatch(/\nBar:$/);
+  });
+
   it('inlines terminal assistant virtual-character snapshots into the final user turn in text-completion-safe mode', () => {
     const messages = [
       {

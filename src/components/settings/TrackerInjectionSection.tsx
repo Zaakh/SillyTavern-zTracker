@@ -26,12 +26,12 @@ export const TrackerInjectionSection: FC<SettingsSectionProps> = ({ settings, up
       </div>
 
       <div className="setting-row">
-        <label title="Which role to use for embedded zTracker snapshots in normal generations. This affects generate_interceptor only, after SillyTavern has already built the live prompt chat array.">
+        <label title="Which role to use for embedded zTracker snapshots in normal generations. This affects generate_interceptor only, after SillyTavern has already built the live prompt chat array. In Text Completion chats, assistant-role snapshots stay as assistant turns when zTracker can preserve a clear reply cue and only inline into the final user turn in ambiguous terminal cases.">
           Embed zTracker snapshots as
         </label>
         <select
           className="text_pole"
-          title="Only affects embedding into the generation chat array after SillyTavern prompt assembly (generate_interceptor), not tracker generation."
+          title="Only affects embedding into the generation chat array after SillyTavern prompt assembly (generate_interceptor), not tracker generation. In Text Completion chats, assistant-role snapshots stay raw when zTracker can preserve a clear assistant reply cue and only inline when a standalone terminal assistant block would be ambiguous."
           value={settings.embedZTrackerRole ?? 'user'}
           onChange={(e) =>
             updateAndRefresh((s) => {
@@ -43,6 +43,9 @@ export const TrackerInjectionSection: FC<SettingsSectionProps> = ({ settings, up
           <option value="system">System</option>
           <option value="assistant">Assistant</option>
         </select>
+        <div className="notes">
+          In Text Completion chats, assistant-role snapshots stay as assistant turns when zTracker can keep a clear reply cue and only inline into the final user turn for ambiguous terminal no-prefill cases.
+        </div>
       </div>
 
       <div className="setting-row">

@@ -301,6 +301,29 @@ function getMessageSpeakerName(message: { name?: string; source?: { name?: strin
   return undefined;
 }
 
+function getSingleAssistantReplyLabel(
+  messages: Array<{ role?: string; is_user?: boolean; is_system?: boolean; name?: string; source?: { name?: string } }>,
+): string | undefined {
+  const assistantLabels = new Set<string>();
+
+  for (const message of messages) {
+    if (!isAssistantConversationTurn(message)) {
+      continue;
+    }
+
+    const speakerName = getMessageSpeakerName(message);
+    if (speakerName) {
+      assistantLabels.add(speakerName);
+    }
+
+    if (assistantLabels.size > 1) {
+      return undefined;
+    }
+  }
+
+  return assistantLabels.size === 1 ? Array.from(assistantLabels)[0] : undefined;
+}
+
 export function includeZTrackerMessages<T extends Message | ChatMessage>(
   messages: T[],
   settings: ExtensionSettings,
@@ -370,25 +393,37 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
         if (hasTrailingAssistantPrefill) {
           insertionIndex = copyMessages.length - 1;
         }
-        const trailingAssistantReplyLabel = hasTrailingAssistantPrefill
+        const terminalAssistantReplyLabel = hasTrailingAssistantPrefill
           ? getMessageSpeakerName(copyMessages[copyMessages.length - 1] as { name?: string; source?: { name?: string } })
+          : foundIndex === copyMessages.length - 1
+            && isUserConversationTurn(foundMessage as { role?: string; is_user?: boolean })
+            ? getSingleAssistantReplyLabel(
+              copyMessages.slice(0, foundIndex) as Array<{
+                role?: string;
+                is_user?: boolean;
+                is_system?: boolean;
+                name?: string;
+                source?: { name?: string };
+              }>,
+            )
           : undefined;
-        // A terminal assistant snapshot without a real assistant prefill still gets
-        // rewritten by SillyTavern's text-completion formatter, so keep that case
-        // inside the final user turn instead of emitting a standalone assistant turn.
+        // Only inline a terminal assistant snapshot when we cannot safely synthesize
+        // the assistant reply cue. Single-speaker chats can still end on a raw
+        // assistant snapshot followed by that speaker label.
         const shouldInlineTerminalAssistantSnapshot =
           options.preserveTextCompletionTurnAlternation
           && embedRole === 'assistant'
           && !hasTrailingAssistantPrefill
+          && !terminalAssistantReplyLabel
           && foundIndex === copyMessages.length - 1
           && isUserConversationTurn(foundMessage as { role?: string; is_user?: boolean });
         // When SillyTavern already appended an assistant prefill turn, keep the
-        // injected snapshot as raw assistant text after that prefill so the prompt
-        // still ends on the assistant reply cue instead of opening a new user block.
+        // injected snapshot as raw assistant text so the prompt still ends on the
+        // assistant reply cue instead of opening a new user block.
         const needsRawTerminalAssistantSnapshot =
           options.preserveTextCompletionTurnAlternation
           && embedRole === 'assistant'
-          && hasTrailingAssistantPrefill;
+          && (hasTrailingAssistantPrefill || !!terminalAssistantReplyLabel);
 
         if (
           options.preserveTextCompletionTurnAlternation
@@ -418,7 +453,7 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
 
         const rawTerminalAssistantHeader = speakerName ? `${speakerName}:` : header || 'Tracker:';
         const rawTerminalAssistantPrefix = speakerName ? `${speakerName}:\n` : prefix || 'Tracker:\n';
-        const rawTerminalAssistantSuffix = trailingAssistantReplyLabel ? `\n${trailingAssistantReplyLabel}:` : '';
+        const rawTerminalAssistantSuffix = terminalAssistantReplyLabel ? `\n${terminalAssistantReplyLabel}:` : '';
         const rawTerminalAssistantContent = needsRawTerminalAssistantSnapshot
           ? wrapInCodeFence
             ? `${rawTerminalAssistantHeader}\n\`\`\`${lang}\n${text}\n\`\`\`${rawTerminalAssistantSuffix}`
