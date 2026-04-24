@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- Mid-chat tracker snapshots injected into text-completion prompts now stay inside valid `[INST]...[/INST]` framing by avoiding unsupported standalone tracker turns after user messages during live chat generation.
+- Mid-chat tracker snapshots injected into text-completion prompts now respect the configured embed role while preserving valid `[INST]...[/INST]` framing, so user/system-safe injections no longer create unsupported standalone turns after user messages and assistant-role virtual-character snapshots stay separate assistant turns.
 
 ## [1.10.1] - 2026-04-22
 

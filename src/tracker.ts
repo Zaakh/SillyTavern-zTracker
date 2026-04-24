@@ -250,6 +250,33 @@ function isUserConversationTurn(message: { role?: string; is_user?: boolean }): 
   return message.role === 'user' || message.is_user === true;
 }
 
+function isAssistantConversationTurn(message: { role?: string; is_user?: boolean; is_system?: boolean }): boolean {
+  if (message.role === 'assistant') {
+    return true;
+  }
+
+  if (message.role === 'user' || message.role === 'system' || message.is_system === true) {
+    return false;
+  }
+
+  return message.is_user === false;
+}
+
+function canInlineEmbeddedTracker(
+  message: { role?: string; is_user?: boolean; is_system?: boolean },
+  embedRole: ExtensionSettings['embedZTrackerRole'],
+): boolean {
+  if (embedRole === 'assistant') {
+    return isAssistantConversationTurn(message);
+  }
+
+  if (embedRole === 'user') {
+    return isUserConversationTurn(message);
+  }
+
+  return false;
+}
+
 function getMessageText(message: { content?: string; mes?: string }): string {
   if (typeof message.content === 'string' && message.content.trim().length > 0) {
     return message.content;
@@ -317,7 +344,13 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
           ? `${prefix}\`\`\`${lang}\n${text}\n\`\`\``
           : `${prefix}${text}`;
 
-        if (options.preserveTextCompletionTurnAlternation && isUserConversationTurn(foundMessage as { role?: string; is_user?: boolean })) {
+        if (
+          options.preserveTextCompletionTurnAlternation
+          && canInlineEmbeddedTracker(
+            foundMessage as { role?: string; is_user?: boolean; is_system?: boolean },
+            embedRole,
+          )
+        ) {
           const inlineHeader = useCharacterName ? `${speakerName ?? 'Tracker'}:\n` : prefix;
           const inlineContent = wrapInCodeFence
             ? `${inlineHeader}\`\`\`${lang}\n${text}\n\`\`\``
