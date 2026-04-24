@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- Mid-chat tracker snapshots injected into text-completion prompts now preserve valid `[INST]...[/INST]` framing across all embed-role settings, so user/system-safe injections avoid unsupported standalone turns after user messages and terminal assistant-role snapshots no longer consume the model's final assistant slot.
+- Mid-chat tracker snapshots injected into text-completion prompts now preserve valid `[INST]...[/INST]` framing across all embed-role settings, including assistant-role virtual-character snapshots when SillyTavern appends a trailing assistant prefill turn and forced assistant names are enabled.
 
 ## [1.10.1] - 2026-04-22
 
