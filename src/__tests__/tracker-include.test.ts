@@ -295,7 +295,7 @@ describe('includeZTrackerMessages', () => {
     expect(result[0].mes).toContain('"A drink, please."\n\nScene details:\n');
   });
 
-  it('keeps assistant virtual-character snapshots as separate assistant turns in text-completion-safe mode', () => {
+  it('inlines terminal assistant virtual-character snapshots into the last user turn in text-completion-safe mode', () => {
     const messages = [
       {
         is_user: true,
@@ -318,12 +318,11 @@ describe('includeZTrackerMessages', () => {
       { preserveTextCompletionTurnAlternation: true },
     ) as any[];
 
-    expect(result).toHaveLength(2);
-    expect(result[0].mes).toBe('"A drink, please."');
-    expect(result[1].role).toBe('assistant');
-    expect(result[1].name).toBe('Scene details');
-    expect(result[1].content).not.toContain('Scene details:');
-    expect(result[1].content).toContain('18:30:00; 09/15/2023 (Friday)');
+    expect(result).toHaveLength(1);
+    expect(result[0].is_user).toBe(true);
+    expect(result[0].content).toContain('"A drink, please."\n\nScene details:\n');
+    expect(result[0].content).toContain('18:30:00; 09/15/2023 (Friday)');
+    expect(result[0].mes).toContain('"A drink, please."\n\nScene details:\n');
   });
 
   it('can embed snapshots as assistant messages', () => {
