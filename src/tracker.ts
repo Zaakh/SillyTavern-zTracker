@@ -356,12 +356,17 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
         const content = wrapInCodeFence
           ? `${prefix}\`\`\`${lang}\n${text}\n\`\`\``
           : `${prefix}${text}`;
+        const trailingMessages = copyMessages.slice(foundIndex + 1);
+        // Only a single empty assistant turn is treated as SillyTavern's reply prefill.
+        // Real multi-character assistant replies must keep the snapshot anchored after
+        // the tracked source turn instead of moving it to the terminal assistant slot.
         const hasTrailingAssistantPrefill =
           embedRole === 'assistant'
-          && foundIndex < copyMessages.length - 1
-          && copyMessages.slice(foundIndex + 1).every((message) =>
-            isAssistantConversationTurn(message as { role?: string; is_user?: boolean; is_system?: boolean }),
-          );
+          && trailingMessages.length === 1
+          && isAssistantConversationTurn(
+            trailingMessages[0] as { role?: string; is_user?: boolean; is_system?: boolean },
+          )
+          && getMessageText(trailingMessages[0] as { content?: string; mes?: string }).length === 0;
         if (hasTrailingAssistantPrefill) {
           insertionIndex = copyMessages.length - 1;
         }

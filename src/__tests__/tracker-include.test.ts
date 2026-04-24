@@ -338,6 +338,58 @@ describe('includeZTrackerMessages', () => {
     expect(result[2].content).toMatch(/\nBar:$/);
   });
 
+  it('keeps assistant virtual-character snapshots anchored after the tracked user turn in multi-character chats', () => {
+    const messages = [
+      {
+        is_user: true,
+        mes: '"A drink, please."',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer entered the bar and ordered a drink.',
+            },
+          },
+        },
+      },
+      {
+        role: 'assistant',
+        content: 'Silvia pours the drink and sets it on the counter.',
+        name: 'Bar',
+      },
+      {
+        role: 'assistant',
+        content: 'What brings you to Eldoria\'s forest?',
+        name: 'Seraphina',
+      },
+      {
+        role: 'assistant',
+        content: '',
+        name: 'Bar',
+      },
+    ];
+
+    const settings = makeSettings(1, 'assistant', true, 'Scene details:');
+    settings.embedZTrackerSnapshotTransformPreset = 'minimal';
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      settings,
+      { preserveTextCompletionTurnAlternation: true },
+    ) as any[];
+
+    expect(result).toHaveLength(5);
+    expect(result[1].role).toBe('assistant');
+    expect(result[1].name).toBe('Scene details');
+    expect(result[1]).not.toHaveProperty('ignoreInstruct');
+    expect(result[1].content).not.toContain('Scene details:');
+    expect(result[1].content).toContain('time: 18:30:00; 09/15/2023 (Friday)');
+    expect(result[2]).toMatchObject({ role: 'assistant', name: 'Bar' });
+    expect(result[3]).toMatchObject({ role: 'assistant', name: 'Seraphina' });
+    expect(result[4]).toMatchObject({ role: 'assistant', name: 'Bar', content: '' });
+  });
+
   it('inlines terminal assistant virtual-character snapshots into the final user turn in text-completion-safe mode', () => {
     const messages = [
       {
