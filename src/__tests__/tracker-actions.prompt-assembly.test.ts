@@ -447,6 +447,51 @@ describe('createTrackerActions prompt assembly', () => {
     },
   );
 
+  test.each([
+    { api: 'openai', expectedPresetName: 'Selected Profile Prompt' },
+    { api: 'textgenerationwebui', expectedPresetName: undefined },
+  ])(
+    'uses the selected connection profile preset for $api profiles only when supported',
+    async ({ api, expectedPresetName }) => {
+      installSillyTavernContext(makeContext());
+
+      buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+      const generateRequest = makeGenerateRequest();
+
+      const actions = createTrackerActions({
+        globalContext: {
+          chat: [{ original_avatar: 'avatar.png', extra: {} }],
+          saveChat: async () => undefined,
+          extensionSettings: {
+            connectionManager: {
+              profiles: [makeProfile({ api, preset: 'Selected Profile Prompt' })],
+            },
+          },
+          CONNECT_API_MAP: {
+            [api]: { selected: api },
+          },
+        },
+        settingsManager: {
+          getSettings: () => makeSettings({ trackerSystemPromptMode: 'selected' }),
+        } as any,
+        generator: { generateRequest, abortRequest: jest.fn() } as any,
+        pendingRequests: new Map(),
+        renderTrackerWithDeps: renderTrackerWithDepsMock,
+        importMetaUrl: TEST_IMPORT_META_URL,
+      });
+
+      await actions.generateTracker(0);
+
+      const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+      if (expectedPresetName) {
+        expect(buildPromptOptions).toHaveProperty('presetName', expectedPresetName);
+      } else {
+        expect(buildPromptOptions).not.toHaveProperty('presetName');
+      }
+      expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+    },
+  );
+
   test('omits syspromptName from buildPrompt when profile mode has no selected system prompt', async () => {
     installSillyTavernContext(makeContext());
 

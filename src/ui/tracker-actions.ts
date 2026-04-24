@@ -961,6 +961,10 @@ export function createTrackerActions(options: {
     const trackerWorldInfoMode = settings.trackerWorldInfoPolicyMode ?? TrackerWorldInfoPolicyMode.INCLUDE_ALL;
     const ignoreWorldInfo = shouldIgnoreWorldInfoDuringTrackerBuild(trackerWorldInfoMode);
     const skipCharacterCardInTrackerGeneration = settings.skipCharacterCardInTrackerGeneration ?? false;
+    const profilePreset =
+      settings.trackerSystemPromptMode === 'selected' && apiMap.selected !== 'textgenerationwebui'
+        ? profile.preset || undefined
+        : undefined;
 
     const syspromptName = resolveTrackerSystemPromptName(settings, context);
     let savedSystemPromptContent: string | undefined;
@@ -993,6 +997,7 @@ export function createTrackerActions(options: {
       },
       ...promptPresetSelections,
       includeNames: includePromptNames,
+      ...(profilePreset ? { presetName: profilePreset } : {}),
       ignoreWorldInfo,
       ...(skipCharacterCardInTrackerGeneration ? { ignoreCharacterFields: true } : {}),
     });

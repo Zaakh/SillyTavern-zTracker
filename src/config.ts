@@ -15,7 +15,7 @@ export enum TrackerWorldInfoPolicyMode {
   ALLOWLIST = 'allowlist',
 }
 
-export type TrackerSystemPromptMode = 'profile' | 'saved';
+export type TrackerSystemPromptMode = 'profile' | 'saved' | 'selected';
 
 export type TrackerGenerationConversationRoleMode = 'preserve' | 'all_assistant';
 
