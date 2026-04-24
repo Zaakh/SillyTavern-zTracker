@@ -265,8 +265,15 @@ function isAssistantConversationTurn(message: { role?: string; is_user?: boolean
 function canInlineEmbeddedTracker(
   message: { role?: string; is_user?: boolean; is_system?: boolean },
   embedRole: ExtensionSettings['embedZTrackerRole'],
+  options: {
+    isTerminalConversationTurn: boolean;
+  },
 ): boolean {
   if (embedRole === 'assistant') {
+    if (options.isTerminalConversationTurn && isUserConversationTurn(message)) {
+      return true;
+    }
+
     return isAssistantConversationTurn(message);
   }
 
@@ -349,6 +356,9 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
           && canInlineEmbeddedTracker(
             foundMessage as { role?: string; is_user?: boolean; is_system?: boolean },
             embedRole,
+            {
+              isTerminalConversationTurn: foundIndex === copyMessages.length - 1,
+            },
           )
         ) {
           const inlineHeader = useCharacterName ? `${speakerName ?? 'Tracker'}:\n` : prefix;
