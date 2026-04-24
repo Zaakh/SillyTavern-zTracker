@@ -289,6 +289,18 @@ function getMessageText(message: { content?: string; mes?: string }): string {
   return '';
 }
 
+function getMessageSpeakerName(message: { name?: string; source?: { name?: string } }): string | undefined {
+  if (typeof message.name === 'string' && message.name.trim().length > 0) {
+    return message.name.trim();
+  }
+
+  if (typeof message.source?.name === 'string' && message.source.name.trim().length > 0) {
+    return message.source.name.trim();
+  }
+
+  return undefined;
+}
+
 export function includeZTrackerMessages<T extends Message | ChatMessage>(
   messages: T[],
   settings: ExtensionSettings,
@@ -353,6 +365,9 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
         if (hasTrailingAssistantPrefill) {
           insertionIndex = copyMessages.length - 1;
         }
+        const trailingAssistantReplyLabel = hasTrailingAssistantPrefill
+          ? getMessageSpeakerName(copyMessages[copyMessages.length - 1] as { name?: string; source?: { name?: string } })
+          : undefined;
         const needsRawTerminalAssistantSnapshot =
           options.preserveTextCompletionTurnAlternation
           && embedRole === 'assistant'
@@ -386,10 +401,11 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
 
         const rawTerminalAssistantHeader = speakerName ? `${speakerName}:` : header || 'Tracker:';
         const rawTerminalAssistantPrefix = speakerName ? `${speakerName}:\n` : prefix || 'Tracker:\n';
+        const rawTerminalAssistantSuffix = trailingAssistantReplyLabel ? `\n${trailingAssistantReplyLabel}:` : '';
         const rawTerminalAssistantContent = needsRawTerminalAssistantSnapshot
           ? wrapInCodeFence
-            ? `${rawTerminalAssistantHeader}\n\`\`\`${lang}\n${text}\n\`\`\``
-            : `${rawTerminalAssistantPrefix}${text}`
+            ? `${rawTerminalAssistantHeader}\n\`\`\`${lang}\n${text}\n\`\`\`${rawTerminalAssistantSuffix}`
+            : `${rawTerminalAssistantPrefix}${text}${rawTerminalAssistantSuffix}`
           : undefined;
 
         const embeddedTrackerMessage = {
