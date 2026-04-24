@@ -295,6 +295,37 @@ describe('includeZTrackerMessages', () => {
     expect(result[0].mes).toContain('"A drink, please."\n\nScene details:\n');
   });
 
+  it('keeps assistant virtual-character snapshots as separate assistant turns in text-completion-safe mode', () => {
+    const messages = [
+      {
+        is_user: true,
+        mes: '"A drink, please."',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer entered the bar and ordered a drink.',
+            },
+          },
+        },
+      },
+    ];
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      makeSettings(1, 'assistant', true, 'Scene details:'),
+      { preserveTextCompletionTurnAlternation: true },
+    ) as any[];
+
+    expect(result).toHaveLength(2);
+    expect(result[0].mes).toBe('"A drink, please."');
+    expect(result[1].role).toBe('assistant');
+    expect(result[1].name).toBe('Scene details');
+    expect(result[1].content).not.toContain('Scene details:');
+    expect(result[1].content).toContain('18:30:00; 09/15/2023 (Friday)');
+  });
+
   it('can embed snapshots as assistant messages', () => {
     const messages = [
       buildMessageWithTracker({ id: 1 }),
