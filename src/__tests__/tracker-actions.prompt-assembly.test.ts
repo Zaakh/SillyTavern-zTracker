@@ -312,12 +312,12 @@ describe('createTrackerActions prompt assembly', () => {
     await actions.generateTrackerPart(0, 'time');
 
     const sentMessages = generateRequest.mock.calls[0][0].prompt;
-    expect(sentMessages).toEqual(expect.arrayContaining([
-      { role: 'assistant', content: 'Prior chat message' },
-    ]));
-    expect(sentMessages).not.toEqual(expect.arrayContaining([
-      { role: 'user', content: 'Prior chat message' },
-    ]));
+    expect(sentMessages).toEqual(
+      expect.arrayContaining([expect.objectContaining({ role: 'assistant', content: 'Prior chat message' })]),
+    );
+    expect(sentMessages).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ role: 'user', content: 'Prior chat message' })]),
+    );
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 

@@ -26,6 +26,9 @@ import {
   includeZTrackerMessages,
   normalizeTrackerGenerationConversationRoles,
   sanitizeMessagesForGeneration,
+  findHistoricalTrackers,
+  injectTrackersToSillyTavern,
+  spliceTrackersToMessages,
 } from '../tracker.js';
 import {
   buildArrayItemCleanupTarget,
@@ -985,11 +988,15 @@ export function createTrackerActions(options: {
     const includePromptNames = apiMap.selected !== 'textgenerationwebui';
 
     let promptResult;
+        const promptStart =
+      settings.includeLastXMessages > 0 ? Math.max(0, messageId - settings.includeLastXMessages) : 0;
+    const rawHistory = globalContext.chat.slice(promptStart, messageId + 1);
+
     promptResult = await buildPrompt(apiMap.selected, {
       targetCharacterId: characterId,
       messageIndexesBetween: {
         end: messageId,
-        start: settings.includeLastXMessages > 0 ? Math.max(0, messageId - settings.includeLastXMessages) : 0,
+        start: promptStart,
       },
       ...promptPresetSelections,
       includeNames: includePromptNames,
@@ -997,7 +1004,44 @@ export function createTrackerActions(options: {
       ...(skipCharacterCardInTrackerGeneration ? { ignoreCharacterFields: true } : {}),
     });
 
-    let messages = includeZTrackerMessages(promptResult.result, settings);
+    const isTextCompletion = apiMap.type === 'text';
+    let rawIndex = 0;
+    const messagesWithTrackerMetadata = promptResult.result.map((message: Message) => {
+      if (message.role === 'system') {
+        return message;
+      }
+
+      const rawMessage = rawHistory[rawIndex++] as
+        | (Message & { extra?: Record<string, unknown> })
+        | undefined;
+      const trackerNamespace = rawMessage?.extra?.[EXTENSION_KEY] as
+        | Record<string, unknown>
+        | undefined;
+      const trackerValue = trackerNamespace?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
+      if (!trackerValue) {
+        return message;
+      }
+
+      const currentExtra = (message as Message & { extra?: Record<string, unknown> }).extra ?? {};
+      const currentTrackerNamespace = currentExtra[EXTENSION_KEY] as
+        | Record<string, unknown>
+        | undefined;
+
+      return {
+        ...message,
+        extra: {
+          ...currentExtra,
+          [EXTENSION_KEY]: {
+            ...currentTrackerNamespace,
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: trackerValue,
+          },
+        },
+      };
+    });
+
+    let messages = includeZTrackerMessages(messagesWithTrackerMetadata, settings, {
+      forceSplice: true,
+    });
     messages = normalizeTrackerGenerationConversationRoles(messages, settings);
     debugLog(settingsManager, 'prompt built', {
       trackerGenerationConversationRoleMode: settings.trackerGenerationConversationRoleMode ?? 'preserve',

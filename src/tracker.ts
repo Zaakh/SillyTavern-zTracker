@@ -22,6 +22,8 @@ export const CHAT_MESSAGE_PARTS_ORDER_KEY = 'partsOrder';
 export const CHAT_MESSAGE_PARTS_META_KEY = 'partsMeta';
 export const CHAT_MESSAGE_PENDING_REDACTIONS_KEY = 'pendingRedactions';
 
+const ST_EXTENSION_PROMPT_IN_CHAT = 1;
+
 function escapeHtmlAttr(value: string): string {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -55,6 +57,150 @@ function getPendingRedactionTargets(extra: Record<string, any> | undefined): Arr
 
 function isBlankPendingLabelValue(value: unknown): boolean {
   return value === null || value === '';
+}
+
+export interface HistoricalTrackerMatch<T extends Message | ChatMessage = Message | ChatMessage> {
+  index: number;
+  depth: number;
+  message: T;
+  trackerValue: unknown;
+}
+
+function getMessageExtra(message: Message | ChatMessage): Record<string, any> | undefined {
+  return 'source' in message ? (message as Message).source?.extra : (message as ChatMessage).extra;
+}
+
+function formatTrackerEmbeddingContent(
+  trackerValue: unknown,
+  settings: ExtensionSettings,
+): { content: string; speakerName?: string } {
+  const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(trackerValue, settings);
+  const header = settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER;
+  const useCharacterName = settings.embedZTrackerAsCharacter ?? false;
+  const prefix = !useCharacterName && header ? `${header}\n` : '';
+  const content = wrapInCodeFence ? `${prefix}\`\`\`${lang}\n${text}\n\`\`\`` : `${prefix}${text}`;
+  const speakerName = useCharacterName ? deriveEmbeddedTrackerSpeakerName(settings) : undefined;
+
+  return { content, speakerName };
+}
+
+function resolveEmbeddedTrackerRole(role: string): number {
+  switch (role) {
+    case 'user':
+      return 1;
+    case 'assistant':
+      return 2;
+    case 'system':
+    default:
+      return 0;
+  }
+}
+
+export function findHistoricalTrackers<T extends Message | ChatMessage>(
+  messages: T[],
+  limit: number,
+  startMessageId?: number,
+): HistoricalTrackerMatch<T>[] {
+  if (!Array.isArray(messages) || messages.length === 0 || !Number.isFinite(limit) || limit <= 0) {
+    return [];
+  }
+
+  const startIndexRaw =
+    typeof startMessageId === 'number' && Number.isFinite(startMessageId)
+      ? Math.trunc(startMessageId)
+      : messages.length - 1;
+  if (startIndexRaw < 0) {
+    return [];
+  }
+
+  const startIndex = Math.min(messages.length - 1, startIndexRaw);
+  const trackers: HistoricalTrackerMatch<T>[] = [];
+
+  for (let index = startIndex; index >= 0 && trackers.length < limit; index--) {
+    const message = messages[index];
+    const extra = getMessageExtra(message);
+    const trackerValue = extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
+    if (trackerValue === undefined) {
+      continue;
+    }
+
+    trackers.push({
+      index,
+      depth: startIndex - index,
+      message,
+      trackerValue,
+    });
+  }
+
+  return trackers;
+}
+
+export function injectTrackersToSillyTavern<T extends Message | ChatMessage>(
+  trackers: HistoricalTrackerMatch<T>[],
+  settings: ExtensionSettings,
+): boolean {
+  if (!Array.isArray(trackers) || trackers.length === 0) {
+    return false;
+  }
+
+  const context = resolveSillyTavernContext();
+  if (!context) {
+    return false;
+  }
+
+  const embedRole = settings.embedZTrackerRole ?? 'user';
+  const stRole = resolveEmbeddedTrackerRole(embedRole);
+
+  for (let i = 0; i < trackers.length; i++) {
+    const tracker = trackers[i];
+    const { content } = formatTrackerEmbeddingContent(tracker.trackerValue, settings);
+
+    context.setExtensionPrompt?.(
+      `zTracker:embedded-${embedRole}:${tracker.index}:${i}`,
+      content,
+      ST_EXTENSION_PROMPT_IN_CHAT,
+      tracker.depth,
+      false,
+      stRole,
+    );
+  }
+  console.debug('zTracker: Injected Tracker data.');
+  return true;
+}
+
+export function spliceTrackersToMessages<T extends Message | ChatMessage>(
+  messages: T[],
+  trackers: HistoricalTrackerMatch<T>[],
+  settings: ExtensionSettings,
+): T[] {
+  const copyMessages = structuredClone(messages) as T[];
+  if (!Array.isArray(trackers) || trackers.length === 0) {
+    return copyMessages;
+  }
+
+  const embedRole = settings.embedZTrackerRole ?? 'user';
+
+  for (const tracker of trackers) {
+    const { content, speakerName } = formatTrackerEmbeddingContent(tracker.trackerValue, settings);
+
+    copyMessages.splice(tracker.index + 1, 0, {
+      content,
+      role: embedRole,
+      is_user: embedRole === 'user',
+      is_system: embedRole === 'system',
+      ...(speakerName ? { name: speakerName } : {}),
+      mes: content,
+    } as unknown as T);
+  }
+
+  return copyMessages;
+}
+
+export interface HistoricalTrackerMatch<T extends Message | ChatMessage = Message | ChatMessage> {
+  index: number;
+  depth: number;
+  message: T;
+  trackerValue: unknown;
 }
 
 export interface TrackerContext {
@@ -225,9 +371,38 @@ function deriveEmbeddedTrackerSpeakerName(settings: ExtensionSettings): string {
 
 const EMBEDDED_TRACKER_SNAPSHOT_MARKER = Symbol('embeddedTrackerSnapshot');
 
+type SillyTavernContextLike = {
+  setExtensionPrompt?: (
+    key: string,
+    value: string,
+    position: number,
+    depth: number,
+    scan?: boolean,
+    role?: number,
+    filter?: () => Promise<boolean> | boolean,
+  ) => void;
+};
+
+function resolveSillyTavernContext(): SillyTavernContextLike | undefined {
+  const sillyTavern = (globalThis as { SillyTavern?: { getContext?: () => unknown } }).SillyTavern;
+  if (!sillyTavern || typeof sillyTavern.getContext !== 'function') {
+    return undefined;
+  }
+
+  try {
+    const context = sillyTavern.getContext() as SillyTavernContextLike | undefined;
+    return context && typeof context.setExtensionPrompt === 'function' ? context : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function includeZTrackerMessages<T extends Message | ChatMessage>(
   messages: T[],
   settings: ExtensionSettings,
+  options?: {
+    forceSplice?: boolean;
+  },
 ): T[] {
   // SillyTavern sometimes keeps speaker attribution only on source.name.
   // Promote it onto cloned chat turns so instruct-mode prompt assembly can still emit named dialogue.
@@ -246,13 +421,12 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
   const embedRole = settings.embedZTrackerRole ?? 'user';
 
   if (settings.includeLastXZTrackerMessages > 0) {
+    const context = resolveSillyTavernContext();
     for (let i = 0; i < settings.includeLastXZTrackerMessages; i++) {
       let foundMessage: T | null = null;
       let foundIndex = -1;
-      // SillyTavern may pass a chat array that ends on the most recent user message
-      // (e.g. Options → Regenerate can produce a 2-message prompt). We must consider
-      // the last message as a valid tracker source.
-      for (let j = copyMessages.length - 1; j >= 0; j--) {
+      // Skip the terminal message so we do not feed the prompt its own current tracker snapshot.
+      for (let j = copyMessages.length - 2; j >= 0; j--) {
         const message = copyMessages[j];
         const extra = 'source' in message ? (message as Message).source?.extra : (message as ChatMessage).extra;
         // @ts-ignore - we avoid mutating the original object across include iterations
@@ -279,25 +453,44 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
           ? `${prefix}\`\`\`${lang}\n${text}\n\`\`\``
           : `${prefix}${text}`;
         const speakerName = useCharacterName ? deriveEmbeddedTrackerSpeakerName(settings) : undefined;
-        const embeddedTrackerMessage = {
-          content,
-          role: embedRole,
-          // These flags are used by SillyTavern Message objects; harmless for ChatMessage.
-          is_user: embedRole === 'user',
-          is_system: embedRole === 'system',
-          ...(speakerName ? { name: speakerName } : {}),
-          mes: content,
-        } as unknown as T;
-        // Keep the marker off the serialized payload while still letting
-        // tracker-generation-only role normalization distinguish injected snapshots.
-        Object.defineProperty(embeddedTrackerMessage, EMBEDDED_TRACKER_SNAPSHOT_MARKER, {
-          value: true,
-        });
-        copyMessages.splice(
-          foundIndex + 1,
-          0,
-          embeddedTrackerMessage,
-        );
+        if (context && !options?.forceSplice) {
+          const promptDepth = copyMessages.length - foundIndex - 1;
+          const roleMap: Record<string, number> = {
+            system: 0,
+            user: 1,
+            assistant: 2,
+          };
+          const stRole = roleMap[embedRole] ?? 0; // Default to system if unknown
+          console.debug('Injecting system message using setExtensionPrompt.');
+          context.setExtensionPrompt?.(
+            `zTracker:embedded-system:${foundIndex}:${i}`,
+            content,
+            ST_EXTENSION_PROMPT_IN_CHAT,
+            promptDepth,
+            false,
+            stRole,
+          );
+        } else {
+          const embeddedTrackerMessage = {
+            content,
+            role: embedRole,
+            // These flags are used by SillyTavern Message objects; harmless for ChatMessage.
+            is_user: embedRole === 'user',
+            is_system: embedRole === 'system',
+            ...(speakerName ? { name: speakerName } : {}),
+            mes: content,
+          } as unknown as T;
+          // Keep the marker off the serialized payload while still letting
+          // tracker-generation-only role normalization distinguish injected snapshots.
+          Object.defineProperty(embeddedTrackerMessage, EMBEDDED_TRACKER_SNAPSHOT_MARKER, {
+            value: true,
+          });
+          copyMessages.splice(
+            foundIndex + 1,
+            0,
+            embeddedTrackerMessage,
+          );
+        }
       }
     }
   }

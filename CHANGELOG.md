@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Reuse historical tracker snapshots during regeneration.
+- Skip the terminal message when selecting tracker data.
+- Prevent regen from advancing tracker state when current data is missing or self-generated.
+
 ## [1.10.1] - 2026-04-22
 
 ### Fixed
@@ -231,6 +237,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [1.0.2] - 2026-01-26
 
 ### Added
+
 - Hover tooltips for zTracker settings to explain what options do.
 
 ## [1.0.1] - 2026-01-26
@@ -241,6 +248,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [1.0.0] - 2026-01-26
 
 ### Added
+
 - World Info policy for tracker generation: include all, exclude all, or allowlist by lorebook name / entry UID.
 - Allowlist picker UI (refresh + search + add/remove) to avoid manual entry.
 - Debug logging toggle and Diagnostics tool for quickly verifying extension template URLs.
@@ -251,4 +259,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 - Extension template bundling now uses `dist/templates` to match SillyTavern’s packaged artifact expectations.
 - Extension install folder is detected at runtime for template rendering (no hardcoded third-party folder name).
-

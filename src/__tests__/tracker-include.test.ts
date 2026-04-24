@@ -1,9 +1,13 @@
+import { jest } from '@jest/globals';
 import type { ExtensionSettings } from '../config.js';
 import {
+  findHistoricalTrackers,
   extractLeadingSystemPrompt,
   includeZTrackerMessages,
   normalizeTrackerGenerationConversationRoles,
+  injectTrackersToSillyTavern,
   sanitizeMessagesForGeneration,
+  spliceTrackersToMessages,
   CHAT_MESSAGE_SCHEMA_VALUE_KEY,
 } from '../tracker.js';
 import { EXTENSION_KEY } from '../extension-metadata.js';
@@ -115,15 +119,15 @@ describe('includeZTrackerMessages', () => {
     expect(result[1].name).toBe('Tracker Log');
   });
 
-  it('can discover a tracker on the last message', () => {
-    const messages = [
-      { content: 'first', role: 'user' },
-      buildMessageWithTracker({ id: 1 }),
-    ];
+  it('does not inject a tracker snapshot from the last message', () => {
+    const messages = [{ content: 'first', role: 'user' }, buildMessageWithTracker({ id: 1 })];
     const result = includeZTrackerMessages(messages as any, makeSettings(1)) as any[];
-    expect(result).toHaveLength(3);
-    expect(result[2].content).toContain('Tracker:');
-    expect(result[2].content).toContain('```json');
+    expect(result).toHaveLength(2);
+    expect(
+      result.some(
+        (message: any) => typeof message.content === 'string' && message.content.startsWith('Tracker:\n```json'),
+      ),
+    ).toBe(false);
   });
 
   it('can apply a minimal formatting preset during embedding', () => {
@@ -227,10 +231,10 @@ describe('includeZTrackerMessages', () => {
         m.content.startsWith('Tracker:\n```json'),
     );
     expect(injected).toHaveLength(2);
-      // The implementation inserts each found snapshot immediately after the message it was found on.
-      // So after inserting snapshot #2, snapshot #1 will appear earlier in the final list.
-      expect(injected[0].content).toContain('"id": 1');
-      expect(injected[1].content).toContain('"id": 2');
+    // The implementation inserts each found snapshot immediately after the message it was found on.
+    // So after inserting snapshot #2, snapshot #1 will appear earlier in the final list.
+    expect(injected[0].content).toContain('"id": 1');
+    expect(injected[1].content).toContain('"id": 2');
   });
 
   it('sanitizes prompt messages before generation requests', () => {
@@ -484,9 +488,9 @@ describe('includeZTrackerMessages', () => {
     ] as any;
 
     expect(sanitizeMessagesForGeneration(messages, {
-      inlineNamesIntoContent: true,
+        inlineNamesIntoContent: true,
       userAlignmentMessage: 'Let\'s get started. Please respond based on the information and instructions provided above.',
-      userName: 'Tobias',
+        userName: 'Tobias',
     })).toEqual([
       {
         role: 'system',
@@ -523,9 +527,9 @@ describe('includeZTrackerMessages', () => {
     ] as any;
 
     expect(sanitizeMessagesForGeneration(messages, {
-      inlineNamesIntoContent: true,
+        inlineNamesIntoContent: true,
       userAlignmentMessage: 'Let\'s get started. Please respond based on the information and instructions provided above.',
-      userName: 'Tobias',
+        userName: 'Tobias',
     })).toEqual([
       {
         role: 'system',
@@ -587,5 +591,82 @@ describe('includeZTrackerMessages', () => {
     expect(normalizeTrackerGenerationConversationRoles(messages, {
       trackerGenerationConversationRoleMode: 'preserve',
     } as ExtensionSettings)).toEqual(messages);
+  });
+
+  describe('historical tracker helpers', () => {
+    afterEach(() => {
+      delete (globalThis as any).SillyTavern;
+    });
+
+    it('finds trackers starting from the provided message id', () => {
+      const messages = [
+        { content: 'first', role: 'user' },
+        buildMessageWithTracker({ id: 1 }),
+        { content: 'middle', role: 'assistant' },
+        buildMessageWithTracker({ id: 2 }),
+        { content: 'current', role: 'user' },
+      ];
+
+      const trackers = findHistoricalTrackers(messages as any, 2, 4);
+
+      expect(trackers.map((tracker) => tracker.index)).toEqual([3, 1]);
+      expect(trackers.map((tracker) => tracker.depth)).toEqual([1, 3]);
+      expect(trackers[0].trackerValue).toEqual({ id: 2 });
+      expect(trackers[1].trackerValue).toEqual({ id: 1 });
+    });
+
+    it('injects historical trackers through setExtensionPrompt', () => {
+      const setExtensionPrompt = jest.fn();
+      (globalThis as any).SillyTavern = {
+        getContext: () => ({ setExtensionPrompt }),
+      };
+
+      const messages = [
+        { content: 'first', role: 'user' },
+        buildMessageWithTracker({ id: 1 }),
+        { content: 'current', role: 'assistant' },
+      ];
+
+      const trackers = findHistoricalTrackers(messages as any, 1, 2);
+      const injected = injectTrackersToSillyTavern(trackers, makeSettings(1, 'assistant'));
+
+      expect(injected).toBe(true);
+      expect(setExtensionPrompt).toHaveBeenCalledTimes(1);
+
+      const [key, content, position, depth, scan, role] = setExtensionPrompt.mock.calls[0];
+      expect(key).toBe('zTracker:embedded-assistant:1:0');
+      expect(content).toContain('Tracker:');
+      expect(content).toContain('```json');
+      expect(position).toBe(1);
+      expect(depth).toBe(1);
+      expect(scan).toBe(false);
+      expect(role).toBe(2);
+    });
+
+    it('splices historical trackers into a cloned message array', () => {
+      const messages = [
+        { content: 'first', role: 'user' },
+        buildMessageWithTracker({ id: 1 }),
+        { content: 'middle', role: 'assistant' },
+        buildMessageWithTracker({ id: 2 }),
+        { content: 'current', role: 'user' },
+      ];
+
+      const trackers = findHistoricalTrackers(messages as any, 2, 4);
+      const result = spliceTrackersToMessages(messages as any, trackers, makeSettings(2)) as any[];
+
+      expect(result).not.toBe(messages);
+      expect(result).toHaveLength(messages.length + 2);
+
+      const injected = result.filter(
+        (message: any) => typeof message.content === 'string' && message.content.startsWith('Tracker:\n```json'),
+      );
+
+      expect(injected).toHaveLength(2);
+      expect(injected[0].content).toContain('"id": 1');
+      expect(injected[1].content).toContain('"id": 2');
+      expect(injected[0].role).toBe('user');
+      expect(injected[1].role).toBe('user');
+    });
   });
 });
