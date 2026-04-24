@@ -5,117 +5,38 @@ Last updated: 2026-04-24
 
 ## Summary
 
-Add a small, reusable test harness for SillyTavern host behavior so tests can share the same fake runtime primitives instead of rebuilding partial mocks in each suite.
+Add a small, repo-local SillyTavern host test harness for the host behaviors that zTracker actually depends on.
 
-This spec complements:
+This harness is meant to reduce duplicated host setup in Jest, make host-boundary tests cheaper to write, and support the still-missing wiring coverage defined in `02-B-entrypoint-wiring-tests.md`.
 
-- `02-testing-strategy.md` by filling the remaining host-integration gap.
-- `02-B-entrypoint-wiring-tests.md` by defining the reusable harness that those wiring tests need.
-
-The goal is not to emulate all of SillyTavern. The goal is to provide a narrow, explicit, repo-local harness for the host behaviors that zTracker actually depends on.
-
-## Motivation
-
-The current test suite is strong for import-safe logic and moderately strong for jsdom UI behavior, but it is uneven at the host boundary.
-
-What we already have:
-
-- Pure and near-pure logic tests for parser, schema helpers, tracker injection, cleanup logic, and rendering.
-- A good shared helper for `createTrackerActions()` tests in `src/test-utils/tracker-actions-test-helpers.ts`.
-- Targeted jsdom tests for `ui-init` behavior.
-
-What is still missing:
-
-- No general-purpose fake SillyTavern runtime for UI/init/wiring tests.
-- No shared event-source harness that records registrations and triggers handlers consistently.
-- No shared DOM scaffold for common host nodes such as extension settings containers, extension menus, and message-template anchors.
-- No small entrypoint boot helper that can validate initialization without importing arbitrary side effects into each test manually.
-- No single place documenting which parts of SillyTavern are intentionally mocked and which are out of scope.
-
-The result is that tracker-actions tests are reusable, while adjacent host-integration tests still assemble local one-off mocks. That increases duplication and makes future host-wiring tests harder to add.
-
-## Current state (baseline)
-
-### Existing reusable piece
-
-`src/test-utils/tracker-actions-test-helpers.ts` already provides a useful harness for tracker-generation tests:
-
-- shared `jest.unstable_mockModule(...)` setup for internal modules and `sillytavern-utils-lib`
-- `makeContext()` for a minimal installed `SillyTavern.getContext()` shape
-- `installSillyTavernContext()` to attach the fake host global
-- shared prompt/generator mocks and reset helpers
-
-This is worth keeping.
-
-### Current gaps
-
-#### 1. Host runtime coverage is slice-specific
-
-The existing helper is tuned for tracker-actions tests. It does not cover host behavior needed by broader UI/init/boot tests, such as:
-
-- event registration inspection
-- deterministic event triggering
-- extension menu/settings DOM scaffolding
-- message-template attachment scaffolding
-- common host methods like `renderExtensionTemplateAsync`, `saveSettingsDebounced`, `saveMetadata`, and `Popup.show.*`
-
-#### 2. UI/init tests still build local ad hoc hosts
-
-`src/__tests__/ui-init.test.ts` and `src/__tests__/ui-init.auto-mode-exclusion.test.ts` create their own handler maps, local `globalThis.SillyTavern` stubs, and DOM setup instead of sharing a common host harness.
-
-That is manageable for a few suites, but it does not scale well when we add:
-
-- entrypoint smoke tests
-- interceptor registration tests
-- selector-assumption tests
-- more event-driven UI flows
-
-#### 3. Entrypoint tests are still awkward
-
-`src/index.tsx` still initializes through import-time side effects. `docs/specs/02-B-entrypoint-wiring-tests.md` correctly identifies this as a missing testability seam.
-
-Without a reusable harness, every future entrypoint test will need to manually:
-
-1. prepare globals
-2. prepare DOM
-3. import the entrypoint in the right order
-4. inspect the resulting wiring
-
-That setup should live in one place.
-
-#### 4. The test boundary is not documented clearly enough
-
-`docs/DEVELOPMENT.md` correctly says to avoid importing `src/index.tsx` in normal tests, but it does not yet explain:
-
-- which host behaviors are shared via helpers
-- which host behaviors are intentionally left unmocked
-- when to use the reusable harness versus a narrow one-off stub
-- when a live SillyTavern smoke test is still required
+This spec intentionally does not propose a generalized fake SillyTavern test framework.
 
 ## Goals
 
-- Add a reusable SillyTavern host test harness under `src/test-utils/`.
-- Keep the harness minimal, explicit, and focused on zTracker's real host dependencies.
-- Reuse the same host primitives across tracker-actions, ui-init, and future entrypoint wiring tests.
-- Make it cheap to add new event-driven tests without rebuilding host scaffolding.
-- Make the mocked host boundary easy to understand and document.
+- Add a reusable host harness under `src/test-utils/` for zTracker's host-boundary tests.
+- Keep the harness narrow, explicit, and shaped around real zTracker dependencies.
+- Reuse the same host primitives across `ui-init`, tracker-action host tests, and future wiring tests.
+- Make selector assumptions and event registrations easy to test without rebuilding ad hoc setup in each suite.
+- Document the boundary clearly so tests stay lean and maintainable.
 
 ## Non-goals
 
 - Reproducing all of SillyTavern in Jest.
+- Creating a generalized integration-test framework for arbitrary host behavior.
 - Simulating browser layout, CSS, or full extension loading semantics.
-- Replacing live SillyTavern smoke tests where host behavior must be confirmed end-to-end.
-- Creating a generic external package or framework. This harness should stay repo-local and shaped around zTracker.
+- Replacing live SillyTavern smoke tests for end-to-end host validation.
 
-## Proposed design
+## Required architecture
 
-### Principle: prefer narrow reusable layers over a giant fake host
+### Principle
 
-The harness should be built from small helpers that can be composed per test suite. Tests should only pull in the host pieces they actually need.
+Prefer a minimal shared harness over a generalized test suite.
 
-### Layer 1: Host runtime builder
+The improvement this repo needs is a small set of reusable host primitives. The repo does not need a broad fake-host architecture or a large abstraction layer that attempts to emulate SillyTavern as a whole.
 
-Add a shared helper, for example `src/test-utils/sillytavern-host-harness.ts`, that exposes a runtime builder such as:
+### Layer 1: host runtime builder
+
+Add a shared host builder, for example `src/test-utils/sillytavern-host-harness.ts`, with a shape similar to:
 
 ```ts
 const host = createSillyTavernHost({
@@ -127,30 +48,27 @@ const host = createSillyTavernHost({
 installSillyTavernHost(host.context);
 ```
 
-The builder should provide stable defaults for common host state used by zTracker:
+The builder must provide stable defaults for the host state zTracker uses, including:
 
 - `chat`
 - `chatMetadata`
 - `characters`
 - `characterId`
-- `name1` / `name2`
+- `name1` and `name2`
 - `extensionSettings`
 - `powerUserSettings`
 - `eventSource`
-- `Popup.show.confirm` / `Popup.show.input`
-- `saveChat`, `saveMetadata`, `saveSettingsDebounced`
+- `Popup.show.confirm` and `Popup.show.input`
+- `saveChat`, `saveMetadata`, and `saveSettingsDebounced`
 - `renderExtensionTemplateAsync`
 - `writeExtensionField`
 - `getPresetManager`
 
-The harness should return both:
+The builder must return both the assembled context and direct handles to assertion-friendly spies and controllers.
 
-- the installed context object
-- direct handles to spies/controllers used by assertions
+### Layer 2: event source harness
 
-### Layer 2: Event source controller
-
-Provide a reusable event-source primitive instead of each test managing its own `Map<string, handler>`.
+Add a reusable event-source primitive so tests do not keep their own handler maps.
 
 Suggested shape:
 
@@ -163,18 +81,18 @@ events.emit('MESSAGE_SENT', 3)
 events.emit('CHAT_CHANGED')
 ```
 
-This should support:
+The event harness must support:
 
 - asserting which events were registered
 - retrieving one or many handlers for a named event
 - triggering handlers in registration order
-- optional reset between tests
+- resetting state between tests when needed
 
-This is the most important missing reusable primitive for UI and entrypoint tests.
+This is the highest-value shared primitive and should be treated as required, not optional.
 
 ### Layer 3: DOM scaffold helpers
 
-Add small DOM builders for the host nodes that zTracker expects to exist.
+Add small DOM scaffold helpers for the host nodes zTracker expects.
 
 Suggested helpers:
 
@@ -184,7 +102,7 @@ Suggested helpers:
 - `installSettingsContainerDom()`
 - `installChatMessageDom(messageId, options)`
 
-These helpers should cover selectors that are currently implicit across tests, including:
+These helpers should cover the selectors zTracker relies on, including:
 
 - `#extensionsMenu`
 - `#extensions_settings`
@@ -193,11 +111,11 @@ These helpers should cover selectors that are currently implicit across tests, i
 - `.mes_buttons`
 - `.extraMesButtons`
 
-The purpose is not to mirror all host markup. The purpose is to make selector assumptions explicit and reusable.
+These helpers must stay intentionally small. They exist to make selector assumptions explicit and reusable, not to mirror host markup in detail.
 
-### Layer 4: Boot helper for host wiring tests
+### Layer 4: boot helper for wiring tests
 
-Add a higher-level helper for the tests that need to validate initialization order or import-time wiring.
+Add a thin boot helper for tests that need to validate initialization and wiring.
 
 Suggested shape:
 
@@ -208,102 +126,52 @@ const boot = await bootExtensionForTest({
 });
 ```
 
-This helper should:
+This helper must:
 
 1. install the host global
 2. install the requested DOM scaffold
-3. import the target module in a controlled way
-4. return handles for assertions
+3. import or invoke the target boot surface in a controlled order
+4. return handles needed for assertions
 
-Initially this may target `initializeGlobalUI()` or a small extracted entrypoint function rather than `src/index.tsx` directly.
+This helper should target the smallest boot seam available. It must not turn `src/index.tsx` import-side effects into the default testing surface for unrelated tests.
 
-### Layer 5: Tracker-actions helper should depend on the shared host layer
+### Layer 5: compose existing tracker-action helpers
 
-`src/test-utils/tracker-actions-test-helpers.ts` should remain, but it should gradually stop owning a parallel fake host implementation.
+`src/test-utils/tracker-actions-test-helpers.ts` should remain focused on tracker-action-specific mocks, but host setup should be composed from the shared host layer where that reduces duplication.
 
-Instead it should compose:
+The goal is one shared host foundation with slice-specific helpers layered on top, not multiple parallel fake-host implementations.
 
-- the generic host runtime builder
-- tracker-actions-specific mocks
-- tracker-actions-specific reset helpers
+## What must be avoided
 
-This keeps the current productive test style while reducing divergence between slices.
+- Do not build a giant fake SillyTavern runtime.
+- Do not add a generalized test suite that tries to model all host behavior.
+- Do not hide selector assumptions or event registration behind abstractions that make failures harder to read.
+- Do not force pure or import-safe logic tests to depend on the harness when a narrow local stub is sufficient.
+- Do not move more behavior into entrypoint-style tests than necessary.
+- Do not treat the harness as a replacement for one real SillyTavern smoke test when host integration must be confirmed end to end.
 
-## Recommended incremental rollout
+## Intended use
 
-### Phase 1: Extract the reusable host primitives
+Use the harness for tests that verify host-boundary behavior such as:
 
-Add:
+- event registration and event-driven behavior
+- interceptor registration
+- DOM attachment to required SillyTavern selectors
+- UI initialization that depends on host globals or shared host nodes
 
-- shared host runtime builder
-- shared event-source harness
-- shared DOM scaffold helpers
-
-Do not refactor the whole test suite at once.
-
-### Phase 2: Migrate the most duplicated suites
-
-Migrate:
-
-- `ui-init.test.ts`
-- `ui-init.auto-mode-exclusion.test.ts`
-- selected tracker-actions tests that currently install the host context manually
-
-The migration should prove that the harness works for both UI and non-UI slices.
-
-### Phase 3: Add missing wiring tests
-
-Use the harness to implement the still-open coverage from `02-B-entrypoint-wiring-tests.md`:
-
-- event registration smoke tests
-- interceptor registration tests
-- DOM attachment selector smoke tests
-
-### Phase 4: Document the boundary
-
-Update `docs/DEVELOPMENT.md` with a short section explaining:
-
-- which helpers exist
-- when to use them
-- what is still intentionally tested only in live SillyTavern
-
-## What would be most useful to add first
-
-If we do not want to build the entire harness at once, the highest-value additions are:
-
-1. `createEventSourceHarness()`
-2. `createSillyTavernHost()` with stable defaults
-3. `installBaseExtensionDom()` for shared selectors
-
-Those three pieces unlock most of the missing tests with the least design risk.
-
-## Open questions
-
-1. Should entrypoint tests import `src/index.tsx` directly, or should we first extract a tiny boot function to keep the import-side effects controlled?
-2. How much of `tracker-actions-test-helpers.ts` should be migrated immediately versus left in place until the new host harness proves itself?
-3. Which selector assumptions are stable enough to encode in shared DOM helpers, and which should remain local to the test that needs them?
-4. Do we want one combined harness file or separate `host`, `events`, and `dom` helpers under `src/test-utils/`?
+Do not use the harness for pure logic tests that can stay import-safe with smaller fixtures.
 
 ## Acceptance criteria
 
-- A shared host harness exists under `src/test-utils/`.
-- At least two existing suites are migrated to use it.
+- A shared SillyTavern host harness exists under `src/test-utils/`.
+- The harness includes a host runtime builder, an event-source harness, and DOM scaffold helpers.
+- At least two existing suites are migrated to use the shared harness.
 - Event-driven tests no longer need per-file handler maps or bespoke `globalThis.SillyTavern` setup.
-- The harness is explicitly documented as a minimal fake host, not a full SillyTavern emulator.
-- The harness is sufficient to implement the currently open entrypoint wiring tests.
+- The harness is sufficient to implement the currently open wiring coverage from `02-B-entrypoint-wiring-tests.md`.
+- `docs/DEVELOPMENT.md` documents the harness as a minimal fake host and explains when not to use it.
 
 ## Validation plan
 
+- Run focused Jest suites for migrated tests.
 - Run `npm test` after introducing the harness.
-- Run focused Jest suites for migrated tests first, then the full suite.
-- If the harness is used for entrypoint or selector smoke tests, pair the automated tests with one live SillyTavern smoke check after a fresh build.
-
-## Tasks checklist
-
-- [ ] Add shared event-source harness helper
-- [ ] Add shared SillyTavern host runtime builder
-- [ ] Add shared DOM scaffold helpers for common selectors
-- [ ] Rebase tracker-actions helpers onto the shared host layer where it reduces duplication
-- [ ] Migrate at least two existing suites to the new harness
-- [ ] Implement the open entrypoint wiring tests using the harness
-- [ ] Document the test harness boundary in `docs/DEVELOPMENT.md`
+- If new wiring tests cover selector assumptions or boot behavior, pair them with one live SillyTavern smoke check after a fresh build.
