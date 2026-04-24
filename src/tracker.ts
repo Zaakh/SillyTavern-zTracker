@@ -250,6 +250,18 @@ function isUserConversationTurn(message: { role?: string; is_user?: boolean }): 
   return message.role === 'user' || message.is_user === true;
 }
 
+function getMessageText(message: { content?: string; mes?: string }): string {
+  if (typeof message.content === 'string' && message.content.trim().length > 0) {
+    return message.content;
+  }
+
+  if (typeof message.mes === 'string' && message.mes.trim().length > 0) {
+    return message.mes;
+  }
+
+  return '';
+}
+
 export function includeZTrackerMessages<T extends Message | ChatMessage>(
   messages: T[],
   settings: ExtensionSettings,
@@ -310,7 +322,7 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
           const inlineContent = wrapInCodeFence
             ? `${inlineHeader}\`\`\`${lang}\n${text}\n\`\`\``
             : `${inlineHeader}${text}`;
-          const existingContent = typeof (foundMessage as any).content === 'string' ? (foundMessage as any).content.trimEnd() : '';
+          const existingContent = getMessageText(foundMessage as { content?: string; mes?: string }).trimEnd();
           const mergedContent = existingContent.length > 0
             ? `${existingContent}\n\n${inlineContent}`
             : inlineContent;
