@@ -368,19 +368,31 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
         const trailingAssistantReplyLabel = hasTrailingAssistantPrefill
           ? getMessageSpeakerName(copyMessages[copyMessages.length - 1] as { name?: string; source?: { name?: string } })
           : undefined;
+        // A terminal assistant snapshot without a real assistant prefill still gets
+        // rewritten by SillyTavern's text-completion formatter, so keep that case
+        // inside the final user turn instead of emitting a standalone assistant turn.
+        const shouldInlineTerminalAssistantSnapshot =
+          options.preserveTextCompletionTurnAlternation
+          && embedRole === 'assistant'
+          && !hasTrailingAssistantPrefill
+          && foundIndex === copyMessages.length - 1
+          && isUserConversationTurn(foundMessage as { role?: string; is_user?: boolean });
+        // When SillyTavern already appended an assistant prefill turn, keep the
+        // injected snapshot as raw assistant text after that prefill so the prompt
+        // still ends on the assistant reply cue instead of opening a new user block.
         const needsRawTerminalAssistantSnapshot =
           options.preserveTextCompletionTurnAlternation
           && embedRole === 'assistant'
-          && (hasTrailingAssistantPrefill || (
-            foundIndex === copyMessages.length - 1
-            && isUserConversationTurn(foundMessage as { role?: string; is_user?: boolean })
-          ));
+          && hasTrailingAssistantPrefill;
 
         if (
           options.preserveTextCompletionTurnAlternation
-          && canInlineEmbeddedTracker(
-            foundMessage as { role?: string; is_user?: boolean; is_system?: boolean },
-            embedRole,
+          && (
+            canInlineEmbeddedTracker(
+              foundMessage as { role?: string; is_user?: boolean; is_system?: boolean },
+              embedRole,
+            )
+            || shouldInlineTerminalAssistantSnapshot
           )
         ) {
           const inlineHeader = useCharacterName ? `${speakerName ?? 'Tracker'}:\n` : prefix;
