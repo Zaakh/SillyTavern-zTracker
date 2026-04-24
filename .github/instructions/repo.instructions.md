@@ -54,11 +54,11 @@ These instructions apply to all files in this repository.
 - Prefer cohesive feature-local modules over monolithic cross-feature service files.
 - Do not split code into tiny wrappers purely to satisfy a size target.
 - Break up oversized test files once they stop mapping cleanly to one module or one behavior cluster.
-- IMPORTANT: Any code change must improve the code quality of the project. Goal is to have a lean codebase.
+- IMPORTANT: Any code change must improve the code quality of the project. Goal is to have a lean codebase. Leave the code better than you found it.
 
 ## Comments
 - Use comments to explain the "why" behind non-obvious code, especially for complex logic or workarounds.
-- Each file and function **must** have a brief explanation describing its purpose and behavior.
+- Important: Each file, function, method, and class **must** have a brief explanation describing its purpose and behavior.
 
 ## Build and required artifacts
 - This extension is loaded by SillyTavern from `manifest.json` and expects built assets:
