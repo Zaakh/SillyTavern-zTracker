@@ -41,6 +41,7 @@ export const SystemPromptSettingsSection: FC<{
         }
       >
         <option value="profile">From active ST prompt</option>
+        <option value="selected">From selected ST prompt</option>
         <option value="saved">From saved ST prompt</option>
       </select>
 

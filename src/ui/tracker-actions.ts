@@ -943,6 +943,7 @@ export function createTrackerActions(options: {
     const chatHtmlValue = schemaPreset.html;
 
     const profile = extensionSettings.connectionManager?.profiles?.find((p: any) => p.id === settings.profileId);
+    const profilePreset = settings.trackerSystemPromptMode === 'selected' ? profile?.preset || undefined : undefined
     if (!profile) {
       throw new Error('Selected connection profile not found. Please re-select a profile in zTracker settings.');
     }
@@ -993,6 +994,7 @@ export function createTrackerActions(options: {
       },
       ...promptPresetSelections,
       includeNames: includePromptNames,
+      presetName: profilePreset,
       ignoreWorldInfo,
       ...(skipCharacterCardInTrackerGeneration ? { ignoreCharacterFields: true } : {}),
     });
