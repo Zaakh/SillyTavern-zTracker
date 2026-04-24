@@ -330,6 +330,7 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
         }
       }
       if (foundMessage) {
+        let insertionIndex = foundIndex;
         const extra =
           'source' in foundMessage
             ? (foundMessage as Message).source?.extra
@@ -343,11 +344,22 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
         const content = wrapInCodeFence
           ? `${prefix}\`\`\`${lang}\n${text}\n\`\`\``
           : `${prefix}${text}`;
+        const hasTrailingAssistantPrefill =
+          embedRole === 'assistant'
+          && foundIndex < copyMessages.length - 1
+          && copyMessages.slice(foundIndex + 1).every((message) =>
+            isAssistantConversationTurn(message as { role?: string; is_user?: boolean; is_system?: boolean }),
+          );
+        if (hasTrailingAssistantPrefill) {
+          insertionIndex = copyMessages.length - 1;
+        }
         const needsRawTerminalAssistantSnapshot =
           options.preserveTextCompletionTurnAlternation
           && embedRole === 'assistant'
-          && foundIndex === copyMessages.length - 1
-          && isUserConversationTurn(foundMessage as { role?: string; is_user?: boolean });
+          && (hasTrailingAssistantPrefill || (
+            foundIndex === copyMessages.length - 1
+            && isUserConversationTurn(foundMessage as { role?: string; is_user?: boolean })
+          ));
 
         if (
           options.preserveTextCompletionTurnAlternation
@@ -396,7 +408,7 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
           value: true,
         });
         copyMessages.splice(
-          foundIndex + 1,
+          insertionIndex + 1,
           0,
           embeddedTrackerMessage,
         );
