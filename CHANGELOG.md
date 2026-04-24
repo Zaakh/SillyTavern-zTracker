@@ -183,7 +183,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Tracker generation now tolerates a small set of near-valid JSON formatting defects before failing, including repeated fences, balanced JSON wrapped in prose, trailing commas, smart quotes used as JSON delimiters, and leading invisible characters. Repair attempts are logged so prompt/parser issues remain diagnosable.
 
 ## [1.2.0] - 2026-03-17
-
 ### Added
 
 - Tracker generation can now use either the selected connection profile's system prompt or a specifically chosen saved SillyTavern system prompt.
@@ -195,7 +194,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Tracker-only saved system prompt mode no longer temporarily mutates SillyTavern's global prompt-preference setting during prompt assembly, avoiding cross-generation leakage.
 
 ## [1.1.4] - 2026-03-06
-
 ### Fixed
 
 - Parts menu no longer appears twice (with a duplicate stuck in the upper-left corner) after editing tracker data and then triggering a partial regeneration. When the tracker DOM was re-rendered the portaled menu list was not cleaned up because the now-disconnected `<details>` element could not fire a `toggle` event to the document; the cleanup now runs directly in that case.
@@ -245,7 +243,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [1.0.1] - 2026-01-26
 
 ### Fixed
-
 - Fix HTML template loading when installed under the default SillyTavern folder name (`SillyTavern-zTracker`) to avoid 404s like `/third-party/zTracker/dist/templates/*.html`.
 
 ## [1.0.0] - 2026-01-26
@@ -260,6 +257,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Setting to customize (or remove) the embedded snapshot header line.
 
 ### Changed
-
 - Extension template bundling now uses `dist/templates` to match SillyTavern’s packaged artifact expectations.
 - Extension install folder is detected at runtime for template rendering (no hardcoded third-party folder name).
