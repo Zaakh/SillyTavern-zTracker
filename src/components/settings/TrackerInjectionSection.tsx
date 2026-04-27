@@ -44,17 +44,17 @@ export const TrackerInjectionSection: FC<SettingsSectionProps> = ({ settings, up
           <option value="assistant">Assistant</option>
         </select>
         <div className="notes">
-          In Text Completion chats, assistant-role snapshots stay as assistant turns when zTracker can keep a clear reply cue and only inline into the final user turn for ambiguous terminal no-prefill cases.
+          In Text Completion chats, assistant-role snapshots stay as assistant turns when zTracker can keep a clear reply cue and only inline into the final user turn for ambiguous terminal no-prefill cases. Confirmed single-speaker terminal fallbacks still use a raw assistant block so the prompt can end on the real assistant reply cue.
         </div>
       </div>
 
       <div className="setting-row">
-        <label title="When enabled, the tracker header is used as the injected speaker name instead of a content prefix. This avoids double labels such as 'Assistant: Tracker:' when SillyTavern includes speaker names.">
+        <label title="When enabled, the tracker header is used as the injected speaker name instead of a content prefix when zTracker can keep a normal standalone injected message. Text-completion terminal assistant fallbacks still keep the tracker label in raw content so the prompt can end on the real assistant reply cue.">
           Inject as virtual character
         </label>
         <input
           type="checkbox"
-          title="Uses the embed snapshot header as the injected message name and removes the header prefix from the embedded content."
+          title="Uses the embed snapshot header as the injected message name and removes the header prefix from the embedded content when a standalone injected message is safe. Raw terminal assistant fallbacks keep the label in content instead."
           checked={settings.embedZTrackerAsCharacter ?? false}
           onChange={(e) =>
             updateAndRefresh((s) => {

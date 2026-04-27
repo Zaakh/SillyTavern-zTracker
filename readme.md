@@ -108,6 +108,8 @@ For **Text Completion** chats, assistant-role snapshots stay as assistant turns 
 
 If SillyTavern's prompt formatting is producing awkward prefixes like `Assistant: Tracker:`, enable **Inject as virtual character**. This uses the embed snapshot header as the injected speaker name and removes the duplicated header prefix from the embedded snapshot body.
 
+In the text-completion-safe terminal assistant fallback, zTracker still keeps the tracker label inside the raw injected content so the prompt can end on the real assistant reply cue. See `docs/TRACKER_INJECTION_BEHAVIOR.md` for the current behavior matrix and concrete prompt shapes.
+
 You can also apply a **regex-based transform** to the embedded snapshot text (for prompt-friendly formatting) via **Embed snapshot transform preset**.
 
 You can customize (or remove) the embedded snapshot header via **Embed snapshot header**.
