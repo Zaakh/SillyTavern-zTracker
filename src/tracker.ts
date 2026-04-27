@@ -232,6 +232,11 @@ type IncludeZTrackerMessagesOptions = {
    * break SillyTavern's prompt framing.
    */
   preserveTextCompletionTurnAlternation?: boolean;
+  /**
+   * When the host confirms a group chat, avoid synthesizing a terminal assistant reply
+   * cue from prior speaker history alone.
+   */
+  isGroupChat?: boolean;
 };
 
 function resolveEmbeddedTrackerRole(
@@ -395,7 +400,8 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
         }
         const terminalAssistantReplyLabel = hasTrailingAssistantPrefill
           ? getMessageSpeakerName(copyMessages[copyMessages.length - 1] as { name?: string; source?: { name?: string } })
-          : foundIndex === copyMessages.length - 1
+          : options.isGroupChat === false
+            && foundIndex === copyMessages.length - 1
             && isUserConversationTurn(foundMessage as { role?: string; is_user?: boolean })
             ? getSingleAssistantReplyLabel(
               copyMessages.slice(0, foundIndex) as Array<{

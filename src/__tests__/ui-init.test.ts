@@ -4,8 +4,11 @@
 
 import { jest } from '@jest/globals';
 
+const includeZTrackerMessagesMock = jest.fn((chat: unknown[]) => chat);
+
 jest.unstable_mockModule('sillytavern-utils-lib/config', () => ({
   st_echo: jest.fn(),
+  selected_group: false,
 }));
 
 jest.unstable_mockModule('sillytavern-utils-lib/types/translate', () => ({
@@ -25,7 +28,7 @@ jest.unstable_mockModule('sillytavern-utils-lib/types', () => ({
 }));
 
 jest.unstable_mockModule('../tracker.js', () => ({
-  includeZTrackerMessages: (chat: unknown[]) => chat,
+  includeZTrackerMessages: includeZTrackerMessagesMock,
 }));
 
 const { initializeGlobalUI } = await import('../ui/ui-init.js');
@@ -80,6 +83,7 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
 
   beforeEach(() => {
     document.body.innerHTML = '';
+    includeZTrackerMessagesMock.mockClear();
     globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
       cb(0);
       return 0;
@@ -135,5 +139,47 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
     expect(document.querySelectorAll('.ztracker-parts-list-portal')).toHaveLength(1);
     expect(oldPortaledList.classList.contains('ztracker-parts-list-portal')).toBe(false);
     expect(oldPortaledList.parentElement).not.toBe(document.body);
+  });
+
+  test('passes text-completion and group-chat hints to the generate interceptor', () => {
+    const chat = [{ mes: 'hello' }];
+    (globalThis as any).SillyTavern = {
+      getContext: () => ({
+        mainApi: 'textgenerationwebui',
+        selected_group: 'group-1',
+      }),
+    };
+
+    (globalThis as any).ztrackerGenerateInterceptor(chat);
+
+    expect(includeZTrackerMessagesMock).toHaveBeenCalledWith(
+      chat,
+      expect.objectContaining({ includeLastXZTrackerMessages: 1 }),
+      {
+        preserveTextCompletionTurnAlternation: true,
+        isGroupChat: true,
+      },
+    );
+  });
+
+  test('passes non-group chat hints to the generate interceptor', () => {
+    const chat = [{ mes: 'hello' }];
+    (globalThis as any).SillyTavern = {
+      getContext: () => ({
+        mainApi: 'openai',
+        selected_group: false,
+      }),
+    };
+
+    (globalThis as any).ztrackerGenerateInterceptor(chat);
+
+    expect(includeZTrackerMessagesMock).toHaveBeenCalledWith(
+      chat,
+      expect.objectContaining({ includeLastXZTrackerMessages: 1 }),
+      {
+        preserveTextCompletionTurnAlternation: false,
+        isGroupChat: false,
+      },
+    );
   });
 });

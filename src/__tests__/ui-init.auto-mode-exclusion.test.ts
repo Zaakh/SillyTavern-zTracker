@@ -6,6 +6,7 @@ import { jest } from '@jest/globals';
 
 jest.unstable_mockModule('sillytavern-utils-lib/config', () => ({
   st_echo: jest.fn(),
+  selected_group: false,
 }));
 
 jest.unstable_mockModule('sillytavern-utils-lib/types/translate', () => ({
