@@ -18,6 +18,8 @@ Test boundaries to remember:
 - Keep executable logic in import-safe modules under `src/` so Jest can load it without booting the full extension entrypoint.
 - Avoid importing `src/index.tsx` in tests because it wires browser and SillyTavern side effects.
 - Use jsdom for DOM behavior and lightweight injected context objects for host-state dependent helpers.
+- Use `src/test-utils/sillytavern-host-harness.ts` for shared host-boundary setup such as `SillyTavern.getContext()`, event registration, `#send_but`, `#message_template`, and `#form_create` scaffolding.
+- Keep using narrower local fixtures for pure logic tests; the shared host harness is for host-boundary behavior, not as a default test dependency.
 - Register any custom Handlebars helpers explicitly in tests that need them.
 
 ## AI agent split
