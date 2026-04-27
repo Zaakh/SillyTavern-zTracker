@@ -3,6 +3,10 @@
  */
 
 import { jest } from '@jest/globals';
+import {
+  createSillyTavernHost,
+  installSillyTavernHost,
+} from '../test-utils/sillytavern-host-harness.js';
 
 const includeZTrackerMessagesMock = jest.fn((chat: unknown[]) => [...chat]);
 
@@ -33,6 +37,24 @@ jest.unstable_mockModule('../tracker.js', () => ({
 
 const { initializeGlobalUI } = await import('../ui/ui-init.js');
 
+/** Returns the narrow tracker-actions surface that ui-init depends on in these tests. */
+function createUiInitActions(overrides: Record<string, unknown> = {}) {
+  return {
+    renderExtensionTemplates: jest.fn(async () => undefined),
+    generateTracker: jest.fn(),
+    editTracker: jest.fn(),
+    deleteTracker: jest.fn(),
+    generateTrackerPart: jest.fn(),
+    generateTrackerArrayItem: jest.fn(),
+    generateTrackerArrayItemByName: jest.fn(),
+    generateTrackerArrayItemByIdentity: jest.fn(),
+    generateTrackerArrayItemField: jest.fn(),
+    generateTrackerArrayItemFieldByName: jest.fn(),
+    generateTrackerArrayItemFieldByIdentity: jest.fn(),
+    ...overrides,
+  } as any;
+}
+
 function buildMessageWithPartsMenu(messageId: number, label: string): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.className = 'mes';
@@ -55,28 +77,14 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
 
   beforeAll(async () => {
     // initializeGlobalUI installs document-level listeners — call it once to avoid duplicates.
+    const host = createSillyTavernHost();
+    installSillyTavernHost(host.context);
     await initializeGlobalUI({
-      globalContext: {
-        chat: [],
-        saveChat: jest.fn(async () => undefined),
-        eventSource: { on: jest.fn() },
-      },
+      globalContext: host.context,
       settingsManager: {
         getSettings: jest.fn(() => ({ autoMode: 'none', includeLastXZTrackerMessages: 1 })),
       } as any,
-      actions: {
-        renderExtensionTemplates: jest.fn(async () => undefined),
-        generateTracker: jest.fn(),
-        editTracker: jest.fn(),
-        deleteTracker: jest.fn(),
-        generateTrackerPart: jest.fn(),
-        generateTrackerArrayItem: jest.fn(),
-        generateTrackerArrayItemByName: jest.fn(),
-        generateTrackerArrayItemByIdentity: jest.fn(),
-        generateTrackerArrayItemField: jest.fn(),
-        generateTrackerArrayItemFieldByName: jest.fn(),
-        generateTrackerArrayItemFieldByIdentity: jest.fn(),
-      } as any,
+      actions: createUiInitActions(),
       renderTrackerWithDeps: () => undefined,
     });
   });
@@ -144,13 +152,11 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
   test('passes text-completion and group-chat hints to the generate interceptor', () => {
     includeZTrackerMessagesMock.mockImplementationOnce(() => [{ mes: 'group result' }]);
     const chat = [{ mes: 'hello' }];
-    (globalThis as any).SillyTavern = {
-      getContext: () => ({
-        mainApi: 'textgenerationwebui',
-        selected_group: 'group-1',
-        name2: 'Bar',
-      }),
-    };
+    installSillyTavernHost(createSillyTavernHost({
+      mainApi: 'textgenerationwebui',
+      selected_group: 'group-1',
+      name2: 'Bar',
+    }).context);
 
     (globalThis as any).ztrackerGenerateInterceptor(chat);
 
@@ -166,13 +172,11 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
   test('passes host-confirmed solo reply labels to the generate interceptor and replaces the chat contents', () => {
     includeZTrackerMessagesMock.mockImplementationOnce(() => [{ mes: 'solo result' }]);
     const chat = [{ mes: 'hello' }];
-    (globalThis as any).SillyTavern = {
-      getContext: () => ({
-        mainApi: 'textgenerationwebui',
-        selected_group: false,
-        name2: 'Bar',
-      }),
-    };
+    installSillyTavernHost(createSillyTavernHost({
+      mainApi: 'textgenerationwebui',
+      selected_group: false,
+      name2: 'Bar',
+    }).context);
 
     (globalThis as any).ztrackerGenerateInterceptor(chat);
 
@@ -188,15 +192,13 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
   test('falls back to the active character name when name2 is unavailable', () => {
     includeZTrackerMessagesMock.mockImplementationOnce(() => [{ mes: 'character result' }]);
     const chat = [{ mes: 'hello' }];
-    (globalThis as any).SillyTavern = {
-      getContext: () => ({
-        mainApi: 'openai',
-        selected_group: false,
-        name2: '',
-        characterId: '0',
-        characters: [{ name: 'Bar' }],
-      }),
-    };
+    installSillyTavernHost(createSillyTavernHost({
+      mainApi: 'openai',
+      selected_group: false,
+      name2: '',
+      characterId: '0',
+      characters: [{ name: 'Bar' }],
+    }).context);
 
     (globalThis as any).ztrackerGenerateInterceptor(chat);
 
