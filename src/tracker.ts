@@ -237,6 +237,11 @@ type IncludeZTrackerMessagesOptions = {
    * cue from prior speaker history alone.
    */
   isGroupChat?: boolean;
+  /**
+   * Host-confirmed active assistant label for terminal solo-chat fallbacks.
+   * Prefer this over history inference when SillyTavern already knows the reply speaker.
+   */
+  assistantReplyLabel?: string;
 };
 
 function resolveEmbeddedTrackerRole(
@@ -351,6 +356,10 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
       : message;
   });
   const embedRole = resolveEmbeddedTrackerRole(settings, options);
+  const configuredAssistantReplyLabel =
+    typeof options.assistantReplyLabel === 'string' && options.assistantReplyLabel.trim().length > 0
+      ? options.assistantReplyLabel.trim()
+      : undefined;
 
   if (settings.includeLastXZTrackerMessages > 0) {
     for (let i = 0; i < settings.includeLastXZTrackerMessages; i++) {
@@ -408,6 +417,8 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
           terminalAssistantReplyLabel = getMessageSpeakerName(
             copyMessages[copyMessages.length - 1] as { name?: string; source?: { name?: string } },
           );
+        } else if (configuredAssistantReplyLabel && isTerminalTrackedUser) {
+          terminalAssistantReplyLabel = configuredAssistantReplyLabel;
         } else if (options.isGroupChat === false && isTerminalTrackedUser) {
           terminalAssistantReplyLabel = getSingleAssistantReplyLabel(
             copyMessages.slice(0, foundIndex) as Array<{
