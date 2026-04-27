@@ -6,7 +6,7 @@ import { EventNames } from 'sillytavern-utils-lib/types';
 import type { ExtensionSettingsManager } from 'sillytavern-utils-lib';
 import type { TrackerActions } from './tracker-actions.js';
 import { includeZTrackerMessages } from '../tracker.js';
-import { st_echo } from 'sillytavern-utils-lib/config';
+import { selected_group, st_echo } from 'sillytavern-utils-lib/config';
 import {
   shouldAutoGenerateForCharacterMessage,
   shouldAutoGenerateForUserMessage,
@@ -245,9 +245,10 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
   });
 
   (globalThis as any).ztrackerGenerateInterceptor = (chat: ChatMessage[]) => {
-    const textCompletionSafeContext = SillyTavern.getContext() as { mainApi?: string };
+    const textCompletionSafeContext = SillyTavern.getContext() as { mainApi?: string; selected_group?: string | false };
     const newChat = includeZTrackerMessages(chat, settingsManager.getSettings(), {
       preserveTextCompletionTurnAlternation: textCompletionSafeContext?.mainApi === 'textgenerationwebui',
+      isGroupChat: Boolean(textCompletionSafeContext?.selected_group ?? selected_group),
     });
     chat.length = 0;
     chat.push(...newChat);

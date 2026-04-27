@@ -323,7 +323,7 @@ describe('includeZTrackerMessages', () => {
     const result = includeZTrackerMessages(
       messages as any,
       settings,
-      { preserveTextCompletionTurnAlternation: true },
+      { preserveTextCompletionTurnAlternation: true, isGroupChat: false },
     ) as any[];
 
     expect(result).toHaveLength(3);
@@ -376,7 +376,7 @@ describe('includeZTrackerMessages', () => {
     const result = includeZTrackerMessages(
       messages as any,
       settings,
-      { preserveTextCompletionTurnAlternation: true },
+      { preserveTextCompletionTurnAlternation: true, isGroupChat: false },
     ) as any[];
 
     expect(result).toHaveLength(5);
@@ -418,7 +418,7 @@ describe('includeZTrackerMessages', () => {
     const result = includeZTrackerMessages(
       messages as any,
       settings,
-      { preserveTextCompletionTurnAlternation: true },
+      { preserveTextCompletionTurnAlternation: true, isGroupChat: false },
     ) as any[];
 
     expect(result).toHaveLength(3);
@@ -430,6 +430,44 @@ describe('includeZTrackerMessages', () => {
     expect(result[2].content).toContain('Scene tracker:\n');
     expect(result[2].content).toContain('time: 18:30:00; 09/15/2023 (Friday)');
     expect(result[2].content).toMatch(/\nBar:$/);
+  });
+
+  it('keeps terminal assistant virtual-character snapshots inline in group chats until the host confirms a single-speaker chat', () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'As you enter the bar you realize you are the only customer.',
+        name: 'Bar',
+      },
+      {
+        is_user: true,
+        mes: '"A drink, please."',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer entered the bar and ordered a drink.',
+            },
+          },
+        },
+      },
+    ];
+
+    const settings = makeSettings(1, 'assistant', true, 'Scene tracker:');
+    settings.embedZTrackerSnapshotTransformPreset = 'minimal';
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      settings,
+      { preserveTextCompletionTurnAlternation: true, isGroupChat: true },
+    ) as any[];
+
+    expect(result).toHaveLength(2);
+    expect(result[1].is_user).toBe(true);
+    expect(result[1].mes).toContain('"A drink, please."\n\nScene tracker:\n');
+    expect(result[1].mes).toContain('time: 18:30:00; 09/15/2023 (Friday)');
+    expect(result[1].mes).toContain('Customer entered the bar and ordered a drink.');
   });
 
   it('inlines terminal assistant virtual-character snapshots into the final user turn in text-completion-safe mode', () => {
