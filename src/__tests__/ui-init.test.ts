@@ -4,8 +4,11 @@
 
 import { jest } from '@jest/globals';
 
+const includeZTrackerMessagesMock = jest.fn((chat: unknown[]) => [...chat]);
+
 jest.unstable_mockModule('sillytavern-utils-lib/config', () => ({
   st_echo: jest.fn(),
+  selected_group: false,
 }));
 
 jest.unstable_mockModule('sillytavern-utils-lib/types/translate', () => ({
@@ -25,7 +28,7 @@ jest.unstable_mockModule('sillytavern-utils-lib/types', () => ({
 }));
 
 jest.unstable_mockModule('../tracker.js', () => ({
-  includeZTrackerMessages: (chat: unknown[]) => chat,
+  includeZTrackerMessages: includeZTrackerMessagesMock,
 }));
 
 const { initializeGlobalUI } = await import('../ui/ui-init.js');
@@ -80,6 +83,7 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
 
   beforeEach(() => {
     document.body.innerHTML = '';
+    includeZTrackerMessagesMock.mockClear();
     globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
       cb(0);
       return 0;
@@ -135,5 +139,72 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
     expect(document.querySelectorAll('.ztracker-parts-list-portal')).toHaveLength(1);
     expect(oldPortaledList.classList.contains('ztracker-parts-list-portal')).toBe(false);
     expect(oldPortaledList.parentElement).not.toBe(document.body);
+  });
+
+  test('passes text-completion and group-chat hints to the generate interceptor', () => {
+    includeZTrackerMessagesMock.mockImplementationOnce(() => [{ mes: 'group result' }]);
+    const chat = [{ mes: 'hello' }];
+    (globalThis as any).SillyTavern = {
+      getContext: () => ({
+        mainApi: 'textgenerationwebui',
+        selected_group: 'group-1',
+        name2: 'Bar',
+      }),
+    };
+
+    (globalThis as any).ztrackerGenerateInterceptor(chat);
+
+    expect(includeZTrackerMessagesMock.mock.calls[0][1]).toEqual(expect.objectContaining({ includeLastXZTrackerMessages: 1 }));
+    expect(includeZTrackerMessagesMock.mock.calls[0][2]).toEqual({
+      preserveTextCompletionTurnAlternation: true,
+      isGroupChat: true,
+      assistantReplyLabel: undefined,
+    });
+    expect(chat).toEqual([{ mes: 'group result' }]);
+  });
+
+  test('passes host-confirmed solo reply labels to the generate interceptor and replaces the chat contents', () => {
+    includeZTrackerMessagesMock.mockImplementationOnce(() => [{ mes: 'solo result' }]);
+    const chat = [{ mes: 'hello' }];
+    (globalThis as any).SillyTavern = {
+      getContext: () => ({
+        mainApi: 'textgenerationwebui',
+        selected_group: false,
+        name2: 'Bar',
+      }),
+    };
+
+    (globalThis as any).ztrackerGenerateInterceptor(chat);
+
+    expect(includeZTrackerMessagesMock.mock.calls[0][1]).toEqual(expect.objectContaining({ includeLastXZTrackerMessages: 1 }));
+    expect(includeZTrackerMessagesMock.mock.calls[0][2]).toEqual({
+      preserveTextCompletionTurnAlternation: true,
+      isGroupChat: false,
+      assistantReplyLabel: 'Bar',
+    });
+    expect(chat).toEqual([{ mes: 'solo result' }]);
+  });
+
+  test('falls back to the active character name when name2 is unavailable', () => {
+    includeZTrackerMessagesMock.mockImplementationOnce(() => [{ mes: 'character result' }]);
+    const chat = [{ mes: 'hello' }];
+    (globalThis as any).SillyTavern = {
+      getContext: () => ({
+        mainApi: 'openai',
+        selected_group: false,
+        name2: '',
+        characterId: '0',
+        characters: [{ name: 'Bar' }],
+      }),
+    };
+
+    (globalThis as any).ztrackerGenerateInterceptor(chat);
+
+    expect(includeZTrackerMessagesMock.mock.calls[0][2]).toEqual({
+      preserveTextCompletionTurnAlternation: false,
+      isGroupChat: false,
+      assistantReplyLabel: 'Bar',
+    });
+    expect(chat).toEqual([{ mes: 'character result' }]);
   });
 });

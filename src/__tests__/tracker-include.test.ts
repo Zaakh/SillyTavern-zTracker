@@ -63,6 +63,26 @@ describe('includeZTrackerMessages', () => {
     },
   });
 
+  // Mirrors only the prompt-shaping boundary relevant to these injection tests:
+  // raw `ignoreInstruct` assistant content stays unwrapped, while named turns are prefixed.
+  const formatTextCompletionPrompt = (messages: Array<any>) => messages.map((message) => {
+    const content = typeof message.content === 'string'
+      ? message.content
+      : typeof message.mes === 'string'
+        ? message.mes
+        : '';
+    const speakerName = typeof message.name === 'string' && message.name.trim().length > 0
+      ? `${message.name.trim()}: `
+      : '';
+    const isAssistantTurn = message.role === 'assistant' || (message.is_user === false && message.is_system !== true);
+
+    if (isAssistantTurn) {
+      return message.ignoreInstruct ? content : `${speakerName}${content}</s>`;
+    }
+
+    return `[INST]${speakerName}${content}[/INST]`;
+  }).join('');
+
   it('injects tracker snapshots after the discovered message', () => {
     const messages = [
       buildMessageWithTracker({ id: 1 }),
@@ -185,6 +205,394 @@ describe('includeZTrackerMessages', () => {
     expect(result).toHaveLength(3);
     expect(result[1].role).toBe('system');
     expect(result[1]).not.toHaveProperty('name');
+  });
+
+  it('rewrites system snapshot injections to user turns for text-completion-safe prompt assembly', () => {
+    const messages = [
+      buildMessageWithTracker({ id: 1 }),
+      { content: 'current', role: 'assistant' },
+    ];
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      makeSettings(1, 'system', true, 'Scene details:'),
+      { preserveTextCompletionTurnAlternation: true },
+    ) as any[];
+
+    expect(result).toHaveLength(3);
+    expect(result[1].role).toBe('user');
+    expect(result[1].name).toBe('Scene details');
+    expect(result[1].is_user).toBe(true);
+    expect(result[1].is_system).toBe(false);
+  });
+
+  it('inlines text-completion-safe tracker snapshots into user turns to avoid nested instruct blocks', () => {
+    const messages = [
+      {
+        content: '"A drink, please."',
+        role: 'user',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer entered the bar and ordered a drink.',
+            },
+          },
+        },
+      },
+    ];
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      makeSettings(1, 'system', true, 'Scene details:'),
+      { preserveTextCompletionTurnAlternation: true },
+    ) as any[];
+
+    expect(result).toHaveLength(1);
+    expect(result[0].role).toBe('user');
+    expect(result[0].content).toContain('"A drink, please."\n\nScene details:\n');
+    expect(result[0].content).toContain('18:30:00; 09/15/2023 (Friday)');
+    expect(result[0].content).toContain('Customer entered the bar and ordered a drink.');
+  });
+
+  it('inlines text-completion-safe tracker snapshots into live is_user chat turns', () => {
+    const messages = [
+      {
+        content: '"A drink, please."',
+        is_user: true,
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer entered the bar and ordered a drink.',
+            },
+          },
+        },
+      },
+    ];
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      makeSettings(1, 'system', true, 'Scene details:'),
+      { preserveTextCompletionTurnAlternation: true },
+    ) as any[];
+
+    expect(result).toHaveLength(1);
+    expect(result[0].is_user).toBe(true);
+    expect(result[0].content).toContain('"A drink, please."\n\nScene details:\n');
+    expect(result[0].content).toContain('18:30:00; 09/15/2023 (Friday)');
+    expect(result[0].content).toContain('Customer entered the bar and ordered a drink.');
+  });
+
+  it('preserves mes-only live user content when inlining text-completion-safe tracker snapshots', () => {
+    const messages = [
+      {
+        is_user: true,
+        mes: '"A drink, please."',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer entered the bar and ordered a drink.',
+            },
+          },
+        },
+      },
+    ];
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      makeSettings(1, 'system', true, 'Scene details:'),
+      { preserveTextCompletionTurnAlternation: true },
+    ) as any[];
+
+    expect(result).toHaveLength(1);
+    expect(result[0].is_user).toBe(true);
+    expect(result[0].content).toContain('"A drink, please."\n\nScene details:\n');
+    expect(result[0].mes).toContain('"A drink, please."\n\nScene details:\n');
+  });
+
+  it('keeps terminal assistant virtual-character snapshots after trailing assistant prefill in text-completion-safe mode', () => {
+    const messages = [
+      {
+        is_user: true,
+        mes: '"A drink, please."',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer entered the bar and ordered a drink.',
+            },
+          },
+        },
+      },
+      {
+        role: 'assistant',
+        content: '',
+        name: 'Bar',
+      },
+    ];
+
+    const settings = makeSettings(1, 'assistant', true, 'Scene details:');
+    settings.embedZTrackerSnapshotTransformPreset = 'minimal';
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      settings,
+      { preserveTextCompletionTurnAlternation: true, isGroupChat: false },
+    ) as any[];
+
+    expect(result).toHaveLength(3);
+    expect(result[0].mes).toBe('"A drink, please."');
+    expect(result[1].role).toBe('assistant');
+    expect(result[1].content).toBe('');
+    expect(result[2].role).toBe('assistant');
+    expect(result[2].ignoreInstruct).toBe(true);
+    expect(result[2]).not.toHaveProperty('name');
+    expect(result[2].content).toContain('Scene details:\n');
+    expect(result[2].content).toContain('time: 18:30:00; 09/15/2023 (Friday)');
+    expect(result[2].content).toMatch(/\nBar:$/);
+  });
+
+  it('keeps assistant virtual-character snapshots anchored after the tracked user turn in multi-character chats', () => {
+    const messages = [
+      {
+        is_user: true,
+        mes: '"A drink, please."',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer entered the bar and ordered a drink.',
+            },
+          },
+        },
+      },
+      {
+        role: 'assistant',
+        content: 'Silvia pours the drink and sets it on the counter.',
+        name: 'Bar',
+      },
+      {
+        role: 'assistant',
+        content: 'What brings you to Eldoria\'s forest?',
+        name: 'Seraphina',
+      },
+      {
+        role: 'assistant',
+        content: '',
+        name: 'Bar',
+      },
+    ];
+
+    const settings = makeSettings(1, 'assistant', true, 'Scene details:');
+    settings.embedZTrackerSnapshotTransformPreset = 'minimal';
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      settings,
+      { preserveTextCompletionTurnAlternation: true, isGroupChat: false },
+    ) as any[];
+
+    expect(result).toHaveLength(5);
+    expect(result[1].role).toBe('assistant');
+    expect(result[1].name).toBe('Scene details');
+    expect(result[1]).not.toHaveProperty('ignoreInstruct');
+    expect(result[1].content).not.toContain('Scene details:');
+    expect(result[1].content).toContain('time: 18:30:00; 09/15/2023 (Friday)');
+    expect(result[2]).toMatchObject({ role: 'assistant', name: 'Bar' });
+    expect(result[3]).toMatchObject({ role: 'assistant', name: 'Seraphina' });
+    expect(result[4]).toMatchObject({ role: 'assistant', name: 'Bar', content: '' });
+  });
+
+  it('keeps terminal assistant virtual-character snapshots as assistant turns in normal chats', () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'As you enter the bar you realize you are the only customer.',
+        name: 'Bar',
+      },
+      {
+        is_user: true,
+        mes: '"A drink, please."',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer entered the bar and ordered a drink.',
+            },
+          },
+        },
+      },
+    ];
+
+    const settings = makeSettings(1, 'assistant', true, 'Scene tracker:');
+    settings.embedZTrackerSnapshotTransformPreset = 'minimal';
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      settings,
+      { preserveTextCompletionTurnAlternation: true, isGroupChat: false },
+    ) as any[];
+
+    expect(result).toHaveLength(3);
+    expect(result[1].is_user).toBe(true);
+    expect(result[1].mes).toBe('"A drink, please."');
+    expect(result[2].role).toBe('assistant');
+    expect(result[2].ignoreInstruct).toBe(true);
+    expect(result[2]).not.toHaveProperty('name');
+    expect(result[2].content).toContain('Scene tracker:\n');
+    expect(result[2].content).toContain('time: 18:30:00; 09/15/2023 (Friday)');
+    expect(result[2].content).toMatch(/\nBar:$/);
+  });
+
+  it('keeps terminal assistant virtual-character snapshots as assistant turns when the host confirms the solo reply label', () => {
+    const messages = [
+      {
+        is_user: true,
+        mes: '"A drink, please."',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer entered the bar and ordered a drink.',
+            },
+          },
+        },
+      },
+    ];
+
+    const settings = makeSettings(1, 'assistant', true, 'Scene tracker:');
+    settings.embedZTrackerSnapshotTransformPreset = 'minimal';
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      settings,
+      {
+        preserveTextCompletionTurnAlternation: true,
+        assistantReplyLabel: 'Bar',
+      },
+    ) as any[];
+
+    expect(result).toHaveLength(2);
+    expect(result[1].role).toBe('assistant');
+    expect(result[1].ignoreInstruct).toBe(true);
+    expect(result[1]).not.toHaveProperty('name');
+    expect(result[1].content).toContain('Scene tracker:\n');
+    expect(result[1].content).toContain('time: 18:30:00; 09/15/2023 (Friday)');
+    expect(result[1].content).toMatch(/\nBar:$/);
+  });
+
+  it('preserves the raw terminal assistant fallback through prompt shaping when the host confirms the solo reply label', () => {
+    const messages = [
+      {
+        is_user: true,
+        mes: 'A water, please.',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer entered the bar and ordered a drink.',
+            },
+          },
+        },
+      },
+    ];
+
+    const settings = makeSettings(1, 'assistant', true, 'Scene tracker:');
+    settings.embedZTrackerSnapshotTransformPreset = 'minimal';
+
+    const prompt = formatTextCompletionPrompt(includeZTrackerMessages(
+      messages as any,
+      settings,
+      {
+        preserveTextCompletionTurnAlternation: true,
+        assistantReplyLabel: 'Bar',
+      },
+    ) as any[]);
+
+    expect(prompt).toContain('[INST]A water, please.[/INST]');
+    expect(prompt).toContain('Scene tracker:\ntime: 18:30:00; 09/15/2023 (Friday)');
+    expect(prompt).toMatch(/\nBar:$/);
+  });
+
+  it('keeps terminal assistant virtual-character snapshots inline in group chats until the host confirms a single-speaker chat', () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'As you enter the bar you realize you are the only customer.',
+        name: 'Bar',
+      },
+      {
+        is_user: true,
+        mes: '"A drink, please."',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer entered the bar and ordered a drink.',
+            },
+          },
+        },
+      },
+    ];
+
+    const settings = makeSettings(1, 'assistant', true, 'Scene tracker:');
+    settings.embedZTrackerSnapshotTransformPreset = 'minimal';
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      settings,
+      { preserveTextCompletionTurnAlternation: true, isGroupChat: true },
+    ) as any[];
+
+    expect(result).toHaveLength(2);
+    expect(result[1].is_user).toBe(true);
+    expect(result[1].mes).toContain('"A drink, please."\n\nScene tracker:\n');
+    expect(result[1].mes).toContain('time: 18:30:00; 09/15/2023 (Friday)');
+    expect(result[1].mes).toContain('Customer entered the bar and ordered a drink.');
+  });
+
+  it('inlines terminal assistant virtual-character snapshots into the final user turn in text-completion-safe mode', () => {
+    const messages = [
+      {
+        is_user: true,
+        mes: '"A drink, please."',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer entered the bar and ordered a drink.',
+            },
+          },
+        },
+      },
+    ];
+
+    const settings = makeSettings(1, 'assistant', true, 'Scene details:');
+    settings.embedZTrackerSnapshotTransformPreset = 'minimal';
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      settings,
+      { preserveTextCompletionTurnAlternation: true },
+    ) as any[];
+
+    expect(result).toHaveLength(1);
+    expect(result[0].is_user).toBe(true);
+    expect(result[0].mes).toContain('"A drink, please."\n\nScene details:\n');
+    expect(result[0].mes).toContain('time: 18:30:00; 09/15/2023 (Friday)');
+    expect(result[0].mes).toContain('Customer entered the bar and ordered a drink.');
   });
 
   it('can embed snapshots as assistant messages', () => {

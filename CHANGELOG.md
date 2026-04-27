@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.10.2] - 2026-04-27
+
+### Fixed
+
+- Mid-chat tracker snapshots injected into text-completion prompts now preserve valid `[INST]...[/INST]` framing across all embed-role settings: assistant-role virtual-character snapshots stay raw when SillyTavern appends a single trailing assistant prefill turn, multi-character assistant reply runs keep the snapshot anchored after the tracked source turn, and terminal assistant snapshots now stay assistant-role in single-speaker chats while still inlining only the ambiguous no-prefill cases.
+
 ## [1.10.1] - 2026-04-22
 
 ### Fixed
