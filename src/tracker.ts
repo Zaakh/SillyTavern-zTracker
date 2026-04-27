@@ -225,9 +225,121 @@ function deriveEmbeddedTrackerSpeakerName(settings: ExtensionSettings): string {
 
 const EMBEDDED_TRACKER_SNAPSHOT_MARKER = Symbol('embeddedTrackerSnapshot');
 
+type IncludeZTrackerMessagesOptions = {
+  /**
+   * Text-completion instruct templates only allow cleanly alternating dialogue turns.
+   * Inline tracker snapshots into user messages when a standalone injected turn would
+   * break SillyTavern's prompt framing.
+   */
+  preserveTextCompletionTurnAlternation?: boolean;
+  /**
+   * When the host confirms a group chat, avoid synthesizing a terminal assistant reply
+   * cue from prior speaker history alone.
+   */
+  isGroupChat?: boolean;
+  /**
+   * Host-confirmed active assistant label for terminal solo-chat fallbacks.
+   * Prefer this over history inference when SillyTavern already knows the reply speaker.
+   */
+  assistantReplyLabel?: string;
+};
+
+function resolveEmbeddedTrackerRole(
+  settings: ExtensionSettings,
+  options: IncludeZTrackerMessagesOptions,
+): ExtensionSettings['embedZTrackerRole'] {
+  const configuredRole = settings.embedZTrackerRole ?? 'user';
+  if (!options.preserveTextCompletionTurnAlternation || configuredRole !== 'system') {
+    return configuredRole;
+  }
+
+  return 'user';
+}
+
+function isUserConversationTurn(message: { role?: string; is_user?: boolean }): boolean {
+  return message.role === 'user' || message.is_user === true;
+}
+
+function isAssistantConversationTurn(message: { role?: string; is_user?: boolean; is_system?: boolean }): boolean {
+  if (message.role === 'assistant') {
+    return true;
+  }
+
+  if (message.role === 'user' || message.role === 'system' || message.is_system === true) {
+    return false;
+  }
+
+  return message.is_user === false;
+}
+
+function canInlineEmbeddedTracker(
+  message: { role?: string; is_user?: boolean; is_system?: boolean },
+  embedRole: ExtensionSettings['embedZTrackerRole'],
+): boolean {
+  if (embedRole === 'assistant') {
+    return isAssistantConversationTurn(message);
+  }
+
+  if (embedRole === 'user') {
+    return isUserConversationTurn(message);
+  }
+
+  return false;
+}
+
+function getMessageText(message: { content?: string; mes?: string }): string {
+  if (typeof message.content === 'string' && message.content.trim().length > 0) {
+    return message.content;
+  }
+
+  if (typeof message.mes === 'string' && message.mes.trim().length > 0) {
+    return message.mes;
+  }
+
+  return '';
+}
+
+function getMessageSpeakerName(message: { name?: string; source?: { name?: string } }): string | undefined {
+  if (typeof message.name === 'string' && message.name.trim().length > 0) {
+    return message.name.trim();
+  }
+
+  if (typeof message.source?.name === 'string' && message.source.name.trim().length > 0) {
+    return message.source.name.trim();
+  }
+
+  return undefined;
+}
+
+function getSingleAssistantReplyLabel(
+  messages: Array<{ role?: string; is_user?: boolean; is_system?: boolean; name?: string; source?: { name?: string } }>,
+): string | undefined {
+  let assistantLabel: string | undefined;
+
+  for (const message of messages) {
+    if (!isAssistantConversationTurn(message)) {
+      continue;
+    }
+
+    const speakerName = getMessageSpeakerName(message);
+    if (!speakerName) {
+      continue;
+    }
+
+    if (assistantLabel && assistantLabel !== speakerName) {
+      return undefined;
+    }
+
+    assistantLabel = speakerName;
+  }
+
+  return assistantLabel;
+}
+
 export function includeZTrackerMessages<T extends Message | ChatMessage>(
   messages: T[],
   settings: ExtensionSettings,
+  options: IncludeZTrackerMessagesOptions = {},
 ): T[] {
   // SillyTavern sometimes keeps speaker attribution only on source.name.
   // Promote it onto cloned chat turns so instruct-mode prompt assembly can still emit named dialogue.
@@ -243,7 +355,11 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
       ? ({ ...message, name: fallbackName } as T)
       : message;
   });
-  const embedRole = settings.embedZTrackerRole ?? 'user';
+  const embedRole = resolveEmbeddedTrackerRole(settings, options);
+  const configuredAssistantReplyLabel =
+    typeof options.assistantReplyLabel === 'string' && options.assistantReplyLabel.trim().length > 0
+      ? options.assistantReplyLabel.trim()
+      : undefined;
 
   if (settings.includeLastXZTrackerMessages > 0) {
     for (let i = 0; i < settings.includeLastXZTrackerMessages; i++) {
@@ -265,28 +381,117 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
         }
       }
       if (foundMessage) {
+        let insertionIndex = foundIndex;
         const extra =
           'source' in foundMessage
             ? (foundMessage as Message).source?.extra
             : (foundMessage as ChatMessage).extra;
         const trackerValue = extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY] || {};
-        const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(trackerValue, settings);
-
-        const header = settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER;
         const useCharacterName = settings.embedZTrackerAsCharacter ?? false;
+        const header = settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER;
+        const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(trackerValue, settings);
+        const speakerName = useCharacterName ? deriveEmbeddedTrackerSpeakerName(settings) : undefined;
         const prefix = !useCharacterName && header ? `${header}\n` : '';
         const content = wrapInCodeFence
           ? `${prefix}\`\`\`${lang}\n${text}\n\`\`\``
           : `${prefix}${text}`;
-        const speakerName = useCharacterName ? deriveEmbeddedTrackerSpeakerName(settings) : undefined;
+        const trailingMessages = copyMessages.slice(foundIndex + 1);
+        // Only a single empty assistant turn is treated as SillyTavern's reply prefill.
+        // Real multi-character assistant replies must keep the snapshot anchored after
+        // the tracked source turn instead of moving it to the terminal assistant slot.
+        const hasTrailingAssistantPrefill =
+          embedRole === 'assistant'
+          && trailingMessages.length === 1
+          && isAssistantConversationTurn(
+            trailingMessages[0] as { role?: string; is_user?: boolean; is_system?: boolean },
+          )
+          && getMessageText(trailingMessages[0] as { content?: string; mes?: string }).length === 0;
+        if (hasTrailingAssistantPrefill) {
+          insertionIndex = copyMessages.length - 1;
+        }
+        const isTerminalTrackedUser =
+          foundIndex === copyMessages.length - 1
+          && isUserConversationTurn(foundMessage as { role?: string; is_user?: boolean });
+        let terminalAssistantReplyLabel: string | undefined;
+        if (hasTrailingAssistantPrefill) {
+          terminalAssistantReplyLabel = getMessageSpeakerName(
+            copyMessages[copyMessages.length - 1] as { name?: string; source?: { name?: string } },
+          );
+        } else if (configuredAssistantReplyLabel && isTerminalTrackedUser) {
+          terminalAssistantReplyLabel = configuredAssistantReplyLabel;
+        } else if (options.isGroupChat === false && isTerminalTrackedUser) {
+          terminalAssistantReplyLabel = getSingleAssistantReplyLabel(
+            copyMessages.slice(0, foundIndex) as Array<{
+              role?: string;
+              is_user?: boolean;
+              is_system?: boolean;
+              name?: string;
+              source?: { name?: string };
+            }>,
+          );
+        }
+        // Only inline a terminal assistant snapshot when we cannot safely synthesize
+        // the assistant reply cue. Single-speaker chats can still end on a raw
+        // assistant snapshot followed by that speaker label.
+        const shouldInlineTerminalAssistantSnapshot =
+          options.preserveTextCompletionTurnAlternation
+          && embedRole === 'assistant'
+          && !hasTrailingAssistantPrefill
+          && !terminalAssistantReplyLabel
+          && isTerminalTrackedUser;
+        // When SillyTavern already appended an assistant prefill turn, keep the
+        // injected snapshot as raw assistant text so the prompt still ends on the
+        // assistant reply cue instead of opening a new user block.
+        const needsRawTerminalAssistantSnapshot =
+          options.preserveTextCompletionTurnAlternation
+          && embedRole === 'assistant'
+          && (hasTrailingAssistantPrefill || !!terminalAssistantReplyLabel);
+
+        if (
+          options.preserveTextCompletionTurnAlternation
+          && (
+            canInlineEmbeddedTracker(
+              foundMessage as { role?: string; is_user?: boolean; is_system?: boolean },
+              embedRole,
+            )
+            || shouldInlineTerminalAssistantSnapshot
+          )
+        ) {
+          const inlineHeader = useCharacterName ? `${speakerName ?? 'Tracker'}:\n` : prefix;
+          const inlineContent = wrapInCodeFence
+            ? `${inlineHeader}\`\`\`${lang}\n${text}\n\`\`\``
+            : `${inlineHeader}${text}`;
+          const existingContent = getMessageText(foundMessage as { content?: string; mes?: string }).trimEnd();
+          const mergedContent = existingContent.length > 0
+            ? `${existingContent}\n\n${inlineContent}`
+            : inlineContent;
+
+          (copyMessages[foundIndex] as any).content = mergedContent;
+          if (typeof (copyMessages[foundIndex] as any).mes === 'string') {
+            (copyMessages[foundIndex] as any).mes = mergedContent;
+          }
+          continue;
+        }
+
+        const rawTerminalAssistantHeader = speakerName ? `${speakerName}:` : header || 'Tracker:';
+        const rawTerminalAssistantPrefix = speakerName ? `${speakerName}:\n` : prefix || 'Tracker:\n';
+        const rawTerminalAssistantSuffix = terminalAssistantReplyLabel ? `\n${terminalAssistantReplyLabel}:` : '';
+        const rawTerminalAssistantContent = needsRawTerminalAssistantSnapshot
+          ? wrapInCodeFence
+            ? `${rawTerminalAssistantHeader}\n\`\`\`${lang}\n${text}\n\`\`\`${rawTerminalAssistantSuffix}`
+            : `${rawTerminalAssistantPrefix}${text}${rawTerminalAssistantSuffix}`
+          : undefined;
+        const embeddedContent = rawTerminalAssistantContent ?? content;
+
         const embeddedTrackerMessage = {
-          content,
+          content: embeddedContent,
           role: embedRole,
           // These flags are used by SillyTavern Message objects; harmless for ChatMessage.
           is_user: embedRole === 'user',
           is_system: embedRole === 'system',
-          ...(speakerName ? { name: speakerName } : {}),
-          mes: content,
+          ...(!needsRawTerminalAssistantSnapshot && speakerName ? { name: speakerName } : {}),
+          ...(needsRawTerminalAssistantSnapshot ? { ignoreInstruct: true } : {}),
+          mes: embeddedContent,
         } as unknown as T;
         // Keep the marker off the serialized payload while still letting
         // tracker-generation-only role normalization distinguish injected snapshots.
@@ -294,7 +499,7 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
           value: true,
         });
         copyMessages.splice(
-          foundIndex + 1,
+          insertionIndex + 1,
           0,
           embeddedTrackerMessage,
         );
