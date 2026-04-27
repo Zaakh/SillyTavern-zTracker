@@ -8,6 +8,7 @@ import type { TrackerActions } from './tracker-actions.js';
 import { includeZTrackerMessages } from '../tracker.js';
 import { selected_group, st_echo } from 'sillytavern-utils-lib/config';
 import {
+  getCurrentCharacterId,
   shouldAutoGenerateForCharacterMessage,
   shouldAutoGenerateForUserMessage,
 } from './character-auto-mode-exclusion.js';
@@ -25,6 +26,39 @@ type InitializeGlobalUIOptions = {
   actions: TrackerActions;
   renderTrackerWithDeps: (messageId: number) => void;
 };
+
+type GenerateInterceptorContext = {
+  mainApi?: string;
+  selected_group?: string | false;
+  name2?: string;
+  characterId?: unknown;
+  characters?: Array<{
+    avatar?: string;
+    data?: Record<string, unknown> & {
+      extensions?: Record<string, unknown>;
+    };
+    name?: string;
+  }>;
+};
+
+function normalizeSpeakerLabel(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+// Prefers the host-owned solo-chat speaker label over local history inference.
+function resolveAssistantReplyLabel(context: GenerateInterceptorContext): string | undefined {
+  const contextLabel = normalizeSpeakerLabel(context.name2);
+  if (contextLabel) {
+    return contextLabel;
+  }
+
+  const characterId = getCurrentCharacterId(context);
+  if (characterId === undefined || !Array.isArray(context.characters)) {
+    return undefined;
+  }
+
+  return normalizeSpeakerLabel(context.characters[characterId]?.name);
+}
 
 /** Injects the zTracker per-message action button into SillyTavern's message template. */
 function ensureMessageTemplateButton(): void {
@@ -245,10 +279,12 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
   });
 
   (globalThis as any).ztrackerGenerateInterceptor = (chat: ChatMessage[]) => {
-    const textCompletionSafeContext = SillyTavern.getContext() as { mainApi?: string; selected_group?: string | false };
+    const textCompletionSafeContext = SillyTavern.getContext() as GenerateInterceptorContext;
+    const isGroupChat = Boolean(textCompletionSafeContext?.selected_group ?? selected_group);
     const newChat = includeZTrackerMessages(chat, settingsManager.getSettings(), {
       preserveTextCompletionTurnAlternation: textCompletionSafeContext?.mainApi === 'textgenerationwebui',
-      isGroupChat: Boolean(textCompletionSafeContext?.selected_group ?? selected_group),
+      isGroupChat,
+      assistantReplyLabel: isGroupChat ? undefined : resolveAssistantReplyLabel(textCompletionSafeContext),
     });
     chat.length = 0;
     chat.push(...newChat);

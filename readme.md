@@ -104,11 +104,11 @@ zTracker can optionally embed the last $X$ tracker snapshots into the prompt cha
 
 You can also control what **role** those embedded snapshots use (**User**, **System**, or **Assistant**) via **Embed zTracker snapshots as**. This setting only affects embedding; it does not change how zTracker generates trackers.
 
-For **Text Completion** chats, assistant-role snapshots stay as assistant turns when zTracker can preserve a clear reply cue, such as SillyTavern's trailing assistant prefill turn or a normal single-speaker chat. zTracker only falls back to inlining the snapshot into the final user turn when a standalone terminal assistant block would otherwise leave the prompt framing ambiguous.
+For **Text Completion** chats, assistant-role snapshots stay as assistant turns when zTracker can preserve a clear reply cue, such as SillyTavern's trailing assistant prefill turn or a host-confirmed solo-chat speaker label. When the host cannot confirm a single reply speaker, zTracker only falls back to inlining the snapshot into the final user turn when a standalone terminal assistant block would otherwise leave the prompt framing ambiguous.
 
 If SillyTavern's prompt formatting is producing awkward prefixes like `Assistant: Tracker:`, enable **Inject as virtual character**. This uses the embed snapshot header as the injected speaker name and removes the duplicated header prefix from the embedded snapshot body.
 
-In the text-completion-safe terminal assistant fallback, zTracker still keeps the tracker label inside the raw injected content so the prompt can end on the real assistant reply cue. See `docs/TRACKER_INJECTION_BEHAVIOR.md` for the current behavior matrix and concrete prompt shapes.
+In the text-completion-safe terminal assistant fallback, zTracker still keeps the tracker label inside the raw injected content so the prompt can end on the real assistant reply cue. See `docs/TRACKER_INJECTION_BEHAVIOR.md` for the current behavior matrix, including when that reply cue is host-confirmed versus inferred from prior assistant history.
 
 You can also apply a **regex-based transform** to the embedded snapshot text (for prompt-friendly formatting) via **Embed snapshot transform preset**.
 

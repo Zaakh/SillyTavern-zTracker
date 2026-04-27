@@ -63,6 +63,26 @@ describe('includeZTrackerMessages', () => {
     },
   });
 
+  // Mirrors only the prompt-shaping boundary relevant to these injection tests:
+  // raw `ignoreInstruct` assistant content stays unwrapped, while named turns are prefixed.
+  const formatTextCompletionPrompt = (messages: Array<any>) => messages.map((message) => {
+    const content = typeof message.content === 'string'
+      ? message.content
+      : typeof message.mes === 'string'
+        ? message.mes
+        : '';
+    const speakerName = typeof message.name === 'string' && message.name.trim().length > 0
+      ? `${message.name.trim()}: `
+      : '';
+    const isAssistantTurn = message.role === 'assistant' || (message.is_user === false && message.is_system !== true);
+
+    if (isAssistantTurn) {
+      return message.ignoreInstruct ? content : `${speakerName}${content}</s>`;
+    }
+
+    return `[INST]${speakerName}${content}[/INST]`;
+  }).join('');
+
   it('injects tracker snapshots after the discovered message', () => {
     const messages = [
       buildMessageWithTracker({ id: 1 }),
@@ -430,6 +450,78 @@ describe('includeZTrackerMessages', () => {
     expect(result[2].content).toContain('Scene tracker:\n');
     expect(result[2].content).toContain('time: 18:30:00; 09/15/2023 (Friday)');
     expect(result[2].content).toMatch(/\nBar:$/);
+  });
+
+  it('keeps terminal assistant virtual-character snapshots as assistant turns when the host confirms the solo reply label', () => {
+    const messages = [
+      {
+        is_user: true,
+        mes: '"A drink, please."',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer entered the bar and ordered a drink.',
+            },
+          },
+        },
+      },
+    ];
+
+    const settings = makeSettings(1, 'assistant', true, 'Scene tracker:');
+    settings.embedZTrackerSnapshotTransformPreset = 'minimal';
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      settings,
+      {
+        preserveTextCompletionTurnAlternation: true,
+        assistantReplyLabel: 'Bar',
+      },
+    ) as any[];
+
+    expect(result).toHaveLength(2);
+    expect(result[1].role).toBe('assistant');
+    expect(result[1].ignoreInstruct).toBe(true);
+    expect(result[1]).not.toHaveProperty('name');
+    expect(result[1].content).toContain('Scene tracker:\n');
+    expect(result[1].content).toContain('time: 18:30:00; 09/15/2023 (Friday)');
+    expect(result[1].content).toMatch(/\nBar:$/);
+  });
+
+  it('preserves the raw terminal assistant fallback through prompt shaping when the host confirms the solo reply label', () => {
+    const messages = [
+      {
+        is_user: true,
+        mes: 'A water, please.',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer entered the bar and ordered a drink.',
+            },
+          },
+        },
+      },
+    ];
+
+    const settings = makeSettings(1, 'assistant', true, 'Scene tracker:');
+    settings.embedZTrackerSnapshotTransformPreset = 'minimal';
+
+    const prompt = formatTextCompletionPrompt(includeZTrackerMessages(
+      messages as any,
+      settings,
+      {
+        preserveTextCompletionTurnAlternation: true,
+        assistantReplyLabel: 'Bar',
+      },
+    ) as any[]);
+
+    expect(prompt).toContain('[INST]A water, please.[/INST]');
+    expect(prompt).toContain('Scene tracker:\ntime: 18:30:00; 09/15/2023 (Friday)');
+    expect(prompt).toMatch(/\nBar:$/);
   });
 
   it('keeps terminal assistant virtual-character snapshots inline in group chats until the host confirms a single-speaker chat', () => {
