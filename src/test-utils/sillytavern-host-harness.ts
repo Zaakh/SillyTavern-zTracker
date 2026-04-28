@@ -39,7 +39,6 @@ type CreateSillyTavernHostOptions = Partial<HostContext> & {
 type BootExtensionForTestOptions = {
   host?: ReturnType<typeof createSillyTavernHost>;
   dom?: {
-    clearDocument?: boolean;
     extensionsMenu?: boolean;
     settingsContainer?: boolean;
     messageTemplate?: boolean;
@@ -107,7 +106,7 @@ export function createSillyTavernHost(options: CreateSillyTavernHostOptions = {}
     name2: options.name2 ?? 'Assistant',
     extensionSettings: options.extensionSettings ?? {},
     powerUserSettings: options.powerUserSettings ?? {},
-    eventSource: { on: (options.events ?? events).on },
+    eventSource: { on: events.on },
     generate: options.generate ?? generate,
     stopGeneration: options.stopGeneration ?? stopGeneration,
     Popup: popup,
@@ -122,10 +121,6 @@ export function createSillyTavernHost(options: CreateSillyTavernHostOptions = {}
   return {
     context,
     events,
-    /** Installs this harness context as the active SillyTavern host global. */
-    install(): void {
-      installSillyTavernHost(context);
-    },
     spies: {
       generate: context.generate,
       stopGeneration: context.stopGeneration,
@@ -138,16 +133,6 @@ export function createSillyTavernHost(options: CreateSillyTavernHostOptions = {}
       writeExtensionField: context.writeExtensionField,
       getPresetManager: context.getPresetManager,
     },
-    popupConfirm,
-    popupInput,
-    saveChat: context.saveChat,
-    saveMetadata: context.saveMetadata,
-    saveSettingsDebounced: context.saveSettingsDebounced,
-    renderExtensionTemplateAsync: context.renderExtensionTemplateAsync,
-    writeExtensionField: context.writeExtensionField,
-    getPresetManager: context.getPresetManager,
-    generate: context.generate,
-    stopGeneration: context.stopGeneration,
   };
 }
 
@@ -160,18 +145,12 @@ export function installSillyTavernHost(context: Record<string, unknown>): void {
 
 /** Clears the body and installs the requested shared host DOM nodes. */
 export function installBaseExtensionDom(options: {
-  clearBody?: boolean;
-  clearDocument?: boolean;
   extensionsMenu?: boolean;
   settingsContainer?: boolean;
   messageTemplate?: boolean;
   sendButton?: boolean;
   characterPanel?: boolean;
 } = {}) {
-  if (options.clearBody || options.clearDocument) {
-    document.body.innerHTML = '';
-  }
-
   return {
     extensionsMenu: options.extensionsMenu ? installExtensionsMenuDom() : null,
     settingsContainer: options.settingsContainer ? installSettingsContainerDom() : null,
@@ -185,10 +164,9 @@ export function installBaseExtensionDom(options: {
 export async function bootExtensionForTest(options: BootExtensionForTestOptions = {}) {
   const host = options.host ?? createSillyTavernHost();
 
-  host.install();
+  installSillyTavernHost(host.context);
   if (options.dom) {
     installBaseExtensionDom({
-      clearDocument: options.dom.clearDocument,
       extensionsMenu: options.dom.extensionsMenu,
       settingsContainer: options.dom.settingsContainer,
       messageTemplate: options.dom.messageTemplate,
@@ -197,8 +175,8 @@ export async function bootExtensionForTest(options: BootExtensionForTestOptions 
     });
   }
 
-  const bootResult = options.boot ? await options.boot() : undefined;
-  return { host, events: host.events, bootResult };
+  await options.boot?.();
+  return { host, events: host.events };
 }
 
 /** Installs the extension menu container used by tracker actions and menu UI. */

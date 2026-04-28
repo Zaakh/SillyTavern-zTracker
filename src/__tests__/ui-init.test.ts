@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 
-import { jest } from '@jest/globals';
+import { afterEach, beforeAll, beforeEach, describe, expect, jest, test } from '@jest/globals';
 import {
   bootExtensionForTest,
   createSillyTavernHost,
@@ -10,7 +10,7 @@ import {
   installSillyTavernHost,
 } from '../test-utils/sillytavern-host-harness.js';
 
-const includeZTrackerMessagesMock = jest.fn((chat: unknown[]) => [...chat]);
+const includeZTrackerMessagesMock = jest.fn((chat: unknown[], ..._rest: unknown[]) => [...chat]);
 
 jest.unstable_mockModule('sillytavern-utils-lib/config', () => ({
   st_echo: jest.fn(),

@@ -71,7 +71,7 @@ async function initializeAutoModeHarness(options: AutoModeHarnessOptions = {}) {
   const host = options.hostHarness ?? createSillyTavernHost(options.host);
   const actions = createAutoModeActions(options.actions);
 
-  const boot = await bootExtensionForTest({
+  await bootExtensionForTest({
     host,
     boot: () => initializeGlobalUI({
       globalContext: host.context as any,
@@ -87,7 +87,7 @@ async function initializeAutoModeHarness(options: AutoModeHarnessOptions = {}) {
     }),
   });
 
-  return { host: boot.host, actions, events: boot.events };
+  return { host, actions, events: host.events };
 }
 
 /** Reinstalls one standard host-rendered chat message. */
