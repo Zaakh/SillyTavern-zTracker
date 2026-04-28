@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.10.3] - 2026-04-28
+
+### Changed
+
+- Tightened the internal SillyTavern host test harness and `ui-init` wiring coverage so host-boundary validation stays aligned with the current `#send_but`, `#message_template`, and `#form_create` selectors.
+
 ## [1.10.2] - 2026-04-27
 
 ### Fixed
