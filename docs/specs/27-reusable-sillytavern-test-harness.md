@@ -1,13 +1,15 @@
 # Spec: Reusable SillyTavern test harness
 
-Status: Open
-Last updated: 2026-04-24
+Status: Implemented
+Last updated: 2026-04-28
 
 ## Summary
 
 Add a small, repo-local SillyTavern host test harness for the host behaviors that zTracker actually depends on.
 
 This harness is meant to reduce duplicated host setup in Jest, make host-boundary tests cheaper to write, and support the still-missing wiring coverage defined in `02-B-entrypoint-wiring-tests.md`.
+
+It should also cover the current host-boundary behaviors already exercised around generate-interceptor context hints, outgoing auto-mode host controls, and character-panel DOM syncing.
 
 This spec intentionally does not propose a generalized fake SillyTavern test framework.
 
@@ -54,10 +56,13 @@ The builder must provide stable defaults for the host state zTracker uses, inclu
 - `chatMetadata`
 - `characters`
 - `characterId`
+- `mainApi`
+- `selected_group`
 - `name1` and `name2`
 - `extensionSettings`
 - `powerUserSettings`
 - `eventSource`
+- `generate` and `stopGeneration`
 - `Popup.show.confirm` and `Popup.show.input`
 - `saveChat`, `saveMetadata`, and `saveSettingsDebounced`
 - `renderExtensionTemplateAsync`
@@ -100,6 +105,8 @@ Suggested helpers:
 - `installMessageTemplateDom()`
 - `installExtensionsMenuDom()`
 - `installSettingsContainerDom()`
+- `installSendButtonDom()`
+- `installCharacterPanelDom()`
 - `installChatMessageDom(messageId, options)`
 
 These helpers should cover the selectors zTracker relies on, including:
@@ -107,9 +114,13 @@ These helpers should cover the selectors zTracker relies on, including:
 - `#extensionsMenu`
 - `#extensions_settings`
 - `#message_template`
+- `#send_but`
+- `#form_create`
 - `.mes`
 - `.mes_buttons`
 - `.extraMesButtons`
+
+For character-panel tests, the scaffold only needs to provide one supported action-row shape that zTracker can target reliably. It must not try to mirror every possible host layout variation.
 
 These helpers must stay intentionally small. They exist to make selector assumptions explicit and reusable, not to mirror host markup in detail.
 
@@ -122,7 +133,7 @@ Suggested shape:
 ```ts
 const boot = await bootExtensionForTest({
   host,
-  dom: { settings: true, extensionsMenu: true, messageTemplate: true },
+  dom: { settingsContainer: true, extensionsMenu: true, messageTemplate: true },
 });
 ```
 
@@ -156,7 +167,10 @@ Use the harness for tests that verify host-boundary behavior such as:
 
 - event registration and event-driven behavior
 - interceptor registration
+- generate-interceptor host hints such as solo-vs-group state and assistant reply labels
 - DOM attachment to required SillyTavern selectors
+- outgoing auto-mode behavior that depends on host stop/resume controls and the live send button
+- character-panel button sync that depends on host-owned panel nodes
 - UI initialization that depends on host globals or shared host nodes
 
 Do not use the harness for pure logic tests that can stay import-safe with smaller fixtures.
@@ -168,6 +182,7 @@ Do not use the harness for pure logic tests that can stay import-safe with small
 - At least two existing suites are migrated to use the shared harness.
 - Event-driven tests no longer need per-file handler maps or bespoke `globalThis.SillyTavern` setup.
 - The harness is sufficient to implement the currently open wiring coverage from `02-B-entrypoint-wiring-tests.md`.
+- The harness is sufficient for current `ui-init` coverage that depends on interceptor context fields, `#send_but`, and `#form_create`.
 - `docs/DEVELOPMENT.md` documents the harness as a minimal fake host and explains when not to use it.
 
 ## Validation plan
