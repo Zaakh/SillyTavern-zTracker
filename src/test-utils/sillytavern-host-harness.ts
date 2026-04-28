@@ -29,7 +29,7 @@ type HostContext = Record<string, unknown> & {
   saveSettingsDebounced: jest.Mock;
   renderExtensionTemplateAsync: jest.Mock;
   writeExtensionField: jest.Mock;
-  getPresetManager: jest.Mock;
+  getPresetManager: (apiId?: string) => unknown;
 };
 
 type CreateSillyTavernHostOptions = Partial<HostContext> & {
