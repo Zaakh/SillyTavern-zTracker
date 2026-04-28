@@ -19,6 +19,7 @@ Test boundaries to remember:
 - Avoid importing `src/index.tsx` in tests because it wires browser and SillyTavern side effects.
 - Use jsdom for DOM behavior and lightweight injected context objects for host-state dependent helpers.
 - Use `src/test-utils/sillytavern-host-harness.ts` for shared host-boundary setup such as `SillyTavern.getContext()`, event registration, `#send_but`, `#message_template`, and `#form_create` scaffolding.
+- Prefer `bootExtensionForTest()` when a suite needs to initialize `initializeGlobalUI()` or another explicit boot seam; keep suite-local wrappers as thin composition over the shared harness instead of rebuilding host install logic.
 - Keep using narrower local fixtures for pure logic tests; the shared host harness is for host-boundary behavior, not as a default test dependency.
 - Register any custom Handlebars helpers explicitly in tests that need them.
 

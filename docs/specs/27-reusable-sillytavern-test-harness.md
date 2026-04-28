@@ -1,7 +1,7 @@
 # Spec: Reusable SillyTavern test harness
 
 Status: Implemented
-Last updated: 2026-04-27
+Last updated: 2026-04-28
 
 ## Summary
 
@@ -133,7 +133,7 @@ Suggested shape:
 ```ts
 const boot = await bootExtensionForTest({
   host,
-  dom: { settings: true, extensionsMenu: true, messageTemplate: true },
+  dom: { settingsContainer: true, extensionsMenu: true, messageTemplate: true },
 });
 ```
 
