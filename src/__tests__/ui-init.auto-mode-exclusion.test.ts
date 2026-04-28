@@ -4,6 +4,7 @@
 
 import { describe, expect, jest, test } from '@jest/globals';
 import {
+  bootExtensionForTest,
   createSillyTavernHost,
   installChatMessageDom,
   installSendButtonDom,
@@ -70,21 +71,23 @@ async function initializeAutoModeHarness(options: AutoModeHarnessOptions = {}) {
   const host = options.hostHarness ?? createSillyTavernHost(options.host);
   const actions = createAutoModeActions(options.actions);
 
-  host.install();
-  await initializeGlobalUI({
-    globalContext: host.context as any,
-    settingsManager: {
-      getSettings: jest.fn(() => ({
-        autoMode: 'inputs',
-        includeLastXZTrackerMessages: 1,
-        ...(options.settings ?? {}),
-      })),
-    } as any,
-    actions: actions as any,
-    renderTrackerWithDeps: options.renderTrackerWithDeps ?? (() => undefined),
+  const boot = await bootExtensionForTest({
+    host,
+    boot: () => initializeGlobalUI({
+      globalContext: host.context as any,
+      settingsManager: {
+        getSettings: jest.fn(() => ({
+          autoMode: 'inputs',
+          includeLastXZTrackerMessages: 1,
+          ...(options.settings ?? {}),
+        })),
+      } as any,
+      actions: actions as any,
+      renderTrackerWithDeps: options.renderTrackerWithDeps ?? (() => undefined),
+    }),
   });
 
-  return { host, actions, events: host.events };
+  return { host: boot.host, actions, events: boot.events };
 }
 
 /** Reinstalls one standard host-rendered chat message. */

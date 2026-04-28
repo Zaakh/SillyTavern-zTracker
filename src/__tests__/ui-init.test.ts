@@ -4,7 +4,9 @@
 
 import { jest } from '@jest/globals';
 import {
+  bootExtensionForTest,
   createSillyTavernHost,
+  installCharacterPanelDom,
   installSillyTavernHost,
 } from '../test-utils/sillytavern-host-harness.js';
 
@@ -17,6 +19,7 @@ jest.unstable_mockModule('sillytavern-utils-lib/config', () => ({
 
 jest.unstable_mockModule('sillytavern-utils-lib/types/translate', () => ({
   AutoModeOptions: {
+    NONE: 'none',
     RESPONSES: 'responses',
     BOTH: 'both',
     INPUT: 'input',
@@ -36,6 +39,8 @@ jest.unstable_mockModule('../tracker.js', () => ({
 }));
 
 const { initializeGlobalUI } = await import('../ui/ui-init.js');
+
+let sharedUiInitHost: ReturnType<typeof createSillyTavernHost>;
 
 /** Returns the narrow tracker-actions surface that ui-init depends on in these tests. */
 function createUiInitActions(overrides: Record<string, unknown> = {}) {
@@ -77,15 +82,17 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
 
   beforeAll(async () => {
     // initializeGlobalUI installs document-level listeners — call it once to avoid duplicates.
-    const host = createSillyTavernHost();
-    installSillyTavernHost(host.context);
-    await initializeGlobalUI({
-      globalContext: host.context,
-      settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'none', includeLastXZTrackerMessages: 1 })),
-      } as any,
-      actions: createUiInitActions(),
-      renderTrackerWithDeps: () => undefined,
+    sharedUiInitHost = createSillyTavernHost();
+    await bootExtensionForTest({
+      host: sharedUiInitHost,
+      boot: () => initializeGlobalUI({
+        globalContext: sharedUiInitHost.context,
+        settingsManager: {
+          getSettings: jest.fn(() => ({ autoMode: 'none', includeLastXZTrackerMessages: 1 })),
+        } as any,
+        actions: createUiInitActions(),
+        renderTrackerWithDeps: () => undefined,
+      }),
     });
   });
 
@@ -147,6 +154,30 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
     expect(document.querySelectorAll('.ztracker-parts-list-portal')).toHaveLength(1);
     expect(oldPortaledList.classList.contains('ztracker-parts-list-portal')).toBe(false);
     expect(oldPortaledList.parentElement).not.toBe(document.body);
+  });
+
+  test('syncs the character-panel auto-mode button when the host panel appears', () => {
+    jest.useFakeTimers();
+    try {
+      const liveHost = createSillyTavernHost({
+        characterId: '0',
+        characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+      });
+      installSillyTavernHost(liveHost.context);
+
+      document.body.innerHTML = '';
+      const { buttonRow } = installCharacterPanelDom();
+
+      sharedUiInitHost.events.emit('CHAT_CHANGED');
+      jest.advanceTimersByTime(25);
+
+      const button = buttonRow.querySelector('#ztracker-character-auto-mode-toggle') as HTMLElement | null;
+      expect(button).not.toBeNull();
+      expect(button?.dataset.excluded).toBe('false');
+      expect(button?.title).toContain('Auto mode is disabled globally');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('passes text-completion and group-chat hints to the generate interceptor', () => {
