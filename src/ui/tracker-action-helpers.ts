@@ -104,6 +104,8 @@ export function getPromptPresetSelections(
     context?: PromptPresetSelectionContextLike;
     trackerSystemPromptMode?: ExtensionSettings['trackerSystemPromptMode'];
     trackerSystemPromptName?: string;
+    trackerInstructName?: string;
+    trackerContextName?: string;
   } = {},
 ) {
   const normalizePromptPresetName = (value: unknown): string | undefined => {
@@ -118,13 +120,18 @@ export function getPromptPresetSelections(
   const activeSystemPromptName = normalizePromptPresetName(options.context?.powerUserSettings?.sysprompt?.name);
   const activeInstructName = normalizePromptPresetName(options.context?.powerUserSettings?.instruct?.preset);
   const activeContextName = normalizePromptPresetName(options.context?.powerUserSettings?.context?.preset);
+
   const instructName = selectedApi === 'textgenerationwebui'
-    ? activeInstructName
+    ? options.trackerSystemPromptMode === 'selected'
+      ? normalizePromptPresetName(options.trackerInstructName)
+      : activeInstructName
     : undefined;
   const contextName = selectedApi === 'textgenerationwebui'
-    ? activeContextName
+    ? options.trackerSystemPromptMode === 'selected'
+      ? normalizePromptPresetName(options.trackerContextName)
+      : activeContextName
     : undefined;
-  const syspromptName = options.trackerSystemPromptMode === 'saved'
+  const syspromptName = options.trackerSystemPromptMode === 'saved' || options.trackerSystemPromptMode === 'selected'
     ? selectedApi === 'textgenerationwebui'
       ? normalizePromptPresetName(options.trackerSystemPromptName)
       : undefined

@@ -966,7 +966,7 @@ export function createTrackerActions(options: {
         ? profile.preset || undefined
         : undefined;
 
-    const syspromptName = resolveTrackerSystemPromptName(settings, context);
+    const syspromptName = resolveTrackerSystemPromptName(settings, context, profile);
     let savedSystemPromptContent: string | undefined;
     if (settings.trackerSystemPromptMode === 'saved') {
       if (!syspromptName) {
@@ -981,10 +981,15 @@ export function createTrackerActions(options: {
       }
     }
 
+    const trackerInstructName = settings.trackerSystemPromptMode === 'selected' ? profile.instruct : undefined;
+    const trackerContextName = settings.trackerSystemPromptMode === 'selected' ? profile.context : undefined;
+
     const promptPresetSelections = getPromptPresetSelections(apiMap.selected, {
       context,
       trackerSystemPromptMode: settings.trackerSystemPromptMode,
       trackerSystemPromptName: syspromptName,
+      trackerInstructName,
+      trackerContextName,
     });
     const includePromptNames = apiMap.selected !== 'textgenerationwebui';
 

@@ -107,10 +107,18 @@ export async function ensureZTrackerSystemPromptPresetInstalled(
 export function resolveTrackerSystemPromptName(
   settings: Pick<ExtensionSettings, 'trackerSystemPromptMode' | 'trackerSystemPromptSavedName'>,
   context: SillyTavernContextLike = SillyTavern.getContext(),
+  profile?: { sysprompt?: string; preset?: string; api?: string },
 ): string | undefined {
   if (settings.trackerSystemPromptMode === 'saved') {
     const savedName = settings.trackerSystemPromptSavedName.trim();
     return savedName || undefined;
+  }
+
+  if (settings.trackerSystemPromptMode === 'selected' && profile) {
+    const profileName = (profile.api === 'textgenerationwebui' ? profile.sysprompt : profile.preset)?.trim();
+    if (profileName) {
+      return profileName;
+    }
   }
 
   return getCurrentGlobalSystemPromptName(context);
