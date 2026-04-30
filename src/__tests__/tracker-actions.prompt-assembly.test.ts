@@ -38,22 +38,31 @@ describe('createTrackerActions prompt assembly', () => {
       prefer_character_prompt: true,
       sysprompt: { name: 'Neutral - Chat' },
     };
-    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true, powerUserSettings }));
+    installSillyTavernContext(makeContext({
+      includeSavedPromptPreset: true,
+      powerUserSettings,
+      getPresetManager: () => ({
+        getSelectedPresetName: () => 'Active Preset',
+        getCompletionPresetByName: (name?: string) =>
+          name === 'zTracker' ? { name: 'zTracker', content: 'Saved tracker system prompt' } : undefined,
+        getPresetList: () => ({ presets: [], preset_names: ['zTracker'] }),
+      }),
+    }));
 
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
     const generateRequest = makeGenerateRequest();
 
     const actions = createTrackerActions({
-      globalContext: {
-        chat: [{ original_avatar: 'avatar.png', extra: {} }],
-        saveChat: async () => undefined,
-        extensionSettings: {
-          connectionManager: {
-            profiles: [makeProfile()],
+        globalContext: {
+          chat: [{ original_avatar: 'avatar.png', extra: {} }],
+          saveChat: async () => undefined,
+          extensionSettings: {
+            connectionManager: {
+              profiles: [makeProfile({ preset: 'Profile Preset' })],
+            },
           },
+          CONNECT_API_MAP: { openai: { selected: 'openai' } },
         },
-        CONNECT_API_MAP: { openai: { selected: 'openai' } },
-      },
       settingsManager: { getSettings: () => makeSettings() } as any,
       generator: { generateRequest, abortRequest: jest.fn() } as any,
       pendingRequests: new Map(),
@@ -71,6 +80,7 @@ describe('createTrackerActions prompt assembly', () => {
       }),
     );
     const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    expect(buildPromptOptions).toHaveProperty('presetName', 'Active Preset');
     expect(buildPromptOptions).not.toHaveProperty('syspromptName');
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
 
@@ -391,15 +401,18 @@ describe('createTrackerActions prompt assembly', () => {
   });
 
   test.each([
-    { api: 'openai', expectedSyspromptName: undefined, expectedContextName: undefined },
-    { api: 'textgenerationwebui', expectedSyspromptName: 'Neutral - Chat', expectedContextName: 'Active Context' },
+    { api: 'openai', expectedSyspromptName: undefined, expectedContextName: undefined, expectedPresetName: 'Active Preset' },
+    { api: 'textgenerationwebui', expectedSyspromptName: 'Neutral - Chat', expectedContextName: 'Active Context', expectedPresetName: undefined },
   ])(
-    'omits stored preset/context slots and uses active runtime prompt state for $api profiles',
-    async ({ api, expectedSyspromptName, expectedContextName }) => {
+    'uses the active runtime preset for chat APIs in profile mode and keeps text-completion prompt selectors active',
+    async ({ api, expectedSyspromptName, expectedContextName, expectedPresetName }) => {
       installSillyTavernContext(makeContext({
-        powerUserSettings: expectedContextName
-          ? { context: { preset: expectedContextName } }
-          : undefined,
+        powerUserSettings: {
+          ...(expectedContextName ? { context: { preset: expectedContextName } } : {}),
+        },
+        getPresetManager: () => ({
+          getSelectedPresetName: () => 'Active Preset',
+        }),
       }));
 
       buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
@@ -411,7 +424,7 @@ describe('createTrackerActions prompt assembly', () => {
           saveChat: async () => undefined,
           extensionSettings: {
             connectionManager: {
-              profiles: [makeProfile({ api, preset: undefined, context: '   ', instruct: undefined, sysprompt: '   ' })],
+              profiles: [makeProfile({ api, preset: 'Profile Preset', context: '   ', instruct: undefined, sysprompt: '   ' })],
             },
           },
           CONNECT_API_MAP: {
@@ -431,7 +444,11 @@ describe('createTrackerActions prompt assembly', () => {
 
       expect(buildPromptMock).toHaveBeenCalledWith(api, expect.any(Object));
       const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
-      expect(buildPromptOptions).not.toHaveProperty('presetName');
+      if (expectedPresetName) {
+        expect(buildPromptOptions).toHaveProperty('presetName', expectedPresetName);
+      } else {
+        expect(buildPromptOptions).not.toHaveProperty('presetName');
+      }
       expect(buildPromptOptions).not.toHaveProperty('instructName');
       if (expectedContextName) {
         expect(buildPromptOptions).toHaveProperty('contextName', expectedContextName);
