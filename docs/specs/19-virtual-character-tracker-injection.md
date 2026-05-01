@@ -1,5 +1,7 @@
 # Spec: Virtual character for tracker snapshot injection
 
+Historical note: this spec captures the original design intent. The current runtime behavior has additional text-completion assistant fallbacks for terminal single-speaker and prefill cases. For the up-to-date behavior contract, see `docs/TRACKER_INJECTION_BEHAVIOR.md`.
+
 Status: Open
 Last updated: 2026-04-13
 

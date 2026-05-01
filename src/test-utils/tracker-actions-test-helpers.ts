@@ -1,4 +1,9 @@
 import { jest } from '@jest/globals';
+import {
+  createSillyTavernHost,
+  installExtensionsMenuDom,
+  installSillyTavernHost,
+} from './sillytavern-host-harness.js';
 
 /** Shared mocks and harness helpers for tracker-action tests. */
 export const buildPromptMock = jest.fn<() => Promise<{ result: Array<{ role: string; content: string }> }>>();
@@ -305,8 +310,7 @@ export function makeContext(options: {
     getPresetList: () => ({ presets: [], preset_names: ['zTracker'] }),
   };
 
-  return {
-    chatMetadata: {},
+  const host = createSillyTavernHost({
     name1: 'Tobias',
     name2: 'Bar',
     powerUserSettings: {
@@ -314,6 +318,13 @@ export function makeContext(options: {
       sysprompt: { name: 'Neutral - Chat' },
       ...(options.powerUserSettings ?? {}),
     },
+    getPresetManager:
+      options.getPresetManager ??
+      ((apiId?: string) => (options.includeSavedPromptPreset && apiId === 'sysprompt' ? savedPromptPreset : null)),
+  });
+
+  return {
+    ...host.context,
     TextCompletionService: {
       constructPrompt: options.textCompletionConstructPrompt,
       createRequestData: options.textCompletionCreateRequestData,
@@ -321,17 +332,12 @@ export function makeContext(options: {
         options.textCompletionProcessRequest ?? jest.fn(async () => ({ content: { time: '10:00:00' } })),
       sendRequest: options.textCompletionSendRequest,
     },
-    getPresetManager:
-      options.getPresetManager ??
-      ((apiId?: string) => (options.includeSavedPromptPreset && apiId === 'sysprompt' ? savedPromptPreset : null)),
   } as any;
 }
 
 /** Installs the provided fake SillyTavern context on the test global. */
 export function installSillyTavernContext(context: any): void {
-  (globalThis as any).SillyTavern = {
-    getContext: () => context,
-  };
+  installSillyTavernHost(context);
 }
 
 /** Returns the standard built prompt result used by most tracker-action tests. */
@@ -368,5 +374,6 @@ export function resetTrackerActionTestState(): void {
   sanitizeMessagesForGenerationMock.mockReset();
   sanitizeMessagesForGenerationMock.mockImplementation((messages: Array<unknown>) => [...messages]);
   stEchoMock.mockReset();
-  document.body.innerHTML = '<div id="extensionsMenu"></div>';
+  document.body.innerHTML = '';
+  installExtensionsMenuDom();
 }
