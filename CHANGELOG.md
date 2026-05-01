@@ -15,6 +15,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The tracker-generation "From active connection profile" and "Saved" mode now resolves prompt the active SillyTavern preset, so chat-completion profiles use the active profile preset. Text Completion does not use these preset.
 - Tracker messages now sent as system when embed as system is set instead reverting to assistant. 
 
+## [1.10.3] - 2026-04-28
+
+### Changed
+
+- Tightened the internal SillyTavern host test harness and `ui-init` wiring coverage so host-boundary validation stays aligned with the current `#send_but`, `#message_template`, and `#form_create` selectors.
+
+## [1.10.2] - 2026-04-27
+
+### Fixed
+
+- Mid-chat tracker snapshots injected into text-completion prompts now preserve valid `[INST]...[/INST]` framing across all embed-role settings: assistant-role virtual-character snapshots stay raw when SillyTavern appends a single trailing assistant prefill turn, multi-character assistant reply runs keep the snapshot anchored after the tracked source turn, and terminal assistant snapshots now stay assistant-role in single-speaker chats while still inlining only the ambiguous no-prefill cases.
+
 ## [1.10.1] - 2026-04-22
 
 ### Fixed
