@@ -57,6 +57,39 @@ function createActions() {
   } as any;
 }
 
+async function initializeRerenderHarness(options: {
+  renderTrackerWithDeps: jest.Mock;
+  host?: Parameters<typeof createSillyTavernHost>[0];
+}) {
+  const host = createSillyTavernHost({
+    chat: [
+      {
+        extra: {
+          zTracker: {
+            value: { time: '09:00:00' },
+            html: '<div>{{data.time}}</div>',
+          },
+        },
+      },
+    ],
+    ...(options.host ?? {}),
+  });
+
+  installChatMessageDom(0);
+  installSillyTavernHost(host.context);
+
+  await initializeGlobalUI({
+    globalContext: host.context,
+    settingsManager: {
+      getSettings: jest.fn(() => ({ autoMode: 'none', includeLastXZTrackerMessages: 0 })),
+    } as any,
+    actions: createActions(),
+    renderTrackerWithDeps: options.renderTrackerWithDeps,
+  });
+
+  return host;
+}
+
 describe('initializeGlobalUI chat rerender failures', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
@@ -64,32 +97,10 @@ describe('initializeGlobalUI chat rerender failures', () => {
   });
 
   test('keeps stored tracker data when chat rerendering fails', async () => {
-    const host = createSillyTavernHost({
-      chat: [
-        {
-          extra: {
-            zTracker: {
-              value: { time: '09:00:00' },
-              html: '<div>{{data.time}}</div>',
-            },
-          },
-        },
-      ],
-    });
-    installChatMessageDom(0);
-    installSillyTavernHost(host.context);
     const renderTrackerWithDeps = jest.fn(() => {
       throw new Error('render failed');
     });
-
-    await initializeGlobalUI({
-      globalContext: host.context,
-      settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'none', includeLastXZTrackerMessages: 0 })),
-      } as any,
-      actions: createActions(),
-      renderTrackerWithDeps,
-    });
+    const host = await initializeRerenderHarness({ renderTrackerWithDeps });
 
     host.events.emit('CHAT_CHANGED');
 
@@ -106,35 +117,13 @@ describe('initializeGlobalUI chat rerender failures', () => {
   });
 
   test('clears stale rerender failure badges after a later successful rerender', async () => {
-    const host = createSillyTavernHost({
-      chat: [
-        {
-          extra: {
-            zTracker: {
-              value: { time: '09:00:00' },
-              html: '<div>{{data.time}}</div>',
-            },
-          },
-        },
-      ],
-    });
-    installChatMessageDom(0);
-    installSillyTavernHost(host.context);
     let shouldFail = true;
     const renderTrackerWithDeps = jest.fn(() => {
       if (shouldFail) {
         throw new Error('render failed');
       }
     });
-
-    await initializeGlobalUI({
-      globalContext: host.context,
-      settingsManager: {
-        getSettings: jest.fn(() => ({ autoMode: 'none', includeLastXZTrackerMessages: 0 })),
-      } as any,
-      actions: createActions(),
-      renderTrackerWithDeps,
-    });
+    const host = await initializeRerenderHarness({ renderTrackerWithDeps });
 
     host.events.emit('CHAT_CHANGED');
     expect(document.querySelector('.ztracker-render-error-status')).not.toBeNull();
