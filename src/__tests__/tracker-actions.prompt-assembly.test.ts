@@ -83,6 +83,63 @@ describe('createTrackerActions prompt assembly', () => {
     ]);
   });
 
+  test('uses the chat metadata schema preset for full tracker generation', async () => {
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const generateRequest = makeGenerateRequest({ content: { weather: 'Rain' } });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile()],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () =>
+          makeSettings({
+            schemaPreset: 'default',
+            schemaPresets: {
+              default: {
+                name: 'Default',
+                value: { type: 'object', properties: { time: { type: 'string' } }, required: ['time'] },
+                html: '<div>default</div>',
+              },
+              alternate: {
+                name: 'Alternate',
+                value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
+                html: '<div>alternate</div>',
+              },
+            },
+          }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    const context = SillyTavern.getContext() as any;
+    context.chatMetadata = { zTracker: { schemaPreset: 'alternate' } };
+
+    await actions.generateTracker(0);
+
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        trackerHtml: '<div>alternate</div>',
+        extensionData: expect.objectContaining({
+          schemaPreset: 'alternate',
+        }),
+      }),
+    );
+  });
+
   test('passes the saved tracker system prompt through buildPrompt for textgenerationwebui profiles', async () => {
     const context = makeContext({ includeSavedPromptPreset: true });
     installSillyTavernContext(context);

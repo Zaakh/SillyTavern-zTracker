@@ -6,11 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-## [1.10.3] - 2026-04-28
+### Fixed
 
-### Changed
-
-- Tightened the internal SillyTavern host test harness and `ui-init` wiring coverage so host-boundary validation stays aligned with the current `#send_but`, `#message_template`, and `#form_create` selectors.
+- Full tracker generation now honors the schema preset selected for the active chat instead of silently falling back to the globally selected preset.
+- Manual tracker edits now validate against the current tracker template before saving, so failed rerenders no longer persist broken tracker data.
+- Tracker rerenders on chat changes now keep stored tracker data when a template fails, and tracker values are escaped by default so LLM output and manual edits do not become live DOM.
 
 ## [1.10.2] - 2026-04-27
 
