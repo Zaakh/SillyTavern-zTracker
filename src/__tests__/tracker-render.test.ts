@@ -43,6 +43,27 @@ describe('renderTracker', () => {
     expect(tracker?.querySelector('.ztracker-controls')).not.toBeNull();
   });
 
+  it('escapes tracker values instead of rendering them as live HTML', () => {
+    const context: TrackerContext = {
+      chat: [
+        {
+          extra: {
+            [EXTENSION_KEY]: {
+              [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { time: '<img src=x onerror="alert(1)">' },
+              [CHAT_MESSAGE_SCHEMA_HTML_KEY]: template,
+            },
+          },
+        } as any,
+      ],
+    };
+
+    renderTracker(0, { context, document, handlebars: Handlebars });
+
+    const tracker = document.querySelector('.mes_ztracker');
+    expect(tracker?.querySelector('.tracker-content')?.textContent).toBe('<img src=x onerror="alert(1)">');
+    expect(tracker?.querySelector('.tracker-content img')).toBeNull();
+  });
+
   it('renders one clickable entry per array item in the parts menu', () => {
     const context: TrackerContext = {
       chat: [

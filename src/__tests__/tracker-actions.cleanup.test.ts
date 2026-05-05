@@ -222,6 +222,8 @@ describe('createTrackerActions cleanup flow', () => {
       required: ['time'],
     };
 
+    const saveMetadataDebounced = jest.fn();
+
     const actions = createTrackerActions({
       globalContext: {
         chat: [
@@ -260,8 +262,13 @@ describe('createTrackerActions cleanup flow', () => {
       importMetaUrl: TEST_IMPORT_META_URL,
     });
 
+    (SillyTavern.getContext() as any).saveMetadataDebounced = saveMetadataDebounced;
+    (SillyTavern.getContext() as any).chatMetadata = { zTracker: { schemaPreset: 'alternate' } };
+
     await actions.generateTrackerPart(0, 'time');
 
     expect(trackerPartsModule.buildTopLevelPartSchema).toHaveBeenCalledWith(defaultSchema, 'time');
+    expect((SillyTavern.getContext() as any).chatMetadata).toEqual({ zTracker: { schemaPreset: 'alternate' } });
+    expect(saveMetadataDebounced).not.toHaveBeenCalled();
   });
 });
