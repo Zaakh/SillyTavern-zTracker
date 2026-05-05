@@ -843,12 +843,13 @@ export function createTrackerActions(options: {
         const selectedApiMap = profile?.api ? globalContext.CONNECT_API_MAP?.[profile.api] : undefined;
         const selectedApi = selectedApiMap?.selected;
         const context = SillyTavern.getContext() as {
-          name1?: string;
-          powerUserSettings?: {
-            instruct?: {
-              user_alignment_message?: string;
-            };
+        name1?: string;
+        powerUserSettings?: {
+          preset?: string;
+          instruct?: {
+            user_alignment_message?: string;
           };
+        };
         };
         const textCompletionPromptBody = selectedApi === 'textgenerationwebui'
           ? sanitizeMessagesForGeneration(requestMessages, {
@@ -962,7 +963,7 @@ export function createTrackerActions(options: {
     const ignoreWorldInfo = shouldIgnoreWorldInfoDuringTrackerBuild(trackerWorldInfoMode);
     const skipCharacterCardInTrackerGeneration = settings.skipCharacterCardInTrackerGeneration ?? false;
 
-    const syspromptName = resolveTrackerSystemPromptName(settings, context);
+    const syspromptName = resolveTrackerSystemPromptName(settings, context, profile);
     let savedSystemPromptContent: string | undefined;
     if (settings.trackerSystemPromptMode === 'saved') {
       if (!syspromptName) {
@@ -977,10 +978,17 @@ export function createTrackerActions(options: {
       }
     }
 
+    const trackerInstructName = settings.trackerSystemPromptMode === 'selected' ? profile.instruct : undefined;
+    const trackerContextName = settings.trackerSystemPromptMode === 'selected' ? profile.context : undefined;
+    const trackerPresetName = settings.trackerSystemPromptMode === 'selected' ? profile.preset : undefined;
+
     const promptPresetSelections = getPromptPresetSelections(apiMap.selected, {
       context,
       trackerSystemPromptMode: settings.trackerSystemPromptMode,
       trackerSystemPromptName: syspromptName,
+      trackerInstructName,
+      trackerContextName,
+      trackerPresetName,
     });
     const includePromptNames = apiMap.selected !== 'textgenerationwebui';
 
