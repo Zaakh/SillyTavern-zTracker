@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-05-05
+
 ### Fixed
 
 - Full tracker generation now honors the schema preset selected for the active chat instead of silently falling back to the globally selected preset, and it persists the normalized chat schema metadata when that selection was missing or stale.
