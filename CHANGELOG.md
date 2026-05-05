@@ -6,14 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-05-05
+
 ### Added
 
-- New System Prompt Source option "From selected connection profile" which uses the connection profile selected for zTracker instead of the Active profile or Default.
+- Added a `System Prompt Source` option that uses the prompt selectors from the connection profile selected for zTracker, so tracker generation can use different prompt presets than the active chat profile.
 
 ### Fixed
 
-- The tracker-generation "From active connection profile" and "Saved" mode now resolves prompt the active SillyTavern preset, so chat-completion profiles use the active profile preset. Text Completion does not use these preset.
-- Tracker messages now sent as system when embed as system is set instead reverting to assistant. 
+- Tracker generation now resolves the active SillyTavern preset correctly for `From active SillyTavern presets` and `From specific saved system prompt`, so chat-completion profiles keep using the host's active prompt state while text-completion profiles keep their active instruct, context, and system-prompt selectors.
+- Embedded tracker messages configured as `system` now stay `system` instead of silently falling back to `assistant`.
 
 ## [1.10.3] - 2026-04-28
 
