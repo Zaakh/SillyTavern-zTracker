@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- New System Prompt Source option "From selected connection profile" which uses the connection profile selected for zTracker instead of the Active profile or Default.
+
+### Fixed
+
+- The tracker-generation "From active connection profile" and "Saved" mode now resolves prompt the active SillyTavern preset, so chat-completion profiles use the active profile preset. Text Completion does not use these preset.
+- Tracker messages now sent as system when embed as system is set instead reverting to assistant. 
+
 ## [1.10.3] - 2026-04-28
 
 ### Changed
@@ -263,4 +272,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 - Extension template bundling now uses `dist/templates` to match SillyTavern’s packaged artifact expectations.
 - Extension install folder is detected at runtime for template rendering (no hardcoded third-party folder name).
-

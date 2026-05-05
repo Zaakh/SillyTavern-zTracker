@@ -46,7 +46,8 @@ In **Extensions → zTracker**, enable **Debug logging** and use the **Diagnosti
 ## System prompt selection for tracker generation
 
 zTracker can now choose the system prompt used during tracker generation:
-- **From connection profile**: keep the current SillyTavern connection profile behavior.
+- **From active SillyTavern presets**: use the currently active host prompt settings.
+- **From selected connection profile**: use the prompt selectors stored on the chosen zTracker connection profile. For Chat Completion profiles, zTracker uses the profile preset. For Text Completion profiles, zTracker uses the profile's instruct, context, and system-prompt slots.
 - **From saved ST prompt**: pick a saved SillyTavern system prompt specifically for tracker extraction.
 
 On startup, zTracker installs a recommended versioned system prompt preset such as **zTracker-1.3.1** if it does not already exist. You can select it in **Extensions → zTracker → System Prompt Source**, and edit it later in SillyTavern's own **System Prompt** manager. Older zTracker prompt presets are not deleted automatically.
