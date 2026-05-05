@@ -40,8 +40,9 @@ export const SystemPromptSettingsSection: FC<{
           })
         }
       >
-        <option value="profile">From active ST prompt</option>
-        <option value="saved">From saved ST prompt</option>
+        <option value="profile">From active SillyTavern presets</option>
+        <option value="selected">From connection profile presets</option>
+        <option value="saved">From specific saved system prompt</option>
       </select>
 
       {settings.trackerSystemPromptMode === 'saved' && (

@@ -16,6 +16,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Normal tracker values are now escaped by default during rendering, so LLM output and manual edits no longer become live DOM unless a template explicitly opts out. Templates that relied on raw HTML in tracker values may need adjustment.
 
+## [1.11.0] - 2026-05-05
+
+### Added
+
+- Added a `System Prompt Source` option that uses the prompt selectors from the connection profile selected for zTracker, so tracker generation can use different prompt presets than the active chat profile.
+
+### Fixed
+
+- Tracker generation now resolves the active SillyTavern preset correctly for `From active SillyTavern presets` and `From specific saved system prompt`, so chat-completion profiles keep using the host's active prompt state while text-completion profiles keep their active instruct, context, and system-prompt selectors.
+- Embedded tracker messages configured as `system` now stay `system` instead of silently falling back to `assistant`.
+
+## [1.10.3] - 2026-04-28
+
 ## [1.10.2] - 2026-04-27
 
 ### Fixed
@@ -267,4 +280,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 - Extension template bundling now uses `dist/templates` to match SillyTavern’s packaged artifact expectations.
 - Extension install folder is detected at runtime for template rendering (no hardcoded third-party folder name).
-
