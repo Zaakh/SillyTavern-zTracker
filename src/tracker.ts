@@ -100,7 +100,8 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
     return;
   }
 
-  const template = hb.compile(trackerHtmlSchema, { noEscape: true, strict: true });
+  // Escape tracker values by default so LLM output and manual edits do not become live DOM.
+  const template = hb.compile(trackerHtmlSchema, { strict: true });
   const renderedHtml = template({ data: trackerData });
   const container = doc.createElement('div');
   container.className = 'mes_ztracker';

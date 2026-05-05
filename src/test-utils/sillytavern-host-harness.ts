@@ -121,6 +121,9 @@ export function createSillyTavernHost(options: CreateSillyTavernHostOptions = {}
   return {
     context,
     events,
+    install(): void {
+      installSillyTavernHost(context);
+    },
     spies: {
       generate: context.generate,
       stopGeneration: context.stopGeneration,

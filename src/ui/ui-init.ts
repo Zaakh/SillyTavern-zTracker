@@ -169,24 +169,19 @@ function rerenderTrackersForCurrentChat(options: {
   renderTrackerWithDeps: (messageId: number) => void;
 }): void {
   const { globalContext, renderTrackerWithDeps } = options;
-  const { saveChat } = globalContext;
-  let chatModified = false;
+  let hadRenderError = false;
 
   globalContext.chat.forEach((message: any, messageId: number) => {
     try {
       renderTrackerWithDeps(messageId);
     } catch (error) {
-      console.error(`Error rendering zTracker on message ${messageId}, removing data:`, error);
-      st_echo('error', 'A zTracker template failed to render. Removing tracker from the message.');
-      if (message?.extra?.[EXTENSION_KEY]) {
-        delete message.extra[EXTENSION_KEY];
-        chatModified = true;
-      }
+      hadRenderError = true;
+      console.error(`Error rendering zTracker on message ${messageId}, keeping stored data:`, error);
     }
   });
 
-  if (chatModified) {
-    saveChat();
+  if (hadRenderError) {
+    st_echo('error', 'A zTracker template failed to render for one or more messages. Tracker data was kept.');
   }
 }
 
