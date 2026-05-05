@@ -936,11 +936,17 @@ export function createTrackerActions(options: {
 
     chatMetadata[EXTENSION_KEY] = chatMetadata[EXTENSION_KEY] || {};
     const storedChatSchemaPresetKey = chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY];
+    const shouldPersistChatSchemaPreset = options?.schemaPresetKey === undefined;
     const { schemaPresetKey, schemaPreset } = resolveSchemaPreset(
       settings,
       options?.schemaPresetKey ?? (typeof storedChatSchemaPresetKey === 'string' ? storedChatSchemaPresetKey : undefined),
     );
-    chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] = schemaPresetKey;
+    if (shouldPersistChatSchemaPreset && storedChatSchemaPresetKey !== schemaPresetKey) {
+      chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] = schemaPresetKey;
+      if (typeof (context as any).saveMetadataDebounced === 'function') {
+        (context as any).saveMetadataDebounced();
+      }
+    }
     const chatJsonValue = schemaPreset.value;
     const chatHtmlValue = schemaPreset.html;
 

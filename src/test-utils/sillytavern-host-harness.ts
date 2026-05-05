@@ -26,6 +26,7 @@ type HostContext = Record<string, unknown> & {
   };
   saveChat: jest.Mock;
   saveMetadata: jest.Mock;
+  saveMetadataDebounced: jest.Mock;
   saveSettingsDebounced: jest.Mock;
   renderExtensionTemplateAsync: jest.Mock;
   writeExtensionField: jest.Mock;
@@ -82,6 +83,7 @@ export function createSillyTavernHost(options: CreateSillyTavernHostOptions = {}
   const popupInput = jest.fn(async () => '');
   const saveChat = jest.fn(async () => undefined);
   const saveMetadata = jest.fn(async () => undefined);
+  const saveMetadataDebounced = jest.fn(() => undefined);
   const saveSettingsDebounced = jest.fn(() => undefined);
   const renderExtensionTemplateAsync = jest.fn(async () => '');
   const writeExtensionField = jest.fn(() => undefined);
@@ -112,6 +114,7 @@ export function createSillyTavernHost(options: CreateSillyTavernHostOptions = {}
     Popup: popup,
     saveChat: options.saveChat ?? saveChat,
     saveMetadata: options.saveMetadata ?? saveMetadata,
+    saveMetadataDebounced: options.saveMetadataDebounced ?? saveMetadataDebounced,
     saveSettingsDebounced: options.saveSettingsDebounced ?? saveSettingsDebounced,
     renderExtensionTemplateAsync: options.renderExtensionTemplateAsync ?? renderExtensionTemplateAsync,
     writeExtensionField: options.writeExtensionField ?? writeExtensionField,
@@ -131,6 +134,7 @@ export function createSillyTavernHost(options: CreateSillyTavernHostOptions = {}
       popupInput: context.Popup.show.input,
       saveChat: context.saveChat,
       saveMetadata: context.saveMetadata,
+      saveMetadataDebounced: context.saveMetadataDebounced,
       saveSettingsDebounced: context.saveSettingsDebounced,
       renderExtensionTemplateAsync: context.renderExtensionTemplateAsync,
       writeExtensionField: context.writeExtensionField,

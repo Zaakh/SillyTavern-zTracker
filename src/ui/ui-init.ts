@@ -14,6 +14,7 @@ import {
 } from './character-auto-mode-exclusion.js';
 import { createCharacterPanelButtonController } from './character-panel-auto-mode.js';
 import { installZTrackerThemeObserver } from './menu-theme.js';
+import { clearMessageStatusIndicator, RENDER_ERROR_STATUS_CLASS, syncMessageStatusIndicator } from './message-status-indicator.js';
 import { createOutgoingAutoModeController } from './outgoing-auto-mode.js';
 import { installPartsMenuPortalHandlers } from './parts-menu-portal.js';
 
@@ -170,6 +171,7 @@ function rerenderTrackersForCurrentChat(options: {
 }): void {
   const { globalContext, renderTrackerWithDeps } = options;
   let hadRenderError = false;
+  clearMessageStatusIndicator({ statusClassName: RENDER_ERROR_STATUS_CLASS });
 
   globalContext.chat.forEach((message: any, messageId: number) => {
     try {
@@ -177,6 +179,12 @@ function rerenderTrackersForCurrentChat(options: {
     } catch (error) {
       hadRenderError = true;
       console.error(`Error rendering zTracker on message ${messageId}, keeping stored data:`, error);
+      syncMessageStatusIndicator({
+        messageId,
+        text: 'zTracker failed to render. Stored data was kept.',
+        statusClassName: RENDER_ERROR_STATUS_CLASS,
+        iconClassName: 'ztracker-message-status-icon ztracker-message-status-icon--static fa-solid fa-triangle-exclamation',
+      });
     }
   });
 

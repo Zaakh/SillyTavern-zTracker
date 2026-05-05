@@ -8,9 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- Full tracker generation now honors the schema preset selected for the active chat instead of silently falling back to the globally selected preset.
+- Full tracker generation now honors the schema preset selected for the active chat instead of silently falling back to the globally selected preset, and it persists the normalized chat schema metadata when that selection was missing or stale.
 - Manual tracker edits now validate against the current tracker template before saving, so failed rerenders no longer persist broken tracker data.
-- Tracker rerenders on chat changes now keep stored tracker data when a template fails, and tracker values are escaped by default so LLM output and manual edits do not become live DOM.
+- Tracker rerenders on chat changes now keep stored tracker data when a template fails instead of deleting it, and affected messages show a local warning badge so the stored tracker is easier to recover.
+
+### Changed
+
+- Normal tracker values are now escaped by default during rendering, so LLM output and manual edits no longer become live DOM unless a template explicitly opts out. Templates that relied on raw HTML in tracker values may need adjustment.
 
 ## [1.10.2] - 2026-04-27
 
