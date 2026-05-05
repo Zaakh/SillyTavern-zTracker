@@ -48,10 +48,8 @@ export function clearMessageStatusIndicator(options: {
     return;
   }
 
-  const holdClassName = options.holdClassName;
-
-  document.querySelectorAll(`.${holdClassName}`).forEach((element) => {
-    element.classList.remove(holdClassName);
+  document.querySelectorAll(`.${options.holdClassName}`).forEach((element) => {
+    element.classList.remove(options.holdClassName!);
   });
 }
 

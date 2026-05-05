@@ -173,7 +173,7 @@ function rerenderTrackersForCurrentChat(options: {
   let hadRenderError = false;
   clearMessageStatusIndicator({ statusClassName: RENDER_ERROR_STATUS_CLASS });
 
-  globalContext.chat.forEach((message: any, messageId: number) => {
+  globalContext.chat.forEach((_message: any, messageId: number) => {
     try {
       renderTrackerWithDeps(messageId);
     } catch (error) {
