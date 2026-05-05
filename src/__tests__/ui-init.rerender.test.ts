@@ -5,6 +5,7 @@
 import { jest } from '@jest/globals';
 import {
   createSillyTavernHost,
+  installChatMessageDom,
   installSillyTavernHost,
 } from '../test-utils/sillytavern-host-harness.js';
 
@@ -75,6 +76,7 @@ describe('initializeGlobalUI chat rerender failures', () => {
         },
       ],
     });
+    installChatMessageDom(0);
     installSillyTavernHost(host.context);
     const renderTrackerWithDeps = jest.fn(() => {
       throw new Error('render failed');
@@ -95,10 +97,51 @@ describe('initializeGlobalUI chat rerender failures', () => {
       value: { time: '09:00:00' },
       html: '<div>{{data.time}}</div>',
     });
+    expect(document.querySelector('.ztracker-render-error-status')?.textContent).toContain('zTracker failed to render. Stored data was kept.');
     expect(host.spies.saveChat).not.toHaveBeenCalled();
     expect(stEchoMock).toHaveBeenCalledWith(
       'error',
       'A zTracker template failed to render for one or more messages. Tracker data was kept.',
     );
+  });
+
+  test('clears stale rerender failure badges after a later successful rerender', async () => {
+    const host = createSillyTavernHost({
+      chat: [
+        {
+          extra: {
+            zTracker: {
+              value: { time: '09:00:00' },
+              html: '<div>{{data.time}}</div>',
+            },
+          },
+        },
+      ],
+    });
+    installChatMessageDom(0);
+    installSillyTavernHost(host.context);
+    let shouldFail = true;
+    const renderTrackerWithDeps = jest.fn(() => {
+      if (shouldFail) {
+        throw new Error('render failed');
+      }
+    });
+
+    await initializeGlobalUI({
+      globalContext: host.context,
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'none', includeLastXZTrackerMessages: 0 })),
+      } as any,
+      actions: createActions(),
+      renderTrackerWithDeps,
+    });
+
+    host.events.emit('CHAT_CHANGED');
+    expect(document.querySelector('.ztracker-render-error-status')).not.toBeNull();
+
+    shouldFail = false;
+    host.events.emit('CHAT_CHANGED');
+
+    expect(document.querySelector('.ztracker-render-error-status')).toBeNull();
   });
 });

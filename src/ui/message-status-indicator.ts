@@ -5,12 +5,14 @@ export const AUTO_MODE_STATUS_CLASS = 'ztracker-auto-mode-status';
 export const CONTEXT_MENU_STATUS_CLASS = 'ztracker-context-menu-status';
 export const FULL_TRACKER_STATUS_CLASS = 'ztracker-full-tracker-status';
 export const MESSAGE_STATUS_BASE_CLASS = 'ztracker-message-status';
+export const RENDER_ERROR_STATUS_CLASS = 'ztracker-render-error-status';
 
 type MessageStatusIndicatorOptions = {
   messageId: number | null;
   text: string;
   statusClassName: string;
   holdClassName?: string;
+  iconClassName?: string;
 };
 
 /** Removes one status-badge variant and its optional message hold styling from the current DOM. */
@@ -80,7 +82,7 @@ export function syncMessageStatusIndicator(options: MessageStatusIndicatorOption
   status.setAttribute('aria-live', 'polite');
 
   const icon = document.createElement('span');
-  icon.className = 'ztracker-message-status-icon fa-solid fa-truck-fast';
+  icon.className = options.iconClassName ?? 'ztracker-message-status-icon fa-solid fa-truck-fast';
   icon.setAttribute('aria-hidden', 'true');
 
   const text = document.createElement('span');

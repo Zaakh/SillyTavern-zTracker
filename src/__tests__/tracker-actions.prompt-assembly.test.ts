@@ -140,6 +140,41 @@ describe('createTrackerActions prompt assembly', () => {
     );
   });
 
+  test('persists normalized chat metadata when the stored schema preset is missing or stale', async () => {
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile()],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings(),
+      } as any,
+      generator: { generateRequest: makeGenerateRequest(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    const context = SillyTavern.getContext() as any;
+    context.chatMetadata = { zTracker: { schemaPreset: 'missing' } };
+    context.saveMetadataDebounced = jest.fn();
+
+    await actions.generateTracker(0);
+
+    expect(context.chatMetadata).toEqual({ zTracker: { schemaPreset: 'default' } });
+    expect(context.saveMetadataDebounced).toHaveBeenCalledTimes(1);
+  });
+
   test('passes the saved tracker system prompt through buildPrompt for textgenerationwebui profiles', async () => {
     const context = makeContext({ includeSavedPromptPreset: true });
     installSillyTavernContext(context);

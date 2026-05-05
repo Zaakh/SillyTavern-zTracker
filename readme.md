@@ -84,6 +84,8 @@ If several related tracker values are wrong at once, use **Cleanup** instead of 
 
 Pending cleanup targets stay visible in the tracker UI so you can see which sections were intentionally cleared and still need attention.
 
+Tracker templates now escape normal tracker values by default. If you previously relied on raw HTML inside tracker data fields, update the template to opt out deliberately instead of assuming those values will render as live markup. When a saved tracker can no longer render with the current template, zTracker keeps the stored data and shows a message-local warning so you can repair the template or tracker JSON without losing the underlying tracker.
+
 Optional (advanced): you can annotate your JSON schema preset to help zTracker keep interdependent sections ordered and array items stable:
 - `x-ztracker-dependsOn`: top-level part ordering hints for sequential generation.
 - `x-ztracker-idKey`: which string field to use as the array-item identity for per-item regeneration (defaults to `name`).
