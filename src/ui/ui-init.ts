@@ -14,6 +14,7 @@ import {
 } from './character-auto-mode-exclusion.js';
 import { createCharacterPanelButtonController } from './character-panel-auto-mode.js';
 import { installZTrackerThemeObserver } from './menu-theme.js';
+import { clearMessageStatusIndicator, RENDER_ERROR_STATUS_CLASS, syncMessageStatusIndicator } from './message-status-indicator.js';
 import { createOutgoingAutoModeController } from './outgoing-auto-mode.js';
 import { installPartsMenuPortalHandlers } from './parts-menu-portal.js';
 
@@ -169,24 +170,26 @@ function rerenderTrackersForCurrentChat(options: {
   renderTrackerWithDeps: (messageId: number) => void;
 }): void {
   const { globalContext, renderTrackerWithDeps } = options;
-  const { saveChat } = globalContext;
-  let chatModified = false;
+  let hadRenderError = false;
+  clearMessageStatusIndicator({ statusClassName: RENDER_ERROR_STATUS_CLASS });
 
-  globalContext.chat.forEach((message: any, messageId: number) => {
+  globalContext.chat.forEach((_message: any, messageId: number) => {
     try {
       renderTrackerWithDeps(messageId);
     } catch (error) {
-      console.error(`Error rendering zTracker on message ${messageId}, removing data:`, error);
-      st_echo('error', 'A zTracker template failed to render. Removing tracker from the message.');
-      if (message?.extra?.[EXTENSION_KEY]) {
-        delete message.extra[EXTENSION_KEY];
-        chatModified = true;
-      }
+      hadRenderError = true;
+      console.error(`Error rendering zTracker on message ${messageId}, keeping stored data:`, error);
+      syncMessageStatusIndicator({
+        messageId,
+        text: 'zTracker failed to render. Stored data was kept.',
+        statusClassName: RENDER_ERROR_STATUS_CLASS,
+        iconClassName: 'ztracker-message-status-icon ztracker-message-status-icon--static fa-solid fa-triangle-exclamation',
+      });
     }
   });
 
-  if (chatModified) {
-    saveChat();
+  if (hadRenderError) {
+    st_echo('error', 'A zTracker template failed to render for one or more messages. Tracker data was kept.');
   }
 }
 

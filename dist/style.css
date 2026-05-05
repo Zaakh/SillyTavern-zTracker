@@ -65,8 +65,17 @@
   font-size: 0.95em;
 }
 
+.ztracker-message-status-icon--static {
+  animation: none;
+}
+
 .ztracker-message-status-text {
   white-space: normal;
+}
+
+.ztracker-render-error-status {
+  border-color: rgba(255, 170, 0, 0.3);
+  background: rgba(255, 170, 0, 0.14);
 }
 
 .ztracker-pending-redactions-status {

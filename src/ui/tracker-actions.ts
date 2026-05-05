@@ -936,10 +936,18 @@ export function createTrackerActions(options: {
     const { extensionSettings, CONNECT_API_MAP } = globalContext;
 
     chatMetadata[EXTENSION_KEY] = chatMetadata[EXTENSION_KEY] || {};
-    chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] =
-      chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] || settings.schemaPreset;
-
-    const { schemaPresetKey, schemaPreset } = resolveSchemaPreset(settings, options?.schemaPresetKey ?? settings.schemaPreset);
+    const storedChatSchemaPresetKey = chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY];
+    const shouldPersistChatSchemaPreset = options?.schemaPresetKey === undefined;
+    const { schemaPresetKey, schemaPreset } = resolveSchemaPreset(
+      settings,
+      options?.schemaPresetKey ?? (typeof storedChatSchemaPresetKey === 'string' ? storedChatSchemaPresetKey : undefined),
+    );
+    if (shouldPersistChatSchemaPreset && storedChatSchemaPresetKey !== schemaPresetKey) {
+      chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] = schemaPresetKey;
+      if (typeof (context as any).saveMetadataDebounced === 'function') {
+        (context as any).saveMetadataDebounced();
+      }
+    }
     const chatJsonValue = schemaPreset.value;
     const chatHtmlValue = schemaPreset.html;
 
@@ -1097,6 +1105,7 @@ export function createTrackerActions(options: {
     if (!message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY]) return;
 
     const currentData = message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_VALUE_KEY];
+    const trackerHtml = message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_HTML_KEY];
 
     const popupContent = `
         <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -1111,34 +1120,31 @@ export function createTrackerActions(options: {
         if (popup.result === POPUP_RESULT.AFFIRMATIVE) {
           const textarea = popup.content.querySelector('#ztracker-edit-textarea') as HTMLTextAreaElement;
           if (textarea) {
+            let newData: unknown;
             try {
-              const newData = JSON.parse(textarea.value);
-              // @ts-ignore
-              message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_VALUE_KEY] = newData;
-              await globalContext.saveChat();
-              let detailsState: boolean[] = [];
-              const messageBlock = document.querySelector(`.mes[mesid="${messageId}"]`);
-              const existingTracker = messageBlock?.querySelector('.mes_ztracker');
-              if (existingTracker) {
-                const detailsElements = existingTracker.querySelectorAll('details');
-                detailsState = Array.from(detailsElements).map((detail) => (detail as HTMLDetailsElement).open);
-              }
-              renderTrackerWithDeps(messageId);
-              if (detailsState.length > 0) {
-                const newTracker = messageBlock?.querySelector('.mes_ztracker');
-                if (newTracker) {
-                  const newDetailsElements = newTracker.querySelectorAll('details');
-                  newDetailsElements.forEach((detail, index) => {
-                    if (detailsState[index] !== undefined) {
-                      (detail as HTMLDetailsElement).open = detailsState[index];
-                    }
-                  });
-                }
-              }
-              st_echo('success', 'Tracker data updated.');
+              newData = JSON.parse(textarea.value);
             } catch (e) {
               console.error('Error parsing new tracker data:', e);
               st_echo('error', 'Invalid JSON. Changes were not saved.');
+              return;
+            }
+
+            const detailsState = captureDetailsState(messageId);
+
+            try {
+              applyTrackerUpdateAndRender(message as any, {
+                trackerData: newData,
+                trackerHtml,
+                render: () => renderTrackerWithDeps(messageId),
+              });
+              restoreDetailsState(messageId, detailsState);
+              await globalContext.saveChat();
+              st_echo('success', 'Tracker data updated.');
+            } catch (e) {
+              console.error('Error validating updated tracker data:', e);
+              renderTrackerWithDeps(messageId);
+              restoreDetailsState(messageId, detailsState);
+              st_echo('error', 'Tracker data failed to render. Changes were not saved.');
             }
           }
         }
@@ -1777,11 +1783,16 @@ export function createTrackerActions(options: {
     if (!chatMetadata[EXTENSION_KEY]) {
       chatMetadata[EXTENSION_KEY] = {};
     }
-    if (!chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY]) {
-      chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] = 'default';
+    const { schemaPresetKey: currentPresetKey } = resolveSchemaPreset(
+      settings,
+      typeof chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] === 'string'
+        ? chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY]
+        : undefined,
+    );
+    if (chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] !== currentPresetKey) {
+      chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] = currentPresetKey;
       context.saveMetadataDebounced();
     }
-    const currentPresetKey = chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY];
 
     const templateData = {
       presets: Object.entries(settings.schemaPresets).map(([key, preset]) => ({
