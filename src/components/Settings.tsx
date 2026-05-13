@@ -16,14 +16,19 @@ import {
   shouldWarnAboutSharedSystemPromptSelection,
 } from '../system-prompt.js';
 import { DiagnosticsSection } from './settings/DiagnosticsSection.js';
-import { reconcilePresetItems, resolvePresetSelection } from './settings/preset-state.js';
+import {
+  reconcilePresetItems,
+  resolvePresetSelection,
+} from './settings/preset-state.js';
 import {
   formatSchemaHtml,
   formatSchemaText,
-  hasUnsavedInvalidSchemaHtmlDraft,
-  hasUnsavedInvalidSchemaDraft,
+  getSchemaDraftState,
+  getSchemaHtmlDraftState,
   shouldSyncSchemaHtmlFromSettings,
   shouldSyncSchemaTextFromSettings,
+  validateSchemaDraft,
+  validateSchemaHtmlDraft,
 } from './settings/schema-editor-state.js';
 import { SettingsSectionDrawer } from './settings/SettingsSectionDrawer.js';
 import { TrackerGenerationSection } from './settings/TrackerGenerationSection.js';
@@ -83,27 +88,33 @@ export const ZTrackerSettings: FC = () => {
   }, []);
 
   const activeSchemaText = formatSchemaText(settings.schemaPresets[settings.schemaPreset]);
-  const schemaTextHasError = hasUnsavedInvalidSchemaDraft(schemaText);
+  const schemaDraftState = getSchemaDraftState({ currentText: schemaText, persistedText: activeSchemaText });
   const activeSchemaHtml = formatSchemaHtml(settings.schemaPresets[settings.schemaPreset]);
-  const schemaHtmlTextHasError = hasUnsavedInvalidSchemaHtmlDraft(schemaHtmlText);
+  const schemaHtmlDraftState = getSchemaHtmlDraftState({ currentText: schemaHtmlText, persistedText: activeSchemaHtml });
 
   useEffect(() => {
     const activePresetChanged = previousSchemaPresetRef.current !== settings.schemaPreset;
     previousSchemaPresetRef.current = settings.schemaPreset;
 
-    if (!shouldSyncSchemaTextFromSettings({ currentText: schemaText, activePresetChanged })) {
-      return;
-    }
-
-    if (schemaText !== activeSchemaText) {
+    if (
+      shouldSyncSchemaTextFromSettings({
+        currentText: schemaText,
+        persistedText: activeSchemaText,
+        activePresetChanged,
+      }) &&
+      schemaText !== activeSchemaText
+    ) {
       setSchemaText(activeSchemaText);
     }
 
-    if (!shouldSyncSchemaHtmlFromSettings({ currentText: schemaHtmlText, activePresetChanged })) {
-      return;
-    }
-
-    if (schemaHtmlText !== activeSchemaHtml) {
+    if (
+      shouldSyncSchemaHtmlFromSettings({
+        currentText: schemaHtmlText,
+        persistedText: activeSchemaHtml,
+        activePresetChanged,
+      }) &&
+      schemaHtmlText !== activeSchemaHtml
+    ) {
       setSchemaHtmlText(activeSchemaHtml);
     }
   }, [activeSchemaHtml, activeSchemaText, schemaHtmlText, schemaText, settings.schemaPreset]);
@@ -137,57 +148,83 @@ export const ZTrackerSettings: FC = () => {
   const handleSchemaPresetsListChange = (newItems: PresetItem[]) => {
     let nextSchemaText = '';
     let nextSchemaHtmlText = '';
+    let shouldPreserveDrafts = false;
 
     updateAndRefresh((currentSettings) => {
       const nextState = reconcilePresetItems(currentSettings.schemaPresets, currentSettings.schemaPreset, newItems);
+      shouldPreserveDrafts = (currentSettings.schemaPreset ?? 'default') === nextState.activeKey;
       currentSettings.schemaPreset = nextState.activeKey;
       currentSettings.schemaPresets = nextState.presets;
       nextSchemaText = formatSchemaText(nextState.presets[nextState.activeKey]);
       nextSchemaHtmlText = formatSchemaHtml(nextState.presets[nextState.activeKey]);
     });
 
-    setSchemaText(nextSchemaText);
-    setSchemaHtmlText(nextSchemaHtmlText);
+    if (!shouldPreserveDrafts) {
+      setSchemaText(nextSchemaText);
+      setSchemaHtmlText(nextSchemaHtmlText);
+    }
   };
 
 
   // Handler for the schema JSON textarea
   const handleSchemaValueChange = (newSchemaText: string) => {
-    setSchemaText(newSchemaText); // Update UI immediately
-    try {
-      const parsedJson = JSON.parse(newSchemaText);
-      updateAndRefresh((s) => {
-        const preset = s.schemaPresets[s.schemaPreset];
-        if (preset) {
-          // Create a new presets object with the updated value
-          s.schemaPresets = {
-            ...s.schemaPresets,
-            [s.schemaPreset]: { ...preset, value: parsedJson },
-          };
-        }
-      });
-    } catch {
-      // Invalid JSON stays local until it parses so the user can keep editing.
+    // Keep the JSON draft local until the user explicitly saves it.
+    setSchemaText(newSchemaText);
+  };
+
+  // Persists the active preset's JSON schema only after explicit confirmation.
+  const saveSchemaValue = () => {
+    const validation = validateSchemaDraft(schemaText);
+    if (!validation.isValid) {
+      return;
     }
+
+    const parsedJson = JSON.parse(schemaText);
+    let nextSchemaText = schemaText;
+    updateAndRefresh((currentSettings) => {
+      const preset = currentSettings.schemaPresets[currentSettings.schemaPreset];
+      if (!preset) {
+        return;
+      }
+
+      const nextPreset = { ...preset, value: parsedJson };
+      currentSettings.schemaPresets = {
+        ...currentSettings.schemaPresets,
+        [currentSettings.schemaPreset]: nextPreset,
+      };
+      nextSchemaText = formatSchemaText(nextPreset);
+    });
+    setSchemaText(nextSchemaText);
   };
 
   // Handler for the schema HTML textarea
   const handleSchemaHtmlChange = (newHtml: string) => {
+    // Keep the HTML draft local until the user explicitly saves it.
     setSchemaHtmlText(newHtml);
-    if (hasUnsavedInvalidSchemaHtmlDraft(newHtml)) {
+  };
+
+  // Persists the active preset's HTML template only after explicit confirmation.
+  const saveSchemaHtmlValue = () => {
+    const validation = validateSchemaHtmlDraft(schemaHtmlText);
+    if (!validation.isValid) {
       return;
     }
 
-    updateAndRefresh((s) => {
-      const preset = s.schemaPresets[s.schemaPreset];
-      if (preset) {
-        // Keep invalid draft edits local until the template parses successfully.
-        s.schemaPresets = {
-          ...s.schemaPresets,
-          [s.schemaPreset]: { ...preset, html: newHtml },
-        };
+    let nextSchemaHtmlValue = schemaHtmlText;
+    updateAndRefresh((currentSettings) => {
+      const preset = currentSettings.schemaPresets[currentSettings.schemaPreset];
+      if (!preset) {
+        return;
       }
+
+      const nextPreset = { ...preset, html: schemaHtmlText };
+      currentSettings.schemaPresets = {
+        ...currentSettings.schemaPresets,
+        [currentSettings.schemaPreset]: nextPreset,
+      };
+      nextSchemaHtmlValue = formatSchemaHtml(nextPreset);
     });
+    setSchemaHtmlText(nextSchemaHtmlValue);
   };
 
   // Restore the current schema preset to its default values
@@ -252,11 +289,19 @@ export const ZTrackerSettings: FC = () => {
                 handleSchemaPresetChange={handleSchemaPresetChange}
                 handleSchemaPresetsListChange={handleSchemaPresetsListChange}
                 schemaText={schemaText}
-                schemaTextHasError={schemaTextHasError}
+                schemaTextHasError={!schemaDraftState.isValid}
+                schemaTextError={schemaDraftState.errorMessage}
+                schemaTextHasUnsavedChanges={schemaDraftState.isDirty}
+                schemaTextCanSave={schemaDraftState.canSave}
                 schemaHtmlText={schemaHtmlText}
-                schemaHtmlTextHasError={schemaHtmlTextHasError}
+                schemaHtmlTextHasError={!schemaHtmlDraftState.isValid}
+                schemaHtmlTextError={schemaHtmlDraftState.errorMessage}
+                schemaHtmlTextHasUnsavedChanges={schemaHtmlDraftState.isDirty}
+                schemaHtmlTextCanSave={schemaHtmlDraftState.canSave}
                 handleSchemaValueChange={handleSchemaValueChange}
                 handleSchemaHtmlChange={handleSchemaHtmlChange}
+                saveSchemaValue={saveSchemaValue}
+                saveSchemaHtmlValue={saveSchemaHtmlValue}
                 restoreSchemaToDefault={restoreSchemaToDefault}
                 systemPromptItems={systemPromptItems}
                 refreshSystemPromptState={refreshSystemPromptState}
