@@ -13,7 +13,7 @@ describe('applyTrackerUpdateAndRender', () => {
     const message: any = { extra: {} };
     const render = jest.fn();
 
-    applyTrackerUpdateAndRender(message, {
+    const rollback = applyTrackerUpdateAndRender(message, {
       trackerData: { time: '10:00' },
       trackerHtml: '<div>{{data.time}}</div>',
       render,
@@ -22,6 +22,9 @@ describe('applyTrackerUpdateAndRender', () => {
     expect(render).toHaveBeenCalledTimes(1);
     expect(message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_VALUE_KEY]).toEqual({ time: '10:00' });
     expect(message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_HTML_KEY]).toBe('<div>{{data.time}}</div>');
+
+    rollback();
+    expect(message.extra[EXTENSION_KEY]).toBeUndefined();
   });
 
   it('rolls back to previous tracker data when render throws', () => {
