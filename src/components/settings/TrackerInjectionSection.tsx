@@ -1,4 +1,5 @@
 import { FC } from 'react';
+import { sanitizeIntegerSetting } from '../../settings-numeric.js';
 import { EmbedSnapshotTransformSection } from './EmbedSnapshotTransformSection.js';
 import type { SettingsSectionProps } from './settings-shared.js';
 
@@ -19,7 +20,7 @@ export const TrackerInjectionSection: FC<SettingsSectionProps> = ({ settings, up
           value={settings.includeLastXZTrackerMessages}
           onChange={(e) =>
             updateAndRefresh((s) => {
-              s.includeLastXZTrackerMessages = parseInt(e.target.value) || 0;
+              s.includeLastXZTrackerMessages = sanitizeIntegerSetting(e.target.value, { fallback: 0, min: 0 });
             })
           }
         />

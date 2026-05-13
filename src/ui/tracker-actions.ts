@@ -586,8 +586,10 @@ export function createTrackerActions(options: {
 
   /** Persists a generated tracker update and restores the rendered tracker state if the save can complete. */
   const persistTrackerUpdate = async (options: PersistTrackerUpdateOptions) => {
+    let rollbackTrackerUpdate: (() => void) | undefined;
+
     try {
-      applyTrackerUpdateAndRender(options.message as any, {
+      rollbackTrackerUpdate = applyTrackerUpdateAndRender(options.message as any, {
         trackerData: options.trackerData,
         trackerHtml: options.trackerHtml,
         extensionData: {
@@ -599,10 +601,6 @@ export function createTrackerActions(options: {
         render: () => renderTrackerWithDeps(options.messageId),
       });
       restoreDetailsState(options.messageId, options.detailsState);
-      await globalContext.saveChat();
-      if (options.successMessage) {
-        st_echo('success', options.successMessage);
-      }
     } catch {
       logPromptEngineeredRenderRollback(
         options.trackerData,
@@ -610,6 +608,19 @@ export function createTrackerActions(options: {
       );
       renderTrackerWithDeps(options.messageId);
       throw new Error('Generated data failed to render with the current template. Not saved.');
+    }
+
+    try {
+      await globalContext.saveChat();
+      if (options.successMessage) {
+        st_echo('success', options.successMessage);
+      }
+    } catch (error) {
+      console.error('Error saving tracker update:', error);
+      rollbackTrackerUpdate?.();
+      renderTrackerWithDeps(options.messageId);
+      restoreDetailsState(options.messageId, options.detailsState);
+      throw new Error('Tracker changes could not be saved. Changes were rolled back.');
     }
   };
 
@@ -1130,21 +1141,32 @@ export function createTrackerActions(options: {
             }
 
             const detailsState = captureDetailsState(messageId);
+            let rollbackTrackerUpdate: (() => void) | undefined;
 
             try {
-              applyTrackerUpdateAndRender(message as any, {
+              rollbackTrackerUpdate = applyTrackerUpdateAndRender(message as any, {
                 trackerData: newData,
                 trackerHtml,
                 render: () => renderTrackerWithDeps(messageId),
               });
               restoreDetailsState(messageId, detailsState);
-              await globalContext.saveChat();
-              st_echo('success', 'Tracker data updated.');
             } catch (e) {
               console.error('Error validating updated tracker data:', e);
               renderTrackerWithDeps(messageId);
               restoreDetailsState(messageId, detailsState);
               st_echo('error', 'Tracker data failed to render. Changes were not saved.');
+              return;
+            }
+
+            try {
+              await globalContext.saveChat();
+              st_echo('success', 'Tracker data updated.');
+            } catch (e) {
+              console.error('Error saving updated tracker data:', e);
+              rollbackTrackerUpdate?.();
+              renderTrackerWithDeps(messageId);
+              restoreDetailsState(messageId, detailsState);
+              st_echo('error', 'Tracker changes could not be saved. Changes were rolled back.');
             }
           }
         }
@@ -1731,10 +1753,15 @@ export function createTrackerActions(options: {
 
   async function renderExtensionTemplates() {
     const extensionsMenu = document.querySelector('#extensionsMenu');
-    const buttonContainer = document.createElement('div');
-    buttonContainer.id = 'ztracker_menu_buttons';
-    buttonContainer.className = 'extension_container';
-    extensionsMenu?.appendChild(buttonContainer);
+    let buttonContainer = document.querySelector('#ztracker_menu_buttons') as HTMLElement | null;
+    if (!buttonContainer) {
+      buttonContainer = document.createElement('div');
+      buttonContainer.id = 'ztracker_menu_buttons';
+      buttonContainer.className = 'extension_container';
+      extensionsMenu?.appendChild(buttonContainer);
+    } else {
+      buttonContainer.replaceChildren();
+    }
 
     const extensionRoot = getExtensionRoot({ importMetaUrl, fallbackFolderName: extensionName });
     const buttonsTemplatePath = 'dist/templates/buttons';

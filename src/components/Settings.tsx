@@ -18,8 +18,11 @@ import {
 import { DiagnosticsSection } from './settings/DiagnosticsSection.js';
 import { reconcilePresetItems, resolvePresetSelection } from './settings/preset-state.js';
 import {
+  formatSchemaHtml,
   formatSchemaText,
+  hasUnsavedInvalidSchemaHtmlDraft,
   hasUnsavedInvalidSchemaDraft,
+  shouldSyncSchemaHtmlFromSettings,
   shouldSyncSchemaTextFromSettings,
 } from './settings/schema-editor-state.js';
 import { SettingsSectionDrawer } from './settings/SettingsSectionDrawer.js';
@@ -40,6 +43,7 @@ export const ZTrackerSettings: FC = () => {
   const [isInjectionOpen, setInjectionOpen] = useState(true);
 
   const [schemaText, setSchemaText] = useState(formatSchemaText(settings.schemaPresets[settings.schemaPreset]));
+  const [schemaHtmlText, setSchemaHtmlText] = useState(formatSchemaHtml(settings.schemaPresets[settings.schemaPreset]));
 
   const updateAndRefresh = useCallback(
     (updater: (currentSettings: ExtensionSettings) => void) => {
@@ -80,6 +84,8 @@ export const ZTrackerSettings: FC = () => {
 
   const activeSchemaText = formatSchemaText(settings.schemaPresets[settings.schemaPreset]);
   const schemaTextHasError = hasUnsavedInvalidSchemaDraft(schemaText);
+  const activeSchemaHtml = formatSchemaHtml(settings.schemaPresets[settings.schemaPreset]);
+  const schemaHtmlTextHasError = hasUnsavedInvalidSchemaHtmlDraft(schemaHtmlText);
 
   useEffect(() => {
     const activePresetChanged = previousSchemaPresetRef.current !== settings.schemaPreset;
@@ -92,11 +98,20 @@ export const ZTrackerSettings: FC = () => {
     if (schemaText !== activeSchemaText) {
       setSchemaText(activeSchemaText);
     }
-  }, [activeSchemaText, schemaText, settings.schemaPreset]);
+
+    if (!shouldSyncSchemaHtmlFromSettings({ currentText: schemaHtmlText, activePresetChanged })) {
+      return;
+    }
+
+    if (schemaHtmlText !== activeSchemaHtml) {
+      setSchemaHtmlText(activeSchemaHtml);
+    }
+  }, [activeSchemaHtml, activeSchemaText, schemaHtmlText, schemaText, settings.schemaPreset]);
 
   // Handler for when a new schema preset is selected
   const handleSchemaPresetChange = (newValue?: string) => {
     let nextSchemaText: string | undefined;
+    let nextSchemaHtmlText: string | undefined;
 
     updateAndRefresh((currentSettings) => {
       const selection = resolvePresetSelection(currentSettings.schemaPresets, newValue);
@@ -106,25 +121,33 @@ export const ZTrackerSettings: FC = () => {
 
       currentSettings.schemaPreset = selection.key;
       nextSchemaText = formatSchemaText(selection.preset);
+      nextSchemaHtmlText = formatSchemaHtml(selection.preset);
     });
 
     if (nextSchemaText !== undefined) {
       setSchemaText(nextSchemaText);
+    }
+
+    if (nextSchemaHtmlText !== undefined) {
+      setSchemaHtmlText(nextSchemaHtmlText);
     }
   };
 
   // Handler for when the list of presets is modified (created, renamed, deleted)
   const handleSchemaPresetsListChange = (newItems: PresetItem[]) => {
     let nextSchemaText = '';
+    let nextSchemaHtmlText = '';
 
     updateAndRefresh((currentSettings) => {
       const nextState = reconcilePresetItems(currentSettings.schemaPresets, currentSettings.schemaPreset, newItems);
       currentSettings.schemaPreset = nextState.activeKey;
       currentSettings.schemaPresets = nextState.presets;
       nextSchemaText = formatSchemaText(nextState.presets[nextState.activeKey]);
+      nextSchemaHtmlText = formatSchemaHtml(nextState.presets[nextState.activeKey]);
     });
 
     setSchemaText(nextSchemaText);
+    setSchemaHtmlText(nextSchemaHtmlText);
   };
 
 
@@ -150,10 +173,15 @@ export const ZTrackerSettings: FC = () => {
 
   // Handler for the schema HTML textarea
   const handleSchemaHtmlChange = (newHtml: string) => {
+    setSchemaHtmlText(newHtml);
+    if (hasUnsavedInvalidSchemaHtmlDraft(newHtml)) {
+      return;
+    }
+
     updateAndRefresh((s) => {
       const preset = s.schemaPresets[s.schemaPreset];
       if (preset) {
-        // Create a new presets object with the updated html
+        // Keep invalid draft edits local until the template parses successfully.
         s.schemaPresets = {
           ...s.schemaPresets,
           [s.schemaPreset]: { ...preset, html: newHtml },
@@ -171,6 +199,7 @@ export const ZTrackerSettings: FC = () => {
     if (!confirm) return;
 
     let nextSchemaText = '';
+    let nextSchemaHtmlText = '';
     updateAndRefresh((currentSettings) => {
       const preset = currentSettings.schemaPresets[currentSettings.schemaPreset];
       if (preset) {
@@ -183,9 +212,11 @@ export const ZTrackerSettings: FC = () => {
           },
         };
         nextSchemaText = formatSchemaText(currentSettings.schemaPresets[currentSettings.schemaPreset]);
+        nextSchemaHtmlText = formatSchemaHtml(currentSettings.schemaPresets[currentSettings.schemaPreset]);
       }
     });
     setSchemaText(nextSchemaText);
+    setSchemaHtmlText(nextSchemaHtmlText);
   };
 
   return (
@@ -222,6 +253,8 @@ export const ZTrackerSettings: FC = () => {
                 handleSchemaPresetsListChange={handleSchemaPresetsListChange}
                 schemaText={schemaText}
                 schemaTextHasError={schemaTextHasError}
+                schemaHtmlText={schemaHtmlText}
+                schemaHtmlTextHasError={schemaHtmlTextHasError}
                 handleSchemaValueChange={handleSchemaValueChange}
                 handleSchemaHtmlChange={handleSchemaHtmlChange}
                 restoreSchemaToDefault={restoreSchemaToDefault}

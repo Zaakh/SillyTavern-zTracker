@@ -42,6 +42,17 @@ type GenerateInterceptorContext = {
   }>;
 };
 
+let themeObserverInstalled = false;
+let characterPanelObserverInstalled = false;
+let trackerActionClickHandlerInstalled = false;
+
+const registeredHostEventSources = new WeakSet<object>();
+
+let activeTrackerActionHandler: {
+  actions: TrackerActions;
+  getPortaledPartsMessageId: (target: HTMLElement) => number | null;
+} | null = null;
+
 function normalizeSpeakerLabel(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
@@ -63,6 +74,10 @@ function resolveAssistantReplyLabel(context: GenerateInterceptorContext): string
 
 /** Injects the zTracker per-message action button into SillyTavern's message template. */
 function ensureMessageTemplateButton(): void {
+  if (document.querySelector('#message_template .mes_buttons .extraMesButtons .mes_ztracker_button')) {
+    return;
+  }
+
   const zTrackerIcon = document.createElement('div');
   zTrackerIcon.title = 'zTracker';
   zTrackerIcon.className = 'mes_button mes_ztracker_button fa-solid fa-truck-moving interactable';
@@ -85,18 +100,24 @@ function resolveMessageIdFromTarget(
 }
 
 /** Applies tracker-specific click actions for message buttons and parts-menu controls. */
-function installTrackerActionClickHandler(options: {
-  actions: TrackerActions;
-  getPortaledPartsMessageId: (target: HTMLElement) => number | null;
-}): void {
-  const { actions, getPortaledPartsMessageId } = options;
+function installTrackerActionClickHandler(): void {
+  if (trackerActionClickHandlerInstalled) {
+    return;
+  }
 
   document.addEventListener('click', (event) => {
+    const runtime = activeTrackerActionHandler;
+    if (!runtime) {
+      return;
+    }
+
     const target = event.target as HTMLElement;
-    const messageId = resolveMessageIdFromTarget(target, getPortaledPartsMessageId);
+    const messageId = resolveMessageIdFromTarget(target, runtime.getPortaledPartsMessageId);
     if (messageId === null) {
       return;
     }
+
+    const { actions } = runtime;
 
     const fieldButton = target.closest('.ztracker-array-item-field-regenerate-button') as HTMLElement | null;
     if (fieldButton) {
@@ -162,6 +183,8 @@ function installTrackerActionClickHandler(options: {
       actions.deleteTracker(messageId);
     }
   });
+
+  trackerActionClickHandlerInstalled = true;
 }
 
 /** Rerenders persisted trackers for the active chat and strips any data that no longer matches the template. */
@@ -206,80 +229,95 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
     });
   }
 
-  installZTrackerThemeObserver();
+  if (!themeObserverInstalled) {
+    installZTrackerThemeObserver();
+    themeObserverInstalled = true;
+  }
+
   characterPanelButtons.scheduleSync();
-  characterPanelButtons.installDomObserver();
+  if (!characterPanelObserverInstalled) {
+    characterPanelButtons.installDomObserver();
+    characterPanelObserverInstalled = true;
+  }
+
   outgoingAutoMode.installDocumentHandlers();
+
   ensureMessageTemplateButton();
-  installTrackerActionClickHandler({
+  activeTrackerActionHandler = {
     actions,
     getPortaledPartsMessageId: partsMenuPortal.getMessageIdForTarget,
-  });
+  };
+  installTrackerActionClickHandler();
 
   await actions.renderExtensionTemplates();
   outgoingAutoMode.syncUi();
 
-  globalContext.eventSource.on(
-    EventNames.CHARACTER_MESSAGE_RENDERED,
-    (messageId: number) => {
-      const settings = settingsManager.getSettings();
-      if (!incomingTypes.includes(settings.autoMode)) return;
+  const eventSource = globalContext?.eventSource;
+  if (eventSource && !registeredHostEventSources.has(eventSource as object)) {
+    globalContext.eventSource.on(
+      EventNames.CHARACTER_MESSAGE_RENDERED,
+      (messageId: number) => {
+        const settings = settingsManager.getSettings();
+        if (!incomingTypes.includes(settings.autoMode)) return;
 
-      const context = SillyTavern.getContext();
-      if (!shouldAutoGenerateForCharacterMessage({ chat: context.chat, characters: context.characters }, messageId)) {
-        return;
-      }
-
-      actions.generateTracker(messageId, { silent: true, showStatusIndicator: false });
-    },
-  );
-  globalContext.eventSource.on(EventNames.USER_MESSAGE_RENDERED, (messageId: number) => {
-    outgoingAutoMode.handleUserMessageRendered(messageId);
-  });
-  globalContext.eventSource.on(
-    EventNames.MESSAGE_SENT,
-    (messageId: number) => {
-      const settings = settingsManager.getSettings();
-      if (!outgoingTypes.includes(settings.autoMode)) return;
-
-      const context = SillyTavern.getContext();
-      if (!shouldAutoGenerateForUserMessage({ characterId: (context as any).characterId, characters: context.characters })) {
-        return;
-      }
-
-      const runId = outgoingAutoMode.beginPendingMessage(messageId);
-      outgoingAutoMode.tryStopPendingHostGeneration();
-
-      void (async () => {
-        try {
-          await actions.generateTracker(messageId, { silent: true, showStatusIndicator: false });
-        } catch (error) {
-          console.error('zTracker auto mode failed to generate a tracker before reply.', error);
-        }
-
-        const completion = outgoingAutoMode.finishPendingMessage(messageId, runId);
-        if (!completion.finished) {
+        const context = SillyTavern.getContext();
+        if (!shouldAutoGenerateForCharacterMessage({ chat: context.chat, characters: context.characters }, messageId)) {
           return;
         }
 
-        if (!completion.shouldResumeHostGeneration) {
+        actions.generateTracker(messageId, { silent: true, showStatusIndicator: false });
+      },
+    );
+    globalContext.eventSource.on(EventNames.USER_MESSAGE_RENDERED, (messageId: number) => {
+      outgoingAutoMode.handleUserMessageRendered(messageId);
+    });
+    globalContext.eventSource.on(
+      EventNames.MESSAGE_SENT,
+      (messageId: number) => {
+        const settings = settingsManager.getSettings();
+        if (!outgoingTypes.includes(settings.autoMode)) return;
+
+        const context = SillyTavern.getContext();
+        if (!shouldAutoGenerateForUserMessage({ characterId: (context as any).characterId, characters: context.characters })) {
           return;
         }
 
-        await outgoingAutoMode.resumeHostGeneration();
-      })();
-    },
-  );
+        const runId = outgoingAutoMode.beginPendingMessage(messageId);
+        outgoingAutoMode.tryStopPendingHostGeneration();
 
-  globalContext.eventSource.on(EventNames.GENERATION_STARTED, () => {
-    outgoingAutoMode.handleGenerationStarted();
-  });
+        void (async () => {
+          try {
+            await actions.generateTracker(messageId, { silent: true, showStatusIndicator: false });
+          } catch (error) {
+            console.error('zTracker auto mode failed to generate a tracker before reply.', error);
+          }
 
-  globalContext.eventSource.on(EventNames.CHAT_CHANGED, () => {
-    outgoingAutoMode.resetAndSync({ invalidateRun: true });
-    characterPanelButtons.scheduleSync();
-    rerenderTrackersForCurrentChat({ globalContext, renderTrackerWithDeps });
-  });
+          const completion = outgoingAutoMode.finishPendingMessage(messageId, runId);
+          if (!completion.finished) {
+            return;
+          }
+
+          if (!completion.shouldResumeHostGeneration) {
+            return;
+          }
+
+          await outgoingAutoMode.resumeHostGeneration();
+        })();
+      },
+    );
+
+    globalContext.eventSource.on(EventNames.GENERATION_STARTED, () => {
+      outgoingAutoMode.handleGenerationStarted();
+    });
+
+    globalContext.eventSource.on(EventNames.CHAT_CHANGED, () => {
+      outgoingAutoMode.resetAndSync({ invalidateRun: true });
+      characterPanelButtons.scheduleSync();
+      rerenderTrackersForCurrentChat({ globalContext, renderTrackerWithDeps });
+    });
+
+    registeredHostEventSources.add(eventSource as object);
+  }
 
   (globalThis as any).ztrackerGenerateInterceptor = (chat: ChatMessage[]) => {
     const textCompletionSafeContext = SillyTavern.getContext() as GenerateInterceptorContext;
