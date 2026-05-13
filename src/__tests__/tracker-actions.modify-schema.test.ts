@@ -28,19 +28,11 @@ describe('createTrackerActions modifyChatMetadata', () => {
       }
 
       if (templatePath === 'dist/templates/modify_schema_popup') {
-        const presets = (templateData?.presets ?? []) as Array<{ key: string; name: string; selected?: boolean }>;
         return `
-          <div>
-            <select id="ztracker-chat-schema-select">
-              ${presets
-                .map(
-                  (preset) =>
-                    `<option value="${preset.key}"${preset.selected ? ' selected' : ''}>${preset.name}</option>`,
-                )
-                .join('')}
-            </select>
-            <div id="schema-switch-note">Changing the chat schema affects future full tracker generations.</div>
-          </div>
+          <select id="ztracker-chat-schema-select">
+            <option value="default">Default</option>
+            <option value="alternate">Alternate</option>
+          </select>
         `;
       }
 
@@ -48,15 +40,13 @@ describe('createTrackerActions modifyChatMetadata', () => {
     });
 
     const callGenericPopup = jest.fn(async (content: string, _type: unknown, _title: string, options: any) => {
-      const popupContent = document.createElement('div');
-      popupContent.innerHTML = content;
-      document.body.appendChild(popupContent);
+      document.body.insertAdjacentHTML('beforeend', content);
 
-      const select = popupContent.querySelector('#ztracker-chat-schema-select') as HTMLSelectElement | null;
+      const select = document.querySelector('#ztracker-chat-schema-select') as HTMLSelectElement | null;
       expect(select).not.toBeNull();
       select!.value = 'alternate';
 
-      await options.onClose?.({ result: 'affirmative', content: popupContent });
+      await options.onClose?.({ result: 'affirmative' });
     });
 
     const saveMetadataDebounced = jest.fn();
@@ -102,7 +92,7 @@ describe('createTrackerActions modifyChatMetadata', () => {
     const menuButton = document.querySelector('#ztracker_modify_schema_preset') as HTMLElement | null;
     expect(menuButton).not.toBeNull();
 
-    await menuButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    menuButton!.click();
     await Promise.resolve();
 
     expect(renderExtensionTemplateAsync).toHaveBeenCalledWith('root', 'dist/templates/modify_schema_popup', expect.any(Object));

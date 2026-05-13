@@ -1872,9 +1872,7 @@ export function createTrackerActions(options: {
       st_echo('error', 'zTracker failed to load one or more HTML templates. See console for diagnostics.');
     }
 
-    extensionsMenu?.querySelector('#ztracker_modify_schema_preset')?.addEventListener('click', async () => {
-      await modifyChatMetadata();
-    });
+    extensionsMenu?.querySelector('#ztracker_modify_schema_preset')?.addEventListener('click', modifyChatMetadata);
   }
 
   async function modifyChatMetadata() {
