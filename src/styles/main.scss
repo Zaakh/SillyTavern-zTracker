@@ -25,6 +25,22 @@
 		margin-top: -2px;
 	}
 
+	.ztracker-schema-status {
+		opacity: 0.8;
+		margin-top: -2px;
+	}
+
+	.ztracker-schema-editor-actions {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+
+		.notes {
+			margin-top: 0;
+		}
+	}
+
     .setting-row {
         display: flex;
         flex-direction: column;

@@ -19,6 +19,19 @@
   color: var(--error-color, #f44336);
   margin-top: -2px;
 }
+.ztracker-settings .ztracker-schema-status {
+  opacity: 0.8;
+  margin-top: -2px;
+}
+.ztracker-settings .ztracker-schema-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ztracker-settings .ztracker-schema-editor-actions .notes {
+  margin-top: 0;
+}
 .ztracker-settings .setting-row {
   display: flex;
   flex-direction: column;

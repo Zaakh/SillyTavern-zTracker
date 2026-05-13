@@ -1,6 +1,16 @@
 import type { Schema } from '../../config.js';
 import Handlebars from 'handlebars';
 
+export interface DraftValidationState {
+  isValid: boolean;
+  errorMessage?: string;
+}
+
+export interface EditorDraftState extends DraftValidationState {
+  isDirty: boolean;
+  canSave: boolean;
+}
+
 // Keeps schema-editor state decisions import-safe so silent data-loss cases can be tested without React.
 export function formatSchemaText(schema?: Schema): string {
   return schema ? JSON.stringify(schema.value, null, 2) : '';
@@ -11,40 +21,96 @@ export function formatSchemaHtml(schema?: Schema): string {
   return schema?.html ?? '';
 }
 
+// Keeps error reporting stable so the UI can explain why a draft cannot be saved.
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+function isTopLevelSchemaObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 // Schema edits only persist once the JSON parses successfully.
-export function hasUnsavedInvalidSchemaDraft(schemaText: string): boolean {
+export function validateSchemaDraft(schemaText: string): DraftValidationState {
   try {
-    JSON.parse(schemaText);
-    return false;
-  } catch {
-    return true;
+    const parsedValue = JSON.parse(schemaText);
+    if (!isTopLevelSchemaObject(parsedValue)) {
+      return {
+        isValid: false,
+        errorMessage: 'Schema JSON must be a top-level object.',
+      };
+    }
+
+    return { isValid: true };
+  } catch (error) {
+    return {
+      isValid: false,
+      errorMessage: getErrorMessage(error, 'Invalid JSON.'),
+    };
   }
 }
 
-// Preserve the local draft while the user is still editing invalid JSON on the same preset.
-export function shouldSyncSchemaTextFromSettings(options: { currentText: string; activePresetChanged: boolean }): boolean {
+// Exposes whether the current JSON draft is valid and still differs from the persisted preset.
+export function getSchemaDraftState(options: { currentText: string; persistedText: string }): EditorDraftState {
+  const validation = validateSchemaDraft(options.currentText);
+  const isDirty = options.currentText !== options.persistedText;
+  return {
+    ...validation,
+    isDirty,
+    canSave: isDirty && validation.isValid,
+  };
+}
+
+// Preserve any unsaved JSON draft while staying on the same preset.
+export function shouldSyncSchemaTextFromSettings(options: {
+  currentText: string;
+  persistedText: string;
+  activePresetChanged: boolean;
+}): boolean {
   if (options.activePresetChanged) {
     return true;
   }
 
-  return !hasUnsavedInvalidSchemaDraft(options.currentText);
+  return options.currentText === options.persistedText;
 }
 
 // Template edits only persist once Handlebars can parse the draft successfully.
-export function hasUnsavedInvalidSchemaHtmlDraft(schemaHtmlText: string): boolean {
+export function validateSchemaHtmlDraft(schemaHtmlText: string): DraftValidationState {
   try {
     Handlebars.precompile(schemaHtmlText);
-    return false;
-  } catch {
-    return true;
+    return { isValid: true };
+  } catch (error) {
+    return {
+      isValid: false,
+      errorMessage: getErrorMessage(error, 'Invalid Handlebars template.'),
+    };
   }
 }
 
-// Preserve the local HTML draft while the user is still editing an invalid template on the same preset.
-export function shouldSyncSchemaHtmlFromSettings(options: { currentText: string; activePresetChanged: boolean }): boolean {
+// Exposes whether the current HTML draft is valid and still differs from the persisted preset.
+export function getSchemaHtmlDraftState(options: { currentText: string; persistedText: string }): EditorDraftState {
+  const validation = validateSchemaHtmlDraft(options.currentText);
+  const isDirty = options.currentText !== options.persistedText;
+  return {
+    ...validation,
+    isDirty,
+    canSave: isDirty && validation.isValid,
+  };
+}
+
+// Preserve any unsaved HTML draft while staying on the same preset.
+export function shouldSyncSchemaHtmlFromSettings(options: {
+  currentText: string;
+  persistedText: string;
+  activePresetChanged: boolean;
+}): boolean {
   if (options.activePresetChanged) {
     return true;
   }
 
-  return !hasUnsavedInvalidSchemaHtmlDraft(options.currentText);
+  return options.currentText === options.persistedText;
 }

@@ -5,22 +5,80 @@
 import {
   formatSchemaHtml,
   formatSchemaText,
-  hasUnsavedInvalidSchemaHtmlDraft,
-  hasUnsavedInvalidSchemaDraft,
+  getSchemaDraftState,
+  getSchemaHtmlDraftState,
   shouldSyncSchemaHtmlFromSettings,
   shouldSyncSchemaTextFromSettings,
+  validateSchemaDraft,
+  validateSchemaHtmlDraft,
 } from '../components/settings/schema-editor-state.js';
 
 describe('schema-editor-state helpers', () => {
-  test('detects invalid schema drafts that have not been persisted yet', () => {
-    expect(hasUnsavedInvalidSchemaDraft('{"scene":')).toBe(true);
-    expect(hasUnsavedInvalidSchemaDraft('{"scene":"kept"}')).toBe(false);
+  test('reports JSON validation errors for invalid schema drafts', () => {
+    expect(validateSchemaDraft('{"scene":')).toEqual(
+      expect.objectContaining({
+        isValid: false,
+        errorMessage: expect.any(String),
+      }),
+    );
+    expect(validateSchemaDraft('[1,2,3]')).toEqual({
+      isValid: false,
+      errorMessage: 'Schema JSON must be a top-level object.',
+    });
+    expect(validateSchemaDraft('{"scene":"kept"}')).toEqual({ isValid: true });
   });
 
-  test('preserves an invalid draft while staying on the same schema preset', () => {
+  test('tracks dirty state for valid JSON drafts that differ from persisted settings', () => {
+    expect(
+      getSchemaDraftState({
+        currentText: '{"scene":"kept"}',
+        persistedText: `{
+  "scene": "kept"
+}`,
+      }),
+    ).toEqual({
+      isDirty: true,
+      isValid: true,
+      canSave: true,
+    });
+  });
+
+  test('does not allow saving an unchanged valid JSON draft', () => {
+    expect(
+      getSchemaDraftState({
+        currentText: `{
+  "scene": "kept"
+}`,
+        persistedText: `{
+  "scene": "kept"
+}`,
+      }),
+    ).toEqual({
+      isDirty: false,
+      isValid: true,
+      canSave: false,
+    });
+  });
+
+  test('preserves a valid unsaved JSON draft while staying on the same schema preset', () => {
+    expect(
+      shouldSyncSchemaTextFromSettings({
+        currentText: '{"scene":"kept"}',
+        persistedText: `{
+  "scene": "kept"
+}`,
+        activePresetChanged: false,
+      }),
+    ).toBe(false);
+  });
+
+  test('preserves an invalid JSON draft while staying on the same schema preset', () => {
     expect(
       shouldSyncSchemaTextFromSettings({
         currentText: '{"scene":',
+        persistedText: `{
+  "scene": "kept"
+}`,
         activePresetChanged: false,
       }),
     ).toBe(false);
@@ -30,6 +88,9 @@ describe('schema-editor-state helpers', () => {
     expect(
       shouldSyncSchemaTextFromSettings({
         currentText: '{"scene":',
+        persistedText: `{
+  "scene": "kept"
+}`,
         activePresetChanged: true,
       }),
     ).toBe(true);
@@ -47,15 +108,57 @@ describe('schema-editor-state helpers', () => {
 }`);
   });
 
-  test('detects invalid Handlebars HTML drafts that have not been persisted yet', () => {
-    expect(hasUnsavedInvalidSchemaHtmlDraft('{{#if data.scene}}')).toBe(true);
-    expect(hasUnsavedInvalidSchemaHtmlDraft('<div>{{data.scene}}</div>')).toBe(false);
+  test('reports Handlebars validation errors for invalid HTML drafts', () => {
+    expect(validateSchemaHtmlDraft('{{#if data.scene}}')).toEqual(
+      expect.objectContaining({
+        isValid: false,
+        errorMessage: expect.any(String),
+      }),
+    );
+    expect(validateSchemaHtmlDraft('<div>{{data.scene}}</div>')).toEqual({ isValid: true });
+  });
+
+  test('tracks dirty state for valid HTML drafts that differ from persisted settings', () => {
+    expect(
+      getSchemaHtmlDraftState({
+        currentText: '<div>{{ data.scene }}</div>',
+        persistedText: '<div>{{data.scene}}</div>',
+      }),
+    ).toEqual({
+      isDirty: true,
+      isValid: true,
+      canSave: true,
+    });
+  });
+
+  test('does not allow saving an unchanged valid HTML draft', () => {
+    expect(
+      getSchemaHtmlDraftState({
+        currentText: '<div>{{data.scene}}</div>',
+        persistedText: '<div>{{data.scene}}</div>',
+      }),
+    ).toEqual({
+      isDirty: false,
+      isValid: true,
+      canSave: false,
+    });
+  });
+
+  test('preserves a valid unsaved HTML draft while staying on the same schema preset', () => {
+    expect(
+      shouldSyncSchemaHtmlFromSettings({
+        currentText: '<div>{{ data.scene }}</div>',
+        persistedText: '<div>{{data.scene}}</div>',
+        activePresetChanged: false,
+      }),
+    ).toBe(false);
   });
 
   test('preserves an invalid HTML draft while staying on the same schema preset', () => {
     expect(
       shouldSyncSchemaHtmlFromSettings({
         currentText: '{{#if data.scene}}',
+        persistedText: '<div>{{data.scene}}</div>',
         activePresetChanged: false,
       }),
     ).toBe(false);
@@ -65,6 +168,7 @@ describe('schema-editor-state helpers', () => {
     expect(
       shouldSyncSchemaHtmlFromSettings({
         currentText: '{{#if data.scene}}',
+        persistedText: '<div>{{data.scene}}</div>',
         activePresetChanged: true,
       }),
     ).toBe(true);
