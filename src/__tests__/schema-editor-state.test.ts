@@ -3,8 +3,11 @@
  */
 
 import {
+  formatSchemaHtml,
   formatSchemaText,
+  hasUnsavedInvalidSchemaHtmlDraft,
   hasUnsavedInvalidSchemaDraft,
+  shouldSyncSchemaHtmlFromSettings,
   shouldSyncSchemaTextFromSettings,
 } from '../components/settings/schema-editor-state.js';
 
@@ -42,5 +45,38 @@ describe('schema-editor-state helpers', () => {
     ).toBe(`{
   "scene": "kept"
 }`);
+  });
+
+  test('detects invalid Handlebars HTML drafts that have not been persisted yet', () => {
+    expect(hasUnsavedInvalidSchemaHtmlDraft('{{#if data.scene}}')).toBe(true);
+    expect(hasUnsavedInvalidSchemaHtmlDraft('<div>{{data.scene}}</div>')).toBe(false);
+  });
+
+  test('preserves an invalid HTML draft while staying on the same schema preset', () => {
+    expect(
+      shouldSyncSchemaHtmlFromSettings({
+        currentText: '{{#if data.scene}}',
+        activePresetChanged: false,
+      }),
+    ).toBe(false);
+  });
+
+  test('resyncs the HTML editor when the active schema preset changes', () => {
+    expect(
+      shouldSyncSchemaHtmlFromSettings({
+        currentText: '{{#if data.scene}}',
+        activePresetChanged: true,
+      }),
+    ).toBe(true);
+  });
+
+  test('formats persisted schema HTML for the editor', () => {
+    expect(
+      formatSchemaHtml({
+        name: 'Custom',
+        value: { scene: 'kept' },
+        html: '<div>{{data.scene}}</div>',
+      }),
+    ).toBe('<div>{{data.scene}}</div>');
   });
 });

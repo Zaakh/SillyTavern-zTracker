@@ -14,6 +14,7 @@ import {
   makeSettings,
   renderTrackerWithDepsMock,
   resetTrackerActionTestState,
+  stEchoMock,
   TEST_IMPORT_META_URL,
 } from '../test-utils/tracker-actions-test-helpers.js';
 
@@ -164,5 +165,42 @@ describe('createTrackerActions full generation indicator', () => {
 
     finishRequest?.();
     await pending;
+  });
+
+  test('rolls back a rendered tracker update when saving the chat fails', async () => {
+    document.body.innerHTML = buildMessage(0);
+
+    const rollback = jest.fn(() => undefined);
+    applyTrackerUpdateAndRenderMock.mockImplementation(() => rollback);
+    const saveChat = jest.fn(async () => {
+      throw new Error('save failed');
+    });
+    const generateRequest = jest.fn((_request, hooks) => {
+      hooks.onStart('request-1');
+      hooks.onFinish('request-1', { content: { time: '10:00:00' } }, null);
+    });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat,
+        extensionSettings: { connectionManager: { profiles: [makeProfile()] } },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: { getSettings: () => makeSettings() } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await expect(actions.generateTracker(0, { showStatusIndicator: true })).resolves.toBe(false);
+
+    expect(rollback).toHaveBeenCalledTimes(1);
+    expect(renderTrackerWithDepsMock).toHaveBeenCalledTimes(1);
+    expect(stEchoMock).toHaveBeenCalledWith(
+      'error',
+      'Tracker generation failed: Tracker changes could not be saved. Changes were rolled back.',
+    );
   });
 });

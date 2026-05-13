@@ -1,6 +1,7 @@
 import { FC } from 'react';
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import type { TrackerGenerationConversationRoleMode } from '../../config.js';
+import { sanitizeIntegerSetting } from '../../settings-numeric.js';
 import type { SettingsSectionProps } from './settings-shared.js';
 
 // Renders the core tracker-generation behavior controls that affect timing, prompt mode, and context size.
@@ -57,7 +58,7 @@ export const GenerationBehaviorSection: FC<SettingsSectionProps> = ({ settings, 
           value={settings.maxResponseToken}
           onChange={(e) =>
             updateAndRefresh((s) => {
-              s.maxResponseToken = parseInt(e.target.value) || 0;
+              s.maxResponseToken = sanitizeIntegerSetting(e.target.value, { fallback: 1, min: 1 });
             })
           }
         />
@@ -76,7 +77,7 @@ export const GenerationBehaviorSection: FC<SettingsSectionProps> = ({ settings, 
           value={settings.skipFirstXMessages}
           onChange={(e) =>
             updateAndRefresh((s) => {
-              s.skipFirstXMessages = parseInt(e.target.value) || 0;
+              s.skipFirstXMessages = sanitizeIntegerSetting(e.target.value, { fallback: 0, min: 0 });
             })
           }
         />
@@ -95,7 +96,7 @@ export const GenerationBehaviorSection: FC<SettingsSectionProps> = ({ settings, 
           value={settings.includeLastXMessages}
           onChange={(e) =>
             updateAndRefresh((s) => {
-              s.includeLastXMessages = parseInt(e.target.value) || 0;
+              s.includeLastXMessages = sanitizeIntegerSetting(e.target.value, { fallback: 0, min: 0 });
             })
           }
         />

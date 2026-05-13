@@ -21,6 +21,17 @@ type OutgoingAutoModeState = {
   runId: number;
 };
 
+type ActiveOutgoingAutoModeRuntime = {
+  getPendingMessageId: () => number | null;
+  cancelPendingTracker: () => boolean;
+  isIndicatorOnlyMutation: (mutation: MutationRecord) => boolean;
+  resetAndSync: (options?: { invalidateRun?: boolean }) => void;
+  syncUi: () => void;
+};
+
+let activeOutgoingAutoModeRuntime: ActiveOutgoingAutoModeRuntime | null = null;
+let outgoingAutoModeDocumentHandlersInstalled = false;
+
 /** Coordinates the outgoing auto-mode hold badge, host stop button, and host generation gating. */
 export function createOutgoingAutoModeController(options: { actions: TrackerActions }) {
   const { actions } = options;
@@ -252,10 +263,32 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
 
   /** Installs the DOM observer and stop-button capture handler used by outgoing auto mode. */
   const installDocumentHandlers = () => {
+    activeOutgoingAutoModeRuntime = {
+      getPendingMessageId: () => state.pendingMessageId,
+      cancelPendingTracker: () => {
+        if (state.pendingMessageId === null || typeof actions.cancelTracker !== 'function') {
+          return false;
+        }
+
+        return actions.cancelTracker(state.pendingMessageId);
+      },
+      isIndicatorOnlyMutation,
+      resetAndSync(options = {}) {
+        reset(options);
+        syncUi();
+      },
+      syncUi,
+    };
+
+    if (outgoingAutoModeDocumentHandlersInstalled) {
+      return;
+    }
+
     document.addEventListener(
       'click',
       (event) => {
-        if (state.pendingMessageId === null) {
+        const runtime = activeOutgoingAutoModeRuntime;
+        if (!runtime || runtime.getPendingMessageId() === null) {
           return;
         }
 
@@ -269,39 +302,37 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
           return;
         }
 
-        if (typeof actions.cancelTracker !== 'function') {
-          return;
-        }
-
-        if (!actions.cancelTracker(state.pendingMessageId)) {
+        if (!runtime.cancelPendingTracker()) {
           return;
         }
 
         event.preventDefault();
         event.stopImmediatePropagation();
-        reset({ invalidateRun: true });
-        syncUi();
+        runtime.resetAndSync({ invalidateRun: true });
       },
       true,
     );
 
     if (typeof MutationObserver === 'undefined') {
+      outgoingAutoModeDocumentHandlersInstalled = true;
       return;
     }
 
     const observer = new MutationObserver((mutations) => {
-      if (state.pendingMessageId === null) {
+      const runtime = activeOutgoingAutoModeRuntime;
+      if (!runtime || runtime.getPendingMessageId() === null) {
         return;
       }
 
-      const hasRelevantMutation = mutations.some((mutation) => !isIndicatorOnlyMutation(mutation));
+      const hasRelevantMutation = mutations.some((mutation) => !runtime.isIndicatorOnlyMutation(mutation));
       if (!hasRelevantMutation) {
         return;
       }
 
-      syncUi();
+      runtime.syncUi();
     });
     observer.observe(document.body, { childList: true, subtree: true });
+    outgoingAutoModeDocumentHandlersInstalled = true;
   };
 
   return {

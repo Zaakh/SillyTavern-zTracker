@@ -75,4 +75,59 @@ describe('createTrackerActions editTracker', () => {
     expect(renderTrackerWithDepsMock).toHaveBeenCalledTimes(1);
     expect(stEchoMock).toHaveBeenCalledWith('error', 'Tracker data failed to render. Changes were not saved.');
   });
+
+  test('rolls back tracker edits when saving the chat fails', async () => {
+    document.body.innerHTML = '<div class="mes" mesid="0"><div class="mes_ztracker"><details open><summary>Tracker</summary></details></div><div class="mes_text"></div></div>';
+
+    const rollback = jest.fn(() => undefined);
+    const saveChat = jest.fn(async () => {
+      throw new Error('save failed');
+    });
+    let popupContent: HTMLElement | undefined;
+    let popupOptions: { onClose?: (popup: any) => Promise<void> | void } | undefined;
+
+    applyTrackerUpdateAndRenderMock.mockImplementation(() => rollback);
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [
+          {
+            original_avatar: 'avatar.png',
+            extra: {
+              zTracker: {
+                schemaValue: { time: '09:00:00' },
+                schemaHtml: '<div>{{data.time}}</div>',
+              },
+            },
+          },
+        ],
+        saveChat,
+        callGenericPopup: jest.fn((content: string, _type: unknown, _title: string, options: any) => {
+          popupContent = document.createElement('div');
+          popupContent.innerHTML = content;
+          document.body.appendChild(popupContent);
+          popupOptions = options;
+        }),
+        extensionSettings: { connectionManager: { profiles: [makeProfile()] } },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: { getSettings: () => makeSettings() } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.editTracker(0);
+
+    const textarea = popupContent?.querySelector('#ztracker-edit-textarea') as HTMLTextAreaElement | null;
+    expect(textarea).not.toBeNull();
+    textarea!.value = '{"time":"10:00:00"}';
+
+    await popupOptions?.onClose?.({ result: 'affirmative', content: popupContent });
+
+    expect(rollback).toHaveBeenCalledTimes(1);
+    expect(renderTrackerWithDepsMock).toHaveBeenCalledTimes(1);
+    expect(stEchoMock).toHaveBeenCalledWith('error', 'Tracker changes could not be saved. Changes were rolled back.');
+  });
 });

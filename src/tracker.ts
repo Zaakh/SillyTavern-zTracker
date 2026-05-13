@@ -666,7 +666,7 @@ export interface ApplyTrackerUpdateOptions {
 export function applyTrackerUpdateAndRender(
   message: { extra?: Record<string, any> } | undefined,
   options: ApplyTrackerUpdateOptions,
-): void {
+): () => void {
   if (!message) {
     throw new Error('applyTrackerUpdateAndRender: message is required');
   }
@@ -676,6 +676,17 @@ export function applyTrackerUpdateAndRender(
 
   const hadExisting = !!message.extra?.[EXTENSION_KEY];
   const previousValue = hadExisting ? structuredClone(message.extra?.[EXTENSION_KEY]) : undefined;
+  const rollback = () => {
+    if (hadExisting) {
+      message.extra = message.extra || {};
+      message.extra[EXTENSION_KEY] = structuredClone(previousValue);
+      return;
+    }
+
+    if (message.extra) {
+      delete message.extra[EXTENSION_KEY];
+    }
+  };
 
   message.extra = message.extra || {};
   message.extra[EXTENSION_KEY] = message.extra[EXTENSION_KEY] || {};
@@ -700,13 +711,11 @@ export function applyTrackerUpdateAndRender(
   try {
     options.render();
   } catch (error) {
-    if (hadExisting) {
-      message.extra[EXTENSION_KEY] = previousValue;
-    } else {
-      delete message.extra[EXTENSION_KEY];
-    }
+    rollback();
     throw error;
   }
+
+  return rollback;
 }
 
 // Warns when a dependent detail array is missing entries for identifiers declared in its source array.

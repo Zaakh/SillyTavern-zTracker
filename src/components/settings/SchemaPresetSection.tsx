@@ -10,6 +10,8 @@ export const SchemaPresetSection: FC<{
   handleSchemaPresetsListChange: (newItems: PresetItem[]) => void;
   schemaText: string;
   schemaTextHasError: boolean;
+  schemaHtmlText: string;
+  schemaHtmlTextHasError: boolean;
   handleSchemaValueChange: (newSchemaText: string) => void;
   handleSchemaHtmlChange: (newHtml: string) => void;
   restoreSchemaToDefault: () => Promise<void>;
@@ -20,6 +22,8 @@ export const SchemaPresetSection: FC<{
   handleSchemaPresetsListChange,
   schemaText,
   schemaTextHasError,
+  schemaHtmlText,
+  schemaHtmlTextHasError,
   handleSchemaValueChange,
   handleSchemaHtmlChange,
   restoreSchemaToDefault,
@@ -57,11 +61,16 @@ export const SchemaPresetSection: FC<{
         <div className="notes ztracker-schema-error">Invalid JSON. The schema draft is not saved until it parses successfully.</div>
       ) : null}
       <STTextarea
-        value={settings.schemaPresets[settings.schemaPreset]?.html ?? ''}
+        value={schemaHtmlText}
         onChange={(e) => handleSchemaHtmlChange(e.target.value)}
         rows={4}
+        className={schemaHtmlTextHasError ? 'ztracker-schema-textarea is-invalid' : 'ztracker-schema-textarea'}
+        aria-invalid={schemaHtmlTextHasError}
         placeholder="Enter your schema HTML here..."
       />
+      {schemaHtmlTextHasError ? (
+        <div className="notes ztracker-schema-error">Invalid Handlebars template. The HTML draft is not saved until it parses successfully.</div>
+      ) : null}
     </div>
   );
 };

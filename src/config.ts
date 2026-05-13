@@ -1,5 +1,6 @@
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import { repairCorruptedRequiredMetadata } from './schema-repair.js';
+import { sanitizeIntegerSetting } from './settings-numeric.js';
 export { extensionName, EXTENSION_KEY } from './extension-metadata.js';
 
 export enum PromptEngineeringMode {
@@ -308,6 +309,11 @@ export const LEGACY_PROMPT_TOON = `You are a highly specialized AI assistant. Yo
 \`\`\`
 `;
 
+const DEFAULT_MAX_RESPONSE_TOKEN = 16000;
+const DEFAULT_SKIP_FIRST_X_MESSAGES = 0;
+const DEFAULT_INCLUDE_LAST_X_MESSAGES = 0;
+const DEFAULT_INCLUDE_LAST_ZTRACKER_MESSAGES = 1;
+
 /** Migrates legacy auto-mode values to the canonical SillyTavern enum value used at runtime. */
 export function migrateLegacyAutoMode(settings: Pick<ExtensionSettings, 'autoMode'>): boolean {
   if ((settings.autoMode as unknown) !== 'input') {
@@ -356,6 +362,54 @@ export function migrateCorruptedSchemaPresetRequiredMetadata(settings: Pick<Exte
       ...preset,
       value: repairedValue as object,
     };
+    changed = true;
+  }
+
+  return changed;
+}
+
+/** Repairs invalid persisted numeric settings so runtime requests never use impossible bounds. */
+export function migrateInvalidNumericSettings(
+  settings: Pick<
+    ExtensionSettings,
+    'maxResponseToken' | 'skipFirstXMessages' | 'includeLastXMessages' | 'includeLastXZTrackerMessages'
+  >,
+): boolean {
+  let changed = false;
+
+  const nextMaxResponseToken = sanitizeIntegerSetting(settings.maxResponseToken, {
+    fallback: DEFAULT_MAX_RESPONSE_TOKEN,
+    min: 1,
+  });
+  if (settings.maxResponseToken !== nextMaxResponseToken) {
+    settings.maxResponseToken = nextMaxResponseToken;
+    changed = true;
+  }
+
+  const nextSkipFirstXMessages = sanitizeIntegerSetting(settings.skipFirstXMessages, {
+    fallback: DEFAULT_SKIP_FIRST_X_MESSAGES,
+    min: 0,
+  });
+  if (settings.skipFirstXMessages !== nextSkipFirstXMessages) {
+    settings.skipFirstXMessages = nextSkipFirstXMessages;
+    changed = true;
+  }
+
+  const nextIncludeLastXMessages = sanitizeIntegerSetting(settings.includeLastXMessages, {
+    fallback: DEFAULT_INCLUDE_LAST_X_MESSAGES,
+    min: 0,
+  });
+  if (settings.includeLastXMessages !== nextIncludeLastXMessages) {
+    settings.includeLastXMessages = nextIncludeLastXMessages;
+    changed = true;
+  }
+
+  const nextIncludeLastXZTrackerMessages = sanitizeIntegerSetting(settings.includeLastXZTrackerMessages, {
+    fallback: DEFAULT_INCLUDE_LAST_ZTRACKER_MESSAGES,
+    min: 0,
+  });
+  if (settings.includeLastXZTrackerMessages !== nextIncludeLastXZTrackerMessages) {
+    settings.includeLastXZTrackerMessages = nextIncludeLastXZTrackerMessages;
     changed = true;
   }
 
@@ -532,7 +586,7 @@ export const defaultSettings: ExtensionSettings = {
   profileId: '',
   trackerSystemPromptMode: 'profile',
   trackerSystemPromptSavedName: '',
-  maxResponseToken: 16000,
+  maxResponseToken: DEFAULT_MAX_RESPONSE_TOKEN,
   autoMode: AutoModeOptions.NONE,
   sequentialPartGeneration: false,
   schemaPreset: 'default',
@@ -544,11 +598,11 @@ export const defaultSettings: ExtensionSettings = {
     },
   },
   prompt: DEFAULT_PROMPT,
-  skipFirstXMessages: 0,
-  includeLastXMessages: 0,
+  skipFirstXMessages: DEFAULT_SKIP_FIRST_X_MESSAGES,
+  includeLastXMessages: DEFAULT_INCLUDE_LAST_X_MESSAGES,
   skipCharacterCardInTrackerGeneration: false,
   trackerGenerationConversationRoleMode: 'preserve',
-  includeLastXZTrackerMessages: 1,
+  includeLastXZTrackerMessages: DEFAULT_INCLUDE_LAST_ZTRACKER_MESSAGES,
   embedZTrackerRole: 'user',
   embedZTrackerAsCharacter: false,
   embedZTrackerSnapshotHeader: DEFAULT_EMBED_SNAPSHOT_HEADER,
