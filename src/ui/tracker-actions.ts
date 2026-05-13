@@ -355,9 +355,39 @@ export function createTrackerActions(options: {
     };
   }
 
-  async function prepareExistingTrackerGeneration(messageId: number) {
+  function getActiveChatSchemaPreset(settings: ExtensionSettings) {
+    const chatMetadata = SillyTavern.getContext().chatMetadata;
+    const extensionMetadata = chatMetadata?.[EXTENSION_KEY];
+
+    return resolveSchemaPreset(
+      settings,
+      typeof extensionMetadata?.[CHAT_METADATA_SCHEMA_PRESET_KEY] === 'string'
+        ? extensionMetadata[CHAT_METADATA_SCHEMA_PRESET_KEY]
+        : undefined,
+    );
+  }
+
+  function notifyIfExistingTrackerUsesOlderSchema(settings: ExtensionSettings, messageSchemaPresetKey: string) {
+    const { schemaPresetKey: activeChatSchemaPresetKey, schemaPreset: activeChatSchemaPreset } = getActiveChatSchemaPreset(settings);
+    if (activeChatSchemaPresetKey === messageSchemaPresetKey) {
+      return;
+    }
+
+    const messageSchemaPreset = settings.schemaPresets[messageSchemaPresetKey];
+    const messageSchemaLabel = messageSchemaPreset?.name ?? messageSchemaPresetKey;
+    const activeChatSchemaLabel = activeChatSchemaPreset?.name ?? activeChatSchemaPresetKey;
+    st_echo(
+      'info',
+      `This tracker still uses the older schema "${messageSchemaLabel}". Run a full tracker regeneration for this message to move it onto the current chat schema "${activeChatSchemaLabel}".`,
+    );
+  }
+
+  async function prepareExistingTrackerGeneration(messageId: number, notifySchemaMismatch = true) {
     const { schemaPresetKey: messageSchemaPresetKey, currentTracker } = getTrackerSchemaAndRenderState(messageId);
     const prepared = await prepareTrackerGeneration(messageId, { schemaPresetKey: messageSchemaPresetKey });
+    if (notifySchemaMismatch) {
+      notifyIfExistingTrackerUsesOlderSchema(prepared.settings, messageSchemaPresetKey);
+    }
 
     return {
       ...prepared,
@@ -1342,7 +1372,7 @@ export function createTrackerActions(options: {
     }
   }
 
-  async function generateTrackerPart(id: number, partKey: string) {
+  async function generateTrackerPartInternal(id: number, partKey: string, notifySchemaMismatch = true) {
     if (cancelIfPending(id)) return false;
 
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
@@ -1358,7 +1388,7 @@ export function createTrackerActions(options: {
       errorContext: 'generating tracker part',
       callback: async () => {
           const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, partsOrder, partsMeta, makeRequest } =
-            await prepareExistingTrackerGeneration(id);
+            await prepareExistingTrackerGeneration(id, notifySchemaMismatch);
           if (!currentTracker || typeof currentTracker !== 'object') {
             throw new Error('No existing tracker found for this message. Generate a full tracker first.');
           }
@@ -1402,6 +1432,10 @@ export function createTrackerActions(options: {
     });
   }
 
+  async function generateTrackerPart(id: number, partKey: string) {
+    return generateTrackerPartInternal(id, partKey);
+  }
+
   async function generateTrackerArrayItem(id: number, partKey: string, index: number) {
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const itemButton = messageBlock?.querySelector(
@@ -1419,6 +1453,7 @@ export function createTrackerActions(options: {
     partKey: string,
     locator: ArrayItemLocator,
     options: { button: Element | null | undefined; errorContext: string },
+    notifySchemaMismatch = true,
   ) {
     if (cancelIfPending(id)) return false;
 
@@ -1430,7 +1465,7 @@ export function createTrackerActions(options: {
       errorContext: options.errorContext,
       callback: async () => {
           const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, partsOrder, partsMeta, makeRequest } =
-            await prepareExistingTrackerGeneration(id);
+            await prepareExistingTrackerGeneration(id, notifySchemaMismatch);
           if (!currentTracker || typeof currentTracker !== 'object') {
             throw new Error('No existing tracker found for this message. Generate a full tracker first.');
           }
@@ -1526,6 +1561,7 @@ export function createTrackerActions(options: {
     fieldKey: string,
     locator: ArrayItemLocator,
     options: { button: Element | null | undefined; errorContext: string },
+    notifySchemaMismatch = true,
   ) {
     if (cancelIfPending(id)) return false;
 
@@ -1537,7 +1573,7 @@ export function createTrackerActions(options: {
       errorContext: options.errorContext,
       callback: async () => {
           const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, partsOrder, partsMeta, makeRequest } =
-            await prepareExistingTrackerGeneration(id);
+            await prepareExistingTrackerGeneration(id, notifySchemaMismatch);
           if (!currentTracker || typeof currentTracker !== 'object') {
             throw new Error('No existing tracker found for this message. Generate a full tracker first.');
           }
@@ -1663,18 +1699,52 @@ export function createTrackerActions(options: {
 
   async function recreateCleanupTarget(messageId: number, target: TrackerCleanupTarget): Promise<boolean> {
     if (target.kind === 'part') {
-      return !!(await generateTrackerPart(messageId, target.partKey));
+      return !!(await generateTrackerPartInternal(messageId, target.partKey, false));
     }
     if (target.kind === 'array-item') {
       if (typeof target.idKey === 'string' && target.idKey && typeof target.idValue === 'string' && target.idValue) {
-        return !!(await generateTrackerArrayItemByIdentity(messageId, target.partKey, target.idKey, target.idValue));
+        return !!(
+          await generateTrackerArrayItemForLocator(
+            messageId,
+            target.partKey,
+            { kind: 'identity', idKey: target.idKey, idValue: target.idValue },
+            { button: undefined, errorContext: 'generating tracker array item (by identity)' },
+            false,
+          )
+        );
       }
-      return !!(await generateTrackerArrayItem(messageId, target.partKey, target.index));
+      return !!(
+        await generateTrackerArrayItemForLocator(
+          messageId,
+          target.partKey,
+          { kind: 'index', index: target.index },
+          { button: undefined, errorContext: 'generating tracker array item' },
+          false,
+        )
+      );
     }
     if (typeof target.idKey === 'string' && target.idKey && typeof target.idValue === 'string' && target.idValue) {
-      return !!(await generateTrackerArrayItemFieldByIdentity(messageId, target.partKey, target.idKey, target.idValue, target.fieldKey));
+      return !!(
+        await generateTrackerArrayItemFieldForLocator(
+          messageId,
+          target.partKey,
+          target.fieldKey,
+          { kind: 'identity', idKey: target.idKey, idValue: target.idValue },
+          { button: undefined, errorContext: 'generating tracker array item field (by identity)' },
+          false,
+        )
+      );
     }
-    return !!(await generateTrackerArrayItemField(messageId, target.partKey, target.index, target.fieldKey));
+    return !!(
+      await generateTrackerArrayItemFieldForLocator(
+        messageId,
+        target.partKey,
+        target.fieldKey,
+        { kind: 'index', index: target.index },
+        { button: undefined, errorContext: 'generating tracker array item field' },
+        false,
+      )
+    );
   }
 
   async function clearAndRecreateTrackerTargets(messageId: number, targets: TrackerCleanupTarget[]): Promise<void> {
@@ -1682,6 +1752,10 @@ export function createTrackerActions(options: {
     if (normalizedTargets.length === 0) {
       return;
     }
+
+    const settings = settingsManager.getSettings();
+    const { schemaPresetKey: messageSchemaPresetKey } = getTrackerSchemaAndRenderState(messageId);
+    notifyIfExistingTrackerUsesOlderSchema(settings, messageSchemaPresetKey);
 
     let successCount = 0;
     for (const target of sortCleanupTargets(normalizedTargets)) {
@@ -1864,7 +1938,10 @@ export function createTrackerActions(options: {
             if (newPresetKey !== currentPresetKey) {
               chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] = newPresetKey;
               context.saveMetadataDebounced();
-              st_echo('success', `Chat schema preset updated to "${settings.schemaPresets[newPresetKey].name}".`);
+              st_echo(
+                'success',
+                `Chat schema preset updated to "${settings.schemaPresets[newPresetKey].name}". Existing trackers keep their current schema until you run a full tracker regeneration for those messages.`,
+              );
             }
           }
         }
