@@ -6,28 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Tracker updates now roll back cleanly when chat saving fails, so the UI no longer claims changes were unsaved while still showing the new tracker state.
+- Schema HTML edits now stay local until the Handlebars template parses successfully, matching the existing invalid-JSON draft behavior.
+- Re-initializing the extension UI no longer duplicates message buttons or global click handlers.
+
+### Changed
+
+- Numeric tracker settings are now clamped to valid whole-number ranges in both the settings UI and startup repairs.
+
 ## [1.11.1] - 2026-05-05
 
 ### Fixed
 
-- Full tracker generation now honors the schema preset selected for the active chat instead of silently falling back to the globally selected preset, and it persists the normalized chat schema metadata when that selection was missing or stale.
-- Manual tracker edits now validate against the current tracker template before saving, so failed rerenders no longer persist broken tracker data.
-- Tracker rerenders on chat changes now keep stored tracker data when a template fails instead of deleting it, and affected messages show a local warning badge so the stored tracker is easier to recover.
+- Full tracker generation now reliably uses the active chat's schema preset instead of falling back to the global selection.
+- Manual tracker edits are now validated before saving, so broken tracker data is less likely to be stored.
+- Stored trackers are now kept when a rerender fails, and affected messages show a warning badge instead of silently losing data.
 
 ### Changed
 
-- Normal tracker values are now escaped by default during rendering, so LLM output and manual edits no longer become live DOM unless a template explicitly opts out. Templates that relied on raw HTML in tracker values may need adjustment.
+- Tracker values are now HTML-escaped by default during rendering. Templates that intentionally render raw HTML must opt in.
 
 ## [1.11.0] - 2026-05-05
 
 ### Added
 
-- Added a `System Prompt Source` option that uses the prompt selectors from the connection profile selected for zTracker, so tracker generation can use different prompt presets than the active chat profile.
+- Added a `System Prompt Source` option so tracker generation can use different prompt presets than the active chat profile.
 
 ### Fixed
 
-- Tracker generation now resolves the active SillyTavern preset correctly for `From active SillyTavern presets` and `From specific saved system prompt`, so chat-completion profiles keep using the host's active prompt state while text-completion profiles keep their active instruct, context, and system-prompt selectors.
-- Embedded tracker messages configured as `system` now stay `system` instead of silently falling back to `assistant`.
+- Tracker generation now resolves the active SillyTavern presets correctly for both chat-completion and text-completion profiles.
+- Embedded tracker messages configured as `system` now stay `system` instead of falling back to `assistant`.
 
 ## [1.10.3] - 2026-04-28
 
@@ -35,194 +45,169 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- Mid-chat tracker snapshots injected into text-completion prompts now preserve valid `[INST]...[/INST]` framing across all embed-role settings: assistant-role virtual-character snapshots stay raw when SillyTavern appends a single trailing assistant prefill turn, multi-character assistant reply runs keep the snapshot anchored after the tracked source turn, and terminal assistant snapshots now stay assistant-role in single-speaker chats while still inlining only the ambiguous no-prefill cases.
+- Mid-chat tracker snapshots injected into text-completion prompts now preserve valid `[INST]...[/INST]` framing across embed-role settings.
 
 ## [1.10.1] - 2026-04-22
 
 ### Fixed
 
-- Text-completion tracker generation now passes the active SillyTavern context preset into prompt assembly and omits inactive request-local instruct overrides, avoiding live `Preset undefined not found` console errors during tracker regeneration.
+- Text-completion tracker generation now uses the active SillyTavern context preset, avoiding `Preset undefined not found` errors during regeneration.
 
 ## [1.10.0] - 2026-04-22
 
 ### Added
 
-- Added a tracker-generation `Conversation role handling` setting that can optionally relabel user chat turns as assistant turns before zTracker sends tracker-generation requests, while leaving normal chat generation and tracker injection unchanged.
+- Added a tracker-generation `Conversation role handling` setting so user turns can be relabeled as assistant turns before a tracker request is sent.
 
 ### Fixed
 
-- Tracker-generation conversation-role normalization now leaves embedded tracker snapshot roles unchanged, so injected tracker context keeps its configured role semantics while only real chat turns are relabeled.
+- Embedded tracker snapshots now keep their configured roles when conversation-role normalization is enabled.
 
 ## [1.9.0] - 2026-04-21
 
 ### Added
 
-- Added a tracker cleanup flow that lets you clear selected parts, array items, or item fields before optionally recreating them in one pass, with pending markers so partially cleared targets stay visible and retryable.
+- Added tracker cleanup tools for clearing selected parts, array items, or fields before optionally regenerating them.
 
 ### Fixed
 
-- Array-item context menus now filter out JSON Schema `required` metadata, so stale tracker field metadata can no longer surface `required` as a selectable target in either per-field regeneration or tracker cleanup.
-- Prompt-engineering tracker generation now keeps JSON Schema `required` arrays in the schema block while omitting schema metadata from the example response block, so the prompt no longer shows bogus `required` example fields or empty/null placeholders.
-- Pending tracker cleanup targets now follow stable array-item identities, clear correctly after broader regenerations, and keep using the message's stored schema preset instead of whichever preset is currently selected.
+- Parts and field menus no longer expose bogus `required` entries from JSON Schema metadata.
+- Prompt-engineered tracker generation is less likely to be confused by placeholder-heavy schema examples.
+- Tracker cleanup now follows array items more reliably across regenerations and keeps using the message's stored schema preset.
 
 ## [1.8.0] - 2026-04-17
 
 ### Added
 
-- Manual tracker updates now show a message-local status badge during full tracker generation, full regeneration, and parts-menu part/item/field updates, while silent auto-mode generations continue using only their existing outgoing hold indicator.
+- Manual tracker updates now show a message-local status badge during generation and regeneration.
 
 ## [1.7.2] - 2026-04-17
 
 ### Fixed
 
-- Text-completion tracker generation now follows SillyTavern's live instruct and story-string wrapper behavior end-to-end, preserves speaker attribution, keeps tracker instructions at the end of the request, and applies the same prompt handling to field-level regeneration so malformed labels, duplicated prefixes, and wrapper drift no longer break tracker prompts.
-- Text-completion tracker requests now use the live `TextCompletionService` context together with request-local active prompt state, preventing stale profile preset leakage and runtime failures such as `Preset undefined not found` and `Cannot read properties of undefined (reading 'createRequestData')`.
-- Outgoing auto mode now cleanly pauses the host reply while zTracker generates, avoids aborting its own tracker requests or producing duplicate replies, keeps the pending tracker badge visible across rerenders, and exposes a tracker-specific stop control while the hold is active.
+- Text-completion tracker generation now follows SillyTavern's live prompt formatting more closely, preserving speaker names and reducing malformed prompt failures.
+- Outgoing auto mode now pauses the host reply cleanly while zTracker runs, avoids duplicate replies, and keeps its pending and stop state visible.
 
 ## [1.7.1] - 2026-04-16
 
+### Changed
+
+- zTracker now requires SillyTavern 1.17+.
+
 ### Fixed
 
-- Tracker generation now resolves prompt selectors from the configs currently active in SillyTavern instead of the saved selector fields on the chosen connection profile, and text-completion transport now passes the active instruct preset as request-local state so the final request matches the live host prompt configuration without mutating the shared profile.
-- Auto mode now correctly triggers tracker generation for "Process inputs" again by aligning the settings value with the runtime enum and migrating legacy `input` values to the current SillyTavern setting.
-- Outgoing auto mode now aborts the host's first auto-reply pass, waits for tracker generation to finish and save when possible, and then resumes normal chat generation so the next reply uses the freshly updated tracker or still proceeds when tracker generation fails.
-- Text-completion tracker-generation requests now pass the active instruct preset as request-local transport state instead of temporarily mutating the selected connection profile, avoiding cross-request races when multiple generations overlap.
-- Outgoing auto mode now blocks only the first host auto-reply start after a user message while tracker generation is pending, instead of continuing to stop every later generation-start event until the tracker run finishes.
-- Outgoing auto mode now marks the pending user message while its reply is on hold, showing a message-local "Generating tracker before reply" status until the tracker pass completes or fails.
-- Legacy `autoMode: "input"` settings are now migrated to the current SillyTavern enum value during startup, so outgoing auto mode no longer needs a runtime compatibility branch.
-- Outgoing auto mode now clears its pending hold state on chat changes, preventing a tracker run from the previous chat from resuming generation in the newly opened chat.
-- `manifest.json` now declares `minimum_client_version: 1.17.0` because the request-local text-completion transport is only verified against the current SillyTavern 1.17 host surface.
-- Schema preset changes in the settings UI now persist reliably across create, rename, delete, and reselection flows, and the embed snapshot transform preset manager now uses the same stable preset-selection logic.
-- Invalid schema JSON drafts are no longer overwritten silently by schema preset changes or related settings rerenders; zTracker now keeps the local draft on the current preset and warns before preset actions that would discard it.
+- Tracker generation now uses the prompt selectors currently active in SillyTavern instead of stale saved profile values.
+- Outgoing auto mode now waits more reliably for tracker generation before the first host auto-reply and clears stale hold state when chats change.
+- Schema preset changes now persist more reliably, and invalid local schema drafts are no longer overwritten silently.
 
 ## [1.7.0] - 2026-04-14
 
 ### Added
 
-- Added a per-character auto-mode exclusion toggle on the character panel so zTracker can skip automatic tracker generation for selected characters without disabling manual tracker generation.
+- Added a per-character auto-mode exclusion toggle so selected characters can skip automatic tracker generation without disabling manual generation.
 
 ### Fixed
 
-- Updated the character-panel toggle injection to match SillyTavern 1.17's current character info button row so the per-character truck button appears in the live character editor.
-- The per-character truck toggle now accepts the live host's string-form `characterId` values, so clicking the button correctly updates the selected character's auto-mode exclusion state.
+- The character-panel toggle now works correctly in SillyTavern 1.17's current character editor.
 
 ## [1.6.0] - 2026-04-13
 
 ### Added
 
-- Added an opt-in `Inject as virtual character` tracker-injection setting that sends embedded tracker snapshots with a speaker name derived from the embed header, avoiding double labels such as `Assistant: Tracker:` when SillyTavern includes names in prompts.
+- Added an opt-in `Inject as virtual character` setting for embedded tracker snapshots, reducing doubled speaker labels in prompts.
 
 ## [1.5.5] - 2026-04-13
 
 ### Changed
 
-- Reorganized the zTracker settings UI into separate Tracker Generation and Tracker Injection sections, keeping shared connection-profile and diagnostics controls outside those two areas for faster navigation.
-- Moved the Prompt Engineering selector next to the prompt template editors so mode selection and template editing stay in the same settings block.
+- Reorganized the settings UI into separate Tracker Generation and Tracker Injection sections, and moved prompt-engineering controls closer to their templates.
 
 ## [1.5.4] - 2026-04-13
 
 ### Added
 
-- Added a live diagnostics snapshot for the last tracker-generation request so debug mode now captures both the pre-sanitize prompt messages and the final sanitized prompt text shown through the zTracker diagnostics panel.
-- Added clearer embed-snapshot header diagnostics so the active injected label is shown explicitly and no longer gets confused with the settings placeholder text.
+- Added richer diagnostics in the zTracker settings panel, including the last tracker-generation request and clearer embed-header information.
 
 ### Fixed
 
-- Tracker generation now supplies valid instruct and system-prompt fallbacks for SillyTavern text-completion prompt assembly, avoiding live `Preset undefined not found` console errors while preserving the configured saved tracker prompt behavior.
-- Tracker-generation requests now preserve speaker names from SillyTavern prompt-builder source messages when instruct-mode prompt assembly keeps attribution outside the flattened message content.
-- Text-completion tracker-generation requests now inline assistant and user speaker labels into the final prompt content when the downstream API ignores structured `name` metadata, without duplicating labels that are already present.
-- Normal instruct-mode chat interception now preserves speaker names from `message.source.name` on regular chat turns, so SillyTavern can still render named dialogue while injected zTracker snapshot messages remain anonymous context blocks.
+- Tracker generation now avoids `Preset undefined not found` errors when text-completion prompt assembly needs fallback presets.
+- Speaker names are now preserved more reliably in both tracker generation and normal chat interception.
 
 ## [1.5.3] - 2026-04-02
 
 ### Fixed
 
-- Tracker generation now omits an unset connection-profile system-prompt selection before calling SillyTavern prompt assembly, avoiding live browser errors such as `Preset undefined not found` when the profile uses the global/default system prompt.
-- Embedded zTracker snapshots in normal generations no longer masquerade as named chat turns, so tracker state stays separated from dialogue via the configured embed role and header alone.
+- Tracker generation now skips unset system-prompt selections instead of triggering `Preset undefined not found` errors.
+- Embedded tracker snapshots no longer appear as named chat turns during normal generations.
 
 ## [1.5.2] - 2026-04-02
 
-### Changed
-
-- Consolidated SillyTavern extension-development guidance into the new general skill at `.github/skills/sillytavern-extension-development/` and retired the older standalone SillyTavern notes from `docs/`.
-
 ### Fixed
 
-- Tracker prompt assembly now only forwards instruct presets when the selected SillyTavern connection profile uses a text-completion API family, so zTracker no longer treats the mere presence of `profile.instruct` as a mode decision for chat-completion profiles.
+- Chat-completion profiles no longer mis-handle instruct presets during tracker generation.
 
 ## [1.5.1] - 2026-04-02
 
 ### Fixed
 
-- Tracker generation now omits unset or blank connection-profile preset slots before calling SillyTavern prompt assembly, avoiding browser console errors such as `Preset undefined not found` while preserving valid preset selections.
+- Blank or unset preset slots no longer trigger `Preset undefined not found` errors during tracker generation.
 
 ## [1.5.0] - 2026-04-01
 
 ### Added
 
-- Added a `Skip character card in tracker generation` setting so tracker extraction can optionally ignore character-card prompt fields such as description, personality, and scenario.
+- Added a `Skip character card in tracker generation` setting so tracker extraction can ignore character-card prompt content when needed.
 
 ## [1.4.0] - 2026-04-01
 
 ### Added
 
-- Added a `Skip First X Messages` tracker-generation setting so zTracker can ignore the opening messages in a chat until there is enough context to produce useful tracker data.
+- Added a `Skip First X Messages` tracker-generation setting so zTracker can wait for more chat context before extracting a tracker.
 
 ## [1.3.1] - 2026-03-30
 
-### Added
-
-- Added an on-demand `npm run debug:tracker-context:json` harness that prints one captured JSON-mode tracker-generation request, including injected tracker snapshots and the structured-output schema payload.
-- Added matching `npm run debug:tracker-context:xml` and `npm run debug:tracker-context:toon` harnesses for the prompt-engineered XML and TOON generation paths.
-- Added inspectable markdown request snapshots under `test-output/` for the live-like JSON, XML, and TOON tracker-generation examples.
-- Added matching plain-text prompt snapshots under `test-output/` for the same JSON, XML, and TOON examples; these now target the live verified raw text-completion transport shape rather than a role-labeled inspection view.
-
 ### Fixed
 
-- Tracker generation now requests named turns from SillyTavern prompt assembly so one-on-one chats can preserve speaker attribution like `Tobias:` and `Bar:` for clearer pronoun resolution.
-- Tracker-generation requests now strip SillyTavern/UI-only message fields such as `source`, `mes`, temporary `zTrackerFound` markers, and related helper flags before sending prompt context to the LLM.
-- Tracker-context debug harnesses now use a live-like `Bar` fixture across JSON, XML, and TOON so the captured local request shape matches SillyTavern's real prompt-engineered tracker context more closely.
-- The shipped TOON prompt now more explicitly forbids JSON-like wrappers and braces, reinforces scalar and array layout rules, and auto-migrates installs that still have the previous weaker default TOON prompt.
-- Live verification showed that the current tracker-generation path also includes character-card prompt content from `buildPrompt(...)` and is flattened downstream into a raw `prompt` string for the active text-completion connection profile.
+- Tracker generation now preserves speaker attribution more reliably in one-on-one chats.
+- Tracker-generation requests now send cleaner chat context to the model for more reliable results.
+- The default TOON prompt now steers models toward cleaner TOON output, and older installs upgrade to the improved template automatically.
 
 ## [1.3.0] - 2026-03-20
 
 ### Added
 
-- Embedded tracker snapshots now support a built-in **TOON (compact)** transform preset, using tab-delimited TOON for lower-token prompt context while preserving structured data fidelity.
-- TOON is now available as a prompt-engineering mode alongside JSON and XML.
+- Added a built-in `TOON (compact)` transform preset for embedded tracker snapshots.
+- Added TOON as a prompt-engineering mode alongside JSON and XML.
 
 ### Fixed
 
-- Prompt-engineering now translates the canonical JSON schema into XML or TOON correctly, and existing installs upgrade older shipped XML/TOON prompt templates automatically.
-- zTracker now installs a versioned recommended saved system prompt preset so older saved prompts can coexist safely.
-- XML and TOON reply repair now covers additional live small-model failure shapes, including broken opening XML tags and TOON object-array blocks.
-- Malformed model payloads are now logged uniformly for JSON, XML, and TOON parser failures, and prompt-engineered render rollbacks keep the raw payload attached for diagnosis.
-- Tracker updates now warn when dependency-linked arrays are inconsistent, such as a listed character missing its matching detail entry.
-- Production builds no longer emit webpack's default web-app performance warnings for the extension's single-file bundle.
+- XML and TOON generation now stays aligned with the current schema more reliably, and older installs upgrade to the improved shipped templates automatically.
+- XML and TOON reply repair now handles more malformed model responses.
+- zTracker now warns when dependency-linked arrays become inconsistent.
 
 ## [1.2.1] - 2026-03-17
 
 ### Fixed
 
-- Tracker generation now tolerates a small set of near-valid JSON formatting defects before failing, including repeated fences, balanced JSON wrapped in prose, trailing commas, smart quotes used as JSON delimiters, and leading invisible characters. Repair attempts are logged so prompt/parser issues remain diagnosable.
+- Tracker generation now tolerates a wider set of near-valid JSON formatting defects before failing.
 
 ## [1.2.0] - 2026-03-17
+
 ### Added
 
 - Tracker generation can now use either the selected connection profile's system prompt or a specifically chosen saved SillyTavern system prompt.
-- zTracker now installs a recommended `zTracker` system prompt preset for tracker generation and exposes the selector in extension settings.
-- zTracker settings now warn when the tracker-only saved system prompt matches SillyTavern's currently active global system prompt, because that configuration can make normal chat generations use the extraction prompt too.
+- zTracker now installs a recommended `zTracker` system prompt preset and warns when that tracker-only prompt matches SillyTavern's active global system prompt.
 
 ### Fixed
 
-- Tracker-only saved system prompt mode no longer temporarily mutates SillyTavern's global prompt-preference setting during prompt assembly, avoiding cross-generation leakage.
+- Tracker-only saved system prompt mode no longer mutates SillyTavern's global prompt preference during prompt assembly.
 
 ## [1.1.4] - 2026-03-06
+
 ### Fixed
 
-- Parts menu no longer appears twice (with a duplicate stuck in the upper-left corner) after editing tracker data and then triggering a partial regeneration. When the tracker DOM was re-rendered the portaled menu list was not cleaned up because the now-disconnected `<details>` element could not fire a `toggle` event to the document; the cleanup now runs directly in that case.
-- “Regenerate individual parts” menus can now be closed reliably after regenerating a field. Switching between message menus no longer leaves stale portaled overlays behind due to async `toggle` close-event timing.
+- Parts menus now clean up correctly after tracker edits and partial regenerations, so duplicate or stuck overlays are less likely.
+- `Regenerate individual parts` menus now close reliably after field regeneration.
 
 ## [1.1.3] - 2026-01-28
 
@@ -234,51 +219,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- Minimal embedded tracker snapshots are more compact and LLM-friendly (no blank lines/trailing whitespace, fewer unnecessary quotes, bracket-wrapped array items).
+- Minimal embedded tracker snapshots are now more compact and LLM-friendly.
 
 ## [1.1.1] - 2026-01-28
 
 ### Fixed
 
-- Align the “Regenerate individual parts” (list) icon in the tracker controls.
+- Aligned the `Regenerate individual parts` icon in the tracker controls.
 
 ## [1.1.0] - 2026-01-27
 
 ### Added
 
-- Sequential per-part tracker generation mode (dependency-aware via current tracker snapshot).
-- Per-part and per-array-item regeneration controls on messages.
-- Schema annotations for part ordering and array identity: `x-ztracker-dependsOn` and `x-ztracker-idKey`.
-- Per-field regeneration for object array items (e.g., regenerate `characters.outfit` for a single character).
+- Added sequential per-part tracker generation with dependency-aware ordering.
+- Added per-part, per-array-item, and per-field regeneration controls on messages.
+- Added schema annotations for part ordering and array identity via `x-ztracker-dependsOn` and `x-ztracker-idKey`.
 
 ### Fixed
 
-- Parts menu usability: array submenus show item previews (instead of generic "items") and render above chat content.
-- Parts menu styling is theme-aware and avoids transparent backgrounds.
-- Field-level regeneration prompts omit the old field value to reduce accidental repetition.
-- Full tracker regeneration no longer sends the prior tracker as prompt context; part/item regeneration redacts the target content to reduce repetition anchoring.
-- Embedded tracker snapshot injection now considers the last message in the prompt chat array (fixes missing injection for SillyTavern Options → Regenerate).
+- Parts menus now show better item previews, render above chat content, and inherit theme styling correctly.
+- Field-level regeneration prompts now omit the old field value to reduce accidental repetition.
+- Full regeneration no longer resends the previous tracker as prompt context, and embedded snapshot injection now also covers regenerate flows.
 
 ## [1.0.2] - 2026-01-26
 
 ### Added
-- Hover tooltips for zTracker settings to explain what options do.
+
+- Hover tooltips for zTracker settings.
 
 ## [1.0.1] - 2026-01-26
 
 ### Fixed
-- Fix HTML template loading when installed under the default SillyTavern folder name (`SillyTavern-zTracker`) to avoid 404s like `/third-party/zTracker/dist/templates/*.html`.
+
+- Fixed HTML template loading when installed under the default SillyTavern folder name (`SillyTavern-zTracker`).
 
 ## [1.0.0] - 2026-01-26
 
 ### Added
-- World Info policy for tracker generation: include all, exclude all, or allowlist by lorebook name / entry UID.
-- Allowlist picker UI (refresh + search + add/remove) to avoid manual entry.
-- Debug logging toggle and Diagnostics tool for quickly verifying extension template URLs.
-- Setting to choose the role used when embedding zTracker snapshots into normal generations (user/system/assistant).
-- Named, savable regex transform presets for embedded zTracker snapshots (default JSON + minimal top-level formatting).
-- Setting to customize (or remove) the embedded snapshot header line.
 
-### Changed
-- Extension template bundling now uses `dist/templates` to match SillyTavern’s packaged artifact expectations.
-- Extension install folder is detected at runtime for template rendering (no hardcoded third-party folder name).
+- Added a World Info policy for tracker generation, including allowlist mode by lorebook name or entry UID.
+- Added an allowlist picker UI for easier World Info selection.
+- Added diagnostics tooling and debug logging for extension troubleshooting.
+- Added configurable embedded tracker roles and snapshot headers.
+- Added named, savable regex transform presets for embedded tracker snapshots.
