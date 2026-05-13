@@ -26,6 +26,7 @@ export function reconcilePresetItems<T extends { name: string }>(
 
   return {
     activeKey: nextActiveKey,
+    preservesActiveDrafts: nextActiveKey === currentKey,
     presets: nextPresets,
   };
 }

@@ -19,6 +19,10 @@
   color: var(--error-color, #f44336);
   margin-top: -2px;
 }
+.ztracker-settings .ztracker-schema-status {
+  opacity: 0.8;
+  margin-top: -2px;
+}
 .ztracker-settings .setting-row {
   display: flex;
   flex-direction: column;

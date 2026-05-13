@@ -10,10 +10,18 @@ export const SchemaPresetSection: FC<{
   handleSchemaPresetsListChange: (newItems: PresetItem[]) => void;
   schemaText: string;
   schemaTextHasError: boolean;
+  schemaTextError?: string;
+  schemaTextHasUnsavedChanges: boolean;
+  schemaTextCanSave: boolean;
   schemaHtmlText: string;
   schemaHtmlTextHasError: boolean;
+  schemaHtmlTextError?: string;
+  schemaHtmlTextHasUnsavedChanges: boolean;
+  schemaHtmlTextCanSave: boolean;
   handleSchemaValueChange: (newSchemaText: string) => void;
   handleSchemaHtmlChange: (newHtml: string) => void;
+  saveSchemaValue: () => void;
+  saveSchemaHtmlValue: () => void;
   restoreSchemaToDefault: () => Promise<void>;
 }> = ({
   settings,
@@ -22,10 +30,18 @@ export const SchemaPresetSection: FC<{
   handleSchemaPresetsListChange,
   schemaText,
   schemaTextHasError,
+  schemaTextError,
+  schemaTextHasUnsavedChanges,
+  schemaTextCanSave,
   schemaHtmlText,
   schemaHtmlTextHasError,
+  schemaHtmlTextError,
+  schemaHtmlTextHasUnsavedChanges,
+  schemaHtmlTextCanSave,
   handleSchemaValueChange,
   handleSchemaHtmlChange,
+  saveSchemaValue,
+  saveSchemaHtmlValue,
   restoreSchemaToDefault,
 }) => {
   return (
@@ -47,7 +63,17 @@ export const SchemaPresetSection: FC<{
 
       <div className="title_restorable">
         <span title="The JSON schema and HTML template used for tracker generation and rendering.">Schema</span>
-        <STButton className="fa-solid fa-undo" title="Restore default" onClick={restoreSchemaToDefault} />
+        <STButton className="fa-solid fa-undo" title="Restore default schema JSON and HTML" onClick={restoreSchemaToDefault} />
+      </div>
+
+      <div className="title_restorable">
+        <span title="The JSON schema used for tracker generation.">Schema JSON</span>
+        <STButton
+          className="fa-solid fa-floppy-disk"
+          title="Save JSON schema"
+          onClick={saveSchemaValue}
+          disabled={!schemaTextCanSave}
+        />
       </div>
 
       <STTextarea
@@ -58,8 +84,21 @@ export const SchemaPresetSection: FC<{
         aria-invalid={schemaTextHasError}
       />
       {schemaTextHasError ? (
-        <div className="notes ztracker-schema-error">Invalid JSON. The schema draft is not saved until it parses successfully.</div>
+        <div className="notes ztracker-schema-error">{schemaTextError ?? 'Invalid JSON.'}</div>
+      ) : schemaTextHasUnsavedChanges ? (
+        <div className="notes ztracker-schema-status">Valid JSON. Save to apply this preset change.</div>
       ) : null}
+
+      <div className="title_restorable">
+        <span title="The Handlebars HTML template used to render tracker content.">Schema HTML</span>
+        <STButton
+          className="fa-solid fa-floppy-disk"
+          title="Save schema HTML"
+          onClick={saveSchemaHtmlValue}
+          disabled={!schemaHtmlTextCanSave}
+        />
+      </div>
+
       <STTextarea
         value={schemaHtmlText}
         onChange={(e) => handleSchemaHtmlChange(e.target.value)}
@@ -69,7 +108,9 @@ export const SchemaPresetSection: FC<{
         placeholder="Enter your schema HTML here..."
       />
       {schemaHtmlTextHasError ? (
-        <div className="notes ztracker-schema-error">Invalid Handlebars template. The HTML draft is not saved until it parses successfully.</div>
+        <div className="notes ztracker-schema-error">{schemaHtmlTextError ?? 'Invalid Handlebars template.'}</div>
+      ) : schemaHtmlTextHasUnsavedChanges ? (
+        <div className="notes ztracker-schema-status">Valid template. Save to apply this preset change.</div>
       ) : null}
     </div>
   );

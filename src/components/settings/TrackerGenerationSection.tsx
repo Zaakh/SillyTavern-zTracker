@@ -17,10 +17,18 @@ export const TrackerGenerationSection: FC<{
   handleSchemaPresetsListChange: (newItems: PresetItem[]) => void;
   schemaText: string;
   schemaTextHasError: boolean;
+  schemaTextError?: string;
+  schemaTextHasUnsavedChanges: boolean;
+  schemaTextCanSave: boolean;
   schemaHtmlText: string;
   schemaHtmlTextHasError: boolean;
+  schemaHtmlTextError?: string;
+  schemaHtmlTextHasUnsavedChanges: boolean;
+  schemaHtmlTextCanSave: boolean;
   handleSchemaValueChange: (newSchemaText: string) => void;
   handleSchemaHtmlChange: (newHtml: string) => void;
+  saveSchemaValue: () => void;
+  saveSchemaHtmlValue: () => void;
   restoreSchemaToDefault: () => Promise<void>;
   systemPromptItems: PresetItem[];
   refreshSystemPromptState: () => void;
@@ -35,10 +43,18 @@ export const TrackerGenerationSection: FC<{
   handleSchemaPresetsListChange,
   schemaText,
   schemaTextHasError,
+  schemaTextError,
+  schemaTextHasUnsavedChanges,
+  schemaTextCanSave,
   schemaHtmlText,
   schemaHtmlTextHasError,
+  schemaHtmlTextError,
+  schemaHtmlTextHasUnsavedChanges,
+  schemaHtmlTextCanSave,
   handleSchemaValueChange,
   handleSchemaHtmlChange,
+  saveSchemaValue,
+  saveSchemaHtmlValue,
   restoreSchemaToDefault,
   systemPromptItems,
   refreshSystemPromptState,
@@ -57,10 +73,18 @@ export const TrackerGenerationSection: FC<{
         handleSchemaPresetsListChange={handleSchemaPresetsListChange}
         schemaText={schemaText}
         schemaTextHasError={schemaTextHasError}
+        schemaTextError={schemaTextError}
+        schemaTextHasUnsavedChanges={schemaTextHasUnsavedChanges}
+        schemaTextCanSave={schemaTextCanSave}
         schemaHtmlText={schemaHtmlText}
         schemaHtmlTextHasError={schemaHtmlTextHasError}
+        schemaHtmlTextError={schemaHtmlTextError}
+        schemaHtmlTextHasUnsavedChanges={schemaHtmlTextHasUnsavedChanges}
+        schemaHtmlTextCanSave={schemaHtmlTextCanSave}
         handleSchemaValueChange={handleSchemaValueChange}
         handleSchemaHtmlChange={handleSchemaHtmlChange}
+        saveSchemaValue={saveSchemaValue}
+        saveSchemaHtmlValue={saveSchemaHtmlValue}
         restoreSchemaToDefault={restoreSchemaToDefault}
       />
 

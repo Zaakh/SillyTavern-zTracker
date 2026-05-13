@@ -31,6 +31,7 @@ These are “living” per-change specs. Each spec tracks its current status and
 - [25-consolidate-schema-metadata-helpers.md](25-consolidate-schema-metadata-helpers.md)
 - [26-normalize-chat-roles-for-tracker-generation.md](26-normalize-chat-roles-for-tracker-generation.md)
 - [27-reusable-sillytavern-test-harness.md](27-reusable-sillytavern-test-harness.md)
+- [28-explicit-schema-save-workflow.md](28-explicit-schema-save-workflow.md)
 
 ## Status workflow
 - **Open**: not implemented yet; questions unresolved.
