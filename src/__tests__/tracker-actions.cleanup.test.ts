@@ -14,6 +14,7 @@ import {
   makeSettings,
   renderTrackerWithDepsMock,
   resetTrackerActionTestState,
+  stEchoMock,
   TEST_IMPORT_META_URL,
 } from '../test-utils/tracker-actions-test-helpers.js';
 
@@ -151,7 +152,7 @@ describe('createTrackerActions cleanup flow', () => {
       expect.any(Object),
       expect.objectContaining({
         extensionData: expect.objectContaining({
-          schemaPreset: 'default',
+          schemaKey: 'default',
           pendingRedactions: undefined,
         }),
       }),
@@ -195,7 +196,7 @@ describe('createTrackerActions cleanup flow', () => {
       expect.any(Object),
       expect.objectContaining({
         extensionData: expect.objectContaining({
-          schemaPreset: 'default',
+          schemaKey: 'default',
           pendingRedactions: undefined,
         }),
       }),
@@ -231,7 +232,7 @@ describe('createTrackerActions cleanup flow', () => {
             original_avatar: 'avatar.png',
             extra: {
               zTracker: {
-                schemaPreset: 'default',
+                schemaKey: 'default',
                 schemaValue: { time: '09:00:00' },
                 schemaHtml: '<div></div>',
               },
@@ -263,12 +264,166 @@ describe('createTrackerActions cleanup flow', () => {
     });
 
     (SillyTavern.getContext() as any).saveMetadataDebounced = saveMetadataDebounced;
-    (SillyTavern.getContext() as any).chatMetadata = { zTracker: { schemaPreset: 'alternate' } };
+    (SillyTavern.getContext() as any).chatMetadata = { zTracker: { schemaKey: 'alternate' } };
 
     await actions.generateTrackerPart(0, 'time');
 
     expect(trackerPartsModule.buildTopLevelPartSchema).toHaveBeenCalledWith(defaultSchema, 'time');
-    expect((SillyTavern.getContext() as any).chatMetadata).toEqual({ zTracker: { schemaPreset: 'alternate' } });
+    expect((SillyTavern.getContext() as any).chatMetadata).toEqual({ zTracker: { schemaKey: 'alternate' } });
     expect(saveMetadataDebounced).not.toHaveBeenCalled();
+  });
+
+  test('notifies when targeted regeneration still uses an older message schema after the chat schema changes', async () => {
+    document.body.innerHTML = `
+      <div id="extensionsMenu"></div>
+      <div class="mes" mesid="0">
+        <div class="mes_text">Message 0</div>
+        <div class="ztracker-part-regenerate-button" data-ztracker-part="time"></div>
+      </div>
+    `;
+
+    const generateRequest = jest.fn((_request, hooks) => {
+      hooks.onStart('request-1');
+      hooks.onFinish('request-1', { content: { time: '10:00:00' } }, null);
+    });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [
+          {
+            original_avatar: 'avatar.png',
+            extra: {
+              zTracker: {
+                schemaKey: 'default',
+                schemaValue: { time: '09:00:00' },
+                schemaHtml: '<div></div>',
+              },
+            },
+          },
+        ],
+        saveChat: async () => undefined,
+        extensionSettings: { connectionManager: { profiles: [makeProfile()] } },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () =>
+          makeSettings({
+            schemaPreset: 'alternate',
+            schemaPresets: {
+              default: {
+                name: 'Default',
+                value: { type: 'object', properties: { time: { type: 'string' } }, required: ['time'] },
+                html: '<div></div>',
+              },
+              alternate: {
+                name: 'Alternate',
+                value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
+                html: '<div></div>',
+              },
+            },
+          }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    (SillyTavern.getContext() as any).chatMetadata = { zTracker: { schemaKey: 'alternate' } };
+
+    await actions.generateTrackerPart(0, 'time');
+
+    expect(stEchoMock).toHaveBeenCalledWith(
+      'info',
+      expect.stringContaining('Run a full tracker regeneration for this message to move it onto the current chat schema'),
+    );
+  });
+
+  test('shows the schema mismatch notice only once during clear-and-recreate batches', async () => {
+    document.body.innerHTML = '<div id="extensionsMenu"></div><div class="mes" mesid="0"><div class="mes_text"></div></div>';
+
+    (trackerPartsModule.resolveTopLevelPartsOrder as jest.Mock).mockReturnValue(['time', 'weather']);
+    (trackerPartsModule.buildTopLevelPartSchema as jest.Mock).mockImplementation((_schema, partKey) => ({
+      type: 'object',
+      properties: { [partKey]: { type: 'string' } },
+      required: [partKey],
+    }));
+
+    const callGenericPopup = jest.fn((content: string, _type: unknown, _title: string, popupOptions: any) => {
+      const container = document.createElement('div');
+      container.innerHTML = content;
+      document.body.appendChild(container);
+      const checkboxes = Array.from(container.querySelectorAll('[data-ztracker-cleanup-target-index]')) as HTMLInputElement[];
+      for (const checkbox of checkboxes) {
+        checkbox.checked = true;
+      }
+      return popupOptions.onClose({ result: 'affirmative', content: container });
+    });
+
+    const generateRequest = jest.fn((_request, hooks) => {
+      hooks.onStart('request-1');
+      hooks.onFinish('request-1', { content: { time: '10:00:00', weather: 'Rain' } }, null);
+    });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [
+          {
+            original_avatar: 'avatar.png',
+            extra: {
+              zTracker: {
+                schemaKey: 'default',
+                schemaValue: { time: '09:00:00', weather: 'Sunny' },
+                schemaHtml: '<div></div>',
+              },
+            },
+          },
+        ],
+        saveChat: async () => undefined,
+        callGenericPopup,
+        extensionSettings: { connectionManager: { profiles: [makeProfile()] } },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () =>
+          makeSettings({
+            schemaPreset: 'alternate',
+            schemaPresets: {
+              default: {
+                name: 'Default',
+                value: {
+                  type: 'object',
+                  properties: { time: { type: 'string' }, weather: { type: 'string' } },
+                  required: ['time', 'weather'],
+                },
+                html: '<div></div>',
+              },
+              alternate: {
+                name: 'Alternate',
+                value: {
+                  type: 'object',
+                  properties: { time: { type: 'string' }, weather: { type: 'string' } },
+                  required: ['time', 'weather'],
+                },
+                html: '<div></div>',
+              },
+            },
+          }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    (SillyTavern.getContext() as any).chatMetadata = { zTracker: { schemaKey: 'alternate' } };
+
+    await actions.openTrackerCleanup(0);
+    await flushAsyncWork();
+
+    const mismatchMessages = stEchoMock.mock.calls.filter(
+      ([type, message]) => type === 'info' && typeof message === 'string' && message.includes('full tracker regeneration for this message'),
+    );
+    expect(mismatchMessages).toHaveLength(1);
   });
 });

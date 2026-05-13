@@ -77,10 +77,10 @@ jest.unstable_mockModule('../sillytavern-world-info.js', () => ({
 
 jest.unstable_mockModule('../tracker.js', () => ({
   applyTrackerUpdateAndRender: applyTrackerUpdateAndRenderMock,
-  CHAT_METADATA_SCHEMA_PRESET_KEY: 'schemaPreset',
+  CHAT_METADATA_SCHEMA_PRESET_KEY: 'schemaKey',
   CHAT_MESSAGE_SCHEMA_HTML_KEY: 'schemaHtml',
   CHAT_MESSAGE_PENDING_REDACTIONS_KEY: 'pendingRedactions',
-  CHAT_MESSAGE_SCHEMA_PRESET_KEY: 'schemaPreset',
+  CHAT_MESSAGE_SCHEMA_PRESET_KEY: 'schemaKey',
   CHAT_MESSAGE_SCHEMA_VALUE_KEY: 'schemaValue',
   CHAT_MESSAGE_PARTS_ORDER_KEY: 'partsOrder',
   extractLeadingSystemPrompt: jest.fn((messages: Array<{ role: string; content: string }>) => {
