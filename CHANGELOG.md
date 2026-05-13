@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Chat schema switching now documents and reinforces the existing lazy-switch behavior: future full tracker regenerations use the selected chat schema, while older trackers keep their saved schema until you run a full tracker regeneration for those messages.
+
 ## [1.11.3] - 2026-05-13
 
 ### Fixed
