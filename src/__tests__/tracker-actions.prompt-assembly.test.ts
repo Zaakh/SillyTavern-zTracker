@@ -135,7 +135,7 @@ describe('createTrackerActions prompt assembly', () => {
     });
 
     const context = SillyTavern.getContext() as any;
-    context.chatMetadata = { zTracker: { schemaPreset: 'alternate' } };
+    context.chatMetadata = { zTracker: { schemaKey: 'alternate' } };
 
     await actions.generateTracker(0);
 
@@ -144,7 +144,7 @@ describe('createTrackerActions prompt assembly', () => {
       expect.objectContaining({
         trackerHtml: '<div>alternate</div>',
         extensionData: expect.objectContaining({
-          schemaPreset: 'alternate',
+          schemaKey: 'alternate',
         }),
       }),
     );
@@ -176,12 +176,12 @@ describe('createTrackerActions prompt assembly', () => {
     });
 
     const context = SillyTavern.getContext() as any;
-    context.chatMetadata = { zTracker: { schemaPreset: 'missing' } };
+    context.chatMetadata = { zTracker: { schemaKey: 'missing' } };
     context.saveMetadataDebounced = jest.fn();
 
     await actions.generateTracker(0);
 
-    expect(context.chatMetadata).toEqual({ zTracker: { schemaPreset: 'default' } });
+    expect(context.chatMetadata).toEqual({ zTracker: { schemaKey: 'default' } });
     expect(context.saveMetadataDebounced).toHaveBeenCalledTimes(1);
   });
 
