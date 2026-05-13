@@ -91,6 +91,8 @@ Optional (advanced): you can annotate your JSON schema preset to help zTracker k
 - `x-ztracker-dependsOn`: top-level part ordering hints for sequential generation.
 - `x-ztracker-idKey`: which string field to use as the array-item identity for per-item regeneration (defaults to `name`).
 
+When editing a schema preset's JSON or HTML in **Extensions → zTracker**, changes stay local until you click the Save icon for that field. The save control stays disabled while the draft is unchanged or invalid, and invalid drafts show an inline error instead of overwriting the saved preset.
+
 If a dependency-linked array becomes inconsistent during generation, zTracker now logs a warning in the browser console. Example: `charactersPresent` lists a character name but `characters` has no matching object for that name.
 
 ## World Info (lorebooks)

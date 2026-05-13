@@ -148,18 +148,18 @@ export const ZTrackerSettings: FC = () => {
   const handleSchemaPresetsListChange = (newItems: PresetItem[]) => {
     let nextSchemaText = '';
     let nextSchemaHtmlText = '';
-    let shouldPreserveDrafts = false;
+    let preservesActiveDrafts = false;
 
     updateAndRefresh((currentSettings) => {
       const nextState = reconcilePresetItems(currentSettings.schemaPresets, currentSettings.schemaPreset, newItems);
-      shouldPreserveDrafts = (currentSettings.schemaPreset ?? 'default') === nextState.activeKey;
+      preservesActiveDrafts = nextState.preservesActiveDrafts;
       currentSettings.schemaPreset = nextState.activeKey;
       currentSettings.schemaPresets = nextState.presets;
       nextSchemaText = formatSchemaText(nextState.presets[nextState.activeKey]);
       nextSchemaHtmlText = formatSchemaHtml(nextState.presets[nextState.activeKey]);
     });
 
-    if (!shouldPreserveDrafts) {
+    if (!preservesActiveDrafts) {
       setSchemaText(nextSchemaText);
       setSchemaHtmlText(nextSchemaHtmlText);
     }

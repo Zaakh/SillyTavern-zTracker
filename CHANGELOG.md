@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.11.3] - 2026-05-13
+
 ### Fixed
 
 - Schema JSON and HTML preset editors now keep local drafts until you explicitly save, with disabled Save buttons and inline validation feedback for invalid drafts.

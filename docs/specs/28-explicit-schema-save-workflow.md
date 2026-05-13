@@ -84,14 +84,14 @@ The same settings area already preserves invalid drafts, but it does not preserv
 - [src/components/settings/schema-editor-state.ts](../../src/components/settings/schema-editor-state.ts) now exposes structured validation and dirty-state helpers for both JSON and HTML drafts.
 - The JSON draft validation now rejects non-object top-level values so unusable schema payloads do not become savable just because they parse.
 - [src/components/Settings.tsx](../../src/components/Settings.tsx) no longer persists schema drafts on each `onChange`; it now uses explicit save handlers for JSON and HTML.
-- [src/components/settings/preset-state.ts](../../src/components/settings/preset-state.ts) now exposes a helper that keeps local drafts when preset-list edits do not actually switch the active preset.
-- [src/components/settings/SchemaPresetSection.tsx](../../src/components/settings/SchemaPresetSection.tsx) now renders Save buttons for both editors, disables them until the draft is valid and changed, and shows inline validation or unsaved-draft feedback.
+- [src/components/settings/preset-state.ts](../../src/components/settings/preset-state.ts) now returns whether preset reconciliation kept the active preset, so the settings UI can preserve local drafts across create and rename flows while still resetting on active-preset removal.
+- [src/components/settings/SchemaPresetSection.tsx](../../src/components/settings/SchemaPresetSection.tsx) now renders icon-only Save buttons in the field headers, aligned with the other settings action buttons, while keeping inline validation and unsaved-draft feedback below each editor.
 - [src/styles/main.scss](../../src/styles/main.scss) now includes the minimal editor-action and validation-status styling needed for the new workflow.
 
 ## Verification
 
 - Updated [src/__tests__/schema-editor-state.test.ts](../../src/__tests__/schema-editor-state.test.ts) to cover dirty-state detection, valid unsaved drafts, invalid draft error reporting, and preset-change resync behavior.
-- Updated [src/__tests__/preset-state.test.ts](../../src/__tests__/preset-state.test.ts) to cover draft-preservation behavior across preset-list edits.
+- Updated [src/__tests__/preset-state.test.ts](../../src/__tests__/preset-state.test.ts) to cover draft-preservation behavior across preset create, rename, and active-preset removal flows.
 - Ran `npm test` successfully.
 - Ran `npm run build` successfully.
 - Live SillyTavern smoke verification is still pending. This spec remains `In Progress` until the browser-side no-blink editing flow is confirmed against the real host UI. This session did not have a browser automation surface available to execute that host-level check directly.

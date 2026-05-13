@@ -24,10 +24,33 @@ describe('preset-state helpers', () => {
     const selection = resolvePresetSelection(state.presets, 'custom');
 
     expect(selection?.key).toBe('custom');
+    expect(state.preservesActiveDrafts).toBe(true);
     expect(selection?.preset).toEqual({
       name: 'Custom',
       value: { scene: 'default' },
       html: '<div>default</div>',
+    });
+  });
+
+  test('preserves local drafts when renaming the active preset without changing its key', () => {
+    const state = reconcilePresetItems(
+      {
+        custom: {
+          name: 'Custom',
+          value: { scene: 'draft' },
+          html: '<div>draft</div>',
+        },
+      },
+      'custom',
+      [{ value: 'custom', label: 'Renamed Custom' }],
+    );
+
+    expect(state.activeKey).toBe('custom');
+    expect(state.preservesActiveDrafts).toBe(true);
+    expect(state.presets.custom).toEqual({
+      name: 'Renamed Custom',
+      value: { scene: 'draft' },
+      html: '<div>draft</div>',
     });
   });
 
@@ -56,6 +79,7 @@ describe('preset-state helpers', () => {
     );
 
     expect(state.activeKey).toBe('default');
+    expect(state.preservesActiveDrafts).toBe(false);
     expect(state.presets).toEqual({
       default: {
         name: 'Default',
