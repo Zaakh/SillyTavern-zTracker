@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.11.2] - 2026-05-13
+
 ### Fixed
 
 - Tracker updates now roll back cleanly when chat saving fails, so the UI no longer claims changes were unsaved while still showing the new tracker state.
