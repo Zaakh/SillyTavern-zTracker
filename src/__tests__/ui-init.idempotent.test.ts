@@ -102,4 +102,31 @@ describe('initializeGlobalUI idempotence', () => {
     expect(actions.generateTracker).toHaveBeenCalledTimes(1);
     expect(actions.generateTracker).toHaveBeenCalledWith(0, { showStatusIndicator: true });
   });
+
+  test('routes the redo button through the full regeneration path', async () => {
+    const host = createSillyTavernHost();
+    const actions = createUiInitActions();
+    installSillyTavernHost(host.context);
+    installExtensionsMenuDom();
+    installMessageTemplateDom();
+    installChatMessageDom(0, {
+      innerHtml: '<div class="ztracker-regenerate-button"></div><div class="mes_text">Message 0</div>',
+    });
+
+    await initializeGlobalUI({
+      globalContext: host.context,
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'none', includeLastXZTrackerMessages: 1 })),
+      } as any,
+      actions,
+      renderTrackerWithDeps: jest.fn(),
+    });
+
+    (document.querySelector('.mes[mesid="0"] .ztracker-regenerate-button') as HTMLElement).dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
+
+    expect(actions.generateTracker).toHaveBeenCalledTimes(1);
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { showStatusIndicator: true });
+  });
 });

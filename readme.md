@@ -58,7 +58,7 @@ This is especially useful for smaller models: you can keep your roleplay-oriente
 
 In **Extensions → zTracker**, enable **Sequential generation** to have zTracker generate tracker fields one-by-one (smaller, sequential requests).
 
-If you want to avoid low-context tracker updates at the start of a chat, set **Skip First X Messages** in **Extensions → zTracker**. A value of `0` keeps the old behavior; higher values prevent tracker generation on early messages until the threshold is reached.
+If you want to avoid low-context tracker updates at the start of a chat, set **Skip First X Messages** in **Extensions → zTracker**. A value of `0` keeps the old behavior; higher values prevent first-time tracker generation on early messages until the threshold is reached. Explicit full redo of an already existing tracker still works there.
 
 If character-card prose is adding noise to extraction, enable **Skip character card in tracker generation** in **Extensions → zTracker**. The setting is off by default, and when enabled it makes tracker generation ignore character-card prompt fields such as description, personality, and scenario.
 
