@@ -6,14 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.11.5] - 2026-05-18
+
 ### Added
 
-- zTracker settings now include a `Connection Source` option so tracker generation can either follow SillyTavern's current live connection or stay pinned to a selected saved connection profile.
+- zTracker can now generate trackers from either the currently active SillyTavern connection or a specific saved connection profile.
 
 ### Fixed
 
-- Explicit full redo of an existing tracker now still works on early chat messages, even when `Skip First X Messages` blocks first-time tracker generation there.
-- Active connection mode now tolerates common SillyTavern text-generation API-map aliases, resolves active connection-manager profile ids and generic live text-generation profiles back to the runtime backend type, and forwards live text-generation server URLs from the runtime profile shape, so tracker regeneration no longer fails on those hosts.
+- Full tracker redo now still works on early chat messages, even when `Skip First X Messages` would normally block first-time tracker generation there.
+- Tracker regeneration now follows the active SillyTavern text-generation backend more reliably, including live connection aliases, runtime-selected backends, and live server URLs.
 
 ## [1.11.4] - 2026-05-13
 
