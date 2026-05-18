@@ -26,6 +26,81 @@ const trackerPartsModule = await import('../tracker-parts.js');
 
 describe('createTrackerActions prompt assembly', () => {
   const originalCss = globalThis.CSS;
+  const activeTextConnectApiMap = {
+    koboldcpp: { selected: 'textgenerationwebui', type: 'koboldcpp' },
+    kcpp: { selected: 'textgenerationwebui', type: 'koboldcpp' },
+    'openrouter-text': { selected: 'textgenerationwebui', type: 'openrouter' },
+    ooba: { selected: 'textgenerationwebui', type: 'ooba' },
+  };
+
+  function makeActiveTextRuntimeContext(options: {
+    profileOverrides?: Record<string, unknown>;
+    selectedProfile?: unknown;
+    mainApi?: string;
+    textCompletionType?: string;
+    textCompletionProcessRequest?: jest.Mock;
+    textCompletionConstructPrompt?: jest.Mock;
+    textCompletionCreateRequestData?: jest.Mock;
+    textCompletionSendRequest?: jest.Mock;
+    powerUserSettings?: Record<string, unknown>;
+  } = {}) {
+    const activeProfile = {
+      id: 'active-text-profile',
+      api: 'textgenerationwebui',
+      model: 'live-model',
+      api_server: 'http://live.example',
+      ...options.profileOverrides,
+    };
+    const context = makeContext({
+      extensionSettings: {
+        connectionManager: {
+          selectedProfile: options.selectedProfile ?? activeProfile.id,
+          profiles: [activeProfile],
+        },
+      },
+      mainApi: options.mainApi ?? 'textgenerationwebui',
+      powerUserSettings: options.powerUserSettings,
+      textCompletionProcessRequest: options.textCompletionProcessRequest,
+      textCompletionConstructPrompt: options.textCompletionConstructPrompt,
+      textCompletionCreateRequestData: options.textCompletionCreateRequestData,
+      textCompletionSendRequest: options.textCompletionSendRequest,
+    });
+
+    if (options.textCompletionType !== undefined) {
+      context.textCompletionSettings = { type: options.textCompletionType };
+    }
+
+    return context;
+  }
+
+  function createActiveTrackerActions(options: {
+    connectApiMap?: Record<string, unknown>;
+    settingsOverrides?: Record<string, unknown>;
+    textCompletionStoryStringFormatterLoader?: () => Promise<unknown>;
+  } = {}) {
+    return createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile({ id: 'saved-profile', api: 'openai' })],
+          },
+        },
+        CONNECT_API_MAP: options.connectApiMap ?? activeTextConnectApiMap,
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ profileId: '', connectionSource: 'active', trackerSystemPromptMode: 'profile', ...(options.settingsOverrides ?? {}) }),
+      } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+      ...(options.textCompletionStoryStringFormatterLoader
+        ? { textCompletionStoryStringFormatterLoader: options.textCompletionStoryStringFormatterLoader }
+        : {}),
+    });
+  }
 
   beforeEach(() => {
     resetTrackerActionTestState();
@@ -829,20 +904,7 @@ describe('createTrackerActions prompt assembly', () => {
   test('fails clearly when matching selected API-map aliases disagree on type', async () => {
     const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     const textCompletionProcessRequest = jest.fn(async () => ({ content: { time: '10:00:00' } }));
-    const context = makeContext({
-      extensionSettings: {
-        connectionManager: {
-          selectedProfile: {
-            id: 'active-text-profile',
-            api: 'textgenerationwebui',
-            model: 'live-model',
-            'api-url': 'http://live.example',
-          },
-        },
-      },
-      mainApi: 'textgenerationwebui',
-      textCompletionProcessRequest,
-    });
+    const context = makeContext({ textCompletionProcessRequest });
     installSillyTavernContext(context);
 
     const actions = createTrackerActions({
@@ -851,7 +913,7 @@ describe('createTrackerActions prompt assembly', () => {
         saveChat: async () => undefined,
         extensionSettings: {
           connectionManager: {
-            profiles: [makeProfile({ id: 'saved-profile', api: 'openai' })],
+            profiles: [makeProfile({ api: 'textgenerationwebui', model: 'saved-model', 'api-url': 'http://saved.example' })],
           },
         },
         CONNECT_API_MAP: {
@@ -860,7 +922,7 @@ describe('createTrackerActions prompt assembly', () => {
         },
       },
       settingsManager: {
-        getSettings: () => makeSettings({ profileId: '', connectionSource: 'active', trackerSystemPromptMode: 'profile' }),
+        getSettings: () => makeSettings({ trackerSystemPromptMode: 'profile' }),
       } as any,
       generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
       pendingRequests: new Map(),
@@ -875,6 +937,92 @@ describe('createTrackerActions prompt assembly', () => {
     expect(stEchoMock).toHaveBeenCalledWith(
       'error',
       'Tracker generation failed: Conflicting SillyTavern API mapping types for tracker connection API: textgenerationwebui. Matching selected entries: textA (koboldcpp), textB (openrouter-text)',
+    );
+
+    consoleSpy.mockRestore();
+  });
+
+  test('uses the selected connection-manager profile id to resolve the active text-generation backend key before falling back to mainApi', async () => {
+    const textCompletionProcessRequest = jest.fn(async () => ({ content: { time: '10:00:00' } }));
+    const context = makeActiveTextRuntimeContext({
+      profileOverrides: { api: 'koboldcpp' },
+      textCompletionProcessRequest,
+    });
+    installSillyTavernContext(context);
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+
+    const actions = createActiveTrackerActions();
+
+    await actions.generateTracker(0);
+
+    expect(buildPromptMock).toHaveBeenCalledWith('textgenerationwebui', expect.any(Object));
+    expect(textCompletionProcessRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        api_type: 'koboldcpp',
+        model: 'live-model',
+        api_server: 'http://live.example',
+      }),
+      expect.any(Object),
+      true,
+      expect.any(AbortSignal),
+    );
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test('uses textCompletionSettings.type to resolve the active text-generation backend when the runtime profile stays generic', async () => {
+    const textCompletionProcessRequest = jest.fn(async () => ({ content: { time: '10:00:00' } }));
+    const context = makeActiveTextRuntimeContext({
+      profileOverrides: { sysprompt: 'Live Prompt' },
+      textCompletionType: 'koboldcpp',
+      textCompletionProcessRequest,
+    });
+    installSillyTavernContext(context);
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+
+    const actions = createActiveTrackerActions();
+
+    await actions.generateTracker(0);
+
+    expect(buildPromptMock).toHaveBeenCalledWith('textgenerationwebui', expect.any(Object));
+    expect(textCompletionProcessRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        api_type: 'koboldcpp',
+        model: 'live-model',
+        api_server: 'http://live.example',
+      }),
+      expect.any(Object),
+      true,
+      expect.any(AbortSignal),
+    );
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test.each([
+    ['the runtime type is missing', undefined],
+    ['the runtime type stays generic', 'textgenerationwebui'],
+  ])('fails with a targeted error when %s', async (_label, textCompletionType) => {
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const textCompletionProcessRequest = jest.fn(async () => ({ content: { time: '10:00:00' } }));
+    const context = makeActiveTextRuntimeContext({
+      ...(textCompletionType !== undefined ? { textCompletionType } : {}),
+      textCompletionProcessRequest,
+    });
+    installSillyTavernContext(context);
+
+    const actions = createActiveTrackerActions({
+      connectApiMap: {
+        koboldcpp: { selected: 'textgenerationwebui', type: 'koboldcpp' },
+        'openrouter-text': { selected: 'textgenerationwebui', type: 'openrouter' },
+      },
+    });
+
+    await expect(actions.generateTracker(0)).resolves.toBe(false);
+
+    expect(buildPromptMock).not.toHaveBeenCalled();
+    expect(textCompletionProcessRequest).not.toHaveBeenCalled();
+    expect(stEchoMock).toHaveBeenCalledWith(
+      'error',
+      'Tracker generation failed: Could not resolve the active SillyTavern text-generation backend. The live runtime only exposed the generic textgenerationwebui family without a concrete backend type. Select a saved zTracker connection profile or switch the active SillyTavern backend to one with a concrete runtime type.',
     );
 
     consoleSpy.mockRestore();
@@ -1823,6 +1971,60 @@ describe('createTrackerActions prompt assembly', () => {
     }));
     expect(textCompletionSendRequest).toHaveBeenCalledWith(expect.objectContaining({
       prompt: 'WRAPPED:SYSTEM:Existing system prompt\nBODY:Tobias:Prior chat message | Bar:Prior assistant reply\n\nGenerate tracker JSON',
+    }), true, expect.any(AbortSignal));
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test('uses the resolved active text-generation backend for wrapped text-completion tracker requests when the runtime profile stays generic', async () => {
+    buildPromptMock.mockResolvedValue({
+      result: [
+        { role: 'system', content: 'Existing system prompt' },
+        { role: 'user', content: 'Prior chat message', name: 'Tobias' },
+      ],
+    });
+    const textCompletionConstructPrompt = jest.fn((prompt: Array<{ role: string; content: string; name?: string }>) => {
+      const dialogueBody = prompt.map((message) => `${message.name ?? message.role}:${message.content}`).join(' | ');
+      return `BODY:${dialogueBody}`;
+    });
+    const textCompletionCreateRequestData = jest.fn((requestData: Record<string, unknown>) => requestData);
+    const textCompletionSendRequest = jest.fn(async () => ({ content: { time: '10:00:00' } }));
+    const textCompletionStoryStringFormatterLoader = jest.fn(async () => ({
+      renderStoryString: (params: Record<string, unknown>) => `SYSTEM:${String(params.system ?? '')}`,
+      formatInstructModeStoryString: (storyString: string) => `WRAPPED:${storyString}`,
+      getInstructStoppingSequences: () => ['</s>'],
+    }));
+    const context = makeActiveTextRuntimeContext({
+      textCompletionType: 'koboldcpp',
+      powerUserSettings: {
+        instruct: {
+          preset: 'Active Instruct',
+          story_string_prefix: '[INST]',
+          story_string_suffix: '[/INST]Understood.</s>',
+        },
+        context: {
+          preset: 'Active Context',
+          story_string: '{{#if system}}{{system}}{{/if}}',
+          story_string_position: 0,
+        },
+      },
+      textCompletionConstructPrompt,
+      textCompletionCreateRequestData,
+      textCompletionSendRequest,
+    });
+    installSillyTavernContext(context);
+
+    const actions = createActiveTrackerActions({ textCompletionStoryStringFormatterLoader });
+
+    await actions.generateTracker(0);
+
+    expect(buildPromptMock).toHaveBeenCalledWith('textgenerationwebui', expect.any(Object));
+    expect(textCompletionCreateRequestData).toHaveBeenCalledWith(expect.objectContaining({
+      api_type: 'koboldcpp',
+      api_server: 'http://live.example',
+      model: 'live-model',
+    }));
+    expect(textCompletionSendRequest).toHaveBeenCalledWith(expect.objectContaining({
+      api_type: 'koboldcpp',
     }), true, expect.any(AbortSignal));
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });

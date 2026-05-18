@@ -410,6 +410,18 @@ export function createTrackerActions(options: {
     return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
   }
 
+  /** Resolves the concrete active backend key while preserving generic text-completion profile families. */
+  function resolveActiveRuntimeApi(context: any, selectedProfile: any): string | undefined {
+    const textCompletionType = normalizeRuntimeString(context?.textCompletionSettings?.type);
+    const selectedApi = normalizeRuntimeString(selectedProfile?.api);
+    if (selectedApi) {
+      return selectedApi === 'textgenerationwebui' ? textCompletionType ?? selectedApi : selectedApi;
+    }
+
+    const mainApi = normalizeRuntimeString(context?.mainApi);
+    return mainApi === 'textgenerationwebui' ? textCompletionType ?? mainApi : mainApi;
+  }
+
   /** Resolves one CONNECT_API_MAP entry from either its key or the selected/type aliases the host exposes. */
   function resolveApiMap(api: unknown, connectApiMap: Record<string, any> | undefined): any {
     const normalizedApi = normalizeRuntimeString(api);
@@ -468,18 +480,24 @@ export function createTrackerActions(options: {
   /** Builds a minimal active-connection snapshot from SillyTavern's current runtime state. */
   function getActiveRuntimeConnection(context: any): any {
     const connectionManager = context?.extensionSettings?.connectionManager;
-    const selectedProfile = typeof connectionManager?.getSelectedProfile === 'function'
+    const rawSelectedProfile = typeof connectionManager?.getSelectedProfile === 'function'
       ? connectionManager.getSelectedProfile()
       : connectionManager?.selectedProfile ?? connectionManager?.activeProfile ?? connectionManager?.currentProfile;
+    const selectedProfileId = normalizeRuntimeString(rawSelectedProfile);
+    const selectedProfile = rawSelectedProfile && typeof rawSelectedProfile === 'object'
+      ? rawSelectedProfile
+      : Array.isArray(connectionManager?.profiles)
+        ? connectionManager.profiles.find((profile: any) => normalizeRuntimeString(profile?.id) === selectedProfileId)
+        : undefined;
     const activePresetName = normalizeRuntimeString(context?.getPresetManager?.()?.getSelectedPresetName?.());
     const activeInstructName = normalizeRuntimeString(context?.powerUserSettings?.instruct?.preset);
     const activeContextName = normalizeRuntimeString(context?.powerUserSettings?.context?.preset);
     const activeSystemPromptName = normalizeRuntimeString(context?.powerUserSettings?.sysprompt?.name);
-    const activeApi = normalizeRuntimeString(context?.mainApi) ?? normalizeRuntimeString(selectedProfile?.api);
+    const activeApi = resolveActiveRuntimeApi(context, selectedProfile);
 
     return {
       ...(selectedProfile && typeof selectedProfile === 'object' ? selectedProfile : {}),
-      ...(activeApi ? { api: activeApi } : {}),
+      ...(activeApi ? { resolvedApi: activeApi } : {}),
       ...(activePresetName ? { preset: activePresetName } : {}),
       ...(activeInstructName ? { instruct: activeInstructName } : {}),
       ...(activeContextName ? { context: activeContextName } : {}),
@@ -523,13 +541,32 @@ export function createTrackerActions(options: {
     if (connectionSource === 'active') {
       const profile = getActiveRuntimeConnection(context);
       const profileId = normalizeRuntimeString(profile?.id) ?? '';
-      if (!profile?.api) {
+      const profileApi = normalizeRuntimeString(profile?.resolvedApi) ?? normalizeRuntimeString(profile?.api);
+      const activeTextCompletionType = normalizeRuntimeString(context?.textCompletionSettings?.type);
+      const lacksConcreteActiveTextCompletionType = !activeTextCompletionType || activeTextCompletionType === 'textgenerationwebui';
+      const usesGenericTextCompletionFamily = profileApi === 'textgenerationwebui'
+        && (
+          normalizeRuntimeString(profile?.api) === 'textgenerationwebui'
+          || normalizeRuntimeString(context?.mainApi) === 'textgenerationwebui'
+        );
+      if (!profileApi) {
         throw new Error('No active SillyTavern connection could be resolved for tracker generation.');
       }
 
-      const apiMap = resolveApiMap(profile.api, CONNECT_API_MAP);
+      let apiMap;
+      try {
+        apiMap = resolveApiMap(profileApi, CONNECT_API_MAP);
+      } catch (error) {
+        if (usesGenericTextCompletionFamily && lacksConcreteActiveTextCompletionType) {
+          throw new Error(
+            'Could not resolve the active SillyTavern text-generation backend. The live runtime only exposed the generic textgenerationwebui family without a concrete backend type. Select a saved zTracker connection profile or switch the active SillyTavern backend to one with a concrete runtime type.',
+          );
+        }
+        throw error;
+      }
+
       if (!apiMap?.selected) {
-        throw new Error(`Unsupported or unknown API for prompt building: ${String(profile.api)}`);
+        throw new Error(`Unsupported or unknown API for prompt building: ${String(profileApi)}`);
       }
 
       return {

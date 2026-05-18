@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Explicit full redo of an existing tracker now still works on early chat messages, even when `Skip First X Messages` blocks first-time tracker generation there.
-- Active connection mode now tolerates common SillyTavern text-generation API-map aliases and forwards live text-generation server URLs from the runtime profile shape, so tracker regeneration no longer fails on those hosts.
+- Active connection mode now tolerates common SillyTavern text-generation API-map aliases, resolves active connection-manager profile ids and generic live text-generation profiles back to the runtime backend type, and forwards live text-generation server URLs from the runtime profile shape, so tracker regeneration no longer fails on those hosts.
 
 ## [1.11.4] - 2026-05-13
 
