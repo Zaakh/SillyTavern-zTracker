@@ -379,6 +379,36 @@ export function createTrackerActions(options: {
     return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
   }
 
+  /** Resolves one CONNECT_API_MAP entry from either its key or the selected/type aliases the host exposes. */
+  function resolveApiMap(api: unknown, connectApiMap: Record<string, any> | undefined): any {
+    const normalizedApi = normalizeRuntimeString(api);
+    if (!normalizedApi || !connectApiMap || typeof connectApiMap !== 'object') {
+      return undefined;
+    }
+
+    const directMatch = connectApiMap[normalizedApi];
+    if (directMatch && typeof directMatch === 'object') {
+      return directMatch;
+    }
+
+    const apiMapEntries = Object.entries(connectApiMap).filter(
+      (entry): entry is [string, Record<string, unknown>] => !!entry[1] && typeof entry[1] === 'object',
+    );
+    for (const field of ['selected', 'type'] as const) {
+      const matches = apiMapEntries.filter(([, entry]) => normalizeRuntimeString(entry[field]) === normalizedApi);
+      if (matches.length > 1) {
+        throw new Error(
+          `Ambiguous SillyTavern API mapping for tracker connection API: ${normalizedApi}. Matching ${field} entries: ${matches.map(([key]) => key).join(', ')}`,
+        );
+      }
+      if (matches[0]) {
+        return matches[0][1];
+      }
+    }
+
+    return undefined;
+  }
+
   /** Builds a minimal active-connection snapshot from SillyTavern's current runtime state. */
   function getActiveRuntimeConnection(context: any): any {
     const connectionManager = context?.extensionSettings?.connectionManager;
@@ -413,7 +443,7 @@ export function createTrackerActions(options: {
         throw new Error('No active SillyTavern connection could be resolved for tracker generation.');
       }
 
-      const apiMap = CONNECT_API_MAP[profile.api];
+      const apiMap = resolveApiMap(profile.api, CONNECT_API_MAP);
       if (!apiMap?.selected) {
         throw new Error(`Unsupported or unknown API for prompt building: ${String(profile.api)}`);
       }
@@ -438,7 +468,7 @@ export function createTrackerActions(options: {
       throw new Error('Selected connection profile is missing an API. Please edit the profile in SillyTavern settings.');
     }
 
-    const apiMap = CONNECT_API_MAP[profile.api];
+    const apiMap = resolveApiMap(profile.api, CONNECT_API_MAP);
     if (!apiMap?.selected) {
       throw new Error(`Unsupported or unknown API for prompt building: ${String(profile.api)}`);
     }
