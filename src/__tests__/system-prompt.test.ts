@@ -326,9 +326,10 @@ describe('system prompt helpers', () => {
     expect(migrateCorruptedSchemaPresetRequiredMetadata(settings)).toBe(false);
   });
 
-  test('ships a TOON prompt that explicitly forbids JSON-like output and wrapper objects', () => {
-    expect(DEFAULT_PROMPT_TOON).toContain('DO NOT output JSON, XML, JavaScript objects, braces, brackets, commas between fields, or quoted property names.');
-    expect(DEFAULT_PROMPT_TOON).toContain('Do not invent wrapper keys like `root`, `scene`, `data`, or `response` unless the schema explicitly requires them.');
-    expect(DEFAULT_PROMPT_TOON).toContain('For uniform arrays of objects, preserve the tabular TOON layout shown in the example, including the header row and tab-delimited values.');
+  test('ships a lean TOON prompt that relies on the example instead of verbose syntax prose', () => {
+    expect(DEFAULT_PROMPT_TOON).toContain('Return exactly one ```toon code block and nothing else.');
+    expect(DEFAULT_PROMPT_TOON).toContain('Keep every array count accurate: each `[N]` must match the number of items or rows.');
+    expect(DEFAULT_PROMPT_TOON).toContain('Do not add wrapper keys unless the schema requires them.');
+    expect(DEFAULT_PROMPT_TOON).not.toContain('For arrays of scalars, use the `fieldName[count\\t]: item1\\titem2` layout shown in the example.');
   });
 });

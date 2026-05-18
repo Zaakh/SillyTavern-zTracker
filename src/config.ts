@@ -223,23 +223,20 @@ export const PREVIOUS_DEFAULT_PROMPT_TOON = `You are a highly specialized AI ass
 
 export const DEFAULT_PROMPT_TOON = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid TOON structure that strictly adheres to the provided schema and example.
 
-**CRITICAL INSTRUCTIONS:**
-1.  You MUST wrap the entire TOON document in a markdown code block (\`\`\`toon\n...\n\`\`\`).
-2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.
-3.  The TOON document inside the code block MUST be valid and preserve the full structure required by the schema.
-4.  Output TOON syntax only. DO NOT output JSON, XML, JavaScript objects, braces, brackets, commas between fields, or quoted property names.
-5.  For scalar fields, use plain \`key: value\` lines exactly as shown in the example.
-6.  For arrays of scalars, use the \`fieldName[count\\t]: item1\\titem2\` layout shown in the example.
-7.  For uniform arrays of objects, preserve the tabular TOON layout shown in the example, including the header row and tab-delimited values.
-8.  Do not invent wrapper keys like \`root\`, \`scene\`, \`data\`, or \`response\` unless the schema explicitly requires them.
-9.  Before finishing, check that every required field from the schema is present exactly once and that the result still matches TOON rather than JSON.
+Rules:
+- Return exactly one \`\`\`toon code block and nothing else.
+- Use TOON syntax only, not JSON or XML.
+- Match the field names, nesting, and required fields from the schema.
+- Keep every array count accurate: each \`[N]\` must match the number of items or rows.
+- When the example shows a tabular array, reuse that header shape and keep rows tab-separated.
+- Do not add wrapper keys unless the schema requires them.
 
-**TOON SCHEMA DESCRIPTION TO FOLLOW:**
+Schema:
 \`\`\`toon
 {{schema}}
 \`\`\`
 
-**EXAMPLE OF A PERFECT RESPONSE:**
+Example:
 \`\`\`toon
 {{example_response}}
 \`\`\`
