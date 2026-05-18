@@ -51,6 +51,30 @@ export type CapturedTrackerContext = {
 	request: Record<string, unknown>;
 };
 
+type CaptureTrackerContextOptions = {
+	schemaValue?: object;
+};
+
+/** Rough token estimate for local prompt comparisons when no model-specific tokenizer is available. */
+function estimateTokenCount(text: string): number {
+	return Math.ceil(text.length / 4);
+}
+
+/** Summarizes the captured prompt with exact characters and a rough token estimate. */
+export function summarizeCapturedPrompt(captured: CapturedTrackerContext) {
+	const promptMessages = captured.request.prompt as Array<{ role: string; content: string }>;
+	const lastSystemMessage = [...promptMessages].reverse().find((message) => message.role === 'system');
+	const totalPromptChars = promptMessages.reduce((sum, message) => sum + message.content.length, 0);
+	const lastSystemChars = lastSystemMessage?.content.length ?? 0;
+
+	return {
+		totalPromptChars,
+		totalPromptEstimatedTokens: estimateTokenCount(promptMessages.map((message) => message.content).join('\n')),
+		lastSystemChars,
+		lastSystemEstimatedTokens: estimateTokenCount(lastSystemMessage?.content ?? ''),
+	};
+}
+
 type CapturedPromptMessage = {
 	role: string;
 	content: string;
@@ -77,11 +101,17 @@ const MODE_SAMPLE_RESPONSE: Record<string, string> = {
 const EXPECTED_PROMPT_ROLES = ['system', 'system', 'system', 'assistant', 'user', 'system', 'assistant', 'user', 'system', 'system'];
 
 /** Captures one live-like tracker-generation request for the requested prompt-engineering mode. */
-export async function captureTrackerContext(mode: (typeof PromptEngineeringMode)[keyof typeof PromptEngineeringMode]): Promise<CapturedTrackerContext> {
+export async function captureTrackerContext(
+	mode: (typeof PromptEngineeringMode)[keyof typeof PromptEngineeringMode],
+	options: CaptureTrackerContextOptions = {},
+): Promise<CapturedTrackerContext> {
 	jest.clearAllMocks();
 	document.body.innerHTML = '<div id="extensionsMenu"></div><div class="mes" mesid="0"><div class="mes_text"></div></div>';
 
 	const settings = makeLiveLikeSettings(mode);
+	if (options.schemaValue) {
+		settings.schemaPresets.default.value = options.schemaValue as any;
+	}
 	const capturedRequests: Array<Record<string, unknown>> = [];
 
 	installLiveLikeSillyTavernContext();
@@ -210,13 +240,13 @@ export function expectLiveLikeTrackerContext(
 		return;
 	}
 	expect(trackerInstruction.content).toEqual(expect.stringContaining('```toon'));
-	expect(trackerInstruction.content).toEqual(expect.stringContaining('EXAMPLE OF A PERFECT RESPONSE'));
+	expect(trackerInstruction.content).toEqual(expect.stringContaining('Example:'));
 }
 
 /** Prints one captured request with stable start and end markers for manual inspection. */
 export function printCapturedTrackerContext(marker: string, captured: CapturedTrackerContext): void {
 	console.log(`${marker}_START`);
-	console.log(JSON.stringify(captured, null, 2));
+	console.log(JSON.stringify({ ...captured, promptMetrics: summarizeCapturedPrompt(captured) }, null, 2));
 	console.log(`${marker}_END`);
 }
 
