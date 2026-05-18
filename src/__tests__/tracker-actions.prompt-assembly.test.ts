@@ -18,6 +18,7 @@ import {
   renderTrackerWithDepsMock,
   resetTrackerActionTestState,
   sanitizeMessagesForGenerationMock,
+  stEchoMock,
   TEST_IMPORT_META_URL,
 } from '../test-utils/tracker-actions-test-helpers.js';
 
@@ -610,6 +611,156 @@ describe('createTrackerActions prompt assembly', () => {
       expect.any(AbortSignal),
     );
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test('resolves active textgenerationwebui connections even when the host API map uses an alias key', async () => {
+    const textCompletionProcessRequest = jest.fn(async () => ({ content: { time: '10:00:00' } }));
+    const context = makeContext({
+      extensionSettings: {
+        connectionManager: {
+          selectedProfile: {
+            id: 'active-text-profile',
+            api: 'textgenerationwebui',
+            model: 'live-model',
+            'api-url': 'http://live.example',
+          },
+        },
+      },
+      mainApi: 'textgenerationwebui',
+      textCompletionProcessRequest,
+    });
+    installSillyTavernContext(context);
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile({ id: 'saved-profile', api: 'openai' })],
+          },
+        },
+        CONNECT_API_MAP: {
+          text: { selected: 'textgenerationwebui', type: 'textgenerationwebui' },
+        },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ profileId: '', connectionSource: 'active', trackerSystemPromptMode: 'profile' }),
+      } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0);
+
+    expect(buildPromptMock).toHaveBeenCalledWith('textgenerationwebui', expect.any(Object));
+    expect(textCompletionProcessRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        api_type: 'textgenerationwebui',
+      }),
+      expect.any(Object),
+      true,
+      expect.any(AbortSignal),
+    );
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test('resolves saved textgenerationwebui profiles even when the host API map uses an alias key', async () => {
+    const textCompletionProcessRequest = jest.fn(async () => ({ content: { time: '10:00:00' } }));
+    const context = makeContext({ textCompletionProcessRequest });
+    installSillyTavernContext(context);
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile({ api: 'textgenerationwebui', model: 'saved-model', 'api-url': 'http://saved.example' })],
+          },
+        },
+        CONNECT_API_MAP: {
+          text: { selected: 'textgenerationwebui', type: 'textgenerationwebui' },
+        },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ connectionSource: 'saved', profileId: 'profile-1', trackerSystemPromptMode: 'profile' }),
+      } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0);
+
+    expect(buildPromptMock).toHaveBeenCalledWith('textgenerationwebui', expect.any(Object));
+    expect(textCompletionProcessRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        api_type: 'textgenerationwebui',
+        model: 'saved-model',
+        api_server: 'http://saved.example',
+      }),
+      expect.any(Object),
+      true,
+      expect.any(AbortSignal),
+    );
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test('fails clearly when multiple API-map aliases match the active connection api', async () => {
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const context = makeContext({
+      extensionSettings: {
+        connectionManager: {
+          selectedProfile: {
+            id: 'active-text-profile',
+            api: 'textgenerationwebui',
+          },
+        },
+      },
+      mainApi: 'textgenerationwebui',
+    });
+    installSillyTavernContext(context);
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile({ id: 'saved-profile', api: 'openai' })],
+          },
+        },
+        CONNECT_API_MAP: {
+          textA: { selected: 'textgenerationwebui' },
+          textB: { selected: 'textgenerationwebui' },
+        },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ profileId: '', connectionSource: 'active', trackerSystemPromptMode: 'profile' }),
+      } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await expect(actions.generateTracker(0)).resolves.toBe(false);
+
+    expect(buildPromptMock).not.toHaveBeenCalled();
+    expect(stEchoMock).toHaveBeenCalledWith(
+      'error',
+      'Tracker generation failed: Ambiguous SillyTavern API mapping for tracker connection API: textgenerationwebui. Matching selected entries: textA, textB',
+    );
+
+    consoleSpy.mockRestore();
   });
 
   test.each([
