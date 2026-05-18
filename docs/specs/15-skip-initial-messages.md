@@ -39,7 +39,8 @@ When `generateTracker(messageId)` is called:
 2. If `skipFirstXMessages > 0` and `messageId < skipFirstXMessages`, skip generation:
    - **Auto-mode**: silently skip (no error, no toast).
    - **Manual trigger**: show a brief info toast explaining the threshold is not reached, e.g. *"Tracker generation skipped: chat has fewer than {N} messages."*
-3. Otherwise, proceed with normal generation flow.
+3. If the call is an explicit full redo of a message that already has stored tracker data, allow generation to proceed even when the message is below the threshold.
+4. Otherwise, proceed with normal generation flow.
 
 ### Interaction with `includeLastXMessages`
 
@@ -59,7 +60,7 @@ Example: `skipFirstXMessages = 6`, `includeLastXMessages = 4`
 
 ## Decisions (closed)
 
-1. **Guard placement**: inside `generateTracker()` (the single dispatch point), not in each caller / event handler. This ensures manual and auto-mode triggers both respect the setting. Granular generators (`generateTrackerPart`, `generateTrackerArrayItem*`, etc.) do not need the guard because their UI buttons only appear on messages that already have tracker data.
+1. **Guard placement**: inside `generateTracker()` (the single dispatch point), not in each caller / event handler. This keeps the setting centralized while still allowing full redo of already-tracked messages based on the current message state. Granular generators (`generateTrackerPart`, `generateTrackerArrayItem*`, etc.) do not need the guard because their UI buttons only appear on messages that already have tracker data.
 2. **Semantics**: `messageId < skipFirstXMessages` (0-indexed). If `skipFirstXMessages = 6`, the first tracker can appear on message index 6 (the 7th message in the chat).
 3. **Manual vs. auto behavior on skip**: auto-mode is silent; manual shows an info toast so the user understands why nothing happened.
 4. **Default value**: `0` (no skip) to preserve backward compatibility.
@@ -71,7 +72,8 @@ Example: `skipFirstXMessages = 6`, `includeLastXMessages = 4`
 - [ ] `generateTracker()` checks the threshold and silently skips for auto-mode, or shows an info toast for manual triggers.
 - [ ] UI number input for the setting is present in the settings panel and persists correctly.
 - [ ] When `skipFirstXMessages = 6` and auto-mode is enabled, messages 0–5 receive no auto-generated tracker.
-- [ ] When `skipFirstXMessages = 6`, manually clicking the truck icon on message 3 shows an info toast and does not generate.
+- [ ] When `skipFirstXMessages = 6`, manually clicking the truck icon on message 3 without an existing tracker shows an info toast and does not generate.
+- [ ] When `skipFirstXMessages = 6`, explicitly redoing an already existing tracker on message 3 still generates.
 - [ ] When `skipFirstXMessages = 6`, manually clicking on message 6 generates normally.
 - [ ] When `skipFirstXMessages = 0`, all messages are eligible (existing behavior unchanged).
 - [ ] `includeLastXMessages` still controls the prompt scan window independently.
