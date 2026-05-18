@@ -28,26 +28,14 @@ import {
   sanitizeMessagesForGeneration,
 } from '../tracker.js';
 import {
-  buildArrayItemCleanupTarget,
-  buildArrayItemFieldCleanupTarget,
-  buildArrayItemFieldSchema,
-  buildArrayItemSchema,
   buildTopLevelPartSchema,
   buildPendingRedactions,
   clearTrackerCleanupTargets,
-  findArrayItemIndexByIdentity,
-  findArrayItemIndexByName,
-  getArrayItemIdentityKey,
   getPendingRedactionSchemaPresetKey,
   normalizeTrackerCleanupTargets,
   removePendingRedactionTargets,
   resolveTopLevelPartsOrder,
   mergeTrackerPart,
-  redactTrackerArrayItemValue,
-  redactTrackerPartValue,
-  replaceTrackerArrayItem,
-  replaceTrackerArrayItemField,
-  redactTrackerArrayItemFieldValue,
   type TrackerCleanupTarget,
 } from '../tracker-parts.js';
 import { createPromptEngineeringHelpers } from './prompt-engineering.js';
@@ -62,10 +50,10 @@ import {
 } from './tracker-action-helpers.js';
 import { captureTrackerRequestDebugSnapshot, debugLog, isDebugLoggingEnabled } from './debug.js';
 import {
-  CONTEXT_MENU_STATUS_CLASS,
   FULL_TRACKER_STATUS_CLASS,
   withMessageStatusIndicator,
 } from './message-status-indicator.js';
+import { createContextMenuTrackerActions } from './tracker-context-menu-actions.js';
 import {
   bindCleanupPopupSummary,
   buildCleanupPopupContent,
@@ -97,6 +85,68 @@ interface TextCompletionStoryStringFormatter {
     },
   ) => string[];
 }
+
+/** Describes the shared full-generation status-indicator options used by manual tracker runs. */
+type GenerateTrackerOptions = {
+  silent?: boolean;
+  showStatusIndicator?: boolean;
+};
+
+/** Carries one persisted tracker update through render validation, save, and rollback handling. */
+type PersistTrackerUpdateOptions = {
+  messageId: number;
+  message: unknown;
+  schemaPresetKey: string;
+  trackerData: unknown;
+  trackerHtml: string;
+  partsOrder: string[];
+  partsMeta: unknown;
+  detailsState: boolean[];
+  successMessage?: string;
+  extensionData?: Record<string, unknown>;
+};
+
+/** Describes the prepared runtime state reused by targeted context-menu regeneration actions. */
+export type PrepareExistingTrackerGenerationResult = {
+  message: unknown;
+  settings: ExtensionSettings;
+  schemaPresetKey: string;
+  currentTracker: unknown;
+  chatJsonValue: any;
+  chatHtmlValue: string;
+  messages: Message[];
+  partsOrder: string[];
+  partsMeta: unknown;
+  makeRequest: (messages: Message[], overrideParams?: any) => Promise<ExtractedData | undefined>;
+};
+
+/** Describes one structured tracker request issued by targeted context-menu regeneration actions. */
+export type RequestStructuredTrackerContentOptions = {
+  messages: Message[];
+  settings: ExtensionSettings;
+  schema: any;
+  schemaName: string;
+  prompt: string;
+  makeRequest: (messages: Message[], overrideParams?: any) => Promise<ExtractedData | undefined>;
+  promptEngineeringInstruction?: string;
+};
+
+/** Describes one targeted tracker update that also clears any resolved pending cleanup markers. */
+export type PersistResolvedTrackerUpdateOptions = Omit<PersistTrackerUpdateOptions, 'extensionData'> & {
+  resolvedTargets: TrackerCleanupTarget[];
+};
+
+/** Defines the callback contract consumed by the extracted context-menu tracker actions module. */
+export type ContextMenuTrackerActionsDependencies = {
+  cancelIfPending: (messageId: number) => boolean;
+  getTrackerPrompt: () => string;
+  prepareExistingTrackerGeneration: (
+    messageId: number,
+    notifySchemaMismatch?: boolean,
+  ) => Promise<PrepareExistingTrackerGenerationResult>;
+  requestStructuredTrackerContent: (options: RequestStructuredTrackerContentOptions) => Promise<unknown>;
+  persistResolvedTrackerUpdate: (options: PersistResolvedTrackerUpdateOptions) => Promise<void>;
+};
 
 let textCompletionStoryStringFormatterPromise: Promise<TextCompletionStoryStringFormatter | undefined> | undefined;
 
@@ -280,26 +330,7 @@ export function createTrackerActions(options: {
   let beforeRequestStartHook = options.beforeRequestStartHook;
   const textCompletionStoryStringFormatterLoader = options.textCompletionStoryStringFormatterLoader;
   const { logPromptEngineeredRenderRollback, requestPromptEngineeredResponse } = createPromptEngineeringHelpers();
-  const contextMenuIndicatorText = 'Updating tracker from menu';
   const fullTrackerIndicatorText = 'Updating tracker';
-
-  type GenerateTrackerOptions = {
-    silent?: boolean;
-    showStatusIndicator?: boolean;
-  };
-
-  type PersistTrackerUpdateOptions = {
-    messageId: number;
-    message: unknown;
-    schemaPresetKey: string;
-    trackerData: unknown;
-    trackerHtml: string;
-    partsOrder: string[];
-    partsMeta: unknown;
-    detailsState: boolean[];
-    successMessage?: string;
-    extensionData?: Record<string, unknown>;
-  };
 
   function resolveSchemaPreset(settings: ExtensionSettings, requestedKey?: string) {
     const presetKeys = Object.keys(settings.schemaPresets ?? {});
@@ -408,6 +439,12 @@ export function createTrackerActions(options: {
     const selectedMatches = apiMapEntries.filter(([, entry]) => normalizeRuntimeString(entry.selected) === normalizedApi);
     if (selectedMatches[0]) {
       const matchingTypes = [...new Set(selectedMatches.map(([, entry]) => normalizeRuntimeString(entry.type)).filter(Boolean))];
+      if (matchingTypes.length > 1) {
+        throw new Error(
+          `Conflicting SillyTavern API mapping types for tracker connection API: ${normalizedApi}. Matching selected entries: ${selectedMatches.map(([key, entry]) => `${key} (${normalizeRuntimeString(entry.type) ?? 'unknown'})`).join(', ')}`,
+        );
+      }
+
       return {
         ...selectedMatches[0][1],
         selected: normalizedApi,
@@ -448,6 +485,34 @@ export function createTrackerActions(options: {
       ...(activeContextName ? { context: activeContextName } : {}),
       ...(activeSystemPromptName ? { sysprompt: activeSystemPromptName } : {}),
     };
+  }
+
+  /** Resolves the effective text-generation API server URL across saved and live SillyTavern profile shapes. */
+  function getProfileApiServer(profile: any, source: 'active' | 'saved'): string | undefined {
+    const candidateValues = source === 'active'
+      ? [
+          profile?.api_server,
+          profile?.apiServer,
+          profile?.server_url,
+          profile?.serverUrl,
+          profile?.['api-url'],
+        ]
+      : [
+          profile?.['api-url'],
+          profile?.api_server,
+          profile?.apiServer,
+          profile?.server_url,
+          profile?.serverUrl,
+        ];
+
+    for (const value of candidateValues) {
+      const normalized = normalizeRuntimeString(value);
+      if (normalized) {
+        return normalized;
+      }
+    }
+
+    return undefined;
   }
 
   /** Resolves the effective tracker-generation connection from either saved settings or live host state. */
@@ -519,7 +584,10 @@ export function createTrackerActions(options: {
     );
   }
 
-  async function prepareExistingTrackerGeneration(messageId: number, notifySchemaMismatch = true) {
+  const prepareExistingTrackerGeneration: ContextMenuTrackerActionsDependencies['prepareExistingTrackerGeneration'] = async (
+    messageId,
+    notifySchemaMismatch = true,
+  ) => {
     const { schemaPresetKey: messageSchemaPresetKey, currentTracker } = getTrackerSchemaAndRenderState(messageId);
     const prepared = await prepareTrackerGeneration(messageId, { schemaPresetKey: messageSchemaPresetKey });
     if (notifySchemaMismatch) {
@@ -535,180 +603,9 @@ export function createTrackerActions(options: {
         resolvedConnection: prepared.resolvedConnection,
       }),
     };
-  }
+  };
 
-  type ArrayItemLocator =
-    | { kind: 'index'; index: number }
-    | { kind: 'name'; name: string }
-    | { kind: 'identity'; idKey: string; idValue: string };
-
-  function getTrackerArrayValue(currentTracker: any, partKey: string): any[] {
-    const currentArr = currentTracker?.[partKey];
-    if (!Array.isArray(currentArr)) {
-      throw new Error(`Tracker field is not an array: ${partKey}`);
-    }
-
-    return currentArr;
-  }
-
-  function resolveArrayItemIndex(currentArr: any[], partKey: string, locator: ArrayItemLocator): number {
-    if (locator.kind === 'index') {
-      if (locator.index < 0 || locator.index >= currentArr.length) {
-        throw new Error(`Array index out of range for ${partKey}: ${locator.index}`);
-      }
-      return locator.index;
-    }
-
-    if (locator.kind === 'name') {
-      const index = findArrayItemIndexByName(currentArr, locator.name);
-      if (index === -1) {
-        throw new Error(`No array item found by name in ${partKey}: ${locator.name}`);
-      }
-      return index;
-    }
-
-    const index = findArrayItemIndexByIdentity(currentArr, locator.idKey, locator.idValue);
-    if (index === -1) {
-      throw new Error(`No array item found by ${locator.idKey} in ${partKey}: ${locator.idValue}`);
-    }
-    return index;
-  }
-
-  function resolveArrayItemRegeneration(
-    chatJsonValue: any,
-    partKey: string,
-    currentArr: any[],
-    locator: ArrayItemLocator,
-  ): {
-    index: number;
-    promptContext: Record<string, unknown>;
-    promptContextLabel: string;
-    prompt: string;
-    promptEngineeringInstruction?: string;
-    successMessage: string;
-    resolvedTarget: TrackerCleanupTarget;
-    finalizeItem: (item: unknown) => unknown;
-  } {
-    const index = resolveArrayItemIndex(currentArr, partKey, locator);
-    const currentItem = currentArr[index];
-
-    if (locator.kind === 'name') {
-      const preserveName = currentItem && typeof currentItem === 'object' && typeof (currentItem as any).name === 'string';
-      const preserveLine = preserveName ? `\n\nIMPORTANT: Preserve the item name exactly as "${locator.name}".` : '';
-      return {
-        index,
-        promptContext: { part: partKey, matchBy: 'name', name: locator.name, index },
-        promptContextLabel: 'Regenerate ONLY this array item (matched by name; previous values intentionally omitted):',
-        prompt:
-          `${settingsManager.getSettings().prompt}\n\nRegenerate ONLY the ${partKey} item with name "${locator.name}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}\n\nIMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
-        promptEngineeringInstruction: preserveLine,
-        successMessage: `Updated: ${partKey} (${locator.name})`,
-        resolvedTarget: buildArrayItemCleanupTarget(partKey, index, { idKey: 'name', idValue: locator.name }),
-        finalizeItem: (item) => {
-          if (preserveName && item && typeof item === 'object') {
-            (item as any).name = locator.name;
-          }
-          return item;
-        },
-      };
-    }
-
-    if (locator.kind === 'identity') {
-      const preserveIdentity = currentItem && typeof currentItem === 'object' && typeof (currentItem as any)[locator.idKey] === 'string';
-      const preserveLine = preserveIdentity
-        ? `\n\nIMPORTANT: Preserve the identity field ${locator.idKey} exactly as "${locator.idValue}".`
-        : '';
-      return {
-        index,
-        promptContext: { part: partKey, matchBy: locator.idKey, idValue: locator.idValue, index },
-        promptContextLabel: 'Regenerate ONLY this array item (matched by identity; previous values intentionally omitted):',
-        prompt:
-          `${settingsManager.getSettings().prompt}\n\nRegenerate ONLY the ${partKey} item with ${locator.idKey} "${locator.idValue}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}\n\nIMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
-        promptEngineeringInstruction: preserveLine,
-        successMessage: `Updated: ${partKey} (${locator.idKey}=${locator.idValue})`,
-        resolvedTarget: buildArrayItemCleanupTarget(partKey, index, { idKey: locator.idKey, idValue: locator.idValue }),
-        finalizeItem: (item) => {
-          if (preserveIdentity && item && typeof item === 'object') {
-            (item as any)[locator.idKey] = locator.idValue;
-          }
-          return item;
-        },
-      };
-    }
-
-    const idKey = getArrayItemIdentityKey(chatJsonValue, partKey);
-    const idValue =
-      currentItem && typeof currentItem === 'object' && typeof (currentItem as any)[idKey] === 'string'
-        ? String((currentItem as any)[idKey])
-        : '';
-    return {
-      index,
-      promptContext: { part: partKey, index, ...(idKey && idValue ? { idKey, idValue } : {}) },
-      promptContextLabel: 'Regenerate ONLY this array item (previous item intentionally omitted):',
-      prompt:
-        `${settingsManager.getSettings().prompt}\n\nRegenerate ONLY ${partKey}[${index}] as an object under key "item". Return a single JSON object matching the provided schema. IMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
-      successMessage: `Updated: ${partKey}[${index}]`,
-      resolvedTarget: buildArrayItemCleanupTarget(partKey, index, idKey && idValue ? { idKey, idValue } : undefined),
-      finalizeItem: (item) => item,
-    };
-  }
-
-  function resolveArrayItemFieldRegeneration(
-    chatJsonValue: any,
-    partKey: string,
-    fieldKey: string,
-    currentArr: any[],
-    locator: ArrayItemLocator,
-  ): {
-    index: number;
-    promptContext: Record<string, unknown>;
-    prompt: string;
-    successMessage: string;
-    resolvedTarget: TrackerCleanupTarget;
-  } {
-    const index = resolveArrayItemIndex(currentArr, partKey, locator);
-    const currentItem = currentArr[index];
-    if (!currentItem || typeof currentItem !== 'object' || Array.isArray(currentItem)) {
-      throw new Error(`Array item is not an object at ${partKey}[${index}]`);
-    }
-
-    const idKey = getArrayItemIdentityKey(chatJsonValue, partKey);
-    const idValue = typeof (currentItem as any)?.[idKey] === 'string' ? String((currentItem as any)[idKey]) : '';
-    const itemContext = structuredClone(currentItem);
-    if (fieldKey in (itemContext as any)) {
-      delete (itemContext as any)[fieldKey];
-    }
-
-    return {
-      index,
-      promptContext: {
-        part: partKey,
-        index,
-        ...(idKey && idValue ? { idKey, idValue } : {}),
-        field: fieldKey,
-        itemContext,
-      },
-      prompt:
-        `${settingsManager.getSettings().prompt}\n\nRegenerate ONLY ${partKey}[${index}].${fieldKey}. Return a single JSON object with key "value" that matches the provided schema. Do not change or rename the array item; only update that field. IMPORTANT: Generate a fresh value; the previous value has been intentionally omitted and must not be repeated.`,
-      successMessage: `Updated: ${partKey}[${index}].${fieldKey}`,
-      resolvedTarget: buildArrayItemFieldCleanupTarget(
-        partKey,
-        index,
-        fieldKey,
-        idKey && idValue ? { idKey, idValue } : undefined,
-      ),
-    };
-  }
-
-  async function requestStructuredTrackerContent(options: {
-    messages: Message[];
-    settings: ExtensionSettings;
-    schema: any;
-    schemaName: string;
-    prompt: string;
-    makeRequest: ReturnType<typeof makeRequestFactory>;
-    promptEngineeringInstruction?: string;
-  }) {
+  async function requestStructuredTrackerContent(options: RequestStructuredTrackerContentOptions) {
     if (options.settings.promptEngineeringMode === PromptEngineeringMode.NATIVE) {
       insertTrackerInstructionMessage(options.messages, options.prompt);
       const result = await options.makeRequest(options.messages, {
@@ -726,9 +623,7 @@ export function createTrackerActions(options: {
     );
   }
 
-  const persistResolvedTrackerUpdate = async (
-    options: Omit<PersistTrackerUpdateOptions, 'extensionData'> & { resolvedTargets: TrackerCleanupTarget[] },
-  ) => {
+  const persistResolvedTrackerUpdate: ContextMenuTrackerActionsDependencies['persistResolvedTrackerUpdate'] = async (options) => {
     await persistTrackerUpdate({
       ...options,
       extensionData: buildPendingRedactionExtensionData(options.message, {
@@ -794,33 +689,6 @@ export function createTrackerActions(options: {
     }
   };
 
-  /** Runs one context-menu regeneration action with the shared badge, spinner, and error handling. */
-  const runContextMenuTrackerUpdate = async (
-    options: {
-      messageId: number;
-      button: Element | null | undefined;
-      errorContext: string;
-      callback: () => Promise<void>;
-    },
-  ): Promise<boolean> => {
-    try {
-      options.button?.classList.add('spinning');
-      await withMessageStatusIndicator(
-        { messageId: options.messageId, text: contextMenuIndicatorText, statusClassName: CONTEXT_MENU_STATUS_CLASS },
-        options.callback,
-      );
-      return true;
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error(`Error ${options.errorContext}:`, error);
-        st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
-      }
-      return false;
-    } finally {
-      options.button?.classList.remove('spinning');
-    }
-  };
-
   function getTrackerSchemaAndRenderState(messageId: number) {
     const message = globalContext.chat[messageId];
     if (!message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY]) {
@@ -869,6 +737,7 @@ export function createTrackerActions(options: {
   async function sendTextCompletionTrackerRequest(options: {
     messageId: number;
     profile: any;
+    connectionSource: 'active' | 'saved';
     selectedApiType: string | undefined;
     requestMessages: Message[];
     wrappedRequestMessages?: Message[];
@@ -932,7 +801,7 @@ export function createTrackerActions(options: {
           max_tokens: options.maxTokens,
           model: options.profile?.model,
           api_type: options.selectedApiType ?? options.profile?.api,
-          api_server: options.profile?.['api-url'],
+          api_server: getProfileApiServer(options.profile, options.connectionSource),
           ...(wrappedPrompt.stoppingStrings.length > 0
             ? {
                 stop: wrappedPrompt.stoppingStrings,
@@ -970,7 +839,7 @@ export function createTrackerActions(options: {
           max_tokens: options.maxTokens,
           model: options.profile?.model,
           api_type: options.selectedApiType ?? options.profile?.api,
-          api_server: options.profile?.['api-url'],
+          api_server: getProfileApiServer(options.profile, options.connectionSource),
           ...(options.overridePayload ?? {}),
         },
         requestOptions,
@@ -1016,6 +885,23 @@ export function createTrackerActions(options: {
     return cancelIfPending(messageId);
   }
 
+  const {
+    generateTrackerPart,
+    generateTrackerArrayItem,
+    generateTrackerArrayItemByName,
+    generateTrackerArrayItemByIdentity,
+    generateTrackerArrayItemField,
+    generateTrackerArrayItemFieldByName,
+    generateTrackerArrayItemFieldByIdentity,
+    recreateCleanupTarget,
+  } = createContextMenuTrackerActions({
+    cancelIfPending,
+    getTrackerPrompt: () => settingsManager.getSettings().prompt,
+    prepareExistingTrackerGeneration,
+    requestStructuredTrackerContent,
+    persistResolvedTrackerUpdate,
+  });
+
   function makeRequestFactory(
     messageId: number,
     settings: ExtensionSettings,
@@ -1059,7 +945,7 @@ export function createTrackerActions(options: {
           api: selectedApi,
           apiType: selectedApiMap?.type,
           model: typeof profile?.model === 'string' ? profile.model : undefined,
-          apiServer: typeof profile?.['api-url'] === 'string' ? profile['api-url'] : undefined,
+          apiServer: getProfileApiServer(profile, resolvedConnection.source),
           presetName: typeof profile?.preset === 'string' ? profile.preset : undefined,
           instructName: options.instructName,
           contextName: typeof profile?.context === 'string' ? profile.context : undefined,
@@ -1075,6 +961,7 @@ export function createTrackerActions(options: {
             void sendTextCompletionTrackerRequest({
               messageId,
               profile,
+              connectionSource: resolvedConnection.source,
               selectedApiType: selectedApiMap?.type,
               requestMessages: sanitizedPrompt,
               wrappedRequestMessages: textCompletionPromptBody,
@@ -1539,290 +1426,6 @@ export function createTrackerActions(options: {
     }
   }
 
-  async function generateTrackerPartInternal(id: number, partKey: string, notifySchemaMismatch = true) {
-    if (cancelIfPending(id)) return false;
-
-    const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
-    const partButton = messageBlock?.querySelector(
-      `.ztracker-part-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"]`,
-    );
-
-    const detailsState = captureDetailsState(id);
-
-    return runContextMenuTrackerUpdate({
-      messageId: id,
-      button: partButton,
-      errorContext: 'generating tracker part',
-      callback: async () => {
-          const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, partsOrder, partsMeta, makeRequest } =
-            await prepareExistingTrackerGeneration(id, notifySchemaMismatch);
-          if (!currentTracker || typeof currentTracker !== 'object') {
-            throw new Error('No existing tracker found for this message. Generate a full tracker first.');
-          }
-
-          const partSchema = buildTopLevelPartSchema(chatJsonValue, partKey);
-
-          const redactedTracker = redactTrackerPartValue(currentTracker, partKey);
-          appendCurrentTrackerSnapshot(
-            messages as any,
-            redactedTracker,
-            'Current tracker for this message (target part omitted for freshness; keep everything else consistent):',
-          );
-
-          const partResponse = await requestStructuredTrackerContent({
-            messages,
-            settings,
-            schema: partSchema,
-            schemaName: 'SceneTrackerPart',
-            prompt: `${settings.prompt}\n\nGenerate ONLY the field "${partKey}". Return a single JSON object matching the provided schema.`,
-            makeRequest,
-          });
-
-          if (!partResponse || Object.keys(partResponse as any).length === 0) {
-            throw new Error(`Empty response while generating part: ${partKey}`);
-          }
-
-          const nextTracker = mergeTrackerPart(currentTracker, partKey, partResponse);
-          await persistResolvedTrackerUpdate({
-            messageId: id,
-            message,
-            schemaPresetKey,
-            trackerData: nextTracker,
-            trackerHtml: chatHtmlValue,
-            partsOrder,
-            partsMeta,
-            detailsState,
-            successMessage: `Updated: ${partKey}`,
-            resolvedTargets: [{ kind: 'part', partKey }],
-          });
-        },
-    });
-  }
-
-  async function generateTrackerPart(id: number, partKey: string) {
-    return generateTrackerPartInternal(id, partKey);
-  }
-
-  async function generateTrackerArrayItem(id: number, partKey: string, index: number) {
-    const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
-    const itemButton = messageBlock?.querySelector(
-      `.ztracker-array-item-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"][data-ztracker-index="${index}"]`,
-    );
-
-    return generateTrackerArrayItemForLocator(id, partKey, { kind: 'index', index }, {
-      button: itemButton,
-      errorContext: 'generating tracker array item',
-    });
-  }
-
-  async function generateTrackerArrayItemForLocator(
-    id: number,
-    partKey: string,
-    locator: ArrayItemLocator,
-    options: { button: Element | null | undefined; errorContext: string },
-    notifySchemaMismatch = true,
-  ) {
-    if (cancelIfPending(id)) return false;
-
-    const detailsState = captureDetailsState(id);
-
-    return runContextMenuTrackerUpdate({
-      messageId: id,
-      button: options.button,
-      errorContext: options.errorContext,
-      callback: async () => {
-          const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, partsOrder, partsMeta, makeRequest } =
-            await prepareExistingTrackerGeneration(id, notifySchemaMismatch);
-          if (!currentTracker || typeof currentTracker !== 'object') {
-            throw new Error('No existing tracker found for this message. Generate a full tracker first.');
-          }
-
-          const currentArr = getTrackerArrayValue(currentTracker, partKey);
-          const itemRequest = resolveArrayItemRegeneration(chatJsonValue, partKey, currentArr, locator);
-
-          const itemSchema = buildArrayItemSchema(chatJsonValue, partKey);
-          const redactedTracker = redactTrackerArrayItemValue(currentTracker, partKey, itemRequest.index);
-
-          appendCurrentTrackerSnapshot(
-            messages as any,
-            redactedTracker,
-            'Current tracker for this message (target item omitted for freshness; keep everything else consistent):',
-          );
-          appendCurrentTrackerSnapshot(
-            messages as any,
-            itemRequest.promptContext,
-            itemRequest.promptContextLabel,
-          );
-
-          const itemResponse = (await requestStructuredTrackerContent({
-            messages,
-            settings,
-            schema: itemSchema,
-            schemaName: 'SceneTrackerItem',
-            prompt: itemRequest.prompt,
-            makeRequest,
-            promptEngineeringInstruction: itemRequest.promptEngineeringInstruction,
-          })) as Record<string, unknown> | undefined;
-
-          const item = itemRequest.finalizeItem(itemResponse?.item);
-          if (item === undefined) {
-            throw new Error('Item response missing key: item');
-          }
-
-          const nextTracker = replaceTrackerArrayItem(currentTracker, partKey, itemRequest.index, item);
-          await persistResolvedTrackerUpdate({
-            messageId: id,
-            message,
-            schemaPresetKey,
-            trackerData: nextTracker,
-            trackerHtml: chatHtmlValue,
-            partsOrder,
-            partsMeta,
-            detailsState,
-            successMessage: itemRequest.successMessage,
-            resolvedTargets: [itemRequest.resolvedTarget],
-          });
-        },
-    });
-  }
-
-  async function generateTrackerArrayItemByName(id: number, partKey: string, name: string) {
-    const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
-    const itemButton = messageBlock?.querySelector(
-      `.ztracker-array-item-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"][data-ztracker-name="${CSS.escape(name)}"]`,
-    );
-
-    return generateTrackerArrayItemForLocator(id, partKey, { kind: 'name', name }, {
-      button: itemButton,
-      errorContext: 'generating tracker array item (by name)',
-    });
-  }
-
-  async function generateTrackerArrayItemByIdentity(id: number, partKey: string, idKey: string, idValue: string) {
-    const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
-    const itemButton = messageBlock?.querySelector(
-      `.ztracker-array-item-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"][data-ztracker-idkey="${CSS.escape(idKey)}"][data-ztracker-idvalue="${CSS.escape(idValue)}"]`,
-    );
-
-    return generateTrackerArrayItemForLocator(id, partKey, { kind: 'identity', idKey, idValue }, {
-      button: itemButton,
-      errorContext: 'generating tracker array item (by identity)',
-    });
-  }
-
-  async function generateTrackerArrayItemField(id: number, partKey: string, index: number, fieldKey: string) {
-    const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
-    const fieldButton = messageBlock?.querySelector(
-      `.ztracker-array-item-field-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"][data-ztracker-index="${index}"][data-ztracker-field="${CSS.escape(fieldKey)}"]`,
-    );
-
-    return generateTrackerArrayItemFieldForLocator(id, partKey, fieldKey, { kind: 'index', index }, {
-      button: fieldButton,
-      errorContext: 'generating tracker array item field',
-    });
-  }
-
-  async function generateTrackerArrayItemFieldForLocator(
-    id: number,
-    partKey: string,
-    fieldKey: string,
-    locator: ArrayItemLocator,
-    options: { button: Element | null | undefined; errorContext: string },
-    notifySchemaMismatch = true,
-  ) {
-    if (cancelIfPending(id)) return false;
-
-    const detailsState = captureDetailsState(id);
-
-    return runContextMenuTrackerUpdate({
-      messageId: id,
-      button: options.button,
-      errorContext: options.errorContext,
-      callback: async () => {
-          const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, partsOrder, partsMeta, makeRequest } =
-            await prepareExistingTrackerGeneration(id, notifySchemaMismatch);
-          if (!currentTracker || typeof currentTracker !== 'object') {
-            throw new Error('No existing tracker found for this message. Generate a full tracker first.');
-          }
-
-          const currentArr = getTrackerArrayValue(currentTracker, partKey);
-          const fieldRequest = resolveArrayItemFieldRegeneration(chatJsonValue, partKey, fieldKey, currentArr, locator);
-          const redactedTracker = redactTrackerArrayItemFieldValue(currentTracker, partKey, fieldRequest.index, fieldKey);
-
-          const fieldSchema = buildArrayItemFieldSchema(chatJsonValue, partKey, fieldKey);
-
-          appendCurrentTrackerSnapshot(
-            messages as any,
-            redactedTracker,
-            'Current tracker for this message (target field omitted for freshness; keep everything else consistent):',
-          );
-          appendCurrentTrackerSnapshot(
-            messages as any,
-            fieldRequest.promptContext,
-            'Regenerate ONLY this field within this array item (field value intentionally omitted):',
-          );
-
-          const fieldResponse = (await requestStructuredTrackerContent({
-            messages,
-            settings,
-            schema: fieldSchema,
-            schemaName: 'SceneTrackerItemField',
-            prompt: fieldRequest.prompt,
-            makeRequest,
-          })) as Record<string, unknown> | undefined;
-
-          const value = fieldResponse?.value;
-          if (value === undefined) {
-            throw new Error('Field response missing key: value');
-          }
-
-          const nextTracker = replaceTrackerArrayItemField(currentTracker, partKey, fieldRequest.index, fieldKey, value);
-          await persistResolvedTrackerUpdate({
-            messageId: id,
-            message,
-            schemaPresetKey,
-            trackerData: nextTracker,
-            trackerHtml: chatHtmlValue,
-            partsOrder,
-            partsMeta,
-            detailsState,
-            successMessage: fieldRequest.successMessage,
-            resolvedTargets: [fieldRequest.resolvedTarget],
-          });
-        },
-    });
-  }
-
-  async function generateTrackerArrayItemFieldByName(id: number, partKey: string, name: string, fieldKey: string) {
-    const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
-    const fieldButton = messageBlock?.querySelector(
-      `.ztracker-array-item-field-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"][data-ztracker-name="${CSS.escape(name)}"][data-ztracker-field="${CSS.escape(fieldKey)}"]`,
-    );
-
-    return generateTrackerArrayItemFieldForLocator(id, partKey, fieldKey, { kind: 'name', name }, {
-      button: fieldButton,
-      errorContext: 'generating tracker array item field (by name)',
-    });
-  }
-
-  async function generateTrackerArrayItemFieldByIdentity(
-    id: number,
-    partKey: string,
-    idKey: string,
-    idValue: string,
-    fieldKey: string,
-  ) {
-    const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
-    const fieldButton = messageBlock?.querySelector(
-      `.ztracker-array-item-field-regenerate-button[data-ztracker-part="${CSS.escape(partKey)}"][data-ztracker-idkey="${CSS.escape(idKey)}"][data-ztracker-idvalue="${CSS.escape(idValue)}"][data-ztracker-field="${CSS.escape(fieldKey)}"]`,
-    );
-
-    return generateTrackerArrayItemFieldForLocator(id, partKey, fieldKey, { kind: 'identity', idKey, idValue }, {
-      button: fieldButton,
-      errorContext: 'generating tracker array item field (by identity)',
-    });
-  }
-
   /** Dispatches full tracker generation while enforcing the shared skip-first-messages guard for manual and auto flows. */
   async function generateTracker(id: number, options?: GenerateTrackerOptions) {
     const settings = settingsManager.getSettings();
@@ -1863,56 +1466,6 @@ export function createTrackerActions(options: {
     });
 
     return normalizedTargets;
-  }
-
-  async function recreateCleanupTarget(messageId: number, target: TrackerCleanupTarget): Promise<boolean> {
-    if (target.kind === 'part') {
-      return !!(await generateTrackerPartInternal(messageId, target.partKey, false));
-    }
-    if (target.kind === 'array-item') {
-      if (typeof target.idKey === 'string' && target.idKey && typeof target.idValue === 'string' && target.idValue) {
-        return !!(
-          await generateTrackerArrayItemForLocator(
-            messageId,
-            target.partKey,
-            { kind: 'identity', idKey: target.idKey, idValue: target.idValue },
-            { button: undefined, errorContext: 'generating tracker array item (by identity)' },
-            false,
-          )
-        );
-      }
-      return !!(
-        await generateTrackerArrayItemForLocator(
-          messageId,
-          target.partKey,
-          { kind: 'index', index: target.index },
-          { button: undefined, errorContext: 'generating tracker array item' },
-          false,
-        )
-      );
-    }
-    if (typeof target.idKey === 'string' && target.idKey && typeof target.idValue === 'string' && target.idValue) {
-      return !!(
-        await generateTrackerArrayItemFieldForLocator(
-          messageId,
-          target.partKey,
-          target.fieldKey,
-          { kind: 'identity', idKey: target.idKey, idValue: target.idValue },
-          { button: undefined, errorContext: 'generating tracker array item field (by identity)' },
-          false,
-        )
-      );
-    }
-    return !!(
-      await generateTrackerArrayItemFieldForLocator(
-        messageId,
-        target.partKey,
-        target.fieldKey,
-        { kind: 'index', index: target.index },
-        { button: undefined, errorContext: 'generating tracker array item field' },
-        false,
-      )
-    );
   }
 
   async function clearAndRecreateTrackerTargets(messageId: number, targets: TrackerCleanupTarget[]): Promise<void> {

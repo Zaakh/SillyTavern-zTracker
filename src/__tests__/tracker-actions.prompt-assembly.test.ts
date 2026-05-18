@@ -22,6 +22,8 @@ import {
   TEST_IMPORT_META_URL,
 } from '../test-utils/tracker-actions-test-helpers.js';
 
+const trackerPartsModule = await import('../tracker-parts.js');
+
 describe('createTrackerActions prompt assembly', () => {
   const originalCss = globalThis.CSS;
 
@@ -545,7 +547,11 @@ describe('createTrackerActions prompt assembly', () => {
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 
-  test('uses the active SillyTavern connection for textgenerationwebui without requiring a saved profile id', async () => {
+  test.each([
+    ['api-url', { 'api-url': 'http://live.example' }, 'http://live.example'],
+    ['api_server', { api_server: 'http://live.example' }, 'http://live.example'],
+    ['conflicting live and saved fields', { 'api-url': 'http://saved.example', api_server: 'http://live.example' }, 'http://live.example'],
+  ])('uses the active SillyTavern connection for textgenerationwebui with %s server data without requiring a saved profile id', async (_serverField, serverValue, expectedApiServer) => {
     const textCompletionProcessRequest = jest.fn(async () => ({ content: { time: '10:00:00' } }));
     const context = makeContext({
       extensionSettings: {
@@ -554,7 +560,7 @@ describe('createTrackerActions prompt assembly', () => {
             id: 'active-text-profile',
             api: 'textgenerationwebui',
             model: 'live-model',
-            'api-url': 'http://live.example',
+            ...serverValue,
           },
         },
       },
@@ -602,7 +608,7 @@ describe('createTrackerActions prompt assembly', () => {
       expect.objectContaining({
         api_type: 'textgenerationwebui',
         model: 'live-model',
-        api_server: 'http://live.example',
+        api_server: expectedApiServer,
       }),
       expect.objectContaining({
         instructName: 'Active Instruct',
@@ -818,6 +824,60 @@ describe('createTrackerActions prompt assembly', () => {
       expect.any(AbortSignal),
     );
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test('fails clearly when matching selected API-map aliases disagree on type', async () => {
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const textCompletionProcessRequest = jest.fn(async () => ({ content: { time: '10:00:00' } }));
+    const context = makeContext({
+      extensionSettings: {
+        connectionManager: {
+          selectedProfile: {
+            id: 'active-text-profile',
+            api: 'textgenerationwebui',
+            model: 'live-model',
+            'api-url': 'http://live.example',
+          },
+        },
+      },
+      mainApi: 'textgenerationwebui',
+      textCompletionProcessRequest,
+    });
+    installSillyTavernContext(context);
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile({ id: 'saved-profile', api: 'openai' })],
+          },
+        },
+        CONNECT_API_MAP: {
+          textA: { selected: 'textgenerationwebui', type: 'koboldcpp' },
+          textB: { selected: 'textgenerationwebui', type: 'openrouter-text' },
+        },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ profileId: '', connectionSource: 'active', trackerSystemPromptMode: 'profile' }),
+      } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await expect(actions.generateTracker(0)).resolves.toBe(false);
+
+    expect(buildPromptMock).not.toHaveBeenCalled();
+    expect(textCompletionProcessRequest).not.toHaveBeenCalled();
+    expect(stEchoMock).toHaveBeenCalledWith(
+      'error',
+      'Tracker generation failed: Conflicting SillyTavern API mapping types for tracker connection API: textgenerationwebui. Matching selected entries: textA (koboldcpp), textB (openrouter-text)',
+    );
+
+    consoleSpy.mockRestore();
   });
 
   test.each([
@@ -1356,6 +1416,175 @@ describe('createTrackerActions prompt assembly', () => {
     expect(instructOptionDuringRequest).toBe('Active Instruct');
     expect(profile.instruct).toBe('Profile Instruct');
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test('regenerates an array item by name through the context-menu locator path', async () => {
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const generateRequest = makeGenerateRequest({
+      content: {
+        item: {
+          name: 'Alice',
+          status: 'updated status',
+        },
+      },
+    });
+    (trackerPartsModule.findArrayItemIndexByName as jest.Mock).mockReturnValue(0);
+    (trackerPartsModule.buildArrayItemSchema as jest.Mock).mockReturnValue({
+      type: 'object',
+      properties: {
+        item: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            status: { type: 'string' },
+          },
+          required: ['name', 'status'],
+        },
+      },
+      required: ['item'],
+    });
+    (trackerPartsModule.redactTrackerArrayItemValue as jest.Mock).mockImplementation((tracker) => tracker);
+    (trackerPartsModule.replaceTrackerArrayItem as jest.Mock).mockImplementation((tracker, partKey, index, item) => ({
+      ...tracker,
+      [partKey]: (tracker?.[partKey] ?? []).map((entry: unknown, entryIndex: number) =>
+        entryIndex === index ? item : entry,
+      ),
+    }));
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [
+          {
+            original_avatar: 'avatar.png',
+            extra: {
+              zTracker: {
+                schemaValue: {
+                  characters: [{ name: 'Alice', status: 'old status' }],
+                },
+                schemaHtml: '<div></div>',
+              },
+            },
+          },
+        ],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile()],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: { getSettings: () => makeSettings() } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTrackerArrayItemByName(0, 'characters', 'Alice');
+
+    expect(trackerPartsModule.findArrayItemIndexByName).toHaveBeenCalledWith(
+      [{ name: 'Alice', status: 'old status' }],
+      'Alice',
+    );
+    expect(trackerPartsModule.replaceTrackerArrayItem).toHaveBeenCalledWith(
+      { characters: [{ name: 'Alice', status: 'old status' }] },
+      'characters',
+      0,
+      { name: 'Alice', status: 'updated status' },
+    );
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        trackerData: { characters: [{ name: 'Alice', status: 'updated status' }] },
+      }),
+    );
+  });
+
+  test('regenerates an array-item field by identity through the context-menu locator path', async () => {
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const generateRequest = makeGenerateRequest({
+      content: {
+        value: 'updated status',
+      },
+    });
+    const originalStructuredClone = globalThis.structuredClone;
+    globalThis.structuredClone = originalStructuredClone ?? ((value: unknown) => JSON.parse(JSON.stringify(value)));
+    (trackerPartsModule.getArrayItemIdentityKey as jest.Mock).mockReturnValue('id');
+    (trackerPartsModule.findArrayItemIndexByIdentity as jest.Mock).mockReturnValue(0);
+    (trackerPartsModule.buildArrayItemFieldSchema as jest.Mock).mockReturnValue({
+      type: 'object',
+      properties: {
+        value: { type: 'string' },
+      },
+      required: ['value'],
+    });
+    (trackerPartsModule.redactTrackerArrayItemFieldValue as jest.Mock).mockImplementation((tracker) => tracker);
+    (trackerPartsModule.replaceTrackerArrayItemField as jest.Mock).mockImplementation((tracker, partKey, index, fieldKey, value) => ({
+      ...tracker,
+      [partKey]: (tracker?.[partKey] ?? []).map((entry: Record<string, unknown>, entryIndex: number) =>
+        entryIndex === index ? { ...entry, [fieldKey]: value } : entry,
+      ),
+    }));
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [
+          {
+            original_avatar: 'avatar.png',
+            extra: {
+              zTracker: {
+                schemaValue: {
+                  characters: [{ id: 'char-1', name: 'Alice', status: 'old status' }],
+                },
+                schemaHtml: '<div></div>',
+              },
+            },
+          },
+        ],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile()],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: { getSettings: () => makeSettings() } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    try {
+      await actions.generateTrackerArrayItemFieldByIdentity(0, 'characters', 'id', 'char-1', 'status');
+    } finally {
+      globalThis.structuredClone = originalStructuredClone;
+    }
+
+    expect(trackerPartsModule.findArrayItemIndexByIdentity).toHaveBeenCalledWith(
+      [{ id: 'char-1', name: 'Alice', status: 'old status' }],
+      'id',
+      'char-1',
+    );
+    expect(trackerPartsModule.replaceTrackerArrayItemField).toHaveBeenCalledWith(
+      { characters: [{ id: 'char-1', name: 'Alice', status: 'old status' }] },
+      'characters',
+      0,
+      'status',
+      'updated status',
+    );
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        trackerData: { characters: [{ id: 'char-1', name: 'Alice', status: 'updated status' }] },
+      }),
+    );
   });
 
   test('clears stale profile instruct transport state by omitting the request-local instruct preset when none is active', async () => {
