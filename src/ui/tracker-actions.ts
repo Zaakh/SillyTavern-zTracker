@@ -387,23 +387,42 @@ export function createTrackerActions(options: {
     }
 
     const directMatch = connectApiMap[normalizedApi];
-    if (directMatch && typeof directMatch === 'object') {
+    if (directMatch?.selected) {
       return directMatch;
+    }
+
+    if (
+      directMatch
+      && typeof directMatch === 'object'
+      && normalizeRuntimeString((directMatch as Record<string, unknown>).type) === normalizedApi
+    ) {
+      return {
+        ...directMatch,
+        selected: normalizedApi,
+      };
     }
 
     const apiMapEntries = Object.entries(connectApiMap).filter(
       (entry): entry is [string, Record<string, unknown>] => !!entry[1] && typeof entry[1] === 'object',
     );
-    for (const field of ['selected', 'type'] as const) {
-      const matches = apiMapEntries.filter(([, entry]) => normalizeRuntimeString(entry[field]) === normalizedApi);
-      if (matches.length > 1) {
-        throw new Error(
-          `Ambiguous SillyTavern API mapping for tracker connection API: ${normalizedApi}. Matching ${field} entries: ${matches.map(([key]) => key).join(', ')}`,
-        );
-      }
-      if (matches[0]) {
-        return matches[0][1];
-      }
+    const selectedMatches = apiMapEntries.filter(([, entry]) => normalizeRuntimeString(entry.selected) === normalizedApi);
+    if (selectedMatches[0]) {
+      const matchingTypes = [...new Set(selectedMatches.map(([, entry]) => normalizeRuntimeString(entry.type)).filter(Boolean))];
+      return {
+        ...selectedMatches[0][1],
+        selected: normalizedApi,
+        ...(matchingTypes.length === 1 ? { type: matchingTypes[0] } : {}),
+      };
+    }
+
+    const typeMatches = apiMapEntries.filter(([, entry]) => normalizeRuntimeString(entry.type) === normalizedApi);
+    if (typeMatches.length > 1) {
+      throw new Error(
+        `Ambiguous SillyTavern API mapping for tracker connection API: ${normalizedApi}. Matching type entries: ${typeMatches.map(([key]) => key).join(', ')}`,
+      );
+    }
+    if (typeMatches[0]) {
+      return typeMatches[0][1];
     }
 
     return undefined;
