@@ -367,6 +367,10 @@ export function createTrackerActions(options: {
     );
   }
 
+  function hasStoredTracker(messageId: number) {
+    return Boolean(globalContext.chat[messageId]?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY]);
+  }
+
   function notifyIfExistingTrackerUsesOlderSchema(settings: ExtensionSettings, messageSchemaPresetKey: string) {
     const { schemaPresetKey: activeChatSchemaPresetKey, schemaPreset: activeChatSchemaPreset } = getActiveChatSchemaPreset(settings);
     if (activeChatSchemaPresetKey === messageSchemaPresetKey) {
@@ -1659,7 +1663,8 @@ export function createTrackerActions(options: {
   /** Dispatches full tracker generation while enforcing the shared skip-first-messages guard for manual and auto flows. */
   async function generateTracker(id: number, options?: GenerateTrackerOptions) {
     const settings = settingsManager.getSettings();
-    if (shouldSkipTrackerGeneration(id, settings, (message) => st_echo('info', message), options?.silent)) {
+    const shouldRespectSkipFirstMessages = options?.silent || !hasStoredTracker(id);
+    if (shouldRespectSkipFirstMessages && shouldSkipTrackerGeneration(id, settings, (message) => st_echo('info', message), options?.silent)) {
       return false;
     }
 

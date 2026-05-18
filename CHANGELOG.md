@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Explicit full redo of an existing tracker now still works on early chat messages, even when `Skip First X Messages` blocks first-time tracker generation there.
+
 ## [1.11.4] - 2026-05-13
 
 ### Changed
