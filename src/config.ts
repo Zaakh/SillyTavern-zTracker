@@ -16,6 +16,8 @@ export enum TrackerWorldInfoPolicyMode {
   ALLOWLIST = 'allowlist',
 }
 
+export type TrackerConnectionSource = 'saved' | 'active';
+
 export type TrackerSystemPromptMode = 'profile' | 'saved' | 'selected';
 
 export type TrackerGenerationConversationRoleMode = 'preserve' | 'all_assistant';
@@ -52,6 +54,8 @@ export interface EmbedSnapshotRegexTransformPreset {
 export interface ExtensionSettings {
   version: string;
   formatVersion: string;
+  /** Controls whether tracker generation follows the live host connection or a pinned saved profile. */
+  connectionSource: TrackerConnectionSource;
   profileId: string;
   trackerSystemPromptMode: TrackerSystemPromptMode;
   trackerSystemPromptSavedName: string;
@@ -583,6 +587,7 @@ const FORMAT_VERSION = 'F_1.0';
 export const defaultSettings: ExtensionSettings = {
   version: VERSION,
   formatVersion: FORMAT_VERSION,
+  connectionSource: 'saved',
   profileId: '',
   trackerSystemPromptMode: 'profile',
   trackerSystemPromptSavedName: '',

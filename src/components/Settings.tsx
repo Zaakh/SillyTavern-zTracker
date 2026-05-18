@@ -40,6 +40,7 @@ export const settingsManager = new ExtensionSettingsManager<ExtensionSettings>(E
 export const ZTrackerSettings: FC = () => {
   const forceUpdate = useForceUpdate();
   const settings = settingsManager.getSettings();
+  const connectionSource = settings.connectionSource ?? 'saved';
   const previousSchemaPresetRef = useRef(settings.schemaPreset);
 
   const [diagnosticsText, setDiagnosticsText] = useState<string>('');
@@ -266,16 +267,42 @@ export const ZTrackerSettings: FC = () => {
         <div className="inline-drawer-content">
           <div className="ztracker-container">
             <div className="setting-row">
-              <label title="Which SillyTavern Connection Profile zTracker uses when generating trackers.">Connection Profile</label>
-              <STConnectionProfileSelect
-                initialSelectedProfileId={settings.profileId}
-                onChange={(profile) =>
-                  updateAndRefresh((s) => {
-                    s.profileId = profile?.id ?? '';
-                  })
-                }
-              />
+              <label title="Choose whether zTracker uses the currently active SillyTavern connection or a specific saved connection profile.">Connection Source</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+                <select
+                  className="text_pole"
+                  title="Choose whether zTracker uses the currently active SillyTavern connection or a specific saved connection profile."
+                  value={connectionSource}
+                  onChange={(e) =>
+                    updateAndRefresh((s) => {
+                      s.connectionSource = e.target.value as ExtensionSettings['connectionSource'];
+                    })
+                  }
+                >
+                  <option value="active">Use current active SillyTavern connection</option>
+                  <option value="saved">Use selected saved connection profile</option>
+                </select>
+                {connectionSource === 'active' && (
+                  <small>
+                    zTracker follows the live SillyTavern connection currently in use, including active unsaved connection changes.
+                  </small>
+                )}
+              </div>
             </div>
+
+            {connectionSource === 'saved' && (
+              <div className="setting-row">
+                <label title="Which saved SillyTavern Connection Profile zTracker uses when generating trackers.">Connection Profile</label>
+                <STConnectionProfileSelect
+                  initialSelectedProfileId={settings.profileId}
+                  onChange={(profile) =>
+                    updateAndRefresh((s) => {
+                      s.profileId = profile?.id ?? '';
+                    })
+                  }
+                />
+              </div>
+            )}
 
             <SettingsSectionDrawer
               title="Tracker Generation"

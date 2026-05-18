@@ -367,6 +367,90 @@ export function createTrackerActions(options: {
     );
   }
 
+  type ResolvedTrackerConnection = {
+    source: 'active' | 'saved';
+    profile: any;
+    profileId: string;
+    apiMap: any;
+  };
+
+  /** Normalizes one optional runtime string before using it as a preset or connection selector. */
+  function normalizeRuntimeString(value: unknown): string | undefined {
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+  }
+
+  /** Builds a minimal active-connection snapshot from SillyTavern's current runtime state. */
+  function getActiveRuntimeConnection(context: any): any {
+    const connectionManager = context?.extensionSettings?.connectionManager;
+    const selectedProfile = typeof connectionManager?.getSelectedProfile === 'function'
+      ? connectionManager.getSelectedProfile()
+      : connectionManager?.selectedProfile ?? connectionManager?.activeProfile ?? connectionManager?.currentProfile;
+    const activePresetName = normalizeRuntimeString(context?.getPresetManager?.()?.getSelectedPresetName?.());
+    const activeInstructName = normalizeRuntimeString(context?.powerUserSettings?.instruct?.preset);
+    const activeContextName = normalizeRuntimeString(context?.powerUserSettings?.context?.preset);
+    const activeSystemPromptName = normalizeRuntimeString(context?.powerUserSettings?.sysprompt?.name);
+    const activeApi = normalizeRuntimeString(context?.mainApi) ?? normalizeRuntimeString(selectedProfile?.api);
+
+    return {
+      ...(selectedProfile && typeof selectedProfile === 'object' ? selectedProfile : {}),
+      ...(activeApi ? { api: activeApi } : {}),
+      ...(activePresetName ? { preset: activePresetName } : {}),
+      ...(activeInstructName ? { instruct: activeInstructName } : {}),
+      ...(activeContextName ? { context: activeContextName } : {}),
+      ...(activeSystemPromptName ? { sysprompt: activeSystemPromptName } : {}),
+    };
+  }
+
+  /** Resolves the effective tracker-generation connection from either saved settings or live host state. */
+  function resolveTrackerConnection(settings: ExtensionSettings, context: any): ResolvedTrackerConnection {
+    const connectionSource = settings.connectionSource ?? 'saved';
+    const { extensionSettings, CONNECT_API_MAP } = globalContext;
+
+    if (connectionSource === 'active') {
+      const profile = getActiveRuntimeConnection(context);
+      const profileId = normalizeRuntimeString(profile?.id) ?? '';
+      if (!profile?.api) {
+        throw new Error('No active SillyTavern connection could be resolved for tracker generation.');
+      }
+
+      const apiMap = CONNECT_API_MAP[profile.api];
+      if (!apiMap?.selected) {
+        throw new Error(`Unsupported or unknown API for prompt building: ${String(profile.api)}`);
+      }
+
+      return {
+        source: 'active',
+        profile,
+        profileId,
+        apiMap,
+      };
+    }
+
+    if (!settings.profileId) {
+      throw new Error('Please select a connection profile in settings or switch Connection Source to the active SillyTavern connection.');
+    }
+
+    const profile = extensionSettings.connectionManager?.profiles?.find((p: any) => p.id === settings.profileId);
+    if (!profile) {
+      throw new Error('Selected connection profile not found. Please re-select a profile in zTracker settings.');
+    }
+    if (!profile.api) {
+      throw new Error('Selected connection profile is missing an API. Please edit the profile in SillyTavern settings.');
+    }
+
+    const apiMap = CONNECT_API_MAP[profile.api];
+    if (!apiMap?.selected) {
+      throw new Error(`Unsupported or unknown API for prompt building: ${String(profile.api)}`);
+    }
+
+    return {
+      source: 'saved',
+      profile,
+      profileId: settings.profileId,
+      apiMap,
+    };
+  }
+
   function hasStoredTracker(messageId: number) {
     return Boolean(globalContext.chat[messageId]?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY]);
   }
@@ -397,7 +481,10 @@ export function createTrackerActions(options: {
       ...prepared,
       currentTracker,
       ...getSchemaRenderMetadata(prepared.chatJsonValue),
-      makeRequest: makeRequestFactory(messageId, prepared.settings, { instructName: prepared.transportInstructName }),
+      makeRequest: makeRequestFactory(messageId, prepared.settings, {
+        instructName: prepared.transportInstructName,
+        resolvedConnection: prepared.resolvedConnection,
+      }),
     };
   }
 
@@ -880,22 +967,28 @@ export function createTrackerActions(options: {
     return cancelIfPending(messageId);
   }
 
-  function makeRequestFactory(messageId: number, settings: ExtensionSettings, options: { instructName?: string } = {}) {
+  function makeRequestFactory(
+    messageId: number,
+    settings: ExtensionSettings,
+    options: { instructName?: string; resolvedConnection?: ResolvedTrackerConnection } = {},
+  ) {
     return (requestMessages: Message[], overideParams?: any): Promise<ExtractedData | undefined> => {
       return new Promise((resolve, reject) => {
         const abortController = new AbortController();
-        const profile = globalContext.extensionSettings?.connectionManager?.profiles?.find((p: any) => p.id === settings.profileId);
-        const selectedApiMap = profile?.api ? globalContext.CONNECT_API_MAP?.[profile.api] : undefined;
-        const selectedApi = selectedApiMap?.selected;
         const context = SillyTavern.getContext() as {
-        name1?: string;
-        powerUserSettings?: {
-          preset?: string;
-          instruct?: {
-            user_alignment_message?: string;
+          name1?: string;
+          mainApi?: string;
+          powerUserSettings?: {
+            preset?: string;
+            instruct?: {
+              user_alignment_message?: string;
+            };
           };
         };
-        };
+        const resolvedConnection = options.resolvedConnection ?? resolveTrackerConnection(settings, context);
+        const profile = resolvedConnection.profile;
+        const selectedApiMap = resolvedConnection.apiMap;
+        const selectedApi = selectedApiMap?.selected;
         const textCompletionPromptBody = selectedApi === 'textgenerationwebui'
           ? sanitizeMessagesForGeneration(requestMessages, {
               userAlignmentMessage: context?.powerUserSettings?.instruct?.user_alignment_message,
@@ -912,7 +1005,16 @@ export function createTrackerActions(options: {
         });
         captureTrackerRequestDebugSnapshot(settingsManager, {
           messageId,
-          profileId: settings.profileId,
+          connectionSource: resolvedConnection.source,
+          profileId: resolvedConnection.profileId || '[active connection]',
+          api: selectedApi,
+          apiType: selectedApiMap?.type,
+          model: typeof profile?.model === 'string' ? profile.model : undefined,
+          apiServer: typeof profile?.['api-url'] === 'string' ? profile['api-url'] : undefined,
+          presetName: typeof profile?.preset === 'string' ? profile.preset : undefined,
+          instructName: options.instructName,
+          contextName: typeof profile?.context === 'string' ? profile.context : undefined,
+          syspromptName: typeof profile?.sysprompt === 'string' ? profile.sysprompt : undefined,
           promptEngineeringMode: settings.promptEngineeringMode,
           maxTokens: settings.maxResponseToken,
           overridePayload: overideParams ?? {},
@@ -935,16 +1037,19 @@ export function createTrackerActions(options: {
           }
 
           beforeRequestStartHook?.();
-          generator.generateRequest(
-            {
-              profileId: settings.profileId,
-              prompt: sanitizedPrompt,
-              maxTokens: settings.maxResponseToken,
-              custom: { signal: abortController.signal },
-              overridePayload: {
-                ...overideParams,
-              },
+          const requestParams: any = {
+            prompt: sanitizedPrompt,
+            maxTokens: settings.maxResponseToken,
+            custom: { signal: abortController.signal },
+            overridePayload: {
+              ...overideParams,
             },
+          };
+          if (resolvedConnection.profileId) {
+            requestParams.profileId = resolvedConnection.profileId;
+          }
+          generator.generateRequest(
+            requestParams,
             {
               abortController,
               onStart: (requestId: string) => {
@@ -972,13 +1077,10 @@ export function createTrackerActions(options: {
     }
 
     const settings = settingsManager.getSettings();
-    if (!settings.profileId) {
-      throw new Error('Please select a connection profile in settings.');
-    }
-
     const context = SillyTavern.getContext();
     const chatMetadata = context.chatMetadata;
-    const { extensionSettings, CONNECT_API_MAP } = globalContext;
+    const resolvedConnection = resolveTrackerConnection(settings, context);
+    const { profile, apiMap } = resolvedConnection;
 
     chatMetadata[EXTENSION_KEY] = chatMetadata[EXTENSION_KEY] || {};
     const storedChatSchemaPresetKey = chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY];
@@ -995,19 +1097,6 @@ export function createTrackerActions(options: {
     }
     const chatJsonValue = schemaPreset.value;
     const chatHtmlValue = schemaPreset.html;
-
-    const profile = extensionSettings.connectionManager?.profiles?.find((p: any) => p.id === settings.profileId);
-    if (!profile) {
-      throw new Error('Selected connection profile not found. Please re-select a profile in zTracker settings.');
-    }
-    if (!profile.api) {
-      throw new Error('Selected connection profile is missing an API. Please edit the profile in SillyTavern settings.');
-    }
-
-    const apiMap = CONNECT_API_MAP[profile.api];
-    if (!apiMap?.selected) {
-      throw new Error(`Unsupported or unknown API for prompt building: ${String(profile.api)}`);
-    }
 
     let characterId = characters.findIndex((char: any) => char.avatar === message.original_avatar);
     characterId = characterId !== -1 ? characterId : undefined;
@@ -1120,6 +1209,7 @@ export function createTrackerActions(options: {
     return {
       message,
       settings,
+      resolvedConnection,
       schemaPresetKey,
       chatJsonValue,
       chatHtmlValue,
@@ -1234,13 +1324,25 @@ export function createTrackerActions(options: {
       regenerateButton?.classList.add('spinning');
 
       return await runWithFullTrackerStatusIndicator(id, options, async () => {
-        const { message, settings, schemaPresetKey, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
+        const {
+          message,
+          settings,
+          resolvedConnection,
+          schemaPresetKey,
+          chatJsonValue,
+          chatHtmlValue,
+          messages,
+          transportInstructName,
+        } = await prepareTrackerGeneration(id);
         if (token.cancelled) {
           return false;
         }
 
         const { partsOrder, partsMeta } = getSchemaRenderMetadata(chatJsonValue);
-        const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
+        const makeRequest = makeRequestFactory(id, settings, {
+          instructName: transportInstructName,
+          resolvedConnection,
+        });
         const response = (await requestStructuredTrackerContent({
           messages,
           settings,
@@ -1297,7 +1399,16 @@ export function createTrackerActions(options: {
       regenerateButton?.classList.add('spinning');
 
       return await runWithFullTrackerStatusIndicator(id, options, async () => {
-        const { message, settings, schemaPresetKey, chatJsonValue, chatHtmlValue, messages, transportInstructName } = await prepareTrackerGeneration(id);
+        const {
+          message,
+          settings,
+          resolvedConnection,
+          schemaPresetKey,
+          chatJsonValue,
+          chatHtmlValue,
+          messages,
+          transportInstructName,
+        } = await prepareTrackerGeneration(id);
         if (token.cancelled) {
           return false;
         }
@@ -1307,7 +1418,10 @@ export function createTrackerActions(options: {
           throw new Error('Schema has no top-level properties to generate.');
         }
 
-        const makeRequest = makeRequestFactory(id, settings, { instructName: transportInstructName });
+        const makeRequest = makeRequestFactory(id, settings, {
+          instructName: transportInstructName,
+          resolvedConnection,
+        });
         const baseMessages = structuredClone(messages) as Message[];
         let trackerData: any = {};
 

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- zTracker settings now include a `Connection Source` option so tracker generation can either follow SillyTavern's current live connection or stay pinned to a selected saved connection profile.
+
 ### Fixed
 
 - Explicit full redo of an existing tracker now still works on early chat messages, even when `Skip First X Messages` blocks first-time tracker generation there.

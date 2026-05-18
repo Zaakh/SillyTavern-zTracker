@@ -33,10 +33,17 @@ These are “living” per-change specs. Each spec tracks its current status and
 - [27-reusable-sillytavern-test-harness.md](27-reusable-sillytavern-test-harness.md)
 - [28-explicit-schema-save-workflow.md](28-explicit-schema-save-workflow.md)
 - [29-chat-schema-switching.md](29-chat-schema-switching.md)
+- [30-connection-source-selection.md](30-connection-source-selection.md)
 
 ## Status workflow
-- **Open**: not implemented yet; questions unresolved.
-- **In Progress**: implementation ongoing.
-- **Completed**: implemented + verified; includes notes on how it was validated.
+- Legacy specs may still use `Open`, `In Progress`, and `Completed`.
+- Newer living specs may use a more explicit draft workflow:
+	- `Draft`
+	- `Needs Clarification`
+	- `Ready for Review`
+	- `Approved for Implementation`
+	- `In Implementation`
+	- `Validated`
+	- `Superseded`
 
 When a spec is completed, add a short “Verification” section (what was tested, how to reproduce).

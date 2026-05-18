@@ -12,7 +12,16 @@ export type PromptDebugMessage = {
 export type TrackerRequestDebugSnapshot = {
   capturedAt: string;
   messageId: number;
+  connectionSource: 'active' | 'saved';
   profileId: string;
+  api?: string;
+  apiType?: string;
+  model?: string;
+  apiServer?: string;
+  presetName?: string;
+  instructName?: string;
+  contextName?: string;
+  syspromptName?: string;
   promptEngineeringMode: string;
   maxTokens: number;
   embedSnapshotHeader: string;
@@ -22,6 +31,21 @@ export type TrackerRequestDebugSnapshot = {
   flattenedRequestMessages: string;
   flattenedSanitizedPrompt: string;
 };
+
+const CONNECTION_DEBUG_FIELD_KEYS = [
+  'api',
+  'apiType',
+  'model',
+  'apiServer',
+  'presetName',
+  'instructName',
+  'contextName',
+  'syspromptName',
+] as const;
+
+type ConnectionDebugFieldKey = (typeof CONNECTION_DEBUG_FIELD_KEYS)[number];
+
+type ConnectionDebugFields = Pick<TrackerRequestDebugSnapshot, ConnectionDebugFieldKey>;
 
 type ZTrackerDiagnosticsState = {
   templateChecks?: unknown;
@@ -66,11 +90,36 @@ function flattenPromptDebugMessages(messages: PromptDebugMessage[]): string {
     .join('\n\n');
 }
 
+function pickConnectionDebugFields(snapshot: ConnectionDebugFields): Partial<ConnectionDebugFields> {
+  return Object.fromEntries(
+    CONNECTION_DEBUG_FIELD_KEYS.flatMap((key) => {
+      const value = snapshot[key];
+      return value ? [[key, value]] : [];
+    }),
+  ) as Partial<ConnectionDebugFields>;
+}
+
+function formatConnectionDebugFields(snapshot: Partial<ConnectionDebugFields>): string[] {
+  return CONNECTION_DEBUG_FIELD_KEYS.flatMap((key) => {
+    const value = snapshot[key];
+    return value ? [`${key}: ${value}`] : [];
+  });
+}
+
 export function captureTrackerRequestDebugSnapshot(
   settingsManager: ExtensionSettingsManager<ExtensionSettings>,
   snapshot: {
     messageId: number;
+    connectionSource: 'active' | 'saved';
     profileId: string;
+    api?: string;
+    apiType?: string;
+    model?: string;
+    apiServer?: string;
+    presetName?: string;
+    instructName?: string;
+    contextName?: string;
+    syspromptName?: string;
     promptEngineeringMode: string;
     maxTokens: number;
     overridePayload: unknown;
@@ -88,7 +137,9 @@ export function captureTrackerRequestDebugSnapshot(
   const debugSnapshot: TrackerRequestDebugSnapshot = {
     capturedAt: new Date().toISOString(),
     messageId: snapshot.messageId,
+    connectionSource: snapshot.connectionSource,
     profileId: snapshot.profileId,
+    ...pickConnectionDebugFields(snapshot),
     promptEngineeringMode: snapshot.promptEngineeringMode,
     maxTokens: snapshot.maxTokens,
     embedSnapshotHeader: settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER,
@@ -112,7 +163,9 @@ export function formatTrackerRequestDebugSnapshot(snapshot?: TrackerRequestDebug
     'lastTrackerRequest:',
     `capturedAt: ${snapshot.capturedAt}`,
     `messageId: ${snapshot.messageId}`,
+    `connectionSource: ${snapshot.connectionSource}`,
     `profileId: ${snapshot.profileId}`,
+    ...formatConnectionDebugFields(snapshot),
     `promptEngineeringMode: ${snapshot.promptEngineeringMode}`,
     `maxTokens: ${snapshot.maxTokens}`,
     `embedSnapshotHeader: ${snapshot.embedSnapshotHeader}`,
