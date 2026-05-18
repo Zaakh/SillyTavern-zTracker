@@ -28,7 +28,13 @@ describe('tracker request debug snapshots', () => {
 
     captureTrackerRequestDebugSnapshot(settingsManager, {
       messageId: 7,
+      connectionSource: 'saved',
       profileId: 'profile-1',
+      api: 'openai',
+      apiType: 'chat',
+      model: 'gpt-test',
+      apiServer: 'https://example.invalid',
+      presetName: 'Tracker Prompt',
       promptEngineeringMode: 'native',
       maxTokens: 16000,
       overridePayload: { json_schema: { name: 'SceneTracker' } },
@@ -61,7 +67,13 @@ describe('tracker request debug snapshots', () => {
     const snapshot = getLastTrackerRequestDebugSnapshot();
     expect(snapshot).toMatchObject({
       messageId: 7,
+      connectionSource: 'saved',
       profileId: 'profile-1',
+      api: 'openai',
+      apiType: 'chat',
+      model: 'gpt-test',
+      apiServer: 'https://example.invalid',
+      presetName: 'Tracker Prompt',
       promptEngineeringMode: 'native',
       maxTokens: 16000,
       embedSnapshotHeader: 'Tracker:',
@@ -95,7 +107,15 @@ describe('tracker request debug snapshots', () => {
     const lines = formatTrackerRequestDebugSnapshot({
       capturedAt: '2026-04-02T12:00:00.000Z',
       messageId: 3,
+      connectionSource: 'active',
       profileId: 'profile-2',
+      api: 'textgenerationwebui',
+      apiType: 'textgenerationwebui',
+      model: 'live-model',
+      apiServer: 'http://localhost:5000',
+      instructName: 'Active Instruct',
+      contextName: 'Active Context',
+      syspromptName: 'Active Sysprompt',
       promptEngineeringMode: 'json',
       maxTokens: 512,
       embedSnapshotHeader: 'Scene details:',
@@ -107,7 +127,12 @@ describe('tracker request debug snapshots', () => {
     });
 
     expect(lines.join('\n')).toContain('lastTrackerRequest:');
+    expect(lines.join('\n')).toContain('connectionSource: active');
     expect(lines.join('\n')).toContain('profileId: profile-2');
+    expect(lines.join('\n')).toContain('api: textgenerationwebui');
+    expect(lines.join('\n')).toContain('model: live-model');
+    expect(lines.join('\n')).toContain('apiServer: http://localhost:5000');
+    expect(lines.join('\n')).toContain('instructName: Active Instruct');
     expect(lines.join('\n')).toContain('embedSnapshotHeader: Scene details:');
     expect(lines.join('\n')).toContain('flattenedSanitizedPrompt:');
     expect(lines.join('\n')).toContain('Bar: hello');

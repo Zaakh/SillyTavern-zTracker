@@ -10,7 +10,7 @@ These instructions apply to all files in this repository.
 
 ## Project context
 - This repo builds a **SillyTavern UI extension** (browser-side) named **zTracker**.
-- The latest release version of SillyTavern is 1.17, we test against it, and we aim to maintain compatibility with it and future releases.
+- The latest release version of SillyTavern is 1.18, we test against it, and we aim to maintain compatibility with it and future releases.
 - The extension generates structured “tracker” data for chat messages (via an LLM connection profile), stores it in chat history (`message.extra.zTracker.*`), and renders it above the message.
 
 ## Changelog and versioning
@@ -64,8 +64,8 @@ These instructions apply to all files in this repository.
 - This extension is loaded by SillyTavern from `manifest.json` and expects built assets:
 	- `dist/index.js`
 	- `dist/style.css`
-- Build the extension before any SillyTavern smoke test and commit the changes. The extension must be updated in SillyTavern after that!
-- Commit the changed build artifacts before treating a SillyTavern smoke test as valid for branch review or release work.
+- Build the extension before any e2e SillyTavern test and commit the changes. The extension must be updated in SillyTavern after that to allow the test to run correctly!
+- Commit the changed build artifacts before treating a SillyTavern test as valid for branch review or release work.
 - Assume a live SillyTavern instance may still be serving stale extension assets until the current repo build artifacts are present and committed.
 
 ### Do not copy build outputs between projects

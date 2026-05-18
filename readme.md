@@ -21,7 +21,7 @@ Forked from [SillyTavern WTracker](https://github.com/bmen25124/SillyTavern-WTra
 
 ---
 
-zTracker follows the SillyTavern chat type selected by the chosen connection profile. If that profile uses Text Completion, configure its instruct/context presets in SillyTavern itself; if it uses Chat Completion, SillyTavern's chat-completion prompt settings apply.
+zTracker follows the SillyTavern chat type of whichever connection it is currently using for tracker generation. In **Connection Source = Use current active SillyTavern connection** mode, zTracker resolves tracker-generation connection state from the live SillyTavern runtime, including the currently active prompt selectors and any host-exposed active connection changes. In **Connection Source = Use selected saved connection profile** mode, zTracker uses the pinned saved profile you selected in zTracker settings.
 
 ---
 
@@ -42,6 +42,14 @@ Your API/model might not support structured output. Change `Prompt Engineering` 
 > zTracker UI buttons / schema popup are broken (template 404).
 
 In **Extensions → zTracker**, enable **Debug logging** and use the **Diagnostics** panel (stethoscope button) to print template URL checks to the console. This helps confirm whether SillyTavern can access the extension’s HTML templates.
+
+## Connection source for tracker generation
+
+zTracker can now choose where tracker-generation connection settings come from:
+- **Use current active SillyTavern connection**: resolve tracker-generation connection data from the live SillyTavern runtime, including the currently active prompt selectors and any host-exposed active connection changes.
+- **Use selected saved connection profile**: keep tracker generation pinned to a specific saved SillyTavern connection profile.
+
+This is useful when you want tracker generation to automatically follow your current SillyTavern connection during experimentation, while still keeping the option to pin zTracker to a dedicated extraction profile when needed. If you rely on live unsaved host changes, do a quick smoke test after SillyTavern upgrades.
 
 ## System prompt selection for tracker generation
 

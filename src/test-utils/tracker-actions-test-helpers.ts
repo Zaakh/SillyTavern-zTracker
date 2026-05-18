@@ -238,6 +238,7 @@ export const TEST_IMPORT_META_URL = import.meta.url;
 /** Returns the default extension settings used across tracker-action tests. */
 export function makeSettings(overrides: Record<string, unknown> = {}) {
   return {
+    connectionSource: 'saved',
     profileId: 'profile-1',
     trackerSystemPromptMode: 'saved',
     trackerSystemPromptSavedName: 'zTracker',
@@ -297,6 +298,8 @@ export function makeProfile(overrides: Record<string, unknown> = {}) {
 /** Returns a minimal SillyTavern runtime context for tracker-action tests. */
 export function makeContext(options: {
   includeSavedPromptPreset?: boolean;
+  extensionSettings?: Record<string, unknown>;
+  mainApi?: string;
   powerUserSettings?: Record<string, unknown>;
   getPresetManager?: (apiId?: string) => unknown;
   textCompletionProcessRequest?: jest.Mock;
@@ -311,6 +314,8 @@ export function makeContext(options: {
   };
 
   const host = createSillyTavernHost({
+    extensionSettings: options.extensionSettings,
+    mainApi: options.mainApi,
     name1: 'Tobias',
     name2: 'Bar',
     powerUserSettings: {

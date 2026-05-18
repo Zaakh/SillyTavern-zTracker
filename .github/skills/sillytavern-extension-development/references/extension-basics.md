@@ -1,6 +1,6 @@
 # SillyTavern extension basics
 
-Maintenance: Last reviewed 2026-04-02. Update when SillyTavern changes manifest fields, host APIs, extension storage options, or frontend-extension guidance.
+Maintenance: Last reviewed 2026-05-18. Update when SillyTavern changes manifest fields, host APIs, extension storage options, or frontend-extension guidance.
 
 Use this reference when a task touches the host integration surface of a SillyTavern UI extension.
 
@@ -35,6 +35,7 @@ Stable integration surface:
 - Prefer `SillyTavern.getContext()` over importing SillyTavern internals.
 - Treat the returned context as live mutable runtime state.
 - Re-read context-backed objects when chat/session state can change under you.
+- Do not assume `CONNECT_API_MAP` keys always match `profile.api` or `getContext().mainApi` exactly. Resolve API-map entries by exact key first, then by entry fields such as `selected`, `type`, or `api`; live hosts may expose aliases such as `text` for `textgenerationwebui`.
 
 Shared libraries:
 - Prefer `SillyTavern.libs` when it already exposes the dependency you need.
