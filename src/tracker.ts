@@ -3,7 +3,7 @@ import type { Message } from 'sillytavern-utils-lib';
 import type { ChatMessage } from 'sillytavern-utils-lib/types';
 import { DEFAULT_EMBED_SNAPSHOT_HEADER } from './config.js';
 import type { ExtensionSettings } from './config.js';
-import { EXTENSION_KEY } from './extension-metadata.js';
+import { CHAT_METADATA_SCHEMA_PRESET_KEY, EXTENSION_KEY } from './extension-metadata.js';
 import { formatEmbeddedTrackerSnapshot } from './embed-snapshot-transform.js';
 import { toShortTrackerLabel } from './tracker-helpers.js';
 import {
@@ -14,7 +14,7 @@ import {
   sanitizeArrayItemFieldKeys,
 } from './tracker-parts.js';
 
-export const CHAT_METADATA_SCHEMA_PRESET_KEY = 'schemaKey';
+export { CHAT_METADATA_SCHEMA_PRESET_KEY };
 export const CHAT_MESSAGE_SCHEMA_PRESET_KEY = 'schemaKey';
 export const CHAT_MESSAGE_SCHEMA_VALUE_KEY = 'value';
 export const CHAT_MESSAGE_SCHEMA_HTML_KEY = 'html';

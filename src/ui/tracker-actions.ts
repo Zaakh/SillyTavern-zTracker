@@ -1696,7 +1696,7 @@ export function createTrackerActions(options: {
               context.saveMetadataDebounced();
               st_echo(
                 'success',
-                `Chat schema preset updated to "${settings.schemaPresets[newPresetKey].name}". Existing trackers keep their current schema until you run a full tracker regeneration for those messages.`,
+                `Current chat schema preset updated to "${settings.schemaPresets[newPresetKey].name}". Existing trackers keep their saved message schema until you run a full tracker regeneration for those messages.`,
               );
             }
           }

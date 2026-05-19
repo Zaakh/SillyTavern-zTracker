@@ -101,7 +101,9 @@ Optional (advanced): you can annotate your JSON schema preset to help zTracker k
 
 When editing a schema preset's JSON or HTML in **Extensions → zTracker**, changes stay local until you click the Save icon for that field. The save control stays disabled while the draft is unchanged or invalid, and invalid drafts show an inline error instead of overwriting the saved preset.
 
-When you change the schema preset for a chat from **Extensions → Modify zTracker schema**, that updates the chat default for future full tracker regenerations. This is a lazy switch, not a chat-wide migration. Existing trackers on older messages keep the schema they were saved with until you run a full tracker regeneration on that specific message. Parts-menu regeneration continues to use the saved message schema and now tells you when a full tracker regeneration is required to move that message onto the chat's current schema.
+In **Extensions → zTracker**, **Default Schema Preset** controls which preset definition you are editing and which preset new chats start from. Existing chats keep their own **Current Chat Schema Preset**, which you can change from the settings UI or **Extensions → Modify zTracker schema**.
+
+Changing the current chat schema preset is still a lazy switch, not a chat-wide migration. Future full tracker generations in that chat use the current chat schema preset, while existing trackers on older messages keep their saved message schema until you run a full tracker regeneration on that specific message. Parts-menu regeneration continues to use the saved message schema and tells you when a full tracker regeneration is required to move that message onto the current chat schema.
 
 If a dependency-linked array becomes inconsistent during generation, zTracker now logs a warning in the browser console. Example: `charactersPresent` lists a character name but `characters` has no matching object for that name.
 

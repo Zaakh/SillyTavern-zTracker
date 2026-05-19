@@ -1,5 +1,1 @@
-- TOON has as required field which looks weird.   
-- Manual Tracker generatoin should always work, even if it is in the range of "skipped" messages.
-- No explicit "use current global connectoin" for connection selection in th esettings.
-
-
+- I want to extend the default json schema fields with an additional property: "example" which is to be used in the "*EXAMPLE OF A PERFECT RESPONSE", not in the "SCHEMA TO FOLLOW"
