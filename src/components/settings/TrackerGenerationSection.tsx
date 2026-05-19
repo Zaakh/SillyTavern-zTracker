@@ -33,6 +33,7 @@ export const TrackerGenerationSection: FC<{
   schemaHtmlTextError?: string;
   schemaHtmlTextHasUnsavedChanges: boolean;
   schemaHtmlTextCanSave: boolean;
+  schemaPresetPairError?: string;
   handleSchemaValueChange: (newSchemaText: string) => void;
   handleSchemaHtmlChange: (newHtml: string) => void;
   saveSchemaValue: () => void;
@@ -67,6 +68,7 @@ export const TrackerGenerationSection: FC<{
   schemaHtmlTextError,
   schemaHtmlTextHasUnsavedChanges,
   schemaHtmlTextCanSave,
+  schemaPresetPairError,
   handleSchemaValueChange,
   handleSchemaHtmlChange,
   saveSchemaValue,
@@ -83,7 +85,7 @@ export const TrackerGenerationSection: FC<{
       <GenerationBehaviorSection settings={settings} updateAndRefresh={updateAndRefresh} />
 
       <SchemaPresetSection
-        settings={settings}
+        schemaPresetKey={settings.schemaPreset}
         schemaPresetItems={schemaPresetItems}
         currentChatSchemaPresetKey={currentChatSchemaPresetKey}
         currentChatSchemaPresetLabel={currentChatSchemaPresetLabel}
@@ -105,6 +107,7 @@ export const TrackerGenerationSection: FC<{
         schemaHtmlTextError={schemaHtmlTextError}
         schemaHtmlTextHasUnsavedChanges={schemaHtmlTextHasUnsavedChanges}
         schemaHtmlTextCanSave={schemaHtmlTextCanSave}
+        schemaPresetPairError={schemaPresetPairError}
         handleSchemaValueChange={handleSchemaValueChange}
         handleSchemaHtmlChange={handleSchemaHtmlChange}
         saveSchemaValue={saveSchemaValue}

@@ -186,6 +186,7 @@ jest.unstable_mockModule('../components/settings/schema-editor-state.js', () => 
   shouldSyncSchemaTextFromSettings: jest.fn(() => false),
   validateSchemaDraft: jest.fn(() => ({ isValid: true, errorMessage: '' })),
   validateSchemaHtmlDraft: jest.fn(() => ({ isValid: true, errorMessage: '' })),
+  validateSchemaPresetDraftPair: jest.fn(() => ({ isValid: true, errorMessage: '' })),
 }));
 
 jest.unstable_mockModule('../components/settings/SettingsSectionDrawer.js', () => ({

@@ -29,6 +29,7 @@ import {
   shouldSyncSchemaHtmlFromSettings,
   shouldSyncSchemaTextFromSettings,
   validateSchemaDraft,
+  validateSchemaPresetDraftPair,
   validateSchemaHtmlDraft,
 } from './settings/schema-editor-state.js';
 import { SettingsSectionDrawer } from './settings/SettingsSectionDrawer.js';
@@ -194,6 +195,15 @@ export const ZTrackerSettings: FC = () => {
   const schemaDraftState = getSchemaDraftState({ currentText: schemaText, persistedText: activeSchemaText });
   const activeSchemaHtml = formatSchemaHtml(settings.schemaPresets[settings.schemaPreset]);
   const schemaHtmlDraftState = getSchemaHtmlDraftState({ currentText: schemaHtmlText, persistedText: activeSchemaHtml });
+  const schemaPresetPairValidation = useMemo(
+    () => (schemaDraftState.isValid && schemaHtmlDraftState.isValid
+      ? validateSchemaPresetDraftPair({ schemaText, schemaHtmlText })
+      : { isValid: true }),
+    [schemaDraftState.isValid, schemaHtmlDraftState.isValid, schemaText, schemaHtmlText],
+  );
+  const schemaPresetPairError = schemaPresetPairValidation.isValid ? undefined : schemaPresetPairValidation.errorMessage;
+  const schemaTextCanSave = schemaDraftState.canSave && schemaPresetPairValidation.isValid;
+  const schemaHtmlTextCanSave = schemaHtmlDraftState.canSave && schemaPresetPairValidation.isValid;
 
   useEffect(() => {
     const activePresetChanged = previousSchemaPresetRef.current !== settings.schemaPreset;
@@ -310,7 +320,7 @@ export const ZTrackerSettings: FC = () => {
   // Persists the active preset's JSON schema only after explicit confirmation.
   const saveSchemaValue = () => {
     const validation = validateSchemaDraft(schemaText);
-    if (!validation.isValid) {
+    if (!validation.isValid || !schemaPresetPairValidation.isValid) {
       return;
     }
 
@@ -341,7 +351,7 @@ export const ZTrackerSettings: FC = () => {
   // Persists the active preset's HTML template only after explicit confirmation.
   const saveSchemaHtmlValue = () => {
     const validation = validateSchemaHtmlDraft(schemaHtmlText);
-    if (!validation.isValid) {
+    if (!validation.isValid || !schemaPresetPairValidation.isValid) {
       return;
     }
 
@@ -461,12 +471,13 @@ export const ZTrackerSettings: FC = () => {
                 schemaTextHasError={!schemaDraftState.isValid}
                 schemaTextError={schemaDraftState.errorMessage}
                 schemaTextHasUnsavedChanges={schemaDraftState.isDirty}
-                schemaTextCanSave={schemaDraftState.canSave}
+                schemaTextCanSave={schemaTextCanSave}
                 schemaHtmlText={schemaHtmlText}
                 schemaHtmlTextHasError={!schemaHtmlDraftState.isValid}
                 schemaHtmlTextError={schemaHtmlDraftState.errorMessage}
                 schemaHtmlTextHasUnsavedChanges={schemaHtmlDraftState.isDirty}
-                schemaHtmlTextCanSave={schemaHtmlDraftState.canSave}
+                schemaHtmlTextCanSave={schemaHtmlTextCanSave}
+                schemaPresetPairError={schemaPresetPairError}
                 handleSchemaValueChange={handleSchemaValueChange}
                 handleSchemaHtmlChange={handleSchemaHtmlChange}
                 saveSchemaValue={saveSchemaValue}
