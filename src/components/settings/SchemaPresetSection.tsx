@@ -1,5 +1,5 @@
 import { FC } from 'react';
-import { STButton, STPresetSelect, STTextarea, PresetItem } from 'sillytavern-utils-lib/components/react';
+import { STButton, STPresetSelect, STSelect, STTextarea, PresetItem } from 'sillytavern-utils-lib/components/react';
 import { ExtensionSettings } from '../../config.js';
 
 // Keeps schema preset selection and schema/template editing together because they change the same tracker shape.
@@ -85,13 +85,16 @@ export const SchemaPresetSection: FC<{
           <label title="Selects the schema preset used for full tracker generation and full Regenerate Tracker in the current chat.">
             Current Chat Schema Preset
           </label>
-          <STPresetSelect
-            label="Current Chat Schema Preset"
-            items={schemaPresetItems}
+          <STSelect
             value={currentChatSchemaPresetKey}
-            onChange={handleCurrentChatSchemaPresetChange}
-            onItemsChange={() => undefined}
-          />
+            onChange={(event) => handleCurrentChatSchemaPresetChange(event.target.value)}
+          >
+            {schemaPresetItems.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </STSelect>
           <div className="notes ztracker-schema-status">
             {currentChatSchemaPresetHasStoredValue && !currentChatSchemaPresetHasValidStoredValue
               ? `This chat still references unavailable schema preset "${currentChatSchemaPresetStoredKey}". zTracker is currently showing the fallback preset "${currentChatSchemaPresetLabel ?? currentChatSchemaPresetKey}" until you choose or generate with a valid chat schema.`
