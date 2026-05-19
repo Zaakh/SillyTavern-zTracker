@@ -220,7 +220,6 @@ jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', (
       'div',
       null,
       React.createElement('div', null, 'Default Schema Preset'),
-      React.createElement('div', null, 'Sets the default schema for new chats'),
       currentChatSchemaPresetAvailable
         ? React.createElement(
             React.Fragment,
@@ -239,17 +238,6 @@ jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', (
                 },
                 schemaPresetItems.map((item) => React.createElement('option', { key: item.value, value: item.value }, item.label)),
               ),
-            ),
-            React.createElement(
-              'div',
-              null,
-              currentChatSchemaPresetHasStoredValue && !currentChatSchemaPresetHasValidStoredValue
-                ? `This chat still references unavailable schema preset "${currentChatSchemaPresetStoredKey}".`
-                : currentChatSchemaPresetHasStoredValue
-                ? `Full tracker generation in this chat uses "${currentChatSchemaPresetLabel ?? currentChatSchemaPresetKey}".`
-                : currentChatSchemaPresetUsesDefault
-                  ? 'This chat is currently following the default schema preset.'
-                  : 'Full tracker generation in this chat uses the current chat schema preset.',
             ),
             React.createElement(
               'button',
@@ -360,8 +348,6 @@ describe('zTracker settings connection source UI', () => {
 
     expect(container.textContent).toContain('Default Schema Preset');
     expect(container.textContent).toContain('Current Chat Schema Preset');
-    expect(container.textContent).toContain('Sets the default schema for new chats');
-    expect(container.textContent).toContain('Full tracker generation in this chat uses');
   });
 
   test('changing the current chat schema preset updates chat metadata without changing the global default', () => {
@@ -415,7 +401,6 @@ describe('zTracker settings connection source UI', () => {
     }
 
     expect(select.value).toBe('default');
-    expect(container.textContent).toContain('currently following the default schema preset');
   });
 
   test('deleting the active current chat schema preset immediately persists the fallback preset', () => {
@@ -498,7 +483,7 @@ describe('zTracker settings connection source UI', () => {
     expect(saveSettingsMock).toHaveBeenCalled();
   });
 
-  test('stale current chat schema copy says the stored preset is unavailable', () => {
+  test('stale current chat schema state still resolves the fallback preset in the selector', () => {
     mockSettings.schemaPresets = {
       default: {
         name: 'Default',
@@ -517,8 +502,11 @@ describe('zTracker settings connection source UI', () => {
     };
 
     const container = renderSettings();
+    const select = container.querySelector('[data-testid="preset-select-Current Chat Schema Preset"]');
+    if (!(select instanceof HTMLSelectElement)) {
+      throw new Error('Current chat schema preset select not found');
+    }
 
-    expect(container.textContent).toContain('still references unavailable schema preset');
-    expect(container.textContent).toContain('removed');
+    expect(select.value).toBe('default');
   });
 });

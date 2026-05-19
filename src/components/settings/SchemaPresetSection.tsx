@@ -60,6 +60,14 @@ export const SchemaPresetSection: FC<{
   saveSchemaHtmlValue,
   restoreSchemaToDefault,
 }) => {
+  const currentChatSchemaPresetTitle = currentChatSchemaPresetHasStoredValue && !currentChatSchemaPresetHasValidStoredValue
+    ? `This chat still references unavailable schema preset "${currentChatSchemaPresetStoredKey}". zTracker is currently showing the fallback preset "${currentChatSchemaPresetLabel ?? currentChatSchemaPresetKey}" until you choose or generate with a valid chat schema.`
+    : currentChatSchemaPresetHasStoredValue
+      ? `Uses "${currentChatSchemaPresetLabel ?? currentChatSchemaPresetKey}" for full tracker generation and full Regenerate Tracker in the current chat. Partial regeneration still uses each message's saved schema.`
+      : currentChatSchemaPresetUsesDefault
+        ? `This chat currently follows the default schema preset "${currentChatSchemaPresetLabel ?? currentChatSchemaPresetKey}" until its own chat schema is saved. Full tracker generation will persist that chat schema when needed.`
+        : 'Selects the schema preset used for full tracker generation and full Regenerate Tracker in the current chat.';
+
   return (
     <div className="setting-row">
       <label title="Selects the default schema preset for new chats and which preset definition you are editing below. You can create, rename, and delete presets.">
@@ -76,17 +84,15 @@ export const SchemaPresetSection: FC<{
         enableDelete
         enableRename
       />
-      <div className="notes ztracker-schema-status">
-        Sets the default schema for new chats and selects which preset definition the JSON and HTML editors below are modifying.
-      </div>
 
       {currentChatSchemaPresetAvailable ? (
         <>
-          <label title="Selects the schema preset used for full tracker generation and full Regenerate Tracker in the current chat.">
+          <label title={currentChatSchemaPresetTitle}>
             Current Chat Schema Preset
           </label>
           <STSelect
             value={currentChatSchemaPresetKey}
+            title={currentChatSchemaPresetTitle}
             onChange={(event) => handleCurrentChatSchemaPresetChange(event.target.value)}
           >
             {schemaPresetItems.map((item) => (
@@ -95,15 +101,6 @@ export const SchemaPresetSection: FC<{
               </option>
             ))}
           </STSelect>
-          <div className="notes ztracker-schema-status">
-            {currentChatSchemaPresetHasStoredValue && !currentChatSchemaPresetHasValidStoredValue
-              ? `This chat still references unavailable schema preset "${currentChatSchemaPresetStoredKey}". zTracker is currently showing the fallback preset "${currentChatSchemaPresetLabel ?? currentChatSchemaPresetKey}" until you choose or generate with a valid chat schema.`
-              : currentChatSchemaPresetHasStoredValue
-              ? `Full tracker generation in this chat uses "${currentChatSchemaPresetLabel ?? currentChatSchemaPresetKey}". Partial regeneration still uses each message's saved schema.`
-              : currentChatSchemaPresetUsesDefault
-                ? `This chat is currently following the default schema preset "${currentChatSchemaPresetLabel ?? currentChatSchemaPresetKey}" until its own chat schema is saved. Full tracker generation will persist that chat schema when needed.`
-                : 'Full tracker generation in this chat uses the current chat schema preset. Partial regeneration still uses each message\'s saved schema.'}
-          </div>
         </>
       ) : null}
 
