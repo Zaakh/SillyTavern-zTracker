@@ -6,27 +6,9 @@ import { jest } from '@jest/globals';
 import React, { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 
-const presetSelectMock = jest.fn(
-  ({ label, items, value, onChange }: { label: string; items: Array<{ value: string; label: string }>; value?: string; onChange?: (value?: string) => void }) =>
-    React.createElement(
-      'label',
-      null,
-      label,
-      React.createElement(
-        'select',
-        {
-          'data-testid': `preset-select-${label}`,
-          value: value ?? '',
-          onChange: (event: React.ChangeEvent<HTMLSelectElement>) => onChange?.(event.target.value),
-        },
-        items.map((item) => React.createElement('option', { key: item.value, value: item.value }, item.label)),
-      ),
-    ),
-);
-
 const selectMock = jest.fn(
   ({ children, value, onChange, title }: { children?: React.ReactNode; value?: string; onChange?: (event: React.ChangeEvent<HTMLSelectElement>) => void; title?: string }) =>
-    React.createElement('select', { 'data-testid': 'current-chat-schema-select', value: value ?? '', onChange, title }, children),
+    React.createElement('select', { 'data-testid': title?.includes('modifying') ? 'default-schema-select' : 'current-chat-schema-select', value: value ?? '', onChange, title }, children),
 );
 
 const buttonMock = jest.fn(
@@ -41,10 +23,15 @@ const textareaMock = jest.fn(
 
 jest.unstable_mockModule('sillytavern-utils-lib/components/react', () => ({
   STButton: buttonMock,
-  STPresetSelect: presetSelectMock,
   STSelect: selectMock,
   STTextarea: textareaMock,
   PresetItem: class PresetItemMock {},
+}));
+
+const stEchoMock = jest.fn();
+
+jest.unstable_mockModule('sillytavern-utils-lib/config', () => ({
+  st_echo: stEchoMock,
 }));
 
 const { SchemaPresetSection } = await import('../components/settings/SchemaPresetSection.js');
@@ -55,10 +42,20 @@ describe('SchemaPresetSection', () => {
   beforeEach(() => {
     (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
     document.body.innerHTML = '<div id="root"></div>';
-    presetSelectMock.mockClear();
     selectMock.mockClear();
     buttonMock.mockClear();
     textareaMock.mockClear();
+    stEchoMock.mockClear();
+    (globalThis as any).SillyTavern = {
+      getContext: () => ({
+        Popup: {
+          show: {
+            input: jest.fn(),
+            confirm: jest.fn(),
+          },
+        },
+      }),
+    };
   });
 
   afterEach(() => {
@@ -90,6 +87,7 @@ describe('SchemaPresetSection', () => {
           currentChatSchemaPresetHasStoredValue: false,
           currentChatSchemaPresetHasValidStoredValue: false,
           handleSchemaPresetChange: jest.fn(),
+          handleSchemaPresetRename: jest.fn(),
           handleCurrentChatSchemaPresetChange: jest.fn(),
           handleSchemaPresetsListChange: jest.fn(),
           schemaText: '{\n  "type": "object"\n}',
@@ -126,5 +124,25 @@ describe('SchemaPresetSection', () => {
 
     expect(saveJsonButton).toHaveProperty('disabled', true);
     expect(saveHtmlButton).toHaveProperty('disabled', true);
+  });
+
+  test('shows an explicit global preset selector next to the schema editors', () => {
+    const container = renderSection();
+
+    const defaultSchemaSelect = container.querySelector('[data-testid="default-schema-select"]');
+    expect(defaultSchemaSelect).not.toBeNull();
+    expect(container.querySelector('button[title="Create a new schema preset"]')).not.toBeNull();
+    expect(container.querySelector('button[title="Rename selected schema preset"]')).not.toBeNull();
+    expect(container.querySelector('button[title="Delete selected schema preset"]')).not.toBeNull();
+  });
+
+  test('disables rename and delete for the read-only default preset', () => {
+    const container = renderSection({ schemaPresetKey: 'default' });
+
+    const renameButton = container.querySelector('button[title="Rename selected schema preset"]');
+    const deleteButton = container.querySelector('button[title="Delete selected schema preset"]');
+
+    expect(renameButton).toHaveProperty('disabled', true);
+    expect(deleteButton).toHaveProperty('disabled', true);
   });
 });

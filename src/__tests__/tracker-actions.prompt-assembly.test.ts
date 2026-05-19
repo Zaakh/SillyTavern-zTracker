@@ -26,6 +26,7 @@ const trackerPartsModule = await import('../tracker-parts.js');
 
 describe('createTrackerActions prompt assembly', () => {
   const originalCss = globalThis.CSS;
+  const originalStructuredClone = globalThis.structuredClone;
   const activeTextConnectApiMap = {
     koboldcpp: { selected: 'textgenerationwebui', type: 'koboldcpp' },
     kcpp: { selected: 'textgenerationwebui', type: 'koboldcpp' },
@@ -105,10 +106,12 @@ describe('createTrackerActions prompt assembly', () => {
   beforeEach(() => {
     resetTrackerActionTestState();
     globalThis.CSS = originalCss ?? ({ escape: (value: string) => value } as typeof CSS);
+    globalThis.structuredClone = originalStructuredClone ?? ((value: unknown) => JSON.parse(JSON.stringify(value)));
   });
 
   afterEach(() => {
     globalThis.CSS = originalCss;
+    globalThis.structuredClone = originalStructuredClone;
   });
 
   test('injects the saved prompt without mutating prefer_character_prompt', async () => {
@@ -261,6 +264,119 @@ describe('createTrackerActions prompt assembly', () => {
 
     expect(context.chatMetadata).toEqual({ zTracker: { schemaKey: 'default' } });
     expect(context.saveMetadataDebounced).toHaveBeenCalledTimes(1);
+  });
+
+  test('includes the selected schema preset name when full generation fails to render', async () => {
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const generateRequest = makeGenerateRequest({ content: { scene: 'Bridge' } });
+    applyTrackerUpdateAndRenderMock.mockImplementation(() => {
+      throw new Error('render failed');
+    });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile()],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () =>
+          makeSettings({
+            schemaPreset: 'broken',
+            schemaPresets: {
+              broken: {
+                name: 'Broken Pair',
+                value: {
+                  type: 'object',
+                  properties: {
+                    scene: { type: 'string' },
+                  },
+                  required: ['scene'],
+                },
+                html: '<div>{{data.scene}}</div>',
+              },
+            },
+          }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await expect(actions.generateTracker(0)).resolves.toBe(false);
+
+    expect(stEchoMock).toHaveBeenCalledWith(
+      'error',
+      'Tracker generation failed: Generated data failed to render with schema preset "Broken Pair". Not saved.',
+    );
+  });
+
+  test('includes the selected schema preset name when sequential generation fails to render', async () => {
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    (trackerPartsModule.resolveTopLevelPartsOrder as jest.Mock).mockReturnValue(['scene']);
+    (trackerPartsModule.buildTopLevelPartSchema as jest.Mock).mockImplementation((schema: unknown) => schema);
+    (trackerPartsModule.mergeTrackerPart as jest.Mock).mockImplementation((currentTracker: Record<string, unknown> | undefined, partKey: string, partResponse: Record<string, unknown>) => ({
+      ...(currentTracker ?? {}),
+      [partKey]: partResponse?.[partKey],
+    }));
+    const generateRequest = makeGenerateRequest({ content: { scene: 'Bridge' } });
+    applyTrackerUpdateAndRenderMock.mockImplementation(() => {
+      throw new Error('render failed');
+    });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile()],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () =>
+          makeSettings({
+            sequentialPartGeneration: true,
+            schemaPreset: 'broken',
+            schemaPresets: {
+              broken: {
+                name: 'Broken Pair',
+                value: {
+                  type: 'object',
+                  properties: {
+                    scene: { type: 'string' },
+                  },
+                  required: ['scene'],
+                },
+                html: '<div>{{data.scene}}</div>',
+              },
+            },
+          }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await expect(actions.generateTracker(0)).resolves.toBe(false);
+
+    expect(stEchoMock).toHaveBeenCalledWith(
+      'error',
+      'Tracker generation failed: Generated data failed to render with schema preset "Broken Pair". Not saved.',
+    );
   });
 
   test('passes the saved tracker system prompt through buildPrompt for textgenerationwebui profiles', async () => {

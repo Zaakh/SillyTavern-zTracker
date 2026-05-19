@@ -257,6 +257,50 @@ export const ZTrackerSettings: FC = () => {
     }
   };
 
+  // Renames the active preset key in-place so chat metadata and unsaved drafts stay attached to the same preset.
+  const handleSchemaPresetRename = (currentKey: string, newKey: string) => {
+    if (!currentKey || !newKey || currentKey === newKey) {
+      return;
+    }
+
+    let shouldRefreshChatSchemaState = false;
+    let renamedActivePreset = false;
+
+    updateAndRefresh((currentSettings) => {
+      const currentPreset = currentSettings.schemaPresets[currentKey];
+      if (!currentPreset || currentSettings.schemaPresets[newKey]) {
+        return;
+      }
+
+      const nextSchemaPresets = Object.fromEntries(
+        Object.entries(currentSettings.schemaPresets).map(([presetKey, preset]) => (
+          presetKey === currentKey
+            ? [[newKey, { ...preset, name: newKey }]]
+            : [[presetKey, preset]]
+        )).flat(),
+      ) as ExtensionSettings['schemaPresets'];
+
+      currentSettings.schemaPresets = nextSchemaPresets;
+      if (currentSettings.schemaPreset === currentKey) {
+        currentSettings.schemaPreset = newKey;
+        renamedActivePreset = true;
+      }
+
+      const context = SillyTavern.getContext();
+      if (readStoredChatSchemaPresetKey(context?.chatMetadata) === currentKey && persistChatSchemaPreset(context, newKey)) {
+        shouldRefreshChatSchemaState = true;
+      }
+    });
+
+    if (renamedActivePreset) {
+      previousSchemaPresetRef.current = newKey;
+    }
+
+    if (shouldRefreshChatSchemaState) {
+      forceUpdate();
+    }
+  };
+
   // Persists the active chat schema preset without changing the global default or preset editor selection.
   const handleCurrentChatSchemaPresetChange = (newValue?: string) => {
     const context = SillyTavern.getContext();
@@ -465,6 +509,7 @@ export const ZTrackerSettings: FC = () => {
                 currentChatSchemaPresetHasStoredValue={currentChatSchemaPresetState.hasStoredSchemaKey}
                 currentChatSchemaPresetHasValidStoredValue={currentChatSchemaPresetState.hasValidStoredSchemaKey}
                 handleSchemaPresetChange={handleSchemaPresetChange}
+                handleSchemaPresetRename={handleSchemaPresetRename}
                 handleCurrentChatSchemaPresetChange={handleCurrentChatSchemaPresetChange}
                 handleSchemaPresetsListChange={handleSchemaPresetsListChange}
                 schemaText={schemaText}

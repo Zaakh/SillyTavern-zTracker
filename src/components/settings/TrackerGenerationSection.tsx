@@ -21,6 +21,7 @@ export const TrackerGenerationSection: FC<{
   currentChatSchemaPresetHasStoredValue: boolean;
   currentChatSchemaPresetHasValidStoredValue: boolean;
   handleSchemaPresetChange: (newValue?: string) => void;
+  handleSchemaPresetRename: (currentKey: string, newValue: string) => void;
   handleCurrentChatSchemaPresetChange: (newValue?: string) => void;
   handleSchemaPresetsListChange: (newItems: PresetItem[]) => void;
   schemaText: string;
@@ -56,6 +57,7 @@ export const TrackerGenerationSection: FC<{
   currentChatSchemaPresetHasStoredValue,
   currentChatSchemaPresetHasValidStoredValue,
   handleSchemaPresetChange,
+  handleSchemaPresetRename,
   handleCurrentChatSchemaPresetChange,
   handleSchemaPresetsListChange,
   schemaText,
@@ -95,6 +97,7 @@ export const TrackerGenerationSection: FC<{
         currentChatSchemaPresetHasStoredValue={currentChatSchemaPresetHasStoredValue}
         currentChatSchemaPresetHasValidStoredValue={currentChatSchemaPresetHasValidStoredValue}
         handleSchemaPresetChange={handleSchemaPresetChange}
+        handleSchemaPresetRename={handleSchemaPresetRename}
         handleCurrentChatSchemaPresetChange={handleCurrentChatSchemaPresetChange}
         handleSchemaPresetsListChange={handleSchemaPresetsListChange}
         schemaText={schemaText}

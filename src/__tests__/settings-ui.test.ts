@@ -8,6 +8,7 @@ import { createRoot, Root } from 'react-dom/client';
 
 let mockSettings: any = createMockSettings();
 const saveSettingsMock = jest.fn();
+let sillyTavernContext: any;
 const profileSelectMock = jest.fn(({ initialSelectedProfileId }: { initialSelectedProfileId?: string }) =>
   React.createElement('div', { 'data-testid': 'profile-select' }, initialSelectedProfileId ?? 'none'),
 );
@@ -203,6 +204,7 @@ jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', (
     currentChatSchemaPresetUsesDefault,
     currentChatSchemaPresetHasStoredValue,
     currentChatSchemaPresetHasValidStoredValue,
+    handleSchemaPresetRename,
     handleCurrentChatSchemaPresetChange,
     handleSchemaPresetsListChange,
   }: {
@@ -214,6 +216,7 @@ jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', (
     currentChatSchemaPresetUsesDefault: boolean;
     currentChatSchemaPresetHasStoredValue: boolean;
     currentChatSchemaPresetHasValidStoredValue: boolean;
+    handleSchemaPresetRename: (currentKey: string, newValue: string) => void;
     handleCurrentChatSchemaPresetChange: (value?: string) => void;
     handleSchemaPresetsListChange: (newItems: Array<{ value: string; label: string }>) => void;
   }) =>
@@ -254,11 +257,7 @@ jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', (
               {
                 type: 'button',
                 'data-testid': 'rename-custom-preset',
-                onClick: () =>
-                  handleSchemaPresetsListChange([
-                    { value: 'default', label: 'Default' },
-                    { value: 'custom', label: 'Renamed Custom' },
-                  ]),
+                onClick: () => handleSchemaPresetRename('custom', 'renamed-custom'),
               },
               'rename custom preset',
             ),
@@ -291,12 +290,13 @@ describe('zTracker settings connection source UI', () => {
     reconcilePresetItemsMock.mockClear();
     resolvePresetSelectionMock.mockClear();
     document.body.innerHTML = '<div id="root"></div>';
+    sillyTavernContext = {
+      chatMetadata: { zTracker: { schemaKey: 'default' } },
+      saveMetadataDebounced: jest.fn(),
+      Popup: { show: { confirm: jest.fn() } },
+    };
     (globalThis as any).SillyTavern = {
-      getContext: () => ({
-        chatMetadata: { zTracker: { schemaKey: 'default' } },
-        saveMetadataDebounced: jest.fn(),
-        Popup: { show: { confirm: jest.fn() } },
-      }),
+      getContext: () => sillyTavernContext,
     };
   });
 
@@ -444,7 +444,7 @@ describe('zTracker settings connection source UI', () => {
     expect(saveSettingsMock).toHaveBeenCalled();
   });
 
-  test('renaming a preset keeps the current chat schema key unchanged', () => {
+  test('renaming a preset migrates the current chat schema key to the renamed preset', () => {
     mockSettings.schemaPreset = 'custom';
     mockSettings.schemaPresets = {
       default: {
@@ -479,8 +479,13 @@ describe('zTracker settings connection source UI', () => {
       renameButton.click();
     });
 
-    expect(context.chatMetadata).toEqual({ zTracker: { schemaKey: 'custom' } });
-    expect(saveMetadataDebounced).not.toHaveBeenCalled();
+    expect(context.chatMetadata).toEqual({ zTracker: { schemaKey: 'renamed-custom' } });
+    expect(saveMetadataDebounced).toHaveBeenCalledTimes(1);
+    const currentChatSelect = container.querySelector('[data-testid="preset-select-Current Chat Schema Preset"]');
+    if (!(currentChatSelect instanceof HTMLSelectElement)) {
+      throw new Error('Current chat schema preset select not found');
+    }
+    expect(currentChatSelect.value).toBe('renamed-custom');
     expect(saveSettingsMock).toHaveBeenCalled();
   });
 
