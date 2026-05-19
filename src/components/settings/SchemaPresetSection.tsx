@@ -1,10 +1,9 @@
 import { FC } from 'react';
 import { STButton, STPresetSelect, STSelect, STTextarea, PresetItem } from 'sillytavern-utils-lib/components/react';
-import { ExtensionSettings } from '../../config.js';
 
 // Keeps schema preset selection and schema/template editing together because they change the same tracker shape.
 export const SchemaPresetSection: FC<{
-  settings: ExtensionSettings;
+  schemaPresetKey: string;
   schemaPresetItems: PresetItem[];
   currentChatSchemaPresetKey?: string;
   currentChatSchemaPresetLabel?: string;
@@ -26,13 +25,14 @@ export const SchemaPresetSection: FC<{
   schemaHtmlTextError?: string;
   schemaHtmlTextHasUnsavedChanges: boolean;
   schemaHtmlTextCanSave: boolean;
+  schemaPresetPairError?: string;
   handleSchemaValueChange: (newSchemaText: string) => void;
   handleSchemaHtmlChange: (newHtml: string) => void;
   saveSchemaValue: () => void;
   saveSchemaHtmlValue: () => void;
   restoreSchemaToDefault: () => Promise<void>;
 }> = ({
-  settings,
+  schemaPresetKey,
   schemaPresetItems,
   currentChatSchemaPresetKey,
   currentChatSchemaPresetLabel,
@@ -54,6 +54,7 @@ export const SchemaPresetSection: FC<{
   schemaHtmlTextError,
   schemaHtmlTextHasUnsavedChanges,
   schemaHtmlTextCanSave,
+  schemaPresetPairError,
   handleSchemaValueChange,
   handleSchemaHtmlChange,
   saveSchemaValue,
@@ -76,7 +77,7 @@ export const SchemaPresetSection: FC<{
       <STPresetSelect
         label="Default Schema Preset"
         items={schemaPresetItems}
-        value={settings.schemaPreset}
+        value={schemaPresetKey}
         onChange={handleSchemaPresetChange}
         onItemsChange={handleSchemaPresetsListChange}
         readOnlyValues={['default']}
@@ -154,6 +155,10 @@ export const SchemaPresetSection: FC<{
         <div className="notes ztracker-schema-error">{schemaHtmlTextError ?? 'Invalid Handlebars template.'}</div>
       ) : schemaHtmlTextHasUnsavedChanges ? (
         <div className="notes ztracker-schema-status">Valid template. Save to apply this preset change.</div>
+      ) : null}
+
+      {schemaPresetPairError ? (
+        <div className="notes ztracker-schema-error">{schemaPresetPairError}</div>
       ) : null}
     </div>
   );
