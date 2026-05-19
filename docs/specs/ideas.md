@@ -1,1 +1,2 @@
 - I want to extend the default json schema fields with an additional property: "example" which is to be used in the "*EXAMPLE OF A PERFECT RESPONSE", not in the "SCHEMA TO FOLLOW"
+- During tracker generation the "conversation role handling" is not correctly applied. The "Character" names are stripped, making it difficult to identify who did what when refering to "you" and "I" in the chat.
