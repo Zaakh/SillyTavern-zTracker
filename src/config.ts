@@ -1,7 +1,7 @@
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import { repairCorruptedRequiredMetadata } from './schema-repair.js';
 import { sanitizeIntegerSetting } from './settings-numeric.js';
-export { extensionName, EXTENSION_KEY } from './extension-metadata.js';
+export { extensionName, EXTENSION_KEY, CHAT_METADATA_SCHEMA_PRESET_KEY } from './extension-metadata.js';
 
 export enum PromptEngineeringMode {
   NATIVE = 'native',

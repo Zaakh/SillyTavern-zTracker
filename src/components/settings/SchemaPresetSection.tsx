@@ -6,7 +6,15 @@ import { ExtensionSettings } from '../../config.js';
 export const SchemaPresetSection: FC<{
   settings: ExtensionSettings;
   schemaPresetItems: PresetItem[];
+  currentChatSchemaPresetKey?: string;
+  currentChatSchemaPresetLabel?: string;
+  currentChatSchemaPresetStoredKey?: string;
+  currentChatSchemaPresetUsesDefault: boolean;
+  currentChatSchemaPresetAvailable: boolean;
+  currentChatSchemaPresetHasStoredValue: boolean;
+  currentChatSchemaPresetHasValidStoredValue: boolean;
   handleSchemaPresetChange: (newValue?: string) => void;
+  handleCurrentChatSchemaPresetChange: (newValue?: string) => void;
   handleSchemaPresetsListChange: (newItems: PresetItem[]) => void;
   schemaText: string;
   schemaTextHasError: boolean;
@@ -26,7 +34,15 @@ export const SchemaPresetSection: FC<{
 }> = ({
   settings,
   schemaPresetItems,
+  currentChatSchemaPresetKey,
+  currentChatSchemaPresetLabel,
+  currentChatSchemaPresetStoredKey,
+  currentChatSchemaPresetUsesDefault,
+  currentChatSchemaPresetAvailable,
+  currentChatSchemaPresetHasStoredValue,
+  currentChatSchemaPresetHasValidStoredValue,
   handleSchemaPresetChange,
+  handleCurrentChatSchemaPresetChange,
   handleSchemaPresetsListChange,
   schemaText,
   schemaTextHasError,
@@ -46,11 +62,11 @@ export const SchemaPresetSection: FC<{
 }) => {
   return (
     <div className="setting-row">
-      <label title="Selects the active schema preset used to parse and render trackers. You can create, rename, and delete presets.">
-        Schema Preset
+      <label title="Selects the default schema preset for new chats and which preset definition you are editing below. You can create, rename, and delete presets.">
+        Default Schema Preset
       </label>
       <STPresetSelect
-        label="Schema Preset"
+        label="Default Schema Preset"
         items={schemaPresetItems}
         value={settings.schemaPreset}
         onChange={handleSchemaPresetChange}
@@ -60,6 +76,33 @@ export const SchemaPresetSection: FC<{
         enableDelete
         enableRename
       />
+      <div className="notes ztracker-schema-status">
+        Sets the default schema for new chats and selects which preset definition the JSON and HTML editors below are modifying.
+      </div>
+
+      {currentChatSchemaPresetAvailable ? (
+        <>
+          <label title="Selects the schema preset used for full tracker generation and full Regenerate Tracker in the current chat.">
+            Current Chat Schema Preset
+          </label>
+          <STPresetSelect
+            label="Current Chat Schema Preset"
+            items={schemaPresetItems}
+            value={currentChatSchemaPresetKey}
+            onChange={handleCurrentChatSchemaPresetChange}
+            onItemsChange={() => undefined}
+          />
+          <div className="notes ztracker-schema-status">
+            {currentChatSchemaPresetHasStoredValue && !currentChatSchemaPresetHasValidStoredValue
+              ? `This chat still references unavailable schema preset "${currentChatSchemaPresetStoredKey}". zTracker is currently showing the fallback preset "${currentChatSchemaPresetLabel ?? currentChatSchemaPresetKey}" until you choose or generate with a valid chat schema.`
+              : currentChatSchemaPresetHasStoredValue
+              ? `Full tracker generation in this chat uses "${currentChatSchemaPresetLabel ?? currentChatSchemaPresetKey}". Partial regeneration still uses each message's saved schema.`
+              : currentChatSchemaPresetUsesDefault
+                ? `This chat is currently following the default schema preset "${currentChatSchemaPresetLabel ?? currentChatSchemaPresetKey}" until its own chat schema is saved. Full tracker generation will persist that chat schema when needed.`
+                : 'Full tracker generation in this chat uses the current chat schema preset. Partial regeneration still uses each message\'s saved schema.'}
+          </div>
+        </>
+      ) : null}
 
       <div className="title_restorable">
         <span title="The JSON schema and HTML template used for tracker generation and rendering.">Schema</span>

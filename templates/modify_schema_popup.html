@@ -1,11 +1,11 @@
 <div style="display: flex; flex-direction: column; gap: 8px;">
-    <label for="ztracker-chat-schema-select">Select the schema preset for this chat:</label>
+    <label for="ztracker-chat-schema-select">Select the current chat schema preset:</label>
     <select id="ztracker-chat-schema-select" class="text_pole">
         {{#each presets}}
         <option value="{{this.key}}" {{#if this.selected}}selected{{/if}}>{{this.name}}</option>
         {{/each}}
     </select>
     <div style="font-size: 0.92em; opacity: 0.85;">
-        Changing the chat schema affects future full tracker generations. Existing trackers keep their saved schema until you run a full tracker regeneration for those messages.
+        Changing the current chat schema affects future full tracker generations in this chat. Existing trackers keep their saved message schema until you run a full tracker regeneration for those messages.
     </div>
 </div>

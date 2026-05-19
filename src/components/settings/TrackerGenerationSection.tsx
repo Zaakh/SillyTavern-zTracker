@@ -13,7 +13,15 @@ export const TrackerGenerationSection: FC<{
   settings: ExtensionSettings;
   updateAndRefresh: SettingsUpdateAndRefresh;
   schemaPresetItems: PresetItem[];
+  currentChatSchemaPresetKey?: string;
+  currentChatSchemaPresetLabel?: string;
+  currentChatSchemaPresetStoredKey?: string;
+  currentChatSchemaPresetUsesDefault: boolean;
+  currentChatSchemaPresetAvailable: boolean;
+  currentChatSchemaPresetHasStoredValue: boolean;
+  currentChatSchemaPresetHasValidStoredValue: boolean;
   handleSchemaPresetChange: (newValue?: string) => void;
+  handleCurrentChatSchemaPresetChange: (newValue?: string) => void;
   handleSchemaPresetsListChange: (newItems: PresetItem[]) => void;
   schemaText: string;
   schemaTextHasError: boolean;
@@ -39,7 +47,15 @@ export const TrackerGenerationSection: FC<{
   settings,
   updateAndRefresh,
   schemaPresetItems,
+  currentChatSchemaPresetKey,
+  currentChatSchemaPresetLabel,
+  currentChatSchemaPresetStoredKey,
+  currentChatSchemaPresetUsesDefault,
+  currentChatSchemaPresetAvailable,
+  currentChatSchemaPresetHasStoredValue,
+  currentChatSchemaPresetHasValidStoredValue,
   handleSchemaPresetChange,
+  handleCurrentChatSchemaPresetChange,
   handleSchemaPresetsListChange,
   schemaText,
   schemaTextHasError,
@@ -69,7 +85,15 @@ export const TrackerGenerationSection: FC<{
       <SchemaPresetSection
         settings={settings}
         schemaPresetItems={schemaPresetItems}
+        currentChatSchemaPresetKey={currentChatSchemaPresetKey}
+        currentChatSchemaPresetLabel={currentChatSchemaPresetLabel}
+        currentChatSchemaPresetStoredKey={currentChatSchemaPresetStoredKey}
+        currentChatSchemaPresetUsesDefault={currentChatSchemaPresetUsesDefault}
+        currentChatSchemaPresetAvailable={currentChatSchemaPresetAvailable}
+        currentChatSchemaPresetHasStoredValue={currentChatSchemaPresetHasStoredValue}
+        currentChatSchemaPresetHasValidStoredValue={currentChatSchemaPresetHasValidStoredValue}
         handleSchemaPresetChange={handleSchemaPresetChange}
+        handleCurrentChatSchemaPresetChange={handleCurrentChatSchemaPresetChange}
         handleSchemaPresetsListChange={handleSchemaPresetsListChange}
         schemaText={schemaText}
         schemaTextHasError={schemaTextHasError}

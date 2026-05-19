@@ -6,8 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- zTracker settings now separate the default schema preset for new chats from the current chat schema preset used by full tracker generation.
+
 ### Fixed
 
+- Current chat schema preset fallback now updates immediately when the selected preset becomes unavailable, instead of waiting for a later full generation to normalize chat metadata.
 - TOON prompt-engineering tracker generation now sends a leaner schema and example prompt, reducing prompt bloat while keeping the same structured-output contract.
 
 ## [1.11.5] - 2026-05-18
