@@ -3,6 +3,23 @@ import { repairCorruptedRequiredMetadata } from './schema-repair.js';
 
 export type StructuredFormat = 'json' | 'xml' | 'toon';
 
+type PromptSchemaNormalizationOptions = {
+  includeDescriptions?: boolean;
+  includeDocumentMetadata?: boolean;
+  includeFormat?: boolean;
+  includeDefaults?: boolean;
+  includeZTrackerMetadata?: boolean;
+};
+
+function hasNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+/** Identifies whether a field already carries a stronger semantic hint than format/default metadata. */
+function hasPromptSemanticHint(schema: any): boolean {
+  return hasNonEmptyString(schema?.description) || schema?.example !== undefined;
+}
+
 function escapeXmlText(value: unknown): string {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -44,16 +61,39 @@ function objectToXml(value: unknown, indent = 0): string {
   return xml;
 }
 
-function normalizeSchemaForPrompt(schema: any): any {
+/** Normalizes a JSON schema into the smaller prompt-facing shape needed for model instructions. */
+function normalizeSchemaForPrompt(schema: any, options: PromptSchemaNormalizationOptions = {}): any {
   if (!schema || typeof schema !== 'object') {
     return schema;
   }
 
+  const {
+    includeDescriptions = true,
+    includeDocumentMetadata = true,
+    includeFormat = true,
+    includeDefaults = true,
+    includeZTrackerMetadata = true,
+  } = options;
+
   const normalized: Record<string, any> = {};
-  for (const key of ['title', 'description', 'type', '$schema', 'format']) {
-    if (schema[key] !== undefined) {
-      normalized[key] = schema[key];
+  if (includeDocumentMetadata) {
+    for (const key of ['title', '$schema']) {
+      if (schema[key] !== undefined) {
+        normalized[key] = schema[key];
+      }
     }
+  }
+
+  if (schema.type !== undefined) {
+    normalized.type = schema.type;
+  }
+
+  if (schema.format !== undefined && (includeFormat || !hasPromptSemanticHint(schema))) {
+    normalized.format = schema.format;
+  }
+
+  if (includeDescriptions && schema.description !== undefined) {
+    normalized.description = schema.description;
   }
 
   if (Array.isArray(schema.required) && schema.required.length > 0) {
@@ -68,31 +108,51 @@ function normalizeSchemaForPrompt(schema: any): any {
     normalized.const = schema.const;
   }
 
-  if (schema.default !== undefined) {
+  if (schema.default !== undefined && (includeDefaults || !hasPromptSemanticHint(schema))) {
     normalized.default = schema.default;
   }
 
   if (schema.items !== undefined) {
-    normalized.items = normalizeSchemaForPrompt(schema.items);
+    normalized.items = normalizeSchemaForPrompt(schema.items, options);
   }
 
   if (schema.properties && typeof schema.properties === 'object') {
     normalized.properties = Object.fromEntries(
-      Object.entries(schema.properties).map(([key, value]) => [key, normalizeSchemaForPrompt(value)]),
+      Object.entries(schema.properties).map(([key, value]) => [key, normalizeSchemaForPrompt(value, options)]),
     );
   }
 
-  for (const key of ['x-ztracker-dependsOn', 'x-ztracker-idKey']) {
-    if (schema[key] !== undefined) {
-      normalized[key] = schema[key];
+  if (includeZTrackerMetadata) {
+    for (const key of ['x-ztracker-dependsOn', 'x-ztracker-idKey']) {
+      if (schema[key] !== undefined) {
+        normalized[key] = schema[key];
+      }
     }
   }
 
   return normalized;
 }
 
+/** Chooses how much schema metadata each prompt-engineering format needs for reliable generation. */
+function getPromptSchemaNormalizationOptions(format: StructuredFormat): PromptSchemaNormalizationOptions {
+  if (format === 'toon') {
+    return {
+      includeDescriptions: false,
+      includeDocumentMetadata: false,
+      includeFormat: false,
+      includeDefaults: false,
+      includeZTrackerMetadata: true,
+    };
+  }
+
+  return {};
+}
+
 export function schemaToPromptSchema(schema: any, format: StructuredFormat): string {
-  const promptSchema = normalizeSchemaForPrompt(repairCorruptedRequiredMetadata(schema));
+  const promptSchema = normalizeSchemaForPrompt(
+    repairCorruptedRequiredMetadata(schema),
+    getPromptSchemaNormalizationOptions(format),
+  );
 
   if (format === 'xml') {
     return objectToXml(promptSchema).trim();

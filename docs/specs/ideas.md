@@ -1,5 +1,3 @@
-- TOON has as required field which looks weird.   
-- Manual Tracker generatoin should always work, even if it is in the range of "skipped" messages.
-- No explicit "use current global connectoin" for connection selection in th esettings.
-
-
+- I want to extend the default json schema fields with an additional property: "example" which is to be used in the "*EXAMPLE OF A PERFECT RESPONSE", not in the "SCHEMA TO FOLLOW"
+- During tracker generation the "conversation role handling" is not correctly applied. The "Character" names are stripped, making it difficult to identify who did what when refering to "you" and "I" in the chat.
+- We need to document all button actions, triggered events, and their corresponding effects. Form: "Button X triggers event Y, which causes Z to happen in the tracker or chat behavior." Goal is to have an index of all user workflows to ensure proper testing and to identify any gaps in the UX or edge cases that may not be handled.

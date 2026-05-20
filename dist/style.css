@@ -23,6 +23,17 @@
   opacity: 0.8;
   margin-top: -2px;
 }
+.ztracker-settings .ztracker-preset-select-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ztracker-settings .ztracker-preset-select-row select {
+  flex: 1 1 auto;
+}
+.ztracker-settings .ztracker-preset-select-row button {
+  flex: 0 0 auto;
+}
 .ztracker-settings .setting-row {
   display: flex;
   flex-direction: column;

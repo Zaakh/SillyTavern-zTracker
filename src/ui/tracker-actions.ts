@@ -136,6 +136,8 @@ export type PersistResolvedTrackerUpdateOptions = Omit<PersistTrackerUpdateOptio
   resolvedTargets: TrackerCleanupTarget[];
 };
 
+const TRACKER_RENDER_FAILURE_MESSAGE = 'Generated data failed to render with the current template. Not saved.';
+
 /** Defines the callback contract consumed by the extracted context-menu tracker actions module. */
 export type ContextMenuTrackerActionsDependencies = {
   cancelIfPending: (messageId: number) => boolean;
@@ -706,10 +708,10 @@ export function createTrackerActions(options: {
     } catch {
       logPromptEngineeredRenderRollback(
         options.trackerData,
-        new Error('Generated data failed to render with the current template. Not saved.'),
+        new Error(TRACKER_RENDER_FAILURE_MESSAGE),
       );
       renderTrackerWithDeps(options.messageId);
-      throw new Error('Generated data failed to render with the current template. Not saved.');
+      throw new Error(TRACKER_RENDER_FAILURE_MESSAGE);
     }
 
     try {
@@ -724,6 +726,13 @@ export function createTrackerActions(options: {
       restoreDetailsState(options.messageId, options.detailsState);
       throw new Error('Tracker changes could not be saved. Changes were rolled back.');
     }
+  };
+
+  const formatTrackerGenerationErrorMessage = (error: unknown, activeSchemaPresetLabel?: string) => {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return errorMessage === TRACKER_RENDER_FAILURE_MESSAGE && activeSchemaPresetLabel
+      ? `Generated data failed to render with schema preset "${activeSchemaPresetLabel}". Not saved.`
+      : errorMessage;
   };
 
   function getTrackerSchemaAndRenderState(messageId: number) {
@@ -1289,6 +1298,7 @@ export function createTrackerActions(options: {
     const regenerateButton = messageBlock?.querySelector('.ztracker-regenerate-button');
     const detailsState = captureDetailsState(id);
     const token = { cancelled: false };
+    let activeSchemaPresetLabel: string | undefined;
 
     pendingSequences.set(id, token);
 
@@ -1310,6 +1320,7 @@ export function createTrackerActions(options: {
         if (token.cancelled) {
           return false;
         }
+        activeSchemaPresetLabel = settings.schemaPresets[schemaPresetKey]?.name ?? schemaPresetKey;
 
         const { partsOrder, partsMeta } = getSchemaRenderMetadata(chatJsonValue);
         const makeRequest = makeRequestFactory(id, settings, {
@@ -1347,7 +1358,7 @@ export function createTrackerActions(options: {
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Error generating tracker:', error);
-        st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
+        st_echo('error', `Tracker generation failed: ${formatTrackerGenerationErrorMessage(error, activeSchemaPresetLabel)}`);
       }
       return false;
     } finally {
@@ -1363,6 +1374,7 @@ export function createTrackerActions(options: {
     const mainButton = messageBlock?.querySelector('.mes_ztracker_button');
     const regenerateButton = messageBlock?.querySelector('.ztracker-regenerate-button');
     const detailsState = captureDetailsState(id);
+    let activeSchemaPresetLabel: string | undefined;
 
     const token = { cancelled: false };
     pendingSequences.set(id, token);
@@ -1385,6 +1397,7 @@ export function createTrackerActions(options: {
         if (token.cancelled) {
           return false;
         }
+        activeSchemaPresetLabel = settings.schemaPresets[schemaPresetKey]?.name ?? schemaPresetKey;
 
         const { partsOrder, partsMeta } = getSchemaRenderMetadata(chatJsonValue);
         if (partsOrder.length === 0) {
@@ -1452,8 +1465,9 @@ export function createTrackerActions(options: {
       });
     } catch (error: any) {
       if (error.name !== 'AbortError') {
+        const displayMessage = formatTrackerGenerationErrorMessage(error, activeSchemaPresetLabel);
         console.error('Error generating tracker (sequential):', error);
-        st_echo('error', `Tracker generation failed: ${(error as Error).message}`);
+        st_echo('error', `Tracker generation failed: ${displayMessage}`);
       }
       return false;
     } finally {
@@ -1696,7 +1710,7 @@ export function createTrackerActions(options: {
               context.saveMetadataDebounced();
               st_echo(
                 'success',
-                `Chat schema preset updated to "${settings.schemaPresets[newPresetKey].name}". Existing trackers keep their current schema until you run a full tracker regeneration for those messages.`,
+                `Current chat schema preset updated to "${settings.schemaPresets[newPresetKey].name}". Existing trackers keep their saved message schema until you run a full tracker regeneration for those messages.`,
               );
             }
           }

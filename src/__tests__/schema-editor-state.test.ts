@@ -11,6 +11,7 @@ import {
   shouldSyncSchemaTextFromSettings,
   validateSchemaDraft,
   validateSchemaHtmlDraft,
+  validateSchemaPresetDraftPair,
 } from '../components/settings/schema-editor-state.js';
 
 describe('schema-editor-state helpers', () => {
@@ -116,6 +117,70 @@ describe('schema-editor-state helpers', () => {
       }),
     );
     expect(validateSchemaHtmlDraft('<div>{{data.scene}}</div>')).toEqual({ isValid: true });
+  });
+
+  test('rejects schema preset drafts when the HTML no longer matches the JSON schema', () => {
+    expect(
+      validateSchemaPresetDraftPair({
+        schemaText: `{
+  "type": "object",
+  "properties": {
+    "scene": {
+      "type": "string"
+    }
+  },
+  "required": ["scene"]
+}`,
+        schemaHtmlText: '<div>{{data.weather}}</div>',
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        isValid: false,
+        errorMessage: expect.stringContaining('Schema JSON and HTML must stay coupled'),
+      }),
+    );
+  });
+
+  test('rejects schema preset drafts when the template requires optional fields missing from minimal tracker data', () => {
+    expect(
+      validateSchemaPresetDraftPair({
+        schemaText: `{
+  "type": "object",
+  "properties": {
+    "scene": {
+      "type": "string"
+    },
+    "weather": {
+      "type": "string"
+    }
+  },
+  "required": ["scene"]
+}`,
+        schemaHtmlText: '<div>{{data.scene}} {{data.weather}}</div>',
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        isValid: false,
+        errorMessage: expect.stringContaining('full and minimal tracker data'),
+      }),
+    );
+  });
+
+  test('accepts schema preset drafts when the HTML matches the JSON schema', () => {
+    expect(
+      validateSchemaPresetDraftPair({
+        schemaText: `{
+  "type": "object",
+  "properties": {
+    "scene": {
+      "type": "string"
+    }
+  },
+  "required": ["scene"]
+}`,
+        schemaHtmlText: '<div>{{data.scene}}</div>',
+      }),
+    ).toEqual({ isValid: true });
   });
 
   test('tracks dirty state for valid HTML drafts that differ from persisted settings', () => {

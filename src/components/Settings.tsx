@@ -1,8 +1,10 @@
 import { FC, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { STConnectionProfileSelect, PresetItem } from 'sillytavern-utils-lib/components/react';
 import { ExtensionSettingsManager } from 'sillytavern-utils-lib';
+import { st_echo } from 'sillytavern-utils-lib/config';
 import {
   ExtensionSettings,
+  CHAT_METADATA_SCHEMA_PRESET_KEY,
   DEFAULT_SCHEMA_VALUE,
   DEFAULT_SCHEMA_HTML,
   defaultSettings,
@@ -28,6 +30,7 @@ import {
   shouldSyncSchemaHtmlFromSettings,
   shouldSyncSchemaTextFromSettings,
   validateSchemaDraft,
+  validateSchemaPresetDraftPair,
   validateSchemaHtmlDraft,
 } from './settings/schema-editor-state.js';
 import { SettingsSectionDrawer } from './settings/SettingsSectionDrawer.js';
@@ -36,6 +39,120 @@ import { TrackerInjectionSection } from './settings/TrackerInjectionSection.js';
 
 // Initialize the settings manager once, outside the component
 export const settingsManager = new ExtensionSettingsManager<ExtensionSettings>(EXTENSION_KEY, defaultSettings);
+
+type ResolvedSchemaPresetSelection = {
+  key: string;
+  label: string;
+  usedFallback: boolean;
+};
+
+type CurrentChatSchemaPresetState = {
+  isAvailable: boolean;
+  selection: ResolvedSchemaPresetSelection | null;
+  storedSchemaKey?: string;
+  hasStoredSchemaKey: boolean;
+  hasValidStoredSchemaKey: boolean;
+};
+
+/** Returns the current chat's extension metadata record, creating it only when explicitly requested. */
+function getExtensionChatMetadataRecord(chatMetadata: unknown, createIfMissing = false): Record<string, any> | undefined {
+  if (!chatMetadata || typeof chatMetadata !== 'object') {
+    return undefined;
+  }
+
+  const metadataRecord = chatMetadata as Record<string, any>;
+  const currentValue = metadataRecord[EXTENSION_KEY];
+  if (currentValue && typeof currentValue === 'object') {
+    return currentValue as Record<string, any>;
+  }
+
+  if (!createIfMissing) {
+    return undefined;
+  }
+
+  metadataRecord[EXTENSION_KEY] = {};
+  return metadataRecord[EXTENSION_KEY] as Record<string, any>;
+}
+
+/** Reads the stored schema preset key from the active chat when one exists. */
+function readStoredChatSchemaPresetKey(chatMetadata: unknown): string | undefined {
+  const extensionMetadata = getExtensionChatMetadataRecord(chatMetadata);
+  const storedSchemaKey = extensionMetadata?.[CHAT_METADATA_SCHEMA_PRESET_KEY];
+  return typeof storedSchemaKey === 'string' && storedSchemaKey.trim().length > 0 ? storedSchemaKey : undefined;
+}
+
+/** Persists one chat-level schema preset selection when it actually changes. */
+async function persistChatSchemaPreset(context: any, schemaPresetKey: string): Promise<boolean> {
+  const extensionMetadata = getExtensionChatMetadataRecord(context?.chatMetadata, true);
+  if (!extensionMetadata || extensionMetadata[CHAT_METADATA_SCHEMA_PRESET_KEY] === schemaPresetKey) {
+    return false;
+  }
+
+  const previousSchemaPresetKey = extensionMetadata[CHAT_METADATA_SCHEMA_PRESET_KEY];
+  extensionMetadata[CHAT_METADATA_SCHEMA_PRESET_KEY] = schemaPresetKey;
+  if (typeof context?.saveMetadata === 'function') {
+    try {
+      await Promise.resolve(context.saveMetadata());
+    } catch (error) {
+      if (previousSchemaPresetKey === undefined) {
+        delete extensionMetadata[CHAT_METADATA_SCHEMA_PRESET_KEY];
+      } else {
+        extensionMetadata[CHAT_METADATA_SCHEMA_PRESET_KEY] = previousSchemaPresetKey;
+      }
+      console.error('zTracker: failed to save current chat schema preset metadata.', error);
+      await st_echo('error', 'Current chat schema preset could not be saved. The selector was reverted.');
+      return false;
+    }
+  } else if (typeof context?.saveMetadataDebounced === 'function') {
+    context.saveMetadataDebounced();
+  }
+  return true;
+}
+
+/** Resolves one schema preset key against the current settings and falls back to the active default when missing. */
+function resolveSchemaPresetSelection(
+  schemaPresets: ExtensionSettings['schemaPresets'],
+  fallbackKey: string,
+  requestedKey?: string,
+): ResolvedSchemaPresetSelection | null {
+  const presetEntries = Object.entries(schemaPresets ?? {});
+  if (presetEntries.length === 0) {
+    return null;
+  }
+
+  const normalizedFallbackKey = schemaPresets[fallbackKey] ? fallbackKey : presetEntries[0][0];
+  const resolvedKey = requestedKey && schemaPresets[requestedKey] ? requestedKey : normalizedFallbackKey;
+  return {
+    key: resolvedKey,
+    label: schemaPresets[resolvedKey]?.name ?? resolvedKey,
+    usedFallback: resolvedKey !== requestedKey,
+  };
+}
+
+/** Reads the active chat schema state from live SillyTavern chat metadata without holding a stale reference. */
+function getCurrentChatSchemaPresetState(settings: ExtensionSettings): CurrentChatSchemaPresetState {
+  const context = SillyTavern.getContext();
+  const chatMetadata = context?.chatMetadata;
+  if (!chatMetadata || typeof chatMetadata !== 'object') {
+    return {
+      isAvailable: false,
+      selection: null,
+      storedSchemaKey: undefined,
+      hasStoredSchemaKey: false,
+      hasValidStoredSchemaKey: false,
+    };
+  }
+
+  const storedSchemaKey = readStoredChatSchemaPresetKey(chatMetadata);
+  const hasValidStoredSchemaKey = typeof storedSchemaKey === 'string' && !!settings.schemaPresets[storedSchemaKey];
+  return {
+    isAvailable: true,
+    selection: resolveSchemaPresetSelection(settings.schemaPresets, settings.schemaPreset, storedSchemaKey),
+    storedSchemaKey,
+    hasStoredSchemaKey: typeof storedSchemaKey === 'string' && storedSchemaKey.trim().length > 0,
+    hasValidStoredSchemaKey,
+  };
+}
 
 export const ZTrackerSettings: FC = () => {
   const forceUpdate = useForceUpdate();
@@ -68,6 +185,7 @@ export const ZTrackerSettings: FC = () => {
       label: preset.name,
     }));
   }, [settings.schemaPresets]);
+  const currentChatSchemaPresetState = getCurrentChatSchemaPresetState(settings);
 
   const systemPromptItems = useMemo((): PresetItem[] => {
     return listSystemPromptPresetNames().map((name) => ({
@@ -92,6 +210,18 @@ export const ZTrackerSettings: FC = () => {
   const schemaDraftState = getSchemaDraftState({ currentText: schemaText, persistedText: activeSchemaText });
   const activeSchemaHtml = formatSchemaHtml(settings.schemaPresets[settings.schemaPreset]);
   const schemaHtmlDraftState = getSchemaHtmlDraftState({ currentText: schemaHtmlText, persistedText: activeSchemaHtml });
+  const schemaPresetPairValidation = useMemo(
+    () => (schemaDraftState.isValid && schemaHtmlDraftState.isValid
+      ? validateSchemaPresetDraftPair({ schemaText, schemaHtmlText })
+      : { isValid: true }),
+    [schemaDraftState.isValid, schemaHtmlDraftState.isValid, schemaText, schemaHtmlText],
+  );
+  const schemaPresetPairError = schemaPresetPairValidation.isValid ? undefined : schemaPresetPairValidation.errorMessage;
+  const schemaPresetPairCanSave =
+    (schemaDraftState.isDirty || schemaHtmlDraftState.isDirty) &&
+    schemaDraftState.isValid &&
+    schemaHtmlDraftState.isValid &&
+    schemaPresetPairValidation.isValid;
 
   useEffect(() => {
     const activePresetChanged = previousSchemaPresetRef.current !== settings.schemaPreset;
@@ -145,24 +275,110 @@ export const ZTrackerSettings: FC = () => {
     }
   };
 
+  // Renames the active preset key in-place so chat metadata and unsaved drafts stay attached to the same preset.
+  const handleSchemaPresetRename = (currentKey: string, newKey: string) => {
+    if (!currentKey || !newKey || currentKey === newKey) {
+      return;
+    }
+
+    let shouldMigrateChatSchemaState = false;
+    let renamedActivePreset = false;
+
+    updateAndRefresh((currentSettings) => {
+      const currentPreset = currentSettings.schemaPresets[currentKey];
+      if (!currentPreset || currentSettings.schemaPresets[newKey]) {
+        return;
+      }
+
+      const nextSchemaPresets = Object.fromEntries(
+        Object.entries(currentSettings.schemaPresets).map(([presetKey, preset]) => (
+          presetKey === currentKey
+            ? [[newKey, { ...preset, name: newKey }]]
+            : [[presetKey, preset]]
+        )).flat(),
+      ) as ExtensionSettings['schemaPresets'];
+
+      currentSettings.schemaPresets = nextSchemaPresets;
+      if (currentSettings.schemaPreset === currentKey) {
+        currentSettings.schemaPreset = newKey;
+        renamedActivePreset = true;
+      }
+
+      const context = SillyTavern.getContext();
+      if (readStoredChatSchemaPresetKey(context?.chatMetadata) === currentKey) {
+        shouldMigrateChatSchemaState = true;
+      }
+    });
+
+    if (renamedActivePreset) {
+      previousSchemaPresetRef.current = newKey;
+    }
+
+    if (shouldMigrateChatSchemaState) {
+      const context = SillyTavern.getContext();
+      void persistChatSchemaPreset(context, newKey).finally(() => {
+        forceUpdate();
+      });
+    }
+  };
+
+  // Persists the active chat schema preset without changing the global default or preset editor selection.
+  const handleCurrentChatSchemaPresetChange = async (newValue?: string) => {
+    const context = SillyTavern.getContext();
+    const chatMetadata = context?.chatMetadata;
+    if (!chatMetadata || typeof chatMetadata !== 'object') {
+      return;
+    }
+
+    const selection = resolveSchemaPresetSelection(settings.schemaPresets, settings.schemaPreset, newValue);
+    if (!selection) {
+      return;
+    }
+
+    const storedSchemaPresetKey = readStoredChatSchemaPresetKey(chatMetadata);
+    if (storedSchemaPresetKey === selection.key) {
+      return;
+    }
+
+    await persistChatSchemaPreset(context, selection.key);
+    forceUpdate();
+  };
+
   // Handler for when the list of presets is modified (created, renamed, deleted)
   const handleSchemaPresetsListChange = (newItems: PresetItem[]) => {
     let nextSchemaText = '';
     let nextSchemaHtmlText = '';
     let preservesActiveDrafts = false;
+    let nextChatSchemaSelectionKey: string | undefined;
 
     updateAndRefresh((currentSettings) => {
+      const context = SillyTavern.getContext();
+      const storedChatSchemaKey = readStoredChatSchemaPresetKey(context?.chatMetadata);
       const nextState = reconcilePresetItems(currentSettings.schemaPresets, currentSettings.schemaPreset, newItems);
       preservesActiveDrafts = nextState.preservesActiveDrafts;
       currentSettings.schemaPreset = nextState.activeKey;
       currentSettings.schemaPresets = nextState.presets;
       nextSchemaText = formatSchemaText(nextState.presets[nextState.activeKey]);
       nextSchemaHtmlText = formatSchemaHtml(nextState.presets[nextState.activeKey]);
+
+      if (storedChatSchemaKey && !nextState.presets[storedChatSchemaKey]) {
+        const nextChatSelection = resolveSchemaPresetSelection(nextState.presets, nextState.activeKey, storedChatSchemaKey);
+        if (nextChatSelection) {
+          nextChatSchemaSelectionKey = nextChatSelection.key;
+        }
+      }
     });
 
     if (!preservesActiveDrafts) {
       setSchemaText(nextSchemaText);
       setSchemaHtmlText(nextSchemaHtmlText);
+    }
+
+    if (nextChatSchemaSelectionKey) {
+      const context = SillyTavern.getContext();
+      void persistChatSchemaPreset(context, nextChatSchemaSelectionKey).finally(() => {
+        forceUpdate();
+      });
     }
   };
 
@@ -173,44 +389,16 @@ export const ZTrackerSettings: FC = () => {
     setSchemaText(newSchemaText);
   };
 
-  // Persists the active preset's JSON schema only after explicit confirmation.
-  const saveSchemaValue = () => {
-    const validation = validateSchemaDraft(schemaText);
-    if (!validation.isValid) {
+  // Persists the active preset as one coupled JSON-and-HTML pair so preset switching cannot drift them apart.
+  const saveSchemaPresetPair = () => {
+    const jsonValidation = validateSchemaDraft(schemaText);
+    const htmlValidation = validateSchemaHtmlDraft(schemaHtmlText);
+    if (!jsonValidation.isValid || !htmlValidation.isValid || !schemaPresetPairValidation.isValid) {
       return;
     }
 
     const parsedJson = JSON.parse(schemaText);
     let nextSchemaText = schemaText;
-    updateAndRefresh((currentSettings) => {
-      const preset = currentSettings.schemaPresets[currentSettings.schemaPreset];
-      if (!preset) {
-        return;
-      }
-
-      const nextPreset = { ...preset, value: parsedJson };
-      currentSettings.schemaPresets = {
-        ...currentSettings.schemaPresets,
-        [currentSettings.schemaPreset]: nextPreset,
-      };
-      nextSchemaText = formatSchemaText(nextPreset);
-    });
-    setSchemaText(nextSchemaText);
-  };
-
-  // Handler for the schema HTML textarea
-  const handleSchemaHtmlChange = (newHtml: string) => {
-    // Keep the HTML draft local until the user explicitly saves it.
-    setSchemaHtmlText(newHtml);
-  };
-
-  // Persists the active preset's HTML template only after explicit confirmation.
-  const saveSchemaHtmlValue = () => {
-    const validation = validateSchemaHtmlDraft(schemaHtmlText);
-    if (!validation.isValid) {
-      return;
-    }
-
     let nextSchemaHtmlValue = schemaHtmlText;
     updateAndRefresh((currentSettings) => {
       const preset = currentSettings.schemaPresets[currentSettings.schemaPreset];
@@ -218,14 +406,22 @@ export const ZTrackerSettings: FC = () => {
         return;
       }
 
-      const nextPreset = { ...preset, html: schemaHtmlText };
+      const nextPreset = { ...preset, value: parsedJson, html: schemaHtmlText };
       currentSettings.schemaPresets = {
         ...currentSettings.schemaPresets,
         [currentSettings.schemaPreset]: nextPreset,
       };
+      nextSchemaText = formatSchemaText(nextPreset);
       nextSchemaHtmlValue = formatSchemaHtml(nextPreset);
     });
+    setSchemaText(nextSchemaText);
     setSchemaHtmlText(nextSchemaHtmlValue);
+  };
+
+  // Handler for the schema HTML textarea
+  const handleSchemaHtmlChange = (newHtml: string) => {
+    // Keep the HTML draft local until the user explicitly saves it.
+    setSchemaHtmlText(newHtml);
   };
 
   // Restore the current schema preset to its default values
@@ -313,22 +509,32 @@ export const ZTrackerSettings: FC = () => {
                 settings={settings}
                 updateAndRefresh={updateAndRefresh}
                 schemaPresetItems={schemaPresetItems}
+                currentChatSchemaPresetKey={currentChatSchemaPresetState.selection?.key}
+                currentChatSchemaPresetLabel={currentChatSchemaPresetState.selection?.label}
+                currentChatSchemaPresetUsesDefault={!!currentChatSchemaPresetState.selection?.usedFallback}
+                currentChatSchemaPresetAvailable={currentChatSchemaPresetState.isAvailable}
+                currentChatSchemaPresetStoredKey={currentChatSchemaPresetState.storedSchemaKey}
+                currentChatSchemaPresetHasStoredValue={currentChatSchemaPresetState.hasStoredSchemaKey}
+                currentChatSchemaPresetHasValidStoredValue={currentChatSchemaPresetState.hasValidStoredSchemaKey}
                 handleSchemaPresetChange={handleSchemaPresetChange}
+                handleSchemaPresetRename={handleSchemaPresetRename}
+                handleCurrentChatSchemaPresetChange={handleCurrentChatSchemaPresetChange}
                 handleSchemaPresetsListChange={handleSchemaPresetsListChange}
                 schemaText={schemaText}
                 schemaTextHasError={!schemaDraftState.isValid}
                 schemaTextError={schemaDraftState.errorMessage}
                 schemaTextHasUnsavedChanges={schemaDraftState.isDirty}
-                schemaTextCanSave={schemaDraftState.canSave}
+                schemaTextCanSave={schemaPresetPairCanSave}
                 schemaHtmlText={schemaHtmlText}
                 schemaHtmlTextHasError={!schemaHtmlDraftState.isValid}
                 schemaHtmlTextError={schemaHtmlDraftState.errorMessage}
                 schemaHtmlTextHasUnsavedChanges={schemaHtmlDraftState.isDirty}
-                schemaHtmlTextCanSave={schemaHtmlDraftState.canSave}
+                schemaHtmlTextCanSave={schemaPresetPairCanSave}
+                schemaPresetPairError={schemaPresetPairError}
                 handleSchemaValueChange={handleSchemaValueChange}
                 handleSchemaHtmlChange={handleSchemaHtmlChange}
-                saveSchemaValue={saveSchemaValue}
-                saveSchemaHtmlValue={saveSchemaHtmlValue}
+                saveSchemaValue={saveSchemaPresetPair}
+                saveSchemaHtmlValue={saveSchemaPresetPair}
                 restoreSchemaToDefault={restoreSchemaToDefault}
                 systemPromptItems={systemPromptItems}
                 refreshSystemPromptState={refreshSystemPromptState}

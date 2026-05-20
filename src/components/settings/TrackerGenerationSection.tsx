@@ -13,7 +13,16 @@ export const TrackerGenerationSection: FC<{
   settings: ExtensionSettings;
   updateAndRefresh: SettingsUpdateAndRefresh;
   schemaPresetItems: PresetItem[];
+  currentChatSchemaPresetKey?: string;
+  currentChatSchemaPresetLabel?: string;
+  currentChatSchemaPresetStoredKey?: string;
+  currentChatSchemaPresetUsesDefault: boolean;
+  currentChatSchemaPresetAvailable: boolean;
+  currentChatSchemaPresetHasStoredValue: boolean;
+  currentChatSchemaPresetHasValidStoredValue: boolean;
   handleSchemaPresetChange: (newValue?: string) => void;
+  handleSchemaPresetRename: (currentKey: string, newValue: string) => void;
+  handleCurrentChatSchemaPresetChange: (newValue?: string) => void;
   handleSchemaPresetsListChange: (newItems: PresetItem[]) => void;
   schemaText: string;
   schemaTextHasError: boolean;
@@ -25,6 +34,7 @@ export const TrackerGenerationSection: FC<{
   schemaHtmlTextError?: string;
   schemaHtmlTextHasUnsavedChanges: boolean;
   schemaHtmlTextCanSave: boolean;
+  schemaPresetPairError?: string;
   handleSchemaValueChange: (newSchemaText: string) => void;
   handleSchemaHtmlChange: (newHtml: string) => void;
   saveSchemaValue: () => void;
@@ -39,7 +49,16 @@ export const TrackerGenerationSection: FC<{
   settings,
   updateAndRefresh,
   schemaPresetItems,
+  currentChatSchemaPresetKey,
+  currentChatSchemaPresetLabel,
+  currentChatSchemaPresetStoredKey,
+  currentChatSchemaPresetUsesDefault,
+  currentChatSchemaPresetAvailable,
+  currentChatSchemaPresetHasStoredValue,
+  currentChatSchemaPresetHasValidStoredValue,
   handleSchemaPresetChange,
+  handleSchemaPresetRename,
+  handleCurrentChatSchemaPresetChange,
   handleSchemaPresetsListChange,
   schemaText,
   schemaTextHasError,
@@ -51,6 +70,7 @@ export const TrackerGenerationSection: FC<{
   schemaHtmlTextError,
   schemaHtmlTextHasUnsavedChanges,
   schemaHtmlTextCanSave,
+  schemaPresetPairError,
   handleSchemaValueChange,
   handleSchemaHtmlChange,
   saveSchemaValue,
@@ -67,9 +87,18 @@ export const TrackerGenerationSection: FC<{
       <GenerationBehaviorSection settings={settings} updateAndRefresh={updateAndRefresh} />
 
       <SchemaPresetSection
-        settings={settings}
+        schemaPresetKey={settings.schemaPreset}
         schemaPresetItems={schemaPresetItems}
+        currentChatSchemaPresetKey={currentChatSchemaPresetKey}
+        currentChatSchemaPresetLabel={currentChatSchemaPresetLabel}
+        currentChatSchemaPresetStoredKey={currentChatSchemaPresetStoredKey}
+        currentChatSchemaPresetUsesDefault={currentChatSchemaPresetUsesDefault}
+        currentChatSchemaPresetAvailable={currentChatSchemaPresetAvailable}
+        currentChatSchemaPresetHasStoredValue={currentChatSchemaPresetHasStoredValue}
+        currentChatSchemaPresetHasValidStoredValue={currentChatSchemaPresetHasValidStoredValue}
         handleSchemaPresetChange={handleSchemaPresetChange}
+        handleSchemaPresetRename={handleSchemaPresetRename}
+        handleCurrentChatSchemaPresetChange={handleCurrentChatSchemaPresetChange}
         handleSchemaPresetsListChange={handleSchemaPresetsListChange}
         schemaText={schemaText}
         schemaTextHasError={schemaTextHasError}
@@ -81,6 +110,7 @@ export const TrackerGenerationSection: FC<{
         schemaHtmlTextError={schemaHtmlTextError}
         schemaHtmlTextHasUnsavedChanges={schemaHtmlTextHasUnsavedChanges}
         schemaHtmlTextCanSave={schemaHtmlTextCanSave}
+        schemaPresetPairError={schemaPresetPairError}
         handleSchemaValueChange={handleSchemaValueChange}
         handleSchemaHtmlChange={handleSchemaHtmlChange}
         saveSchemaValue={saveSchemaValue}

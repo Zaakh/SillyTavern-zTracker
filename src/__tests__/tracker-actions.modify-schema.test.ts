@@ -101,7 +101,7 @@ describe('createTrackerActions modifyChatMetadata', () => {
     expect(saveMetadataDebounced).toHaveBeenCalledTimes(1);
     expect(stEchoMock).toHaveBeenCalledWith(
       'success',
-      'Chat schema preset updated to "Alternate". Existing trackers keep their current schema until you run a full tracker regeneration for those messages.',
+      'Current chat schema preset updated to "Alternate". Existing trackers keep their saved message schema until you run a full tracker regeneration for those messages.',
     );
   });
 });
