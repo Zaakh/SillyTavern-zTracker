@@ -10,16 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- zTracker settings now separate the default schema preset for new chats from the current chat schema preset used by full tracker generation.
+- zTracker settings now separate the default schema preset for new chats from the current chat schema preset used for full tracker generation, with clearer preset switching and editing controls.
 
 ### Fixed
 
-- Saving either schema editor now persists the current schema JSON and schema HTML together, so switching schema presets keeps the pair coupled.
-- The current chat schema preset selector now prefers immediate metadata saves on hosts that expose fresh chat metadata context objects on each read, preventing the selection from snapping back after rerender.
-- Current chat schema preset fallback now updates immediately when the selected preset becomes unavailable, instead of waiting for a later full generation to normalize chat metadata.
-- Schema preset edits now run stricter JSON/HTML compatibility checks before saving, catching more mismatches earlier instead of only during tracker generation.
-- The schema preset editor now uses an explicit global preset dropdown with create, rename, and delete buttons, making preset switching easier to find in settings.
-- TOON prompt-engineering tracker generation now sends a leaner schema and example prompt, reducing prompt bloat while keeping the same structured-output contract.
+- Schema preset edits now save and validate the JSON schema and HTML template together, reducing mismatches when you switch presets.
+- Current chat schema preset changes now persist more reliably and recover faster when a previously selected preset is removed.
+- TOON prompt-engineering tracker generation now uses a leaner prompt, reducing prompt bloat while preserving the same structured-output behavior.
 
 ## [1.11.5] - 2026-05-18
 
