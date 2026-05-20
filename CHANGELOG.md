@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Saving either schema editor now persists the current schema JSON and schema HTML together, so switching schema presets keeps the pair coupled.
 - The current chat schema preset selector now prefers immediate metadata saves on hosts that expose fresh chat metadata context objects on each read, preventing the selection from snapping back after rerender.
 - Current chat schema preset fallback now updates immediately when the selected preset becomes unavailable, instead of waiting for a later full generation to normalize chat metadata.
 - Schema preset edits now run stricter JSON/HTML compatibility checks before saving, catching more mismatches earlier instead of only during tracker generation.

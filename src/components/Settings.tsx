@@ -386,8 +386,8 @@ export const ZTrackerSettings: FC = () => {
     setSchemaText(newSchemaText);
   };
 
-  // Persists the active preset's JSON schema only after explicit confirmation.
-  const saveSchemaValue = () => {
+  // Persists the active preset as one coupled JSON-and-HTML pair so preset switching cannot drift them apart.
+  const saveSchemaPresetPair = () => {
     const validation = validateSchemaDraft(schemaText);
     if (!validation.isValid || !schemaPresetPairValidation.isValid) {
       return;
@@ -395,20 +395,28 @@ export const ZTrackerSettings: FC = () => {
 
     const parsedJson = JSON.parse(schemaText);
     let nextSchemaText = schemaText;
+    let nextSchemaHtmlValue = schemaHtmlText;
     updateAndRefresh((currentSettings) => {
       const preset = currentSettings.schemaPresets[currentSettings.schemaPreset];
       if (!preset) {
         return;
       }
 
-      const nextPreset = { ...preset, value: parsedJson };
+      const nextPreset = { ...preset, value: parsedJson, html: schemaHtmlText };
       currentSettings.schemaPresets = {
         ...currentSettings.schemaPresets,
         [currentSettings.schemaPreset]: nextPreset,
       };
       nextSchemaText = formatSchemaText(nextPreset);
+      nextSchemaHtmlValue = formatSchemaHtml(nextPreset);
     });
     setSchemaText(nextSchemaText);
+    setSchemaHtmlText(nextSchemaHtmlValue);
+  };
+
+  // Persists the active preset's JSON schema and HTML template together.
+  const saveSchemaValue = () => {
+    saveSchemaPresetPair();
   };
 
   // Handler for the schema HTML textarea
@@ -417,28 +425,14 @@ export const ZTrackerSettings: FC = () => {
     setSchemaHtmlText(newHtml);
   };
 
-  // Persists the active preset's HTML template only after explicit confirmation.
+  // Persists the active preset's HTML template and JSON schema together.
   const saveSchemaHtmlValue = () => {
     const validation = validateSchemaHtmlDraft(schemaHtmlText);
     if (!validation.isValid || !schemaPresetPairValidation.isValid) {
       return;
     }
 
-    let nextSchemaHtmlValue = schemaHtmlText;
-    updateAndRefresh((currentSettings) => {
-      const preset = currentSettings.schemaPresets[currentSettings.schemaPreset];
-      if (!preset) {
-        return;
-      }
-
-      const nextPreset = { ...preset, html: schemaHtmlText };
-      currentSettings.schemaPresets = {
-        ...currentSettings.schemaPresets,
-        [currentSettings.schemaPreset]: nextPreset,
-      };
-      nextSchemaHtmlValue = formatSchemaHtml(nextPreset);
-    });
-    setSchemaHtmlText(nextSchemaHtmlValue);
+    saveSchemaPresetPair();
   };
 
   // Restore the current schema preset to its default values
