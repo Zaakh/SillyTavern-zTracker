@@ -1,6 +1,7 @@
 import { FC, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { STConnectionProfileSelect, PresetItem } from 'sillytavern-utils-lib/components/react';
 import { ExtensionSettingsManager } from 'sillytavern-utils-lib';
+import { st_echo } from 'sillytavern-utils-lib/config';
 import {
   ExtensionSettings,
   CHAT_METADATA_SCHEMA_PRESET_KEY,
@@ -81,14 +82,28 @@ function readStoredChatSchemaPresetKey(chatMetadata: unknown): string | undefine
 }
 
 /** Persists one chat-level schema preset selection when it actually changes. */
-function persistChatSchemaPreset(context: any, schemaPresetKey: string): boolean {
+async function persistChatSchemaPreset(context: any, schemaPresetKey: string): Promise<boolean> {
   const extensionMetadata = getExtensionChatMetadataRecord(context?.chatMetadata, true);
   if (!extensionMetadata || extensionMetadata[CHAT_METADATA_SCHEMA_PRESET_KEY] === schemaPresetKey) {
     return false;
   }
 
+  const previousSchemaPresetKey = extensionMetadata[CHAT_METADATA_SCHEMA_PRESET_KEY];
   extensionMetadata[CHAT_METADATA_SCHEMA_PRESET_KEY] = schemaPresetKey;
-  if (typeof context?.saveMetadataDebounced === 'function') {
+  if (typeof context?.saveMetadata === 'function') {
+    try {
+      await Promise.resolve(context.saveMetadata());
+    } catch (error) {
+      if (previousSchemaPresetKey === undefined) {
+        delete extensionMetadata[CHAT_METADATA_SCHEMA_PRESET_KEY];
+      } else {
+        extensionMetadata[CHAT_METADATA_SCHEMA_PRESET_KEY] = previousSchemaPresetKey;
+      }
+      console.error('zTracker: failed to save current chat schema preset metadata.', error);
+      await st_echo('error', 'Current chat schema preset could not be saved. The selector was reverted.');
+      return false;
+    }
+  } else if (typeof context?.saveMetadataDebounced === 'function') {
     context.saveMetadataDebounced();
   }
   return true;
@@ -263,7 +278,7 @@ export const ZTrackerSettings: FC = () => {
       return;
     }
 
-    let shouldRefreshChatSchemaState = false;
+    let shouldMigrateChatSchemaState = false;
     let renamedActivePreset = false;
 
     updateAndRefresh((currentSettings) => {
@@ -287,8 +302,8 @@ export const ZTrackerSettings: FC = () => {
       }
 
       const context = SillyTavern.getContext();
-      if (readStoredChatSchemaPresetKey(context?.chatMetadata) === currentKey && persistChatSchemaPreset(context, newKey)) {
-        shouldRefreshChatSchemaState = true;
+      if (readStoredChatSchemaPresetKey(context?.chatMetadata) === currentKey) {
+        shouldMigrateChatSchemaState = true;
       }
     });
 
@@ -296,13 +311,16 @@ export const ZTrackerSettings: FC = () => {
       previousSchemaPresetRef.current = newKey;
     }
 
-    if (shouldRefreshChatSchemaState) {
-      forceUpdate();
+    if (shouldMigrateChatSchemaState) {
+      const context = SillyTavern.getContext();
+      void persistChatSchemaPreset(context, newKey).finally(() => {
+        forceUpdate();
+      });
     }
   };
 
   // Persists the active chat schema preset without changing the global default or preset editor selection.
-  const handleCurrentChatSchemaPresetChange = (newValue?: string) => {
+  const handleCurrentChatSchemaPresetChange = async (newValue?: string) => {
     const context = SillyTavern.getContext();
     const chatMetadata = context?.chatMetadata;
     if (!chatMetadata || typeof chatMetadata !== 'object') {
@@ -314,9 +332,13 @@ export const ZTrackerSettings: FC = () => {
       return;
     }
 
-    if (persistChatSchemaPreset(context, selection.key)) {
-      forceUpdate();
+    const storedSchemaPresetKey = readStoredChatSchemaPresetKey(chatMetadata);
+    if (storedSchemaPresetKey === selection.key) {
+      return;
     }
+
+    await persistChatSchemaPreset(context, selection.key);
+    forceUpdate();
   };
 
   // Handler for when the list of presets is modified (created, renamed, deleted)
@@ -324,7 +346,7 @@ export const ZTrackerSettings: FC = () => {
     let nextSchemaText = '';
     let nextSchemaHtmlText = '';
     let preservesActiveDrafts = false;
-    let shouldRefreshChatSchemaState = false;
+    let nextChatSchemaSelectionKey: string | undefined;
 
     updateAndRefresh((currentSettings) => {
       const context = SillyTavern.getContext();
@@ -338,8 +360,8 @@ export const ZTrackerSettings: FC = () => {
 
       if (storedChatSchemaKey && !nextState.presets[storedChatSchemaKey]) {
         const nextChatSelection = resolveSchemaPresetSelection(nextState.presets, nextState.activeKey, storedChatSchemaKey);
-        if (nextChatSelection && persistChatSchemaPreset(context, nextChatSelection.key)) {
-          shouldRefreshChatSchemaState = true;
+        if (nextChatSelection) {
+          nextChatSchemaSelectionKey = nextChatSelection.key;
         }
       }
     });
@@ -349,8 +371,11 @@ export const ZTrackerSettings: FC = () => {
       setSchemaHtmlText(nextSchemaHtmlText);
     }
 
-    if (shouldRefreshChatSchemaState) {
-      forceUpdate();
+    if (nextChatSchemaSelectionKey) {
+      const context = SillyTavern.getContext();
+      void persistChatSchemaPreset(context, nextChatSchemaSelectionKey).finally(() => {
+        forceUpdate();
+      });
     }
   };
 

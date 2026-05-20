@@ -8,6 +8,7 @@ import { createRoot, Root } from 'react-dom/client';
 
 let mockSettings: any = createMockSettings();
 const saveSettingsMock = jest.fn();
+const stEchoMock = jest.fn();
 let sillyTavernContext: any;
 const profileSelectMock = jest.fn(({ initialSelectedProfileId }: { initialSelectedProfileId?: string }) =>
   React.createElement('div', { 'data-testid': 'profile-select' }, initialSelectedProfileId ?? 'none'),
@@ -158,6 +159,10 @@ jest.unstable_mockModule('sillytavern-utils-lib', () => ({
   ExtensionSettingsManager: MockExtensionSettingsManager,
 }));
 
+jest.unstable_mockModule('sillytavern-utils-lib/config', () => ({
+  st_echo: stEchoMock,
+}));
+
 jest.unstable_mockModule('sillytavern-utils-lib/components/react', () => ({
   STConnectionProfileSelect: profileSelectMock,
   STPresetSelect: presetSelectMock,
@@ -283,6 +288,7 @@ describe('zTracker settings connection source UI', () => {
     (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
     mockSettings = createMockSettings();
     saveSettingsMock.mockReset();
+    stEchoMock.mockReset();
     profileSelectMock.mockClear();
     presetSelectMock.mockClear();
     buttonMock.mockClear();
@@ -351,7 +357,7 @@ describe('zTracker settings connection source UI', () => {
     expect(container.textContent).toContain('Current Chat Schema Preset');
   });
 
-  test('changing the current chat schema preset updates chat metadata without changing the global default', () => {
+  test('changing the current chat schema preset updates chat metadata without changing the global default', async () => {
     mockSettings.schemaPresets.alternate = {
       name: 'Alternate',
       value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
@@ -374,15 +380,147 @@ describe('zTracker settings connection source UI', () => {
       throw new Error('Current chat schema preset select not found');
     }
 
-    act(() => {
+    await act(async () => {
       select.value = 'alternate';
       select.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
     });
 
     expect(context.chatMetadata).toEqual({ zTracker: { schemaKey: 'alternate' } });
     expect(saveMetadataDebounced).toHaveBeenCalledTimes(1);
     expect(mockSettings.schemaPreset).toBe('default');
     expect(saveSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test('changing the current chat schema preset survives a rerender when the host returns fresh context wrappers', async () => {
+    mockSettings.schemaPresets.alternate = {
+      name: 'Alternate',
+      value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
+      html: '<div>alternate</div>',
+    };
+
+    const saveMetadataDebounced = jest.fn();
+    const saveMetadata = jest.fn();
+    let persistedChatMetadata = { zTracker: { schemaKey: 'default' } };
+
+    (globalThis as any).SillyTavern = {
+      getContext: () => {
+        const context = {
+          chatMetadata: JSON.parse(JSON.stringify(persistedChatMetadata)),
+          saveMetadataDebounced,
+          saveMetadata: () => {
+            saveMetadata();
+            persistedChatMetadata = JSON.parse(JSON.stringify(context.chatMetadata));
+          },
+          Popup: { show: { confirm: jest.fn() } },
+        };
+
+        return context;
+      },
+    };
+
+    const container = renderSettings();
+    const select = container.querySelector('[data-testid="preset-select-Current Chat Schema Preset"]');
+    if (!(select instanceof HTMLSelectElement)) {
+      throw new Error('Current chat schema preset select not found');
+    }
+
+    await act(async () => {
+      select.value = 'alternate';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const rerenderedSelect = container.querySelector('[data-testid="preset-select-Current Chat Schema Preset"]');
+    if (!(rerenderedSelect instanceof HTMLSelectElement)) {
+      throw new Error('Current chat schema preset select not found after rerender');
+    }
+
+    expect(persistedChatMetadata).toEqual({ zTracker: { schemaKey: 'alternate' } });
+    expect(saveMetadata).toHaveBeenCalledTimes(1);
+    expect(rerenderedSelect.value).toBe('alternate');
+    expect(mockSettings.schemaPreset).toBe('default');
+  });
+
+  test('prefers immediate saveMetadata over debounced metadata saves when both host APIs exist', async () => {
+    mockSettings.schemaPresets.alternate = {
+      name: 'Alternate',
+      value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
+      html: '<div>alternate</div>',
+    };
+
+    const saveMetadataDebounced = jest.fn();
+    const saveMetadata = jest.fn(async () => undefined);
+    const context = {
+      chatMetadata: { zTracker: { schemaKey: 'default' } },
+      saveMetadata,
+      saveMetadataDebounced,
+      Popup: { show: { confirm: jest.fn() } },
+    };
+    (globalThis as any).SillyTavern = {
+      getContext: () => context,
+    };
+
+    const container = renderSettings();
+    const select = container.querySelector('[data-testid="preset-select-Current Chat Schema Preset"]');
+    if (!(select instanceof HTMLSelectElement)) {
+      throw new Error('Current chat schema preset select not found');
+    }
+
+    await act(async () => {
+      select.value = 'alternate';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(context.chatMetadata).toEqual({ zTracker: { schemaKey: 'alternate' } });
+    expect(saveMetadata).toHaveBeenCalledTimes(1);
+    expect(saveMetadataDebounced).not.toHaveBeenCalled();
+  });
+
+  test('reverts the selector and shows an error when immediate metadata save fails', async () => {
+    mockSettings.schemaPresets.alternate = {
+      name: 'Alternate',
+      value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
+      html: '<div>alternate</div>',
+    };
+
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const saveMetadata = jest.fn(async () => {
+      throw new Error('save failed');
+    });
+    const context = {
+      chatMetadata: { zTracker: { schemaKey: 'default' } },
+      saveMetadata,
+      saveMetadataDebounced: jest.fn(),
+      Popup: { show: { confirm: jest.fn() } },
+    };
+    (globalThis as any).SillyTavern = {
+      getContext: () => context,
+    };
+
+    const container = renderSettings();
+    const select = container.querySelector('[data-testid="preset-select-Current Chat Schema Preset"]');
+    if (!(select instanceof HTMLSelectElement)) {
+      throw new Error('Current chat schema preset select not found');
+    }
+
+    await act(async () => {
+      select.value = 'alternate';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const rerenderedSelect = container.querySelector('[data-testid="preset-select-Current Chat Schema Preset"]');
+    if (!(rerenderedSelect instanceof HTMLSelectElement)) {
+      throw new Error('Current chat schema preset select not found after failed save');
+    }
+
+    expect(context.chatMetadata).toEqual({ zTracker: { schemaKey: 'default' } });
+    expect(rerenderedSelect.value).toBe('default');
+    expect(stEchoMock).toHaveBeenCalledWith('error', 'Current chat schema preset could not be saved. The selector was reverted.');
+
+    consoleErrorSpy.mockRestore();
   });
 
   test('current chat schema selector falls back to the global default when the chat has no stored schema key', () => {
@@ -404,7 +542,7 @@ describe('zTracker settings connection source UI', () => {
     expect(select.value).toBe('default');
   });
 
-  test('deleting the active current chat schema preset immediately persists the fallback preset', () => {
+  test('deleting the active current chat schema preset immediately persists the fallback preset', async () => {
     mockSettings.schemaPreset = 'default';
     mockSettings.schemaPresets = {
       default: {
@@ -435,8 +573,9 @@ describe('zTracker settings connection source UI', () => {
       throw new Error('Delete custom preset button not found');
     }
 
-    act(() => {
+    await act(async () => {
       deleteButton.click();
+      await Promise.resolve();
     });
 
     expect(context.chatMetadata).toEqual({ zTracker: { schemaKey: 'default' } });
@@ -444,7 +583,7 @@ describe('zTracker settings connection source UI', () => {
     expect(saveSettingsMock).toHaveBeenCalled();
   });
 
-  test('renaming a preset migrates the current chat schema key to the renamed preset', () => {
+  test('renaming a preset migrates the current chat schema key to the renamed preset', async () => {
     mockSettings.schemaPreset = 'custom';
     mockSettings.schemaPresets = {
       default: {
@@ -475,8 +614,9 @@ describe('zTracker settings connection source UI', () => {
       throw new Error('Rename custom preset button not found');
     }
 
-    act(() => {
+    await act(async () => {
       renameButton.click();
+      await Promise.resolve();
     });
 
     expect(context.chatMetadata).toEqual({ zTracker: { schemaKey: 'renamed-custom' } });
