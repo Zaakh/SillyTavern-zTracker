@@ -91,6 +91,64 @@ const reconcilePresetItemsMock = jest.fn(
   },
 );
 
+const validateSchemaDraftMock = jest.fn((schemaText: string) => {
+  try {
+    const parsedValue = JSON.parse(schemaText);
+    if (typeof parsedValue !== 'object' || parsedValue === null || Array.isArray(parsedValue)) {
+      return { isValid: false, errorMessage: 'Schema JSON must be a top-level object.' };
+    }
+
+    return { isValid: true, errorMessage: '' };
+  } catch (error) {
+    return {
+      isValid: false,
+      errorMessage: error instanceof Error ? error.message : 'Invalid JSON.',
+    };
+  }
+});
+
+const validateSchemaHtmlDraftMock = jest.fn((schemaHtmlText: string) => {
+  if (schemaHtmlText.includes('INVALID_HANDLEBARS')) {
+    return { isValid: false, errorMessage: 'Invalid Handlebars template.' };
+  }
+
+  return { isValid: true, errorMessage: '' };
+});
+
+const getSchemaDraftStateMock = jest.fn(({ currentText, persistedText }: { currentText: string; persistedText: string }) => {
+  const validation = validateSchemaDraftMock(currentText);
+  const isDirty = currentText !== persistedText;
+  return {
+    ...validation,
+    isDirty,
+    canSave: isDirty && validation.isValid,
+  };
+});
+
+const getSchemaHtmlDraftStateMock = jest.fn(({ currentText, persistedText }: { currentText: string; persistedText: string }) => {
+  const validation = validateSchemaHtmlDraftMock(currentText);
+  const isDirty = currentText !== persistedText;
+  return {
+    ...validation,
+    isDirty,
+    canSave: isDirty && validation.isValid,
+  };
+});
+
+const validateSchemaPresetDraftPairMock = jest.fn(({ schemaText, schemaHtmlText }: { schemaText: string; schemaHtmlText: string }) => {
+  const schemaValidation = validateSchemaDraftMock(schemaText);
+  if (!schemaValidation.isValid) {
+    return schemaValidation;
+  }
+
+  const htmlValidation = validateSchemaHtmlDraftMock(schemaHtmlText);
+  if (!htmlValidation.isValid) {
+    return htmlValidation;
+  }
+
+  return { isValid: true, errorMessage: '' };
+});
+
 const resolvePresetSelectionMock = jest.fn((presets: Record<string, any> | undefined, newValue?: string) => {
   const key = newValue ?? 'default';
   const preset = presets?.[key];
@@ -186,13 +244,13 @@ jest.unstable_mockModule('../components/settings/preset-state.js', () => ({
 jest.unstable_mockModule('../components/settings/schema-editor-state.js', () => ({
   formatSchemaHtml: jest.fn((schema?: { html?: string }) => schema?.html ?? ''),
   formatSchemaText: jest.fn((schema?: { value?: unknown }) => (schema ? JSON.stringify(schema.value, null, 2) : '')),
-  getSchemaDraftState: jest.fn(() => ({ isValid: true, errorMessage: '', isDirty: false, canSave: false })),
-  getSchemaHtmlDraftState: jest.fn(() => ({ isValid: true, errorMessage: '', isDirty: false, canSave: false })),
+  getSchemaDraftState: getSchemaDraftStateMock,
+  getSchemaHtmlDraftState: getSchemaHtmlDraftStateMock,
   shouldSyncSchemaHtmlFromSettings: jest.fn(() => false),
   shouldSyncSchemaTextFromSettings: jest.fn(() => false),
-  validateSchemaDraft: jest.fn(() => ({ isValid: true, errorMessage: '' })),
-  validateSchemaHtmlDraft: jest.fn(() => ({ isValid: true, errorMessage: '' })),
-  validateSchemaPresetDraftPair: jest.fn(() => ({ isValid: true, errorMessage: '' })),
+  validateSchemaDraft: validateSchemaDraftMock,
+  validateSchemaHtmlDraft: validateSchemaHtmlDraftMock,
+  validateSchemaPresetDraftPair: validateSchemaPresetDraftPairMock,
 }));
 
 jest.unstable_mockModule('../components/settings/SettingsSectionDrawer.js', () => ({
@@ -211,6 +269,8 @@ jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', (
     handleSchemaHtmlChange,
     saveSchemaValue,
     saveSchemaHtmlValue,
+    schemaTextCanSave,
+    schemaHtmlTextCanSave,
     currentChatSchemaPresetKey,
     currentChatSchemaPresetLabel,
     currentChatSchemaPresetStoredKey,
@@ -231,6 +291,8 @@ jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', (
     handleSchemaHtmlChange: (value: string) => void;
     saveSchemaValue: () => void;
     saveSchemaHtmlValue: () => void;
+    schemaTextCanSave: boolean;
+    schemaHtmlTextCanSave: boolean;
     currentChatSchemaPresetKey?: string;
     currentChatSchemaPresetLabel?: string;
     currentChatSchemaPresetStoredKey?: string;
@@ -312,7 +374,7 @@ jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', (
         },
         'set schema json location',
       ),
-      React.createElement('button', { type: 'button', 'data-testid': 'save-schema-json', onClick: () => saveSchemaValue() }, 'save schema json'),
+      React.createElement('button', { type: 'button', disabled: !schemaTextCanSave, 'data-testid': 'save-schema-json', onClick: () => saveSchemaValue() }, 'save schema json'),
       React.createElement('textarea', {
         'data-testid': 'schema-html-textarea',
         value: schemaHtmlText,
@@ -322,12 +384,21 @@ jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', (
         'button',
         {
           type: 'button',
+          'data-testid': 'set-schema-html-invalid',
+          onClick: () => handleSchemaHtmlChange('INVALID_HANDLEBARS'),
+        },
+        'set schema html invalid',
+      ),
+      React.createElement(
+        'button',
+        {
+          type: 'button',
           'data-testid': 'set-schema-html-updated',
           onClick: () => handleSchemaHtmlChange('<div>updated default</div>'),
         },
         'set schema html updated',
       ),
-      React.createElement('button', { type: 'button', 'data-testid': 'save-schema-html', onClick: () => saveSchemaHtmlValue() }, 'save schema html'),
+      React.createElement('button', { type: 'button', disabled: !schemaHtmlTextCanSave, 'data-testid': 'save-schema-html', onClick: () => saveSchemaHtmlValue() }, 'save schema html'),
     ),
 }));
 
@@ -355,6 +426,11 @@ describe('zTracker settings connection source UI', () => {
     textareaMock.mockClear();
     reconcilePresetItemsMock.mockClear();
     resolvePresetSelectionMock.mockClear();
+    validateSchemaDraftMock.mockClear();
+    validateSchemaHtmlDraftMock.mockClear();
+    getSchemaDraftStateMock.mockClear();
+    getSchemaHtmlDraftStateMock.mockClear();
+    validateSchemaPresetDraftPairMock.mockClear();
     document.body.innerHTML = '<div id="root"></div>';
     sillyTavernContext = {
       chatMetadata: { zTracker: { schemaKey: 'default' } },
@@ -384,6 +460,78 @@ describe('zTracker settings connection source UI', () => {
       root?.render(React.createElement(ZTrackerSettings));
     });
     return container;
+  }
+
+  function seedSchemaPresetSwitchSettings() {
+    mockSettings.schemaPresets = {
+      default: {
+        name: 'Default',
+        value: { type: 'object', properties: { scene: { type: 'string' } }, required: ['scene'] },
+        html: '<div>default</div>',
+      },
+      alternate: {
+        name: 'Alternate',
+        value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
+        html: '<div>alternate</div>',
+      },
+    };
+  }
+
+  async function expectCoupledPresetPersistsAfterSave(saveButtonTestId: 'save-schema-json' | 'save-schema-html') {
+    const container = renderSettings();
+    const defaultPresetSelect = container.querySelector('[data-testid="preset-select-Default Schema Preset"]');
+    const setSchemaJsonButton = container.querySelector('[data-testid="set-schema-json-location"]');
+    const setSchemaHtmlButton = container.querySelector('[data-testid="set-schema-html-updated"]');
+    const saveSchemaButton = container.querySelector(`[data-testid="${saveButtonTestId}"]`);
+
+    if (!(defaultPresetSelect instanceof HTMLSelectElement)) {
+      throw new Error('Default schema preset select not found');
+    }
+    if (!(setSchemaJsonButton instanceof HTMLButtonElement)) {
+      throw new Error('Set schema JSON button not found');
+    }
+    if (!(setSchemaHtmlButton instanceof HTMLButtonElement)) {
+      throw new Error('Set schema HTML button not found');
+    }
+    if (!(saveSchemaButton instanceof HTMLButtonElement)) {
+      throw new Error('Schema save button not found');
+    }
+
+    await act(async () => {
+      setSchemaJsonButton.click();
+      setSchemaHtmlButton.click();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      saveSchemaButton.click();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      defaultPresetSelect.value = 'alternate';
+      defaultPresetSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      defaultPresetSelect.value = 'default';
+      defaultPresetSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const rerenderedSchemaJsonTextarea = container.querySelector('[data-testid="schema-json-textarea"]');
+    const rerenderedSchemaHtmlTextarea = container.querySelector('[data-testid="schema-html-textarea"]');
+
+    if (!(rerenderedSchemaJsonTextarea instanceof HTMLTextAreaElement)) {
+      throw new Error('Schema JSON textarea not found after preset switching');
+    }
+    if (!(rerenderedSchemaHtmlTextarea instanceof HTMLTextAreaElement)) {
+      throw new Error('Schema HTML textarea not found after preset switching');
+    }
+
+    expect(rerenderedSchemaJsonTextarea.value).toContain('location');
+    expect(rerenderedSchemaHtmlTextarea.value).toBe('<div>updated default</div>');
   }
 
   test('hides the saved profile picker in active connection mode', () => {
@@ -418,73 +566,57 @@ describe('zTracker settings connection source UI', () => {
   });
 
   test('saving one schema editor keeps the preset JSON and HTML coupled when switching presets', async () => {
+    seedSchemaPresetSwitchSettings();
+
+    await expectCoupledPresetPersistsAfterSave('save-schema-json');
+  });
+
+  test('saving through the HTML action also persists the paired JSON draft', async () => {
+    seedSchemaPresetSwitchSettings();
+
+    await expectCoupledPresetPersistsAfterSave('save-schema-html');
+  });
+
+  test('disables both save actions and blocks persistence when either coupled draft is invalid', async () => {
     mockSettings.schemaPresets = {
       default: {
         name: 'Default',
         value: { type: 'object', properties: { scene: { type: 'string' } }, required: ['scene'] },
         html: '<div>default</div>',
       },
-      alternate: {
-        name: 'Alternate',
-        value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
-        html: '<div>alternate</div>',
-      },
     };
 
     const container = renderSettings();
-    const defaultPresetSelect = container.querySelector('[data-testid="preset-select-Default Schema Preset"]');
     const setSchemaJsonButton = container.querySelector('[data-testid="set-schema-json-location"]');
-    const setSchemaHtmlButton = container.querySelector('[data-testid="set-schema-html-updated"]');
-    const saveSchemaJsonButton = container.querySelector('[data-testid="save-schema-json"]');
+    const setInvalidSchemaHtmlButton = container.querySelector('[data-testid="set-schema-html-invalid"]');
 
-    if (!(defaultPresetSelect instanceof HTMLSelectElement)) {
-      throw new Error('Default schema preset select not found');
-    }
     if (!(setSchemaJsonButton instanceof HTMLButtonElement)) {
       throw new Error('Set schema JSON button not found');
     }
-    if (!(setSchemaHtmlButton instanceof HTMLButtonElement)) {
-      throw new Error('Set schema HTML button not found');
-    }
-    if (!(saveSchemaJsonButton instanceof HTMLButtonElement)) {
-      throw new Error('Save schema JSON button not found');
+    if (!(setInvalidSchemaHtmlButton instanceof HTMLButtonElement)) {
+      throw new Error('Set invalid schema HTML button not found');
     }
 
     await act(async () => {
       setSchemaJsonButton.click();
-      setSchemaHtmlButton.click();
+      setInvalidSchemaHtmlButton.click();
       await Promise.resolve();
     });
 
-    await act(async () => {
-      saveSchemaJsonButton.click();
-      await Promise.resolve();
-    });
-
-    await act(async () => {
-      defaultPresetSelect.value = 'alternate';
-      defaultPresetSelect.dispatchEvent(new Event('change', { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    await act(async () => {
-      defaultPresetSelect.value = 'default';
-      defaultPresetSelect.dispatchEvent(new Event('change', { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    const rerenderedSchemaJsonTextarea = container.querySelector('[data-testid="schema-json-textarea"]');
-    const rerenderedSchemaHtmlTextarea = container.querySelector('[data-testid="schema-html-textarea"]');
-
-    if (!(rerenderedSchemaJsonTextarea instanceof HTMLTextAreaElement)) {
-      throw new Error('Schema JSON textarea not found after preset switching');
+    const saveSchemaJsonButton = container.querySelector('[data-testid="save-schema-json"]');
+    const saveSchemaHtmlButton = container.querySelector('[data-testid="save-schema-html"]');
+    if (!(saveSchemaJsonButton instanceof HTMLButtonElement)) {
+      throw new Error('Save schema JSON button not found');
     }
-    if (!(rerenderedSchemaHtmlTextarea instanceof HTMLTextAreaElement)) {
-      throw new Error('Schema HTML textarea not found after preset switching');
+    if (!(saveSchemaHtmlButton instanceof HTMLButtonElement)) {
+      throw new Error('Save schema HTML button not found');
     }
 
-    expect(rerenderedSchemaJsonTextarea.value).toContain('location');
-    expect(rerenderedSchemaHtmlTextarea.value).toBe('<div>updated default</div>');
+    expect(saveSchemaJsonButton.disabled).toBe(true);
+    expect(saveSchemaHtmlButton.disabled).toBe(true);
+    expect(mockSettings.schemaPresets.default.value).toEqual({ type: 'object', properties: { scene: { type: 'string' } }, required: ['scene'] });
+    expect(mockSettings.schemaPresets.default.html).toBe('<div>default</div>');
+    expect(saveSettingsMock).not.toHaveBeenCalled();
   });
 
   test('changing the current chat schema preset updates chat metadata without changing the global default', async () => {

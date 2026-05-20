@@ -211,7 +211,7 @@ export const SchemaPresetSection: FC<{
         <span title="The JSON schema used for tracker generation.">Schema JSON</span>
         <STButton
           className="fa-solid fa-floppy-disk"
-          title="Save JSON schema"
+          title="Save the current schema preset pair (JSON and HTML)"
           onClick={saveSchemaValue}
           disabled={!schemaTextCanSave}
         />
@@ -227,14 +227,14 @@ export const SchemaPresetSection: FC<{
       {schemaTextHasError ? (
         <div className="notes ztracker-schema-error">{schemaTextError ?? 'Invalid JSON.'}</div>
       ) : schemaTextHasUnsavedChanges ? (
-        <div className="notes ztracker-schema-status">Valid JSON. Save to apply this preset change.</div>
+        <div className="notes ztracker-schema-status">Valid JSON. Save to apply the current schema preset pair.</div>
       ) : null}
 
       <div className="title_restorable">
         <span title="The Handlebars HTML template used to render tracker content.">Schema HTML</span>
         <STButton
           className="fa-solid fa-floppy-disk"
-          title="Save schema HTML"
+          title="Save the current schema preset pair (JSON and HTML)"
           onClick={saveSchemaHtmlValue}
           disabled={!schemaHtmlTextCanSave}
         />
@@ -251,7 +251,7 @@ export const SchemaPresetSection: FC<{
       {schemaHtmlTextHasError ? (
         <div className="notes ztracker-schema-error">{schemaHtmlTextError ?? 'Invalid Handlebars template.'}</div>
       ) : schemaHtmlTextHasUnsavedChanges ? (
-        <div className="notes ztracker-schema-status">Valid template. Save to apply this preset change.</div>
+        <div className="notes ztracker-schema-status">Valid template. Save to apply the current schema preset pair.</div>
       ) : null}
 
       {schemaPresetPairError ? (

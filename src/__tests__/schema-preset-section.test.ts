@@ -119,8 +119,8 @@ describe('SchemaPresetSection', () => {
 
     expect(container.textContent).toContain('Schema JSON and HTML must stay coupled for both full and minimal tracker data.');
 
-    const saveJsonButton = container.querySelector('button[title="Save JSON schema"]');
-    const saveHtmlButton = container.querySelector('button[title="Save schema HTML"]');
+    const saveButtons = container.querySelectorAll('button[title="Save the current schema preset pair (JSON and HTML)"]');
+    const [saveJsonButton, saveHtmlButton] = Array.from(saveButtons);
 
     expect(saveJsonButton).toHaveProperty('disabled', true);
     expect(saveHtmlButton).toHaveProperty('disabled', true);
