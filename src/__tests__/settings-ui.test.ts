@@ -184,8 +184,8 @@ jest.unstable_mockModule('../components/settings/preset-state.js', () => ({
 }));
 
 jest.unstable_mockModule('../components/settings/schema-editor-state.js', () => ({
-  formatSchemaHtml: jest.fn(() => '<div></div>'),
-  formatSchemaText: jest.fn(() => '{\n}'),
+  formatSchemaHtml: jest.fn((schema?: { html?: string }) => schema?.html ?? ''),
+  formatSchemaText: jest.fn((schema?: { value?: unknown }) => (schema ? JSON.stringify(schema.value, null, 2) : '')),
   getSchemaDraftState: jest.fn(() => ({ isValid: true, errorMessage: '', isDirty: false, canSave: false })),
   getSchemaHtmlDraftState: jest.fn(() => ({ isValid: true, errorMessage: '', isDirty: false, canSave: false })),
   shouldSyncSchemaHtmlFromSettings: jest.fn(() => false),
@@ -201,8 +201,16 @@ jest.unstable_mockModule('../components/settings/SettingsSectionDrawer.js', () =
 
 jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', () => ({
   TrackerGenerationSection: ({
+    settings,
     schemaPresetItems,
     currentChatSchemaPresetAvailable,
+    schemaText,
+    schemaHtmlText,
+    handleSchemaPresetChange,
+    handleSchemaValueChange,
+    handleSchemaHtmlChange,
+    saveSchemaValue,
+    saveSchemaHtmlValue,
     currentChatSchemaPresetKey,
     currentChatSchemaPresetLabel,
     currentChatSchemaPresetStoredKey,
@@ -213,8 +221,16 @@ jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', (
     handleCurrentChatSchemaPresetChange,
     handleSchemaPresetsListChange,
   }: {
+    settings: { schemaPreset: string };
     schemaPresetItems: Array<{ value: string; label: string }>;
     currentChatSchemaPresetAvailable: boolean;
+    schemaText: string;
+    schemaHtmlText: string;
+    handleSchemaPresetChange: (value?: string) => void;
+    handleSchemaValueChange: (value: string) => void;
+    handleSchemaHtmlChange: (value: string) => void;
+    saveSchemaValue: () => void;
+    saveSchemaHtmlValue: () => void;
     currentChatSchemaPresetKey?: string;
     currentChatSchemaPresetLabel?: string;
     currentChatSchemaPresetStoredKey?: string;
@@ -229,6 +245,20 @@ jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', (
       'div',
       null,
       React.createElement('div', null, 'Default Schema Preset'),
+      React.createElement(
+        'label',
+        null,
+        'Default Schema Preset',
+        React.createElement(
+          'select',
+          {
+            'data-testid': 'preset-select-Default Schema Preset',
+            value: settings.schemaPreset,
+            onChange: (event: React.ChangeEvent<HTMLSelectElement>) => handleSchemaPresetChange(event.target.value),
+          },
+          schemaPresetItems.map((item) => React.createElement('option', { key: item.value, value: item.value }, item.label)),
+        ),
+      ),
       currentChatSchemaPresetAvailable
         ? React.createElement(
             React.Fragment,
@@ -268,6 +298,36 @@ jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', (
             ),
           )
         : null,
+      React.createElement('textarea', {
+        'data-testid': 'schema-json-textarea',
+        value: schemaText,
+        onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => handleSchemaValueChange(event.target.value),
+      }),
+      React.createElement(
+        'button',
+        {
+          type: 'button',
+          'data-testid': 'set-schema-json-location',
+          onClick: () => handleSchemaValueChange(JSON.stringify({ type: 'object', properties: { location: { type: 'string' } }, required: ['location'] }, null, 2)),
+        },
+        'set schema json location',
+      ),
+      React.createElement('button', { type: 'button', 'data-testid': 'save-schema-json', onClick: () => saveSchemaValue() }, 'save schema json'),
+      React.createElement('textarea', {
+        'data-testid': 'schema-html-textarea',
+        value: schemaHtmlText,
+        onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => handleSchemaHtmlChange(event.target.value),
+      }),
+      React.createElement(
+        'button',
+        {
+          type: 'button',
+          'data-testid': 'set-schema-html-updated',
+          onClick: () => handleSchemaHtmlChange('<div>updated default</div>'),
+        },
+        'set schema html updated',
+      ),
+      React.createElement('button', { type: 'button', 'data-testid': 'save-schema-html', onClick: () => saveSchemaHtmlValue() }, 'save schema html'),
     ),
 }));
 
@@ -355,6 +415,76 @@ describe('zTracker settings connection source UI', () => {
 
     expect(container.textContent).toContain('Default Schema Preset');
     expect(container.textContent).toContain('Current Chat Schema Preset');
+  });
+
+  test('saving one schema editor keeps the preset JSON and HTML coupled when switching presets', async () => {
+    mockSettings.schemaPresets = {
+      default: {
+        name: 'Default',
+        value: { type: 'object', properties: { scene: { type: 'string' } }, required: ['scene'] },
+        html: '<div>default</div>',
+      },
+      alternate: {
+        name: 'Alternate',
+        value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
+        html: '<div>alternate</div>',
+      },
+    };
+
+    const container = renderSettings();
+    const defaultPresetSelect = container.querySelector('[data-testid="preset-select-Default Schema Preset"]');
+    const setSchemaJsonButton = container.querySelector('[data-testid="set-schema-json-location"]');
+    const setSchemaHtmlButton = container.querySelector('[data-testid="set-schema-html-updated"]');
+    const saveSchemaJsonButton = container.querySelector('[data-testid="save-schema-json"]');
+
+    if (!(defaultPresetSelect instanceof HTMLSelectElement)) {
+      throw new Error('Default schema preset select not found');
+    }
+    if (!(setSchemaJsonButton instanceof HTMLButtonElement)) {
+      throw new Error('Set schema JSON button not found');
+    }
+    if (!(setSchemaHtmlButton instanceof HTMLButtonElement)) {
+      throw new Error('Set schema HTML button not found');
+    }
+    if (!(saveSchemaJsonButton instanceof HTMLButtonElement)) {
+      throw new Error('Save schema JSON button not found');
+    }
+
+    await act(async () => {
+      setSchemaJsonButton.click();
+      setSchemaHtmlButton.click();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      saveSchemaJsonButton.click();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      defaultPresetSelect.value = 'alternate';
+      defaultPresetSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      defaultPresetSelect.value = 'default';
+      defaultPresetSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const rerenderedSchemaJsonTextarea = container.querySelector('[data-testid="schema-json-textarea"]');
+    const rerenderedSchemaHtmlTextarea = container.querySelector('[data-testid="schema-html-textarea"]');
+
+    if (!(rerenderedSchemaJsonTextarea instanceof HTMLTextAreaElement)) {
+      throw new Error('Schema JSON textarea not found after preset switching');
+    }
+    if (!(rerenderedSchemaHtmlTextarea instanceof HTMLTextAreaElement)) {
+      throw new Error('Schema HTML textarea not found after preset switching');
+    }
+
+    expect(rerenderedSchemaJsonTextarea.value).toContain('location');
+    expect(rerenderedSchemaHtmlTextarea.value).toBe('<div>updated default</div>');
   });
 
   test('changing the current chat schema preset updates chat metadata without changing the global default', async () => {
