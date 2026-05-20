@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-05-20
+
 ### Changed
 
 - zTracker settings now separate the default schema preset for new chats from the current chat schema preset used by full tracker generation.

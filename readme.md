@@ -99,7 +99,7 @@ Optional (advanced): you can annotate your JSON schema preset to help zTracker k
 - `x-ztracker-dependsOn`: top-level part ordering hints for sequential generation.
 - `x-ztracker-idKey`: which string field to use as the array-item identity for per-item regeneration (defaults to `name`).
 
-When editing a schema preset's JSON or HTML in **Extensions → zTracker**, changes stay local until you click the Save icon for that field. The save control stays disabled while the draft is unchanged or invalid, and invalid drafts show an inline error instead of overwriting the saved preset.
+When editing a schema preset's JSON or HTML in **Extensions → zTracker**, changes stay local until you click a Save icon. Saving either editor now persists the current JSON and HTML preset pair together. The save controls stay disabled while the paired draft is unchanged or invalid, and invalid drafts show an inline error instead of overwriting the saved preset.
 
 In **Extensions → zTracker**, **Default Schema Preset** controls which preset definition you are editing and which preset new chats start from. Existing chats keep their own **Current Chat Schema Preset**, which you can change from the settings UI or **Extensions → Modify zTracker schema**.
 
