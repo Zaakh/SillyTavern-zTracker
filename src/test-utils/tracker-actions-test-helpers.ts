@@ -9,10 +9,71 @@ import {
 export const buildPromptMock = jest.fn<() => Promise<{ result: Array<{ role: string; content: string }> }>>();
 export const applyTrackerUpdateAndRenderMock = jest.fn();
 export const renderTrackerWithDepsMock = jest.fn();
-export const sanitizeMessagesForGenerationMock = jest.fn((messages: Array<unknown>) => [...messages]);
 export const stEchoMock = jest.fn();
 export const includeZTrackerMessagesMock = jest.fn((messages: Array<unknown>) => [...messages]);
 const embeddedTrackerSnapshotMarker = Symbol('embeddedTrackerSnapshot');
+
+function resolveMockSpeakerName(message: { name?: unknown; source?: { name?: unknown } }): string | undefined {
+  if (typeof message.name === 'string' && message.name.trim().length > 0) {
+    return message.name.trim();
+  }
+
+  if (typeof message.source?.name === 'string' && message.source.name.trim().length > 0) {
+    return message.source.name.trim();
+  }
+
+  return undefined;
+}
+
+function insertMockUserAlignmentMessage(
+  messages: Array<{ role?: string; content?: string; name?: string; ignoreInstruct?: boolean; source?: { name?: string } }>,
+  options: { userAlignmentMessage?: string; userName?: string },
+) {
+  const alignmentMessage = options.userAlignmentMessage?.trim();
+  if (!alignmentMessage) {
+    return [...messages];
+  }
+
+  const firstNonSystemIndex = messages.findIndex((message) => message.role !== 'system');
+  if (firstNonSystemIndex === -1 || messages[firstNonSystemIndex].role !== 'assistant') {
+    return [...messages];
+  }
+
+  const userName = options.userName?.trim();
+  return [
+    ...messages.slice(0, firstNonSystemIndex),
+    {
+      role: 'user',
+      content: alignmentMessage,
+      ...(userName ? { name: userName } : {}),
+    },
+    ...messages.slice(firstNonSystemIndex),
+  ];
+}
+
+function sanitizeMessagesForGenerationMockImpl(
+  messages: Array<{ role?: string; content?: string; name?: string; ignoreInstruct?: boolean; source?: { name?: string } }>,
+  options: { inlineNamesIntoContent?: boolean; userAlignmentMessage?: string; userName?: string } = {},
+) {
+  return insertMockUserAlignmentMessage(messages, options).map((message) => {
+    const name = resolveMockSpeakerName(message);
+    const shouldInlineName =
+      !!options.inlineNamesIntoContent
+      && !!name
+      && (message.role === 'assistant' || message.role === 'user');
+    const baseContent = typeof message.content === 'string' ? message.content : '';
+    const content = shouldInlineName && !baseContent.startsWith(`${name}:`) ? `${name}: ${baseContent}` : baseContent;
+
+    return {
+      role: message.role,
+      content,
+      ...(!shouldInlineName && name ? { name } : {}),
+      ...(typeof message.ignoreInstruct === 'boolean' ? { ignoreInstruct: message.ignoreInstruct } : {}),
+    };
+  });
+}
+
+export const sanitizeMessagesForGenerationMock = jest.fn(sanitizeMessagesForGenerationMockImpl);
 
 function normalizeTrackerGenerationConversationRolesImpl(
   messages: Array<{ role?: string }>,
@@ -377,7 +438,7 @@ export function resetTrackerActionTestState(): void {
   normalizeTrackerGenerationConversationRolesMock.mockImplementation(normalizeTrackerGenerationConversationRolesImpl);
   renderTrackerWithDepsMock.mockReset();
   sanitizeMessagesForGenerationMock.mockReset();
-  sanitizeMessagesForGenerationMock.mockImplementation((messages: Array<unknown>) => [...messages]);
+  sanitizeMessagesForGenerationMock.mockImplementation(sanitizeMessagesForGenerationMockImpl);
   stEchoMock.mockReset();
   document.body.innerHTML = '';
   installExtensionsMenuDom();

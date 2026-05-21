@@ -21,6 +21,7 @@ import {
   stEchoMock,
   TEST_IMPORT_META_URL,
 } from '../test-utils/tracker-actions-test-helpers.js';
+import { wrappedConversationRoleSpeakerLossFixture } from '../test-fixtures/tracker-prompt-fixtures.js';
 
 const trackerPartsModule = await import('../tracker-parts.js');
 
@@ -536,19 +537,9 @@ describe('createTrackerActions prompt assembly', () => {
 
     await actions.generateTracker(0);
 
+    expect(sanitizeMessagesForGenerationMock).toHaveBeenCalledTimes(1);
     expect(sanitizeMessagesForGenerationMock).toHaveBeenNthCalledWith(
       1,
-      [
-        { role: 'system', content: 'Existing system prompt' },
-        { role: 'assistant', content: 'Prior chat message' },
-        { role: 'system', content: 'Generate tracker JSON' },
-      ],
-      expect.objectContaining({
-        userName: 'Tobias',
-      }),
-    );
-    expect(sanitizeMessagesForGenerationMock).toHaveBeenNthCalledWith(
-      2,
       [
         { role: 'system', content: 'Existing system prompt' },
         { role: 'assistant', content: 'Prior chat message' },
@@ -2003,7 +1994,7 @@ describe('createTrackerActions prompt assembly', () => {
     const textCompletionConstructPrompt = jest.fn((prompt: Array<{ role: string; content: string; name?: string }>) => {
       const dialogueMessages = prompt.filter((message) => message.role !== 'system');
       const trailingSystemMessages = prompt.filter((message) => message.role === 'system');
-      const dialogueBody = dialogueMessages.map((message) => `${message.name ?? message.role}:${message.content}`).join(' | ');
+      const dialogueBody = dialogueMessages.map((message) => message.content).join(' | ');
       const systemTail = trailingSystemMessages.map((message) => message.content).join('\n\n');
       return `BODY:${dialogueBody}${systemTail ? `\n\n${systemTail}` : ''}`;
     });
@@ -2061,18 +2052,17 @@ describe('createTrackerActions prompt assembly', () => {
 
     expect(sanitizeMessagesForGenerationMock).toHaveBeenCalledTimes(2);
     expect((sanitizeMessagesForGenerationMock as jest.Mock).mock.calls[0][1]).toEqual(expect.objectContaining({
-      userName: 'Tobias',
-    }));
-    expect((sanitizeMessagesForGenerationMock as jest.Mock).mock.calls[0][1]).not.toHaveProperty('inlineNamesIntoContent');
-    expect((sanitizeMessagesForGenerationMock as jest.Mock).mock.calls[1][1]).toEqual(expect.objectContaining({
       inlineNamesIntoContent: true,
       userName: 'Tobias',
     }));
+    expect((sanitizeMessagesForGenerationMock as jest.Mock).mock.calls[1][1]).toEqual({
+      inlineNamesIntoContent: true,
+    });
     expect(textCompletionStoryStringFormatterLoader).toHaveBeenCalled();
     expect(textCompletionConstructPrompt).toHaveBeenCalledWith(
       [
-        { role: 'user', content: 'Prior chat message', name: 'Tobias' },
-        { role: 'assistant', content: 'Prior assistant reply', name: 'Bar' },
+        { role: 'user', content: 'Tobias: Prior chat message' },
+        { role: 'assistant', content: 'Bar: Prior assistant reply' },
         { role: 'system', content: 'Generate tracker JSON' },
       ],
       expect.objectContaining({
@@ -2081,14 +2071,100 @@ describe('createTrackerActions prompt assembly', () => {
       {},
     );
     expect(textCompletionCreateRequestData).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: 'WRAPPED:SYSTEM:Existing system prompt\nBODY:Tobias:Prior chat message | Bar:Prior assistant reply\n\nGenerate tracker JSON',
+      prompt: 'WRAPPED:SYSTEM:Existing system prompt\nBODY:Tobias: Prior chat message | Bar: Prior assistant reply\n\nGenerate tracker JSON',
       stop: ['</s>'],
       stopping_strings: ['</s>'],
     }));
     expect(textCompletionSendRequest).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: 'WRAPPED:SYSTEM:Existing system prompt\nBODY:Tobias:Prior chat message | Bar:Prior assistant reply\n\nGenerate tracker JSON',
+      prompt: 'WRAPPED:SYSTEM:Existing system prompt\nBODY:Tobias: Prior chat message | Bar: Prior assistant reply\n\nGenerate tracker JSON',
     }), true, expect.any(AbortSignal));
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test('inlines speaker labels before wrapped host prompt construction when roles normalize to assistant', async () => {
+    buildPromptMock.mockResolvedValue({
+      result: [
+        { role: 'system', content: 'Existing system prompt' },
+        { role: 'user', content: 'Just checking the room for a moment.', name: 'Tobias' },
+        { role: 'assistant', content: 'The barkeeper nods.', name: 'Bar' },
+      ],
+    });
+    const textCompletionConstructPrompt = jest.fn((prompt: Array<{ role: string; content: string }>) => {
+      const normalizeRole = (role: string) => (role === 'assistant' ? 'model' : role);
+      return `${prompt.map((message) => `<|turn>${normalizeRole(message.role)}\n${message.content}<turn|>`).join('\n')}\n<|turn>model\n`;
+    });
+    const textCompletionCreateRequestData = jest.fn((requestData: Record<string, unknown>) => requestData);
+    const textCompletionSendRequest = jest.fn(async () => ({ content: { time: '10:00:00' } }));
+    const textCompletionStoryStringFormatterLoader = jest.fn(async () => ({
+      renderStoryString: (params: Record<string, unknown>) => `SYSTEM:${String(params.system ?? '')}`,
+      formatInstructModeStoryString: (storyString: string) => `WRAPPED:${storyString}`,
+      getInstructStoppingSequences: () => ['</s>'],
+    }));
+    installSillyTavernContext(
+      makeContext({
+        powerUserSettings: {
+          instruct: {
+            preset: 'Active Instruct',
+            story_string_prefix: '[INST]',
+            story_string_suffix: '[/INST]Understood.</s>',
+          },
+          context: {
+            preset: 'Active Context',
+            story_string: '{{#if system}}{{system}}{{/if}}',
+            story_string_position: 0,
+          },
+        },
+        textCompletionConstructPrompt,
+        textCompletionCreateRequestData,
+        textCompletionSendRequest,
+      }),
+    );
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile({ api: 'textgenerationwebui' })],
+          },
+        },
+        CONNECT_API_MAP: {
+          textgenerationwebui: { selected: 'textgenerationwebui', type: 'textgenerationwebui' },
+        },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({
+          trackerSystemPromptMode: 'profile',
+          trackerGenerationConversationRoleMode: 'all_assistant',
+        }),
+      } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+      textCompletionStoryStringFormatterLoader,
+    });
+
+    await actions.generateTracker(0);
+
+    expect(textCompletionConstructPrompt).toHaveBeenCalledWith(
+      [
+        { role: 'assistant', content: 'Tobias: Just checking the room for a moment.' },
+        { role: 'assistant', content: 'Bar: The barkeeper nods.' },
+        { role: 'system', content: 'Generate tracker JSON' },
+      ],
+      expect.objectContaining({
+        preset: 'Active Instruct',
+      }),
+      {},
+    );
+    expect(textCompletionCreateRequestData).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: wrappedConversationRoleSpeakerLossFixture.fixedPromptSnapshot,
+    }));
+    expect(textCompletionSendRequest).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: wrappedConversationRoleSpeakerLossFixture.fixedPromptSnapshot,
+    }), true, expect.any(AbortSignal));
   });
 
   test('uses the resolved active text-generation backend for wrapped text-completion tracker requests when the runtime profile stays generic', async () => {
@@ -2099,7 +2175,7 @@ describe('createTrackerActions prompt assembly', () => {
       ],
     });
     const textCompletionConstructPrompt = jest.fn((prompt: Array<{ role: string; content: string; name?: string }>) => {
-      const dialogueBody = prompt.map((message) => `${message.name ?? message.role}:${message.content}`).join(' | ');
+      const dialogueBody = prompt.map((message) => message.content).join(' | ');
       return `BODY:${dialogueBody}`;
     });
     const textCompletionCreateRequestData = jest.fn((requestData: Record<string, unknown>) => requestData);
