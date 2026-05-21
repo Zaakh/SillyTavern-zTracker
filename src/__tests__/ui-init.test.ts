@@ -6,7 +6,9 @@ import { afterEach, beforeAll, beforeEach, describe, expect, jest, test } from '
 import {
   bootExtensionForTest,
   createSillyTavernHost,
+  installChatMessageDom,
   installCharacterPanelDom,
+  installMessageTemplateDom,
   installSillyTavernHost,
 } from '../test-utils/sillytavern-host-harness.js';
 
@@ -75,6 +77,29 @@ function buildMessageWithPartsMenu(messageId: number, label: string): HTMLElemen
     </div>
   `;
   return wrapper;
+}
+
+/** Boots ui-init with one fresh action surface so click-delegation tests can assert the active handler. */
+async function initializeTrackerActionHarness(overrides: Record<string, unknown> = {}) {
+  const host = createSillyTavernHost();
+  const actions = createUiInitActions(overrides);
+
+  document.body.innerHTML = '';
+  installMessageTemplateDom();
+
+  await bootExtensionForTest({
+    host,
+    boot: () => initializeGlobalUI({
+      globalContext: host.context,
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'none', includeLastXZTrackerMessages: 1 })),
+      } as any,
+      actions,
+      renderTrackerWithDeps: () => undefined,
+    }),
+  });
+
+  return { host, actions };
 }
 
 describe('initializeGlobalUI parts menu portal cleanup', () => {
@@ -239,5 +264,27 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
       assistantReplyLabel: 'Bar',
     });
     expect(chat).toEqual([{ mes: 'character result' }]);
+  });
+
+  test('delegates the tracker delete button to deleteTracker for the owning message', async () => {
+    const { actions } = await initializeTrackerActionHarness();
+
+    installChatMessageDom(7, {
+      innerHtml: `
+        <div class="mes_text">Message 7</div>
+        <div class="mes_ztracker">
+          <div class="ztracker-delete-button fa-solid fa-trash-can" title="Delete Tracker"></div>
+        </div>
+      `,
+    });
+
+    const deleteButton = document.querySelector('.ztracker-delete-button');
+    if (!(deleteButton instanceof HTMLElement)) {
+      throw new Error('Delete tracker button not found');
+    }
+
+    deleteButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(actions.deleteTracker).toHaveBeenCalledWith(7);
   });
 });

@@ -2,6 +2,12 @@
 
 This document is for contributors and maintainers. It covers local development, testing, and versioning/release workflow for this repository.
 
+## Maintainer docs
+
+- Use [WORKFLOW_INDEX.md](WORKFLOW_INDEX.md) as the canonical index of zTracker user controls, runtime events, and testing gaps.
+- Use [TRACKER_INJECTION_BEHAVIOR.md](TRACKER_INJECTION_BEHAVIOR.md) for the detailed runtime contract of tracker snapshot injection.
+- Use [specs/specs-index.md](specs/specs-index.md) for living feature specs and historical design intent.
+
 ## Development & testing
 
 Working on the extension locally?
