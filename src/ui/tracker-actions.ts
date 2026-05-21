@@ -247,7 +247,6 @@ function trimTextCompletionResponse(
 
 async function buildStoryStringWrappedTextCompletionPrompt(options: {
   requestMessages: Message[];
-  bodyRequestMessages?: Message[];
   context: {
     powerUserSettings?: {
       instruct?: Record<string, unknown>;
@@ -295,11 +294,19 @@ async function buildStoryStringWrappedTextCompletionPrompt(options: {
     promptParts.push(wrappedStoryString);
   }
 
-  const bodyMessages = options.bodyRequestMessages
-    ? extractLeadingSystemPrompt(options.bodyRequestMessages).remainingMessages
-    : remainingMessages;
-  if (bodyMessages.length > 0) {
-    const promptBody = options.textCompletionService.constructPrompt(bodyMessages, activeInstructSettings, {});
+  if (remainingMessages.length > 0) {
+    // SillyTavern's wrapped text-completion prompt builder can drop `message.name`
+    // for dialogue turns, so reuse the canonical sanitizer before delegating the body.
+    const wrappedBodyMessages = sanitizeMessagesForGeneration(remainingMessages as Array<{
+      role: string;
+      content: string;
+      name?: string;
+      ignoreInstruct?: boolean;
+      source?: { name?: string };
+    }>, {
+      inlineNamesIntoContent: true,
+    }) as Message[];
+    const promptBody = options.textCompletionService.constructPrompt(wrappedBodyMessages, activeInstructSettings, {});
     if (promptBody.length > 0) {
       promptParts.push(promptBody);
     }
@@ -786,7 +793,6 @@ export function createTrackerActions(options: {
     connectionSource: 'active' | 'saved';
     selectedApiType: string | undefined;
     requestMessages: Message[];
-    wrappedRequestMessages?: Message[];
     instructName?: string;
     overridePayload?: Record<string, any>;
     maxTokens: number;
@@ -829,7 +835,6 @@ export function createTrackerActions(options: {
     try {
       const wrappedPrompt = await buildStoryStringWrappedTextCompletionPrompt({
         requestMessages: options.requestMessages,
-        bodyRequestMessages: options.wrappedRequestMessages,
         context,
         textCompletionService,
         formatterLoader: textCompletionStoryStringFormatterLoader,
@@ -970,12 +975,6 @@ export function createTrackerActions(options: {
         const profile = resolvedConnection.profile;
         const selectedApiMap = resolvedConnection.apiMap;
         const selectedApi = selectedApiMap?.selected;
-        const textCompletionPromptBody = selectedApi === 'textgenerationwebui'
-          ? sanitizeMessagesForGeneration(requestMessages, {
-              userAlignmentMessage: context?.powerUserSettings?.instruct?.user_alignment_message,
-              userName: context?.name1,
-            })
-          : undefined;
         const sanitizedPrompt = sanitizeMessagesForGeneration(requestMessages, {
           inlineNamesIntoContent: selectedApi === 'textgenerationwebui',
           userAlignmentMessage:
@@ -1010,7 +1009,6 @@ export function createTrackerActions(options: {
               connectionSource: resolvedConnection.source,
               selectedApiType: selectedApiMap?.type,
               requestMessages: sanitizedPrompt,
-              wrappedRequestMessages: textCompletionPromptBody,
               instructName: options.instructName,
               overridePayload: overideParams ?? {},
               maxTokens: settings.maxResponseToken,

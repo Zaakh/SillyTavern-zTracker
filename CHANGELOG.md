@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Wrapped text-completion tracker regeneration now preserves speaker names after `Conversation role handling` relabels dialogue turns, so prompts keep `Tobias:`/character attribution instead of collapsing named turns into unlabeled model blocks.
+
 ## [1.12.0] - 2026-05-20
 
 ### Changed
