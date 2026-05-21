@@ -293,6 +293,46 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     await trackerPromise;
   });
 
+  test('keeps one coherent outgoing hold across MESSAGE_SENT, GENERATION_STARTED, and USER_MESSAGE_RENDERED', async () => {
+    document.body.innerHTML = '';
+    let resolveTracker: (value: boolean) => void = () => undefined;
+    const trackerPromise = new Promise<boolean>((resolve) => {
+      resolveTracker = resolve;
+    });
+    const { events, host, actions } = await initializeAutoModeHarness({
+      host: {
+        chat: [{ original_avatar: 'alice.png' }],
+        characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+        characterId: 0,
+        stopGeneration: jest.fn(() => true),
+        generate: jest.fn(async () => undefined),
+      },
+      actions: {
+        generateTracker: jest.fn(() => trackerPromise),
+      },
+    });
+
+    events.emit('MESSAGE_SENT', 0);
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true, showStatusIndicator: false });
+    expect(host.spies.stopGeneration).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('.ztracker-auto-mode-status')).toBeNull();
+
+    events.emit('GENERATION_STARTED');
+    expect(host.spies.stopGeneration).toHaveBeenCalledTimes(1);
+    expect(host.spies.generate).not.toHaveBeenCalled();
+
+    renderMessage(0);
+    events.emit('USER_MESSAGE_RENDERED', 0);
+    expect(document.querySelector('.mes[mesid="0"]')?.classList.contains('ztracker-auto-mode-hold')).toBe(true);
+    expect(document.querySelector('.ztracker-auto-mode-status')?.textContent).toContain('Generating tracker before reply');
+
+    resolveTracker(true);
+    await trackerPromise;
+
+    expect(host.spies.generate).toHaveBeenCalledWith(undefined, { automatic_trigger: true });
+    expect(document.querySelector('.ztracker-auto-mode-status')).toBeNull();
+  });
+
   test('reapplies the hold indicator when SillyTavern rerenders the pending message without a user-message event', async () => {
     renderMessage(0);
     let resolveTracker: (value: boolean) => void = () => undefined;
