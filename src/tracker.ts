@@ -493,6 +493,7 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
           ...(!needsRawTerminalAssistantSnapshot && speakerName ? { name: speakerName } : {}),
           ...(needsRawTerminalAssistantSnapshot ? { ignoreInstruct: true } : {}),
           mes: embeddedContent,
+          extra: embedRole === 'system' ? { type: 'narrator' } : {},
         } as unknown as T;
         // Keep the marker off the serialized payload while still letting
         // tracker-generation-only role normalization distinguish injected snapshots.
