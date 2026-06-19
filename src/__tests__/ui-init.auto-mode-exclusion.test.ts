@@ -79,6 +79,7 @@ async function initializeAutoModeHarness(options: AutoModeHarnessOptions = {}) {
         getSettings: jest.fn(() => ({
           autoMode: 'inputs',
           includeLastXZTrackerMessages: 1,
+          skipFirstXMessages: 0,
           ...(options.settings ?? {}),
         })),
       } as any,
@@ -528,5 +529,111 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
 
     expect(host.spies.generate).not.toHaveBeenCalled();
     expect(document.querySelector('.ztracker-auto-mode-status')).toBeNull();
+  });
+});
+
+describe('initializeGlobalUI outgoing hold respects Skip First X Messages', () => {
+  test('does not stop, hold, or generate for a message within the skip threshold', async () => {
+    renderMessage(0);
+    const { events, host, actions } = await initializeAutoModeHarness({
+      host: {
+        chat: [{ original_avatar: 'alice.png' }],
+        characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+        characterId: 0,
+        stopGeneration: jest.fn(() => true),
+        generate: jest.fn(async () => undefined),
+      },
+      settings: { skipFirstXMessages: 5 },
+      actions: { generateTracker: jest.fn(async () => true) },
+    });
+
+    events.emit('MESSAGE_SENT', 0);
+    events.emit('GENERATION_STARTED');
+    await Promise.resolve();
+
+    expect(actions.generateTracker).not.toHaveBeenCalled();
+    expect(host.spies.stopGeneration).not.toHaveBeenCalled();
+    expect(host.spies.generate).not.toHaveBeenCalled();
+  });
+
+  test('does not render a hold badge for a skipped early message', async () => {
+    renderMessage(0);
+    const { events } = await initializeAutoModeHarness({
+      host: {
+        chat: [{ original_avatar: 'alice.png' }],
+        characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+        characterId: 0,
+        stopGeneration: jest.fn(() => true),
+        generate: jest.fn(async () => undefined),
+      },
+      settings: { skipFirstXMessages: 5 },
+      actions: { generateTracker: jest.fn(async () => true) },
+    });
+
+    events.emit('MESSAGE_SENT', 0);
+    await Promise.resolve();
+
+    expect(document.querySelector('.ztracker-auto-mode-status')).toBeNull();
+    expect(document.querySelector('.mes[mesid="0"]')?.classList.contains('ztracker-auto-mode-hold')).toBe(false);
+  });
+
+  test('still stops, generates, and resumes for a message at or beyond the skip threshold', async () => {
+    renderMessage(5);
+    let resolveTracker: (value: boolean) => void = () => undefined;
+    const trackerPromise = new Promise<boolean>((resolve) => {
+      resolveTracker = resolve;
+    });
+    const { events, host, actions } = await initializeAutoModeHarness({
+      host: {
+        chat: [{ original_avatar: 'alice.png' }],
+        characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+        characterId: 0,
+        stopGeneration: jest.fn(() => true),
+        generate: jest.fn(async () => undefined),
+      },
+      settings: { skipFirstXMessages: 5 },
+      actions: { generateTracker: jest.fn(() => trackerPromise) },
+    });
+
+    events.emit('MESSAGE_SENT', 5);
+    expect(actions.generateTracker).toHaveBeenCalledWith(5, { silent: true, showStatusIndicator: false });
+
+    events.emit('GENERATION_STARTED');
+    expect(host.spies.stopGeneration).toHaveBeenCalledTimes(1);
+
+    resolveTracker(true);
+    await trackerPromise;
+
+    expect(host.spies.generate).toHaveBeenCalledWith(undefined, { automatic_trigger: true });
+  });
+
+  test('still engages the hold when Skip First X Messages is zero', async () => {
+    renderMessage(0);
+    let resolveTracker: (value: boolean) => void = () => undefined;
+    const trackerPromise = new Promise<boolean>((resolve) => {
+      resolveTracker = resolve;
+    });
+    const { events, host, actions } = await initializeAutoModeHarness({
+      host: {
+        chat: [{ original_avatar: 'alice.png' }],
+        characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+        characterId: 0,
+        stopGeneration: jest.fn(() => true),
+        generate: jest.fn(async () => undefined),
+      },
+      settings: { skipFirstXMessages: 0 },
+      actions: { generateTracker: jest.fn(() => trackerPromise) },
+    });
+
+    events.emit('MESSAGE_SENT', 0);
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true, showStatusIndicator: false });
+
+    events.emit('GENERATION_STARTED');
+    expect(host.spies.stopGeneration).toHaveBeenCalledTimes(1);
+
+    resolveTracker(true);
+    await trackerPromise;
+
+    expect(host.spies.generate).toHaveBeenCalledWith(undefined, { automatic_trigger: true });
   });
 });
