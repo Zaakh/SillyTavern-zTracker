@@ -17,6 +17,7 @@ import { installZTrackerThemeObserver } from './menu-theme.js';
 import { clearMessageStatusIndicator, RENDER_ERROR_STATUS_CLASS, syncMessageStatusIndicator } from './message-status-indicator.js';
 import { createOutgoingAutoModeController } from './outgoing-auto-mode.js';
 import { installPartsMenuPortalHandlers } from './parts-menu-portal.js';
+import { shouldSkipTrackerGeneration } from './tracker-action-helpers.js';
 
 const incomingTypes = [AutoModeOptions.RESPONSES, AutoModeOptions.BOTH];
 const outgoingTypes = [AutoModeOptions.INPUT, AutoModeOptions.BOTH];
@@ -279,6 +280,15 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
 
         const context = SillyTavern.getContext();
         if (!shouldAutoGenerateForUserMessage({ characterId: (context as any).characterId, characters: context.characters })) {
+          return;
+        }
+
+        // Skip the host-reply hold entirely when this message would be skipped by Skip First X Messages:
+        // there is no tracker to generate first, so stopping and re-issuing the reply would needlessly
+        // abort the first reply and race SillyTavern's generation teardown.
+        // This guard MUST mirror generateTracker's silent skip decision (see tracker-actions.ts);
+        // both pass silent=true so the gate never diverges from what the action would actually do.
+        if (shouldSkipTrackerGeneration(messageId, settings, () => {}, true)) {
           return;
         }
 
