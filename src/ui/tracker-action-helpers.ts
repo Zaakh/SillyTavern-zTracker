@@ -166,12 +166,16 @@ export function shouldSkipTrackerGeneration(
   notify: (message: string) => void,
   silent?: boolean,
 ): boolean {
-  if (settings.skipFirstXMessages <= 0 || messageId >= settings.skipFirstXMessages) {
+  // Coerce defensively: an undefined/malformed skipFirstXMessages makes the comparisons NaN and
+  // falls through to "skip", which would silently disable tracker generation on the MESSAGE_SENT
+  // hot path. Production sanitizes this to a number; this guards imports and edge cases.
+  const skipFirstXMessages = Number(settings.skipFirstXMessages) || 0;
+  if (skipFirstXMessages <= 0 || messageId >= skipFirstXMessages) {
     return false;
   }
 
   if (!silent) {
-    notify(`Tracker generation skipped: this message is within the first ${settings.skipFirstXMessages} messages.`);
+    notify(`Tracker generation skipped: this message is within the first ${skipFirstXMessages} messages.`);
   }
 
   return true;
