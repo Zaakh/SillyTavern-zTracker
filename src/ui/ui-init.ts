@@ -1,5 +1,5 @@
 import type { ExtensionSettings } from '../config.js';
-import { EXTENSION_KEY } from '../config.js';
+import { EXTENSION_KEY, getOrderedTrackerModules, getSettingsForTrackerModule } from '../config.js';
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import type { ChatMessage } from 'sillytavern-utils-lib/types';
 import { EventNames } from 'sillytavern-utils-lib/types';
@@ -21,6 +21,41 @@ import { shouldSkipTrackerGeneration } from './tracker-action-helpers.js';
 
 const incomingTypes = [AutoModeOptions.RESPONSES, AutoModeOptions.BOTH];
 const outgoingTypes = [AutoModeOptions.INPUT, AutoModeOptions.BOTH];
+
+function getDueAutoModuleIds(options: {
+  settings: ExtensionSettings;
+  messageId: number;
+  characterContext: Parameters<typeof shouldAutoGenerateForUserMessage>[0];
+  direction: 'incoming' | 'outgoing';
+}): string[] {
+  return getOrderedTrackerModules(options.settings)
+    .filter((module) => module.auto.enabled)
+    .filter((module) => (
+      options.direction === 'incoming'
+        ? shouldAutoGenerateForCharacterMessage(options.characterContext, options.messageId, module.id)
+        : shouldAutoGenerateForUserMessage(options.characterContext, module.id)
+    ))
+    .filter((module) => !shouldSkipTrackerGeneration(
+      options.messageId,
+      getSettingsForTrackerModule(options.settings, module.id),
+      () => {},
+      true,
+    ))
+    .map((module) => module.id);
+}
+
+function generateDueAutoModules(actions: TrackerActions, messageId: number, moduleIds: string[]) {
+  if (typeof actions.generateTrackersForMessage === 'function') {
+    return actions.generateTrackersForMessage(messageId, {
+      silent: true,
+      showStatusIndicator: false,
+      autoOnly: true,
+      moduleIds,
+    });
+  }
+
+  return actions.generateTracker(messageId, { silent: true, showStatusIndicator: false });
+}
 
 type InitializeGlobalUIOptions = {
   globalContext: any;
@@ -262,11 +297,17 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
         if (!incomingTypes.includes(settings.autoMode)) return;
 
         const context = SillyTavern.getContext();
-        if (!shouldAutoGenerateForCharacterMessage({ chat: context.chat, characters: context.characters }, messageId)) {
+        const moduleIds = getDueAutoModuleIds({
+          settings,
+          messageId,
+          characterContext: { chat: context.chat, characters: context.characters },
+          direction: 'incoming',
+        });
+        if (moduleIds.length === 0) {
           return;
         }
 
-        actions.generateTracker(messageId, { silent: true, showStatusIndicator: false });
+        generateDueAutoModules(actions, messageId, moduleIds);
       },
     );
     globalContext.eventSource.on(EventNames.USER_MESSAGE_RENDERED, (messageId: number) => {
@@ -279,16 +320,13 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
         if (!outgoingTypes.includes(settings.autoMode)) return;
 
         const context = SillyTavern.getContext();
-        if (!shouldAutoGenerateForUserMessage({ characterId: (context as any).characterId, characters: context.characters })) {
-          return;
-        }
-
-        // Skip the host-reply hold entirely when this message would be skipped by Skip First X Messages:
-        // there is no tracker to generate first, so stopping and re-issuing the reply would needlessly
-        // abort the first reply and race SillyTavern's generation teardown.
-        // This guard MUST mirror generateTracker's silent skip decision (see tracker-actions.ts);
-        // both pass silent=true so the gate never diverges from what the action would actually do.
-        if (shouldSkipTrackerGeneration(messageId, settings, () => {}, true)) {
+        const moduleIds = getDueAutoModuleIds({
+          settings,
+          messageId,
+          characterContext: { characterId: (context as any).characterId, characters: context.characters },
+          direction: 'outgoing',
+        });
+        if (moduleIds.length === 0) {
           return;
         }
 
@@ -297,7 +335,7 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
 
         void (async () => {
           try {
-            await actions.generateTracker(messageId, { silent: true, showStatusIndicator: false });
+            await generateDueAutoModules(actions, messageId, moduleIds);
           } catch (error) {
             console.error('zTracker auto mode failed to generate a tracker before reply.', error);
           }
@@ -332,11 +370,24 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
   (globalThis as any).ztrackerGenerateInterceptor = (chat: ChatMessage[]) => {
     const textCompletionSafeContext = SillyTavern.getContext() as GenerateInterceptorContext;
     const isGroupChat = Boolean(textCompletionSafeContext?.selected_group ?? selected_group);
-    const newChat = includeZTrackerMessages(chat, settingsManager.getSettings(), {
+    const settings = settingsManager.getSettings();
+    const interceptorOptions = {
       preserveTextCompletionTurnAlternation: textCompletionSafeContext?.mainApi === 'textgenerationwebui',
       isGroupChat,
       assistantReplyLabel: isGroupChat ? undefined : resolveAssistantReplyLabel(textCompletionSafeContext),
-    });
+    };
+    let newChat = chat;
+    for (const module of [...getOrderedTrackerModules(settings)].reverse()) {
+      const moduleSettings = getSettingsForTrackerModule(settings, module.id);
+      if (moduleSettings.includeLastXZTrackerMessages <= 0) {
+        continue;
+      }
+
+      newChat = includeZTrackerMessages(newChat, moduleSettings, {
+        ...interceptorOptions,
+        moduleId: module.id,
+      });
+    }
     chat.length = 0;
     chat.push(...newChat);
   };

@@ -4,7 +4,16 @@ import { ExtensionSettingsManager } from 'sillytavern-utils-lib';
 import { st_echo } from 'sillytavern-utils-lib/config';
 import {
   ExtensionSettings,
+  TrackerModule,
   CHAT_METADATA_SCHEMA_PRESET_KEY,
+  applySettingsToTrackerModule,
+  createDefaultTrackerModule,
+  createTrackerModuleId,
+  getOrderedTrackerModules,
+  getSettingsForTrackerModule,
+  purgeTrackerModuleDataFromChat,
+  readModuleChatSchemaPresetKey,
+  writeModuleChatSchemaPresetKey,
   DEFAULT_SCHEMA_VALUE,
   DEFAULT_SCHEMA_HTML,
   defaultSettings,
@@ -54,6 +63,66 @@ type CurrentChatSchemaPresetState = {
   hasValidStoredSchemaKey: boolean;
 };
 
+type ImportedTrackerModule = Partial<Omit<TrackerModule, 'auto' | 'schema' | 'prompts' | 'systemPrompt' | 'connection' | 'generation' | 'injection'>>
+  & Pick<TrackerModule, 'name'>
+  & {
+    auto?: Partial<TrackerModule['auto']>;
+    schema?: Partial<TrackerModule['schema']>;
+    prompts?: Partial<TrackerModule['prompts']>;
+    systemPrompt?: Partial<TrackerModule['systemPrompt']>;
+    connection?: Partial<TrackerModule['connection']>;
+    generation?: Partial<TrackerModule['generation']>;
+    injection?: Partial<TrackerModule['injection']>;
+  };
+
+const MODULE_EXPORT_VERSION = 1;
+
+function normalizeModuleOrder(modules: TrackerModule[]): void {
+  modules.forEach((module, index) => {
+    module.order = index;
+  });
+}
+
+function parseImportedTrackerModule(text: string): ImportedTrackerModule | null {
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+
+    const parsedRecord = parsed as Record<string, unknown>;
+    const module = (parsedRecord.module && typeof parsedRecord.module === 'object'
+      ? parsedRecord.module
+      : parsedRecord) as Partial<ImportedTrackerModule>;
+    if (!module || typeof module !== 'object' || typeof module.name !== 'string' || !module.name.trim()) {
+      return null;
+    }
+    return module as ImportedTrackerModule;
+  } catch {
+    return null;
+  }
+}
+
+function createImportedTrackerModule(importedModule: ImportedTrackerModule, modules: TrackerModule[]): TrackerModule {
+  const id = createTrackerModuleId(modules, importedModule.id || importedModule.name);
+  const base = createDefaultTrackerModule({ id, name: importedModule.name.trim(), order: modules.length });
+  return {
+    ...base,
+    ...JSON.parse(JSON.stringify(importedModule)),
+    id,
+    name: importedModule.name.trim(),
+    enabled: importedModule.enabled ?? base.enabled,
+    order: modules.length,
+    auto: { ...base.auto, ...importedModule.auto },
+    schema: { ...base.schema, ...importedModule.schema },
+    prompts: { ...base.prompts, ...importedModule.prompts },
+    systemPrompt: { ...base.systemPrompt, ...importedModule.systemPrompt },
+    connection: { ...base.connection, ...importedModule.connection },
+    generation: { ...base.generation, ...importedModule.generation },
+    injection: { ...base.injection, ...importedModule.injection },
+  };
+}
+
 /** Returns the current chat's extension metadata record, creating it only when explicitly requested. */
 function getExtensionChatMetadataRecord(chatMetadata: unknown, createIfMissing = false): Record<string, any> | undefined {
   if (!chatMetadata || typeof chatMetadata !== 'object') {
@@ -75,30 +144,24 @@ function getExtensionChatMetadataRecord(chatMetadata: unknown, createIfMissing =
 }
 
 /** Reads the stored schema preset key from the active chat when one exists. */
-function readStoredChatSchemaPresetKey(chatMetadata: unknown): string | undefined {
-  const extensionMetadata = getExtensionChatMetadataRecord(chatMetadata);
-  const storedSchemaKey = extensionMetadata?.[CHAT_METADATA_SCHEMA_PRESET_KEY];
-  return typeof storedSchemaKey === 'string' && storedSchemaKey.trim().length > 0 ? storedSchemaKey : undefined;
+function readStoredChatSchemaPresetKey(chatMetadata: unknown, moduleId: string): string | undefined {
+  return readModuleChatSchemaPresetKey(chatMetadata, moduleId);
 }
 
 /** Persists one chat-level schema preset selection when it actually changes. */
-async function persistChatSchemaPreset(context: any, schemaPresetKey: string): Promise<boolean> {
+async function persistChatSchemaPreset(context: any, schemaPresetKey: string, moduleId: string): Promise<boolean> {
   const extensionMetadata = getExtensionChatMetadataRecord(context?.chatMetadata, true);
-  if (!extensionMetadata || extensionMetadata[CHAT_METADATA_SCHEMA_PRESET_KEY] === schemaPresetKey) {
+  const previousSchemaPresetKey = readStoredChatSchemaPresetKey(context?.chatMetadata, moduleId);
+  if (!extensionMetadata || previousSchemaPresetKey === schemaPresetKey) {
     return false;
   }
 
-  const previousSchemaPresetKey = extensionMetadata[CHAT_METADATA_SCHEMA_PRESET_KEY];
-  extensionMetadata[CHAT_METADATA_SCHEMA_PRESET_KEY] = schemaPresetKey;
+  writeModuleChatSchemaPresetKey(context?.chatMetadata, schemaPresetKey, moduleId);
   if (typeof context?.saveMetadata === 'function') {
     try {
       await Promise.resolve(context.saveMetadata());
     } catch (error) {
-      if (previousSchemaPresetKey === undefined) {
-        delete extensionMetadata[CHAT_METADATA_SCHEMA_PRESET_KEY];
-      } else {
-        extensionMetadata[CHAT_METADATA_SCHEMA_PRESET_KEY] = previousSchemaPresetKey;
-      }
+      writeModuleChatSchemaPresetKey(context?.chatMetadata, previousSchemaPresetKey, moduleId);
       console.error('zTracker: failed to save current chat schema preset metadata.', error);
       await st_echo('error', 'Current chat schema preset could not be saved. The selector was reverted.');
       return false;
@@ -130,7 +193,7 @@ function resolveSchemaPresetSelection(
 }
 
 /** Reads the active chat schema state from live SillyTavern chat metadata without holding a stale reference. */
-function getCurrentChatSchemaPresetState(settings: ExtensionSettings): CurrentChatSchemaPresetState {
+function getCurrentChatSchemaPresetState(settings: ExtensionSettings, moduleId: string): CurrentChatSchemaPresetState {
   const context = SillyTavern.getContext();
   const chatMetadata = context?.chatMetadata;
   if (!chatMetadata || typeof chatMetadata !== 'object') {
@@ -143,7 +206,7 @@ function getCurrentChatSchemaPresetState(settings: ExtensionSettings): CurrentCh
     };
   }
 
-  const storedSchemaKey = readStoredChatSchemaPresetKey(chatMetadata);
+  const storedSchemaKey = readStoredChatSchemaPresetKey(chatMetadata, moduleId);
   const hasValidStoredSchemaKey = typeof storedSchemaKey === 'string' && !!settings.schemaPresets[storedSchemaKey];
   return {
     isAvailable: true,
@@ -157,16 +220,20 @@ function getCurrentChatSchemaPresetState(settings: ExtensionSettings): CurrentCh
 export const ZTrackerSettings: FC = () => {
   const forceUpdate = useForceUpdate();
   const settings = settingsManager.getSettings();
-  const connectionSource = settings.connectionSource ?? 'saved';
-  const previousSchemaPresetRef = useRef(settings.schemaPreset);
+  const orderedModules = getOrderedTrackerModules(settings, { includeDisabled: true });
+  const [selectedModuleId, setSelectedModuleId] = useState(() => orderedModules[0]?.id ?? defaultSettings.modules[0].id);
+  const selectedModule = orderedModules.find((module) => module.id === selectedModuleId) ?? orderedModules[0] ?? defaultSettings.modules[0];
+  const moduleSettings = getSettingsForTrackerModule(settings, selectedModule.id);
+  const connectionSource = moduleSettings.connectionSource ?? 'saved';
+  const previousSchemaPresetRef = useRef(moduleSettings.schemaPreset);
 
   const [diagnosticsText, setDiagnosticsText] = useState<string>('');
   const [systemPromptRefreshRevision, setSystemPromptRefreshRevision] = useState(0);
   const [isGenerationOpen, setGenerationOpen] = useState(true);
   const [isInjectionOpen, setInjectionOpen] = useState(true);
 
-  const [schemaText, setSchemaText] = useState(formatSchemaText(settings.schemaPresets[settings.schemaPreset]));
-  const [schemaHtmlText, setSchemaHtmlText] = useState(formatSchemaHtml(settings.schemaPresets[settings.schemaPreset]));
+  const [schemaText, setSchemaText] = useState(formatSchemaText(moduleSettings.schemaPresets[moduleSettings.schemaPreset]));
+  const [schemaHtmlText, setSchemaHtmlText] = useState(formatSchemaHtml(moduleSettings.schemaPresets[moduleSettings.schemaPreset]));
 
   const updateAndRefresh = useCallback(
     (updater: (currentSettings: ExtensionSettings) => void) => {
@@ -178,37 +245,65 @@ export const ZTrackerSettings: FC = () => {
     [forceUpdate],
   );
 
+  const updateSelectedModuleAndRefresh = useCallback(
+    (updater: (currentSettings: ExtensionSettings) => void) => {
+      updateAndRefresh((currentSettings) => {
+        const module = currentSettings.modules?.find((candidate) => candidate.id === selectedModuleId)
+          ?? currentSettings.modules?.[0];
+        if (!module) {
+          updater(currentSettings);
+          return;
+        }
+
+        const moduleDraft = getSettingsForTrackerModule(currentSettings, module.id);
+        updater(moduleDraft);
+        applySettingsToTrackerModule(module, moduleDraft);
+        if (moduleDraft.autoMode !== 'none') {
+          currentSettings.autoMode = moduleDraft.autoMode;
+        }
+      });
+    },
+    [selectedModuleId, updateAndRefresh],
+  );
+
+  useEffect(() => {
+    if (orderedModules.some((module) => module.id === selectedModuleId)) {
+      return;
+    }
+    setSelectedModuleId(orderedModules[0]?.id ?? defaultSettings.modules[0].id);
+  }, [orderedModules, selectedModuleId]);
+
   // Memoized data for the schema preset dropdown
   const schemaPresetItems = useMemo((): PresetItem[] => {
-    return Object.entries(settings.schemaPresets).map(([value, preset]) => ({
+    return Object.entries(moduleSettings.schemaPresets).map(([value, preset]) => ({
       value,
       label: preset.name,
     }));
-  }, [settings.schemaPresets]);
-  const currentChatSchemaPresetState = getCurrentChatSchemaPresetState(settings);
+  }, [moduleSettings.schemaPresets]);
+  const currentChatSchemaPresetState = getCurrentChatSchemaPresetState(moduleSettings, selectedModule.id);
 
   const systemPromptItems = useMemo((): PresetItem[] => {
     return listSystemPromptPresetNames().map((name) => ({
       value: name,
       label: name,
     }));
-  }, [settings.trackerSystemPromptMode, settings.trackerSystemPromptSavedName, systemPromptRefreshRevision]);
+  }, [moduleSettings.trackerSystemPromptMode, moduleSettings.trackerSystemPromptSavedName, systemPromptRefreshRevision]);
 
   const currentGlobalSystemPromptName = getCurrentGlobalSystemPromptName();
-  const showSharedSystemPromptWarning = shouldWarnAboutSharedSystemPromptSelection(settings);
+  const showSharedSystemPromptWarning = shouldWarnAboutSharedSystemPromptSelection(moduleSettings);
   const showMissingSavedSystemPromptWarning =
-    settings.trackerSystemPromptMode === 'saved' &&
-    settings.trackerSystemPromptSavedName.trim().length > 0 &&
+    moduleSettings.trackerSystemPromptMode === 'saved' &&
+    moduleSettings.trackerSystemPromptSavedName.trim().length > 0 &&
     systemPromptItems.length > 0 &&
-    !hasSystemPromptPreset(settings.trackerSystemPromptSavedName);
+    !hasSystemPromptPreset(moduleSettings.trackerSystemPromptSavedName);
 
   const refreshSystemPromptState = useCallback(() => {
     setSystemPromptRefreshRevision((revision) => revision + 1);
   }, []);
 
-  const activeSchemaText = formatSchemaText(settings.schemaPresets[settings.schemaPreset]);
+  const activeSchemaText = formatSchemaText(moduleSettings.schemaPresets[moduleSettings.schemaPreset]);
   const schemaDraftState = getSchemaDraftState({ currentText: schemaText, persistedText: activeSchemaText });
-  const activeSchemaHtml = formatSchemaHtml(settings.schemaPresets[settings.schemaPreset]);
+  const activeSchemaHtml = formatSchemaHtml(moduleSettings.schemaPresets[moduleSettings.schemaPreset]);
   const schemaHtmlDraftState = getSchemaHtmlDraftState({ currentText: schemaHtmlText, persistedText: activeSchemaHtml });
   const schemaPresetPairValidation = useMemo(
     () => (schemaDraftState.isValid && schemaHtmlDraftState.isValid
@@ -224,8 +319,8 @@ export const ZTrackerSettings: FC = () => {
     schemaPresetPairValidation.isValid;
 
   useEffect(() => {
-    const activePresetChanged = previousSchemaPresetRef.current !== settings.schemaPreset;
-    previousSchemaPresetRef.current = settings.schemaPreset;
+    const activePresetChanged = previousSchemaPresetRef.current !== moduleSettings.schemaPreset;
+    previousSchemaPresetRef.current = moduleSettings.schemaPreset;
 
     if (
       shouldSyncSchemaTextFromSettings({
@@ -248,14 +343,14 @@ export const ZTrackerSettings: FC = () => {
     ) {
       setSchemaHtmlText(activeSchemaHtml);
     }
-  }, [activeSchemaHtml, activeSchemaText, schemaHtmlText, schemaText, settings.schemaPreset]);
+  }, [activeSchemaHtml, activeSchemaText, schemaHtmlText, schemaText, moduleSettings.schemaPreset]);
 
   // Handler for when a new schema preset is selected
   const handleSchemaPresetChange = (newValue?: string) => {
     let nextSchemaText: string | undefined;
     let nextSchemaHtmlText: string | undefined;
 
-    updateAndRefresh((currentSettings) => {
+    updateSelectedModuleAndRefresh((currentSettings) => {
       const selection = resolvePresetSelection(currentSettings.schemaPresets, newValue);
       if (!selection) {
         return;
@@ -284,7 +379,7 @@ export const ZTrackerSettings: FC = () => {
     let shouldMigrateChatSchemaState = false;
     let renamedActivePreset = false;
 
-    updateAndRefresh((currentSettings) => {
+    updateSelectedModuleAndRefresh((currentSettings) => {
       const currentPreset = currentSettings.schemaPresets[currentKey];
       if (!currentPreset || currentSettings.schemaPresets[newKey]) {
         return;
@@ -305,7 +400,7 @@ export const ZTrackerSettings: FC = () => {
       }
 
       const context = SillyTavern.getContext();
-      if (readStoredChatSchemaPresetKey(context?.chatMetadata) === currentKey) {
+      if (readStoredChatSchemaPresetKey(context?.chatMetadata, selectedModule.id) === currentKey) {
         shouldMigrateChatSchemaState = true;
       }
     });
@@ -316,7 +411,7 @@ export const ZTrackerSettings: FC = () => {
 
     if (shouldMigrateChatSchemaState) {
       const context = SillyTavern.getContext();
-      void persistChatSchemaPreset(context, newKey).finally(() => {
+      void persistChatSchemaPreset(context, newKey, selectedModule.id).finally(() => {
         forceUpdate();
       });
     }
@@ -330,17 +425,17 @@ export const ZTrackerSettings: FC = () => {
       return;
     }
 
-    const selection = resolveSchemaPresetSelection(settings.schemaPresets, settings.schemaPreset, newValue);
+    const selection = resolveSchemaPresetSelection(moduleSettings.schemaPresets, moduleSettings.schemaPreset, newValue);
     if (!selection) {
       return;
     }
 
-    const storedSchemaPresetKey = readStoredChatSchemaPresetKey(chatMetadata);
+    const storedSchemaPresetKey = readStoredChatSchemaPresetKey(chatMetadata, selectedModule.id);
     if (storedSchemaPresetKey === selection.key) {
       return;
     }
 
-    await persistChatSchemaPreset(context, selection.key);
+    await persistChatSchemaPreset(context, selection.key, selectedModule.id);
     forceUpdate();
   };
 
@@ -351,9 +446,9 @@ export const ZTrackerSettings: FC = () => {
     let preservesActiveDrafts = false;
     let nextChatSchemaSelectionKey: string | undefined;
 
-    updateAndRefresh((currentSettings) => {
+    updateSelectedModuleAndRefresh((currentSettings) => {
       const context = SillyTavern.getContext();
-      const storedChatSchemaKey = readStoredChatSchemaPresetKey(context?.chatMetadata);
+      const storedChatSchemaKey = readStoredChatSchemaPresetKey(context?.chatMetadata, selectedModule.id);
       const nextState = reconcilePresetItems(currentSettings.schemaPresets, currentSettings.schemaPreset, newItems);
       preservesActiveDrafts = nextState.preservesActiveDrafts;
       currentSettings.schemaPreset = nextState.activeKey;
@@ -376,7 +471,7 @@ export const ZTrackerSettings: FC = () => {
 
     if (nextChatSchemaSelectionKey) {
       const context = SillyTavern.getContext();
-      void persistChatSchemaPreset(context, nextChatSchemaSelectionKey).finally(() => {
+      void persistChatSchemaPreset(context, nextChatSchemaSelectionKey, selectedModule.id).finally(() => {
         forceUpdate();
       });
     }
@@ -400,7 +495,7 @@ export const ZTrackerSettings: FC = () => {
     const parsedJson = JSON.parse(schemaText);
     let nextSchemaText = schemaText;
     let nextSchemaHtmlValue = schemaHtmlText;
-    updateAndRefresh((currentSettings) => {
+    updateSelectedModuleAndRefresh((currentSettings) => {
       const preset = currentSettings.schemaPresets[currentSettings.schemaPreset];
       if (!preset) {
         return;
@@ -434,7 +529,7 @@ export const ZTrackerSettings: FC = () => {
 
     let nextSchemaText = '';
     let nextSchemaHtmlText = '';
-    updateAndRefresh((currentSettings) => {
+    updateSelectedModuleAndRefresh((currentSettings) => {
       const preset = currentSettings.schemaPresets[currentSettings.schemaPreset];
       if (preset) {
         currentSettings.schemaPresets = {
@@ -453,6 +548,122 @@ export const ZTrackerSettings: FC = () => {
     setSchemaHtmlText(nextSchemaHtmlText);
   };
 
+  const updateModuleList = (updater: (modules: TrackerModule[]) => string | undefined) => {
+    let nextSelectedModuleId: string | undefined;
+    updateAndRefresh((currentSettings) => {
+      currentSettings.modules = getOrderedTrackerModules(currentSettings, { includeDisabled: true }).map((module) => ({
+        ...module,
+        schema: { ...module.schema, presets: JSON.parse(JSON.stringify(module.schema.presets)) },
+        prompts: { ...module.prompts },
+        systemPrompt: { ...module.systemPrompt },
+        connection: { ...module.connection },
+        generation: {
+          ...module.generation,
+          worldInfoAllowlistBookNames: [...module.generation.worldInfoAllowlistBookNames],
+          worldInfoAllowlistEntryIds: [...module.generation.worldInfoAllowlistEntryIds],
+        },
+        injection: { ...module.injection, transformPresets: JSON.parse(JSON.stringify(module.injection.transformPresets)) },
+        auto: { ...module.auto },
+      }));
+      nextSelectedModuleId = updater(currentSettings.modules);
+      normalizeModuleOrder(currentSettings.modules);
+    });
+    if (nextSelectedModuleId) {
+      setSelectedModuleId(nextSelectedModuleId);
+    }
+  };
+
+  const addModule = () => {
+    updateModuleList((modules) => {
+      const id = createTrackerModuleId(modules, 'module');
+      modules.push(createDefaultTrackerModule({ id, name: `Module ${modules.length + 1}`, order: modules.length }));
+      return id;
+    });
+  };
+
+  const cloneModule = () => {
+    updateModuleList((modules) => {
+      const source = modules.find((module) => module.id === selectedModule.id);
+      if (!source) {
+        return undefined;
+      }
+      const id = createTrackerModuleId(modules, `${source.id}-copy`);
+      modules.push({ ...JSON.parse(JSON.stringify(source)), id, name: `${source.name} Copy`, order: modules.length });
+      return id;
+    });
+  };
+
+  const moveSelectedModule = (direction: -1 | 1) => {
+    updateModuleList((modules) => {
+      const index = modules.findIndex((module) => module.id === selectedModule.id);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= modules.length) {
+        return undefined;
+      }
+      [modules[index], modules[nextIndex]] = [modules[nextIndex], modules[index]];
+      return selectedModule.id;
+    });
+  };
+
+  const deleteSelectedModule = async () => {
+    if (orderedModules.length <= 1) {
+      await st_echo('warning', 'At least one Module is required.');
+      return;
+    }
+
+    const confirmed = await SillyTavern.getContext().Popup.show.confirm(
+      'Delete Module',
+      `Delete "${selectedModule.name}" and its saved tracker data in this chat?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    const context = SillyTavern.getContext();
+    purgeTrackerModuleDataFromChat(context?.chat, selectedModule.id);
+    if (typeof context?.saveChat === 'function') {
+      await Promise.resolve(context.saveChat());
+    }
+
+    updateModuleList((modules) => {
+      const index = modules.findIndex((module) => module.id === selectedModule.id);
+      modules.splice(index, 1);
+      return modules[Math.max(0, index - 1)]?.id ?? modules[0]?.id;
+    });
+  };
+
+  const exportSelectedModule = () => {
+    const payload = JSON.stringify({ version: MODULE_EXPORT_VERSION, module: selectedModule }, null, 2);
+    const blob = new Blob([payload], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${selectedModule.id || 'ztracker-module'}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importModule = async () => {
+    const importedText = await SillyTavern.getContext().Popup.show.input(
+      'Import Module',
+      'Paste an exported zTracker Module JSON definition:',
+      '',
+    );
+    const importedModule = parseImportedTrackerModule(importedText ?? '');
+    if (!importedModule) {
+      await st_echo('warning', 'The pasted Module JSON could not be imported.');
+      return;
+    }
+
+    updateModuleList((modules) => {
+      const module = createImportedTrackerModule(importedModule, modules);
+      modules.push(module);
+      return module.id;
+    });
+  };
+
+  const selectedModuleIndex = orderedModules.findIndex((module) => module.id === selectedModule.id);
+
   return (
     <div className="ztracker-settings">
       <div className="inline-drawer">
@@ -463,6 +674,77 @@ export const ZTrackerSettings: FC = () => {
         <div className="inline-drawer-content">
           <div className="ztracker-container">
             <div className="setting-row">
+              <label>Modules</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {orderedModules.map((module) => (
+                    <button
+                      key={module.id}
+                      type="button"
+                      className={`menu_button ${module.id === selectedModule.id ? 'active' : ''}`}
+                      style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}
+                      onClick={() => setSelectedModuleId(module.id)}
+                    >
+                      <span>{module.name}</span>
+                      <span>{module.enabled ? 'Enabled' : 'Disabled'}{module.auto.enabled ? ' / Auto' : ''}</span>
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  <button type="button" className="menu_button" onClick={addModule}>Add</button>
+                  <button type="button" className="menu_button" onClick={cloneModule}>Clone</button>
+                  <button type="button" className="menu_button" disabled={selectedModuleIndex <= 0} onClick={() => moveSelectedModule(-1)}>Up</button>
+                  <button type="button" className="menu_button" disabled={selectedModuleIndex < 0 || selectedModuleIndex >= orderedModules.length - 1} onClick={() => moveSelectedModule(1)}>Down</button>
+                  <button type="button" className="menu_button" disabled={orderedModules.length <= 1} onClick={() => void deleteSelectedModule()}>Delete</button>
+                  <button type="button" className="menu_button" onClick={exportSelectedModule}>Export</button>
+                  <button type="button" className="menu_button" onClick={() => void importModule()}>Import</button>
+                </div>
+              </div>
+            </div>
+
+            <div className="setting-row">
+              <label title="Human-readable Module name shown in settings and tracker output.">Module Name</label>
+              <input
+                className="text_pole"
+                value={selectedModule.name}
+                onChange={(e) => updateAndRefresh((currentSettings) => {
+                  const module = currentSettings.modules?.find((candidate) => candidate.id === selectedModule.id);
+                  if (module) {
+                    module.name = e.target.value;
+                  }
+                })}
+              />
+            </div>
+
+            <div className="setting-row">
+              <label title="Controls whether this Module renders, injects context, and appears in manual generation actions.">Module Enabled</label>
+              <input
+                type="checkbox"
+                checked={selectedModule.enabled}
+                onChange={(e) => updateAndRefresh((currentSettings) => {
+                  const module = currentSettings.modules?.find((candidate) => candidate.id === selectedModule.id);
+                  if (module) {
+                    module.enabled = e.target.checked;
+                  }
+                })}
+              />
+            </div>
+
+            <div className="setting-row">
+              <label title="Controls whether this Module participates in incoming or outgoing automatic generation.">Auto Generate</label>
+              <input
+                type="checkbox"
+                checked={selectedModule.auto.enabled}
+                onChange={(e) => updateAndRefresh((currentSettings) => {
+                  const module = currentSettings.modules?.find((candidate) => candidate.id === selectedModule.id);
+                  if (module) {
+                    module.auto.enabled = e.target.checked;
+                  }
+                })}
+              />
+            </div>
+
+            <div className="setting-row">
               <label title="Choose whether zTracker uses the currently active SillyTavern connection or a specific saved connection profile.">Connection Source</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
                 <select
@@ -470,7 +752,7 @@ export const ZTrackerSettings: FC = () => {
                   title="Choose whether zTracker uses the currently active SillyTavern connection or a specific saved connection profile."
                   value={connectionSource}
                   onChange={(e) =>
-                    updateAndRefresh((s) => {
+                    updateSelectedModuleAndRefresh((s) => {
                       s.connectionSource = e.target.value as ExtensionSettings['connectionSource'];
                     })
                   }
@@ -490,9 +772,9 @@ export const ZTrackerSettings: FC = () => {
               <div className="setting-row">
                 <label title="Which saved SillyTavern Connection Profile zTracker uses when generating trackers.">Connection Profile</label>
                 <STConnectionProfileSelect
-                  initialSelectedProfileId={settings.profileId}
+                  initialSelectedProfileId={moduleSettings.profileId}
                   onChange={(profile) =>
-                    updateAndRefresh((s) => {
+                    updateSelectedModuleAndRefresh((s) => {
                       s.profileId = profile?.id ?? '';
                     })
                   }
@@ -506,8 +788,8 @@ export const ZTrackerSettings: FC = () => {
               onToggle={() => setGenerationOpen((value) => !value)}
             >
               <TrackerGenerationSection
-                settings={settings}
-                updateAndRefresh={updateAndRefresh}
+                settings={moduleSettings}
+                updateAndRefresh={updateSelectedModuleAndRefresh}
                 schemaPresetItems={schemaPresetItems}
                 currentChatSchemaPresetKey={currentChatSchemaPresetState.selection?.key}
                 currentChatSchemaPresetLabel={currentChatSchemaPresetState.selection?.label}
@@ -549,7 +831,7 @@ export const ZTrackerSettings: FC = () => {
               isOpen={isInjectionOpen}
               onToggle={() => setInjectionOpen((value) => !value)}
             >
-              <TrackerInjectionSection settings={settings} updateAndRefresh={updateAndRefresh} />
+              <TrackerInjectionSection settings={moduleSettings} updateAndRefresh={updateSelectedModuleAndRefresh} />
             </SettingsSectionDrawer>
 
             <DiagnosticsSection

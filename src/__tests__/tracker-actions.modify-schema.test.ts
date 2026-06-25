@@ -97,7 +97,7 @@ describe('createTrackerActions modifyChatMetadata', () => {
 
     expect(renderExtensionTemplateAsync).toHaveBeenCalledWith('root', 'dist/templates/modify_schema_popup', expect.any(Object));
     expect(callGenericPopup).toHaveBeenCalled();
-    expect(context.chatMetadata).toEqual({ zTracker: { schemaKey: 'alternate' } });
+    expect(context.chatMetadata).toEqual({ zTracker: { byModule: { default: { schemaKey: 'alternate' } } } });
     expect(saveMetadataDebounced).toHaveBeenCalledTimes(1);
     expect(stEchoMock).toHaveBeenCalledWith(
       'success',

@@ -7,6 +7,7 @@ import {
   applyTrackerUpdateAndRenderMock,
   buildPromptMock,
   createTrackerActions,
+  createTrackerModuleFromLegacySettings,
   includeZTrackerMessagesMock,
   installSillyTavernContext,
   markEmbeddedTrackerSnapshot,
@@ -232,6 +233,173 @@ describe('createTrackerActions prompt assembly', () => {
     );
   });
 
+  test('uses the target module config and chat schema for manual generation', async () => {
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const generateRequest = makeGenerateRequest({ content: { agenda: 'Find the exit' } });
+    const agendaSettings = makeSettings({
+      schemaPreset: 'agenda-default',
+      prompt: 'Generate agenda tracker JSON',
+      schemaPresets: {
+        'agenda-default': {
+          name: 'Agenda Default',
+          value: { type: 'object', properties: { plan: { type: 'string' } }, required: ['plan'] },
+          html: '<div>agenda default</div>',
+        },
+        'agenda-chat': {
+          name: 'Agenda Chat',
+          value: { type: 'object', properties: { agenda: { type: 'string' } }, required: ['agenda'] },
+          html: '<div>agenda chat</div>',
+        },
+      },
+    });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: { zTracker: { byId: { default: { schemaValue: { old: true } } } } } }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile()],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({
+          modules: [
+            createTrackerModuleFromLegacySettings(makeSettings(), { id: 'default', name: 'Default', order: 0 }),
+            createTrackerModuleFromLegacySettings(agendaSettings, { id: 'agenda', name: 'Agenda', order: 1 }),
+          ],
+        }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    const context = SillyTavern.getContext() as any;
+    context.chatMetadata = { zTracker: { byModule: { agenda: { schemaKey: 'agenda-chat' } } } };
+
+    await actions.generateTracker(0, { moduleId: 'agenda' });
+
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        moduleId: 'agenda',
+        trackerHtml: '<div>agenda chat</div>',
+        extensionData: expect.objectContaining({
+          schemaKey: 'agenda-chat',
+        }),
+      }),
+    );
+    expect(generateRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        overridePayload: expect.objectContaining({
+          json_schema: expect.objectContaining({
+            value: expect.objectContaining({
+              properties: expect.objectContaining({ agenda: { type: 'string' } }),
+            }),
+          }),
+        }),
+      }),
+      expect.any(Object),
+    );
+  });
+
+  test('generates enabled modules sequentially in module order', async () => {
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const generateRequest = makeGenerateRequest({ content: { time: '10:00:00' } });
+    const defaultModule = createTrackerModuleFromLegacySettings(makeSettings(), { id: 'default', name: 'Default', order: 2 });
+    const agendaModule = createTrackerModuleFromLegacySettings(makeSettings({ prompt: 'Generate agenda tracker JSON' }), {
+      id: 'agenda',
+      name: 'Agenda',
+      order: 1,
+    });
+    const disabledModule = createTrackerModuleFromLegacySettings(makeSettings({ prompt: 'Generate disabled tracker JSON' }), {
+      id: 'disabled',
+      name: 'Disabled',
+      order: 0,
+    });
+    disabledModule.enabled = false;
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile()],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ modules: [defaultModule, agendaModule, disabledModule] }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await expect(actions.generateTrackersForMessage(0)).resolves.toBe(true);
+
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenNthCalledWith(
+      1,
+      expect.any(Object),
+      expect.objectContaining({ moduleId: 'agenda' }),
+    );
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenNthCalledWith(
+      2,
+      expect.any(Object),
+      expect.objectContaining({ moduleId: 'default' }),
+    );
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalledTimes(2);
+  });
+
+  test('auto orchestration only generates auto-enabled modules', async () => {
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const generateRequest = makeGenerateRequest({ content: { time: '10:00:00' } });
+    const manualModule = createTrackerModuleFromLegacySettings(makeSettings(), { id: 'manual', name: 'Manual', order: 0 });
+    const autoModule = createTrackerModuleFromLegacySettings(makeSettings(), { id: 'auto', name: 'Auto', order: 1 });
+    autoModule.auto.enabled = true;
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile()],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ modules: [manualModule, autoModule] }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await expect(actions.generateTrackersForMessage(0, { autoOnly: true, silent: true })).resolves.toBe(true);
+
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ moduleId: 'auto' }),
+    );
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalledTimes(1);
+  });
+
   test('persists normalized chat metadata when the stored schema preset is missing or stale', async () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
 
@@ -263,7 +431,7 @@ describe('createTrackerActions prompt assembly', () => {
 
     await actions.generateTracker(0);
 
-    expect(context.chatMetadata).toEqual({ zTracker: { schemaKey: 'default' } });
+    expect(context.chatMetadata).toEqual({ zTracker: { byModule: { default: { schemaKey: 'default' } } } });
     expect(context.saveMetadataDebounced).toHaveBeenCalledTimes(1);
   });
 

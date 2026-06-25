@@ -1,4 +1,5 @@
 import type { ExtensionSettings } from '../config.js';
+import { createDefaultTrackerModule, getSettingsForTrackerModule } from '../config.js';
 import {
   extractLeadingSystemPrompt,
   includeZTrackerMessages,
@@ -7,6 +8,7 @@ import {
   CHAT_MESSAGE_SCHEMA_VALUE_KEY,
 } from '../tracker.js';
 import { EXTENSION_KEY } from '../extension-metadata.js';
+import { CHAT_MESSAGE_MODULES_KEY } from '../tracker.js';
 
 describe('includeZTrackerMessages', () => {
   const makeSettings = (
@@ -94,6 +96,74 @@ describe('includeZTrackerMessages', () => {
     expect(result[1].content).toContain('```json');
     expect(result[1].role).toBe('user');
     expect(result[1]).not.toHaveProperty('name');
+  });
+
+  it('injects only the requested module snapshot', () => {
+    const messages = [
+      {
+        content: 'base',
+        role: 'assistant',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_MODULES_KEY]: {
+              default: { [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { scene: 'Bridge' } },
+              agenda: { [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { goal: 'Find exit' } },
+            },
+          },
+        },
+      },
+      { content: 'current', role: 'user' },
+    ];
+
+    const result = includeZTrackerMessages(messages as any, makeSettings(1), { moduleId: 'agenda' }) as any[];
+
+    expect(result).toHaveLength(3);
+    expect(result[1].content).toContain('Find exit');
+    expect(result[1].content).not.toContain('Bridge');
+  });
+
+  it('composes multiple virtual-character module injections in module order', () => {
+    const sceneModule = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    sceneModule.injection.includeLastXMessages = 1;
+    sceneModule.injection.embedRole = 'assistant';
+    sceneModule.injection.embedAsCharacter = true;
+    sceneModule.injection.snapshotHeader = 'Scene Tracker:';
+    const agendaModule = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
+    agendaModule.injection.includeLastXMessages = 1;
+    agendaModule.injection.embedRole = 'assistant';
+    agendaModule.injection.embedAsCharacter = true;
+    agendaModule.injection.snapshotHeader = 'Agenda Tracker:';
+    const settings = { ...makeSettings(0), modules: [sceneModule, agendaModule] } as ExtensionSettings;
+    const messages = [
+      {
+        content: 'base',
+        role: 'assistant',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_MODULES_KEY]: {
+              scene: { [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { place: 'Bridge' } },
+              agenda: { [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { goal: 'Find exit' } },
+            },
+          },
+        },
+      },
+      { content: 'current', role: 'user' },
+    ];
+
+    const afterAgenda = includeZTrackerMessages(
+      messages as any,
+      getSettingsForTrackerModule(settings, 'agenda'),
+      { moduleId: 'agenda' },
+    ) as any[];
+    const result = includeZTrackerMessages(
+      afterAgenda as any,
+      getSettingsForTrackerModule(settings, 'scene'),
+      { moduleId: 'scene' },
+    ) as any[];
+
+    expect(result.map((message) => message.name).filter(Boolean)).toEqual(['Scene Tracker', 'Agenda Tracker']);
+    expect(result[1].content).toContain('Bridge');
+    expect(result[2].content).toContain('Find exit');
   });
 
   it('can inject tracker snapshots as a virtual character name', () => {

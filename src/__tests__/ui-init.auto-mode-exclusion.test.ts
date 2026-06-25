@@ -39,6 +39,7 @@ jest.unstable_mockModule('../tracker.js', () => ({
 }));
 
 const { initializeGlobalUI } = await import('../ui/ui-init.js');
+const { createDefaultTrackerModule } = await import('../config.js');
 
 type AutoModeHarnessOptions = {
   host?: Parameters<typeof createSillyTavernHost>[0];
@@ -533,6 +534,70 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
 });
 
 describe('initializeGlobalUI outgoing hold respects Skip First X Messages', () => {
+  test('does not stop, hold, or generate when no module has auto enabled', async () => {
+    renderMessage(0);
+    const manualModule = createDefaultTrackerModule({ id: 'manual', name: 'Manual', order: 0 });
+    const { events, host, actions } = await initializeAutoModeHarness({
+      host: {
+        chat: [{ original_avatar: 'alice.png' }],
+        characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+        characterId: 0,
+        stopGeneration: jest.fn(() => true),
+        generate: jest.fn(async () => undefined),
+      },
+      settings: { modules: [manualModule] },
+      actions: {
+        generateTrackersForMessage: jest.fn(async () => true),
+      },
+    });
+
+    events.emit('MESSAGE_SENT', 0);
+    events.emit('GENERATION_STARTED');
+    await Promise.resolve();
+
+    expect(actions.generateTrackersForMessage).not.toHaveBeenCalled();
+    expect(host.spies.stopGeneration).not.toHaveBeenCalled();
+    expect(host.spies.generate).not.toHaveBeenCalled();
+    expect(document.querySelector('.ztracker-auto-mode-status')).toBeNull();
+  });
+
+  test('holds and generates only auto modules due after each module skip guard', async () => {
+    renderMessage(0);
+    const skippedModule = createDefaultTrackerModule({ id: 'skipped', name: 'Skipped', order: 0 });
+    skippedModule.auto.enabled = true;
+    skippedModule.generation.skipFirstXMessages = 5;
+    const dueModule = createDefaultTrackerModule({ id: 'due', name: 'Due', order: 1 });
+    dueModule.auto.enabled = true;
+    dueModule.generation.skipFirstXMessages = 0;
+
+    const { events, host, actions } = await initializeAutoModeHarness({
+      host: {
+        chat: [{ original_avatar: 'alice.png' }],
+        characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+        characterId: 0,
+        stopGeneration: jest.fn(() => true),
+        generate: jest.fn(async () => undefined),
+      },
+      settings: { modules: [skippedModule, dueModule] },
+      actions: {
+        generateTrackersForMessage: jest.fn(async () => true),
+      },
+    });
+
+    events.emit('MESSAGE_SENT', 0);
+    events.emit('GENERATION_STARTED');
+    await Promise.resolve();
+
+    expect(actions.generateTrackersForMessage).toHaveBeenCalledWith(0, {
+      silent: true,
+      showStatusIndicator: false,
+      autoOnly: true,
+      moduleIds: ['due'],
+    });
+    expect(host.spies.stopGeneration).toHaveBeenCalledTimes(1);
+    expect(host.spies.generate).toHaveBeenCalledWith(undefined, { automatic_trigger: true });
+  });
+
   test('does not stop, hold, or generate for a message within the skip threshold', async () => {
     renderMessage(0);
     const { events, host, actions } = await initializeAutoModeHarness({

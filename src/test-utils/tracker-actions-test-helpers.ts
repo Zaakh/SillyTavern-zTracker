@@ -144,6 +144,9 @@ jest.unstable_mockModule('../tracker.js', () => ({
   CHAT_MESSAGE_SCHEMA_PRESET_KEY: 'schemaKey',
   CHAT_MESSAGE_SCHEMA_VALUE_KEY: 'schemaValue',
   CHAT_MESSAGE_PARTS_ORDER_KEY: 'partsOrder',
+  getTrackerModuleRecord: jest.fn((message: any, moduleId = 'default') => (
+    message?.extra?.zTracker?.byId?.[moduleId as string] ?? message?.extra?.zTracker
+  )),
   extractLeadingSystemPrompt: jest.fn((messages: Array<{ role: string; content: string }>) => {
     const firstNonSystemIndex = messages.findIndex((message) => message.role !== 'system');
     if (firstNonSystemIndex === 0) {
@@ -290,7 +293,7 @@ jest.unstable_mockModule('../ui/debug.js', () => ({
 }));
 
 export const { createTrackerActions } = await import('../ui/tracker-actions.js');
-export const { PromptEngineeringMode, TrackerWorldInfoPolicyMode } = await import('../config.js');
+export const { PromptEngineeringMode, TrackerWorldInfoPolicyMode, createTrackerModuleFromLegacySettings } = await import('../config.js');
 export const { parseResponse } = await import('../parser.js');
 export const { schemaToExample, schemaToPromptSchema } = await import('../schema-to-example.js');
 

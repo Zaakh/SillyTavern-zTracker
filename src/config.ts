@@ -1,7 +1,18 @@
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import { repairCorruptedRequiredMetadata } from './schema-repair.js';
 import { sanitizeIntegerSetting } from './settings-numeric.js';
-export { extensionName, EXTENSION_KEY, CHAT_METADATA_SCHEMA_PRESET_KEY } from './extension-metadata.js';
+import { DEFAULT_MODULE_ID, EXTENSION_KEY } from './extension-metadata.js';
+export {
+  extensionName,
+  EXTENSION_KEY,
+  CHAT_METADATA_SCHEMA_PRESET_KEY,
+  CHAT_METADATA_MODULES_KEY,
+  DEFAULT_MODULE_ID,
+  getModuleChatMetadataRecord,
+  migrateLegacyChatMetadataToModules,
+  readModuleChatSchemaPresetKey,
+  writeModuleChatSchemaPresetKey,
+} from './extension-metadata.js';
 
 export enum PromptEngineeringMode {
   NATIVE = 'native',
@@ -21,6 +32,8 @@ export type TrackerConnectionSource = 'saved' | 'active';
 export type TrackerSystemPromptMode = 'profile' | 'saved' | 'selected';
 
 export type TrackerGenerationConversationRoleMode = 'preserve' | 'all_assistant';
+
+export type TrackerGenerationMode = 'full' | 'sequential-parts';
 
 export interface Schema {
   name: string;
@@ -51,9 +64,72 @@ export interface EmbedSnapshotRegexTransformPreset {
   wrapInCodeFence?: boolean;
 }
 
+export interface TrackerModuleAutoSettings {
+  enabled: boolean;
+}
+
+export interface TrackerModuleSchemaSettings {
+  preset: string;
+  presets: Record<string, Schema>;
+}
+
+export interface TrackerModulePromptSettings {
+  prompt: string;
+  promptEngineeringMode: PromptEngineeringMode;
+  promptJson: string;
+  promptXml: string;
+  promptToon: string;
+}
+
+export interface TrackerModuleSystemPromptSettings {
+  mode: TrackerSystemPromptMode;
+  savedName: string;
+}
+
+export interface TrackerModuleConnectionSettings {
+  source: TrackerConnectionSource;
+  profileId: string;
+}
+
+export interface TrackerModuleGenerationSettings {
+  mode: TrackerGenerationMode;
+  maxResponseToken: number;
+  skipFirstXMessages: number;
+  includeLastXMessages: number;
+  skipCharacterCardInTrackerGeneration: boolean;
+  conversationRoleMode: TrackerGenerationConversationRoleMode;
+  worldInfoPolicyMode: TrackerWorldInfoPolicyMode;
+  worldInfoAllowlistBookNames: string[];
+  worldInfoAllowlistEntryIds: number[];
+}
+
+export interface TrackerModuleInjectionSettings {
+  includeLastXMessages: number;
+  embedRole: 'user' | 'assistant' | 'system';
+  embedAsCharacter: boolean;
+  snapshotHeader: string;
+  transformPreset: string;
+  transformPresets: Record<string, EmbedSnapshotRegexTransformPreset>;
+}
+
+export interface TrackerModule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  order: number;
+  auto: TrackerModuleAutoSettings;
+  schema: TrackerModuleSchemaSettings;
+  prompts: TrackerModulePromptSettings;
+  systemPrompt: TrackerModuleSystemPromptSettings;
+  connection: TrackerModuleConnectionSettings;
+  generation: TrackerModuleGenerationSettings;
+  injection: TrackerModuleInjectionSettings;
+}
+
 export interface ExtensionSettings {
   version: string;
   formatVersion: string;
+  modules: TrackerModule[];
   /** Controls whether tracker generation follows the live host connection or a pinned saved profile. */
   connectionSource: TrackerConnectionSource;
   profileId: string;
@@ -579,37 +655,20 @@ export const DEFAULT_SCHEMA_HTML = `<div class="ztracker_default_mes_template">
 <hr>`;
 
 const VERSION = '0.1.0';
-const FORMAT_VERSION = 'F_1.0';
+const FORMAT_VERSION = 'F_2.0';
 
-export const defaultSettings: ExtensionSettings = {
-  version: VERSION,
-  formatVersion: FORMAT_VERSION,
-  connectionSource: 'saved',
-  profileId: '',
-  trackerSystemPromptMode: 'profile',
-  trackerSystemPromptSavedName: '',
-  maxResponseToken: DEFAULT_MAX_RESPONSE_TOKEN,
-  autoMode: AutoModeOptions.NONE,
-  sequentialPartGeneration: false,
-  schemaPreset: 'default',
-  schemaPresets: {
+function createDefaultSchemaPresets(): Record<string, Schema> {
+  return {
     default: {
       name: 'Default',
       value: DEFAULT_SCHEMA_VALUE,
       html: DEFAULT_SCHEMA_HTML,
     },
-  },
-  prompt: DEFAULT_PROMPT,
-  skipFirstXMessages: DEFAULT_SKIP_FIRST_X_MESSAGES,
-  includeLastXMessages: DEFAULT_INCLUDE_LAST_X_MESSAGES,
-  skipCharacterCardInTrackerGeneration: false,
-  trackerGenerationConversationRoleMode: 'preserve',
-  includeLastXZTrackerMessages: DEFAULT_INCLUDE_LAST_ZTRACKER_MESSAGES,
-  embedZTrackerRole: 'user',
-  embedZTrackerAsCharacter: false,
-  embedZTrackerSnapshotHeader: DEFAULT_EMBED_SNAPSHOT_HEADER,
-  embedZTrackerSnapshotTransformPreset: 'default',
-  embedZTrackerSnapshotTransformPresets: {
+  };
+}
+
+function createDefaultEmbedSnapshotTransformPresets(): Record<string, EmbedSnapshotRegexTransformPreset> {
+  return {
     default: {
       name: 'Default (JSON)',
       input: 'pretty_json',
@@ -637,7 +696,251 @@ export const defaultSettings: ExtensionSettings = {
       codeFenceLang: 'toon',
       wrapInCodeFence: true,
     },
-  },
+  };
+}
+
+function cloneSettingsValue<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+export function createDefaultTrackerModule(options: Partial<Pick<TrackerModule, 'id' | 'name' | 'order'>> = {}): TrackerModule {
+  return {
+    id: options.id ?? DEFAULT_MODULE_ID,
+    name: options.name ?? 'Default',
+    enabled: true,
+    order: options.order ?? 0,
+    auto: {
+      enabled: false,
+    },
+    schema: {
+      preset: 'default',
+      presets: createDefaultSchemaPresets(),
+    },
+    prompts: {
+      prompt: DEFAULT_PROMPT,
+      promptEngineeringMode: PromptEngineeringMode.NATIVE,
+      promptJson: DEFAULT_PROMPT_JSON,
+      promptXml: DEFAULT_PROMPT_XML,
+      promptToon: DEFAULT_PROMPT_TOON,
+    },
+    systemPrompt: {
+      mode: 'profile',
+      savedName: '',
+    },
+    connection: {
+      source: 'saved',
+      profileId: '',
+    },
+    generation: {
+      mode: 'full',
+      maxResponseToken: DEFAULT_MAX_RESPONSE_TOKEN,
+      skipFirstXMessages: DEFAULT_SKIP_FIRST_X_MESSAGES,
+      includeLastXMessages: DEFAULT_INCLUDE_LAST_X_MESSAGES,
+      skipCharacterCardInTrackerGeneration: false,
+      conversationRoleMode: 'preserve',
+      worldInfoPolicyMode: TrackerWorldInfoPolicyMode.INCLUDE_ALL,
+      worldInfoAllowlistBookNames: [],
+      worldInfoAllowlistEntryIds: [],
+    },
+    injection: {
+      includeLastXMessages: DEFAULT_INCLUDE_LAST_ZTRACKER_MESSAGES,
+      embedRole: 'user',
+      embedAsCharacter: false,
+      snapshotHeader: DEFAULT_EMBED_SNAPSHOT_HEADER,
+      transformPreset: 'default',
+      transformPresets: createDefaultEmbedSnapshotTransformPresets(),
+    },
+  };
+}
+
+export function createTrackerModuleFromLegacySettings(
+  settings: Partial<ExtensionSettings>,
+  options: Partial<Pick<TrackerModule, 'id' | 'name' | 'order'>> = {},
+): TrackerModule {
+  const module = createDefaultTrackerModule(options);
+  module.connection.source = settings.connectionSource ?? module.connection.source;
+  module.connection.profileId = settings.profileId ?? module.connection.profileId;
+  module.systemPrompt.mode = settings.trackerSystemPromptMode ?? module.systemPrompt.mode;
+  module.systemPrompt.savedName = settings.trackerSystemPromptSavedName ?? module.systemPrompt.savedName;
+  module.generation.maxResponseToken = settings.maxResponseToken ?? module.generation.maxResponseToken;
+  module.generation.mode = settings.sequentialPartGeneration ? 'sequential-parts' : 'full';
+  module.generation.skipFirstXMessages = settings.skipFirstXMessages ?? module.generation.skipFirstXMessages;
+  module.generation.includeLastXMessages = settings.includeLastXMessages ?? module.generation.includeLastXMessages;
+  module.generation.skipCharacterCardInTrackerGeneration =
+    settings.skipCharacterCardInTrackerGeneration ?? module.generation.skipCharacterCardInTrackerGeneration;
+  module.generation.conversationRoleMode =
+    settings.trackerGenerationConversationRoleMode ?? module.generation.conversationRoleMode;
+  module.generation.worldInfoPolicyMode = settings.trackerWorldInfoPolicyMode ?? module.generation.worldInfoPolicyMode;
+  module.generation.worldInfoAllowlistBookNames = cloneSettingsValue(
+    settings.trackerWorldInfoAllowlistBookNames ?? module.generation.worldInfoAllowlistBookNames,
+  );
+  module.generation.worldInfoAllowlistEntryIds = cloneSettingsValue(
+    settings.trackerWorldInfoAllowlistEntryIds ?? module.generation.worldInfoAllowlistEntryIds,
+  );
+  module.auto.enabled = settings.autoMode !== undefined && settings.autoMode !== AutoModeOptions.NONE;
+  module.schema.preset = settings.schemaPreset ?? module.schema.preset;
+  module.schema.presets = cloneSettingsValue(settings.schemaPresets ?? module.schema.presets);
+  module.prompts.prompt = settings.prompt ?? module.prompts.prompt;
+  module.prompts.promptEngineeringMode = settings.promptEngineeringMode ?? module.prompts.promptEngineeringMode;
+  module.prompts.promptJson = settings.promptJson ?? module.prompts.promptJson;
+  module.prompts.promptXml = settings.promptXml ?? module.prompts.promptXml;
+  module.prompts.promptToon = settings.promptToon ?? module.prompts.promptToon;
+  module.injection.includeLastXMessages =
+    settings.includeLastXZTrackerMessages ?? module.injection.includeLastXMessages;
+  module.injection.embedRole = settings.embedZTrackerRole ?? module.injection.embedRole;
+  module.injection.embedAsCharacter = settings.embedZTrackerAsCharacter ?? module.injection.embedAsCharacter;
+  module.injection.snapshotHeader = settings.embedZTrackerSnapshotHeader ?? module.injection.snapshotHeader;
+  module.injection.transformPreset = settings.embedZTrackerSnapshotTransformPreset ?? module.injection.transformPreset;
+  module.injection.transformPresets = cloneSettingsValue(
+    settings.embedZTrackerSnapshotTransformPresets ?? module.injection.transformPresets,
+  );
+  return module;
+}
+
+export function getTrackerModule(settings: ExtensionSettings, moduleId = DEFAULT_MODULE_ID): TrackerModule {
+  return settings.modules?.find((module) => module.id === moduleId)
+    ?? settings.modules?.[0]
+    ?? createTrackerModuleFromLegacySettings(settings, { id: DEFAULT_MODULE_ID, name: 'Default', order: 0 });
+}
+
+export function getOrderedTrackerModules(settings: ExtensionSettings, options: { includeDisabled?: boolean } = {}): TrackerModule[] {
+  const modules = settings.modules?.length
+    ? settings.modules
+    : [getTrackerModule(settings, DEFAULT_MODULE_ID)];
+  return [...modules]
+    .filter((module) => options.includeDisabled || module.enabled)
+    .sort((left, right) => left.order - right.order);
+}
+
+export function getSettingsForTrackerModule(settings: ExtensionSettings, moduleId = DEFAULT_MODULE_ID): ExtensionSettings {
+  const module = getTrackerModule(settings, moduleId);
+  return {
+    ...settings,
+    connectionSource: module.connection.source,
+    profileId: module.connection.profileId,
+    trackerSystemPromptMode: module.systemPrompt.mode,
+    trackerSystemPromptSavedName: module.systemPrompt.savedName,
+    maxResponseToken: module.generation.maxResponseToken,
+    autoMode: module.auto.enabled ? settings.autoMode : AutoModeOptions.NONE,
+    sequentialPartGeneration: module.generation.mode === 'sequential-parts',
+    schemaPreset: module.schema.preset,
+    schemaPresets: module.schema.presets,
+    prompt: module.prompts.prompt,
+    skipFirstXMessages: module.generation.skipFirstXMessages,
+    includeLastXMessages: module.generation.includeLastXMessages,
+    skipCharacterCardInTrackerGeneration: module.generation.skipCharacterCardInTrackerGeneration,
+    trackerGenerationConversationRoleMode: module.generation.conversationRoleMode,
+    includeLastXZTrackerMessages: module.injection.includeLastXMessages,
+    embedZTrackerRole: module.injection.embedRole,
+    embedZTrackerAsCharacter: module.injection.embedAsCharacter,
+    embedZTrackerSnapshotHeader: module.injection.snapshotHeader,
+    embedZTrackerSnapshotTransformPreset: module.injection.transformPreset,
+    embedZTrackerSnapshotTransformPresets: module.injection.transformPresets,
+    promptEngineeringMode: module.prompts.promptEngineeringMode,
+    promptJson: module.prompts.promptJson,
+    promptXml: module.prompts.promptXml,
+    promptToon: module.prompts.promptToon,
+    trackerWorldInfoPolicyMode: module.generation.worldInfoPolicyMode,
+    trackerWorldInfoAllowlistBookNames: module.generation.worldInfoAllowlistBookNames,
+    trackerWorldInfoAllowlistEntryIds: module.generation.worldInfoAllowlistEntryIds,
+  };
+}
+
+export function createTrackerModuleId(existingModules: Array<Pick<TrackerModule, 'id'>>, base = 'module'): string {
+  const usedIds = new Set(existingModules.map((module) => module.id));
+  const normalizedBase = base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'module';
+  let id = normalizedBase;
+  let suffix = 2;
+  while (usedIds.has(id)) {
+    id = `${normalizedBase}-${suffix}`;
+    suffix += 1;
+  }
+  return id;
+}
+
+export function applySettingsToTrackerModule(module: TrackerModule, settings: ExtensionSettings): void {
+  module.connection.source = settings.connectionSource;
+  module.connection.profileId = settings.profileId;
+  module.systemPrompt.mode = settings.trackerSystemPromptMode;
+  module.systemPrompt.savedName = settings.trackerSystemPromptSavedName;
+  module.generation.maxResponseToken = settings.maxResponseToken;
+  module.auto.enabled = settings.autoMode !== AutoModeOptions.NONE;
+  module.generation.mode = settings.sequentialPartGeneration ? 'sequential-parts' : 'full';
+  module.schema.preset = settings.schemaPreset;
+  module.schema.presets = cloneSettingsValue(settings.schemaPresets);
+  module.prompts.prompt = settings.prompt;
+  module.prompts.promptEngineeringMode = settings.promptEngineeringMode;
+  module.prompts.promptJson = settings.promptJson;
+  module.prompts.promptXml = settings.promptXml;
+  module.prompts.promptToon = settings.promptToon;
+  module.generation.skipFirstXMessages = settings.skipFirstXMessages;
+  module.generation.includeLastXMessages = settings.includeLastXMessages;
+  module.generation.skipCharacterCardInTrackerGeneration = settings.skipCharacterCardInTrackerGeneration;
+  module.generation.conversationRoleMode = settings.trackerGenerationConversationRoleMode;
+  module.injection.includeLastXMessages = settings.includeLastXZTrackerMessages;
+  module.injection.embedRole = settings.embedZTrackerRole;
+  module.injection.embedAsCharacter = settings.embedZTrackerAsCharacter;
+  module.injection.snapshotHeader = settings.embedZTrackerSnapshotHeader;
+  module.injection.transformPreset = settings.embedZTrackerSnapshotTransformPreset;
+  module.injection.transformPresets = cloneSettingsValue(settings.embedZTrackerSnapshotTransformPresets);
+  module.generation.worldInfoPolicyMode = settings.trackerWorldInfoPolicyMode;
+  module.generation.worldInfoAllowlistBookNames = cloneSettingsValue(settings.trackerWorldInfoAllowlistBookNames);
+  module.generation.worldInfoAllowlistEntryIds = cloneSettingsValue(settings.trackerWorldInfoAllowlistEntryIds);
+}
+
+export function purgeTrackerModuleDataFromChat(chat: Array<{ extra?: Record<string, any> }> | undefined, moduleId: string): number {
+  if (!Array.isArray(chat)) {
+    return 0;
+  }
+
+  let purgedCount = 0;
+  for (const message of chat) {
+    const modules = message?.extra?.[EXTENSION_KEY]?.byId;
+    if (modules && typeof modules === 'object' && !Array.isArray(modules) && Object.prototype.hasOwnProperty.call(modules, moduleId)) {
+      delete modules[moduleId];
+      purgedCount += 1;
+    }
+  }
+  return purgedCount;
+}
+
+/** Seeds the Module collection from legacy flat settings during the one-way format upgrade. */
+export function migrateLegacySettingsToModules(settings: ExtensionSettings): boolean {
+  if (settings.formatVersion === FORMAT_VERSION && Array.isArray(settings.modules) && settings.modules.length > 0) {
+    return false;
+  }
+
+  settings.modules = [createTrackerModuleFromLegacySettings(settings, { id: DEFAULT_MODULE_ID, name: 'Default', order: 0 })];
+  settings.formatVersion = FORMAT_VERSION;
+  return true;
+}
+
+const defaultTrackerModule = createDefaultTrackerModule();
+
+export const defaultSettings: ExtensionSettings = {
+  version: VERSION,
+  formatVersion: FORMAT_VERSION,
+  modules: [defaultTrackerModule],
+  connectionSource: 'saved',
+  profileId: '',
+  trackerSystemPromptMode: 'profile',
+  trackerSystemPromptSavedName: '',
+  maxResponseToken: DEFAULT_MAX_RESPONSE_TOKEN,
+  autoMode: AutoModeOptions.NONE,
+  sequentialPartGeneration: false,
+  schemaPreset: 'default',
+  schemaPresets: defaultTrackerModule.schema.presets,
+  prompt: DEFAULT_PROMPT,
+  skipFirstXMessages: DEFAULT_SKIP_FIRST_X_MESSAGES,
+  includeLastXMessages: DEFAULT_INCLUDE_LAST_X_MESSAGES,
+  skipCharacterCardInTrackerGeneration: false,
+  trackerGenerationConversationRoleMode: 'preserve',
+  includeLastXZTrackerMessages: DEFAULT_INCLUDE_LAST_ZTRACKER_MESSAGES,
+  embedZTrackerRole: 'user',
+  embedZTrackerAsCharacter: false,
+  embedZTrackerSnapshotHeader: DEFAULT_EMBED_SNAPSHOT_HEADER,
+  embedZTrackerSnapshotTransformPreset: 'default',
+  embedZTrackerSnapshotTransformPresets: defaultTrackerModule.injection.transformPresets,
   promptEngineeringMode: PromptEngineeringMode.NATIVE,
   promptJson: DEFAULT_PROMPT_JSON,
   promptXml: DEFAULT_PROMPT_XML,

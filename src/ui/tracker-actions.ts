@@ -1,5 +1,16 @@
 import type { ExtensionSettings } from '../config.js';
-import { PromptEngineeringMode, TrackerWorldInfoPolicyMode, EXTENSION_KEY, extensionName } from '../config.js';
+import {
+  PromptEngineeringMode,
+  TrackerWorldInfoPolicyMode,
+  DEFAULT_MODULE_ID,
+  EXTENSION_KEY,
+  extensionName,
+  getOrderedTrackerModules,
+  getSettingsForTrackerModule,
+  getModuleChatMetadataRecord,
+  readModuleChatSchemaPresetKey,
+  writeModuleChatSchemaPresetKey,
+} from '../config.js';
 import type { ExtensionSettingsManager } from 'sillytavern-utils-lib';
 import { buildPrompt, Generator, getWorldInfos, Message } from 'sillytavern-utils-lib';
 import type { ExtractedData } from 'sillytavern-utils-lib/types';
@@ -24,6 +35,7 @@ import {
   CHAT_MESSAGE_PARTS_ORDER_KEY,
   extractLeadingSystemPrompt,
   includeZTrackerMessages,
+  getTrackerModuleRecord,
   normalizeTrackerGenerationConversationRoles,
   sanitizeMessagesForGeneration,
 } from '../tracker.js';
@@ -88,13 +100,20 @@ interface TextCompletionStoryStringFormatter {
 
 /** Describes the shared full-generation status-indicator options used by manual tracker runs. */
 type GenerateTrackerOptions = {
+  moduleId?: string;
   silent?: boolean;
   showStatusIndicator?: boolean;
+};
+
+type GenerateTrackersForMessageOptions = Omit<GenerateTrackerOptions, 'moduleId'> & {
+  autoOnly?: boolean;
+  moduleIds?: string[];
 };
 
 /** Carries one persisted tracker update through render validation, save, and rollback handling. */
 type PersistTrackerUpdateOptions = {
   messageId: number;
+  moduleId?: string;
   message: unknown;
   schemaPresetKey: string;
   trackerData: unknown;
@@ -140,7 +159,7 @@ const TRACKER_RENDER_FAILURE_MESSAGE = 'Generated data failed to render with the
 
 /** Defines the callback contract consumed by the extracted context-menu tracker actions module. */
 export type ContextMenuTrackerActionsDependencies = {
-  cancelIfPending: (messageId: number) => boolean;
+  cancelIfPending: (messageId: number, moduleId?: string) => boolean;
   getTrackerPrompt: () => string;
   prepareExistingTrackerGeneration: (
     messageId: number,
@@ -327,19 +346,30 @@ export function createTrackerActions(options: {
   settingsManager: ExtensionSettingsManager<ExtensionSettings>;
   generator: Generator;
   pendingRequests: Map<number, string>;
-  renderTrackerWithDeps: (messageId: number) => void;
+  renderTrackerWithDeps: (messageId: number, moduleId?: string) => void;
   importMetaUrl: string;
   beforeRequestStartHook?: () => void;
   textCompletionStoryStringFormatterLoader?: () => Promise<TextCompletionStoryStringFormatter | undefined>;
 }) {
   const { globalContext, settingsManager, generator, pendingRequests, renderTrackerWithDeps, importMetaUrl } = options;
-  const pendingSequences = new Map<number, { cancelled: boolean }>();
+  const pendingSequences = new Map<string, { cancelled: boolean }>();
+  const pendingRequestsByRun = new Map<string, string>();
   const localPendingRequestAborters = new Map<string, AbortController>();
   let nextLocalRequestId = 0;
   let beforeRequestStartHook = options.beforeRequestStartHook;
   const textCompletionStoryStringFormatterLoader = options.textCompletionStoryStringFormatterLoader;
   const { logPromptEngineeredRenderRollback, requestPromptEngineeredResponse } = createPromptEngineeringHelpers();
   const fullTrackerIndicatorText = 'Updating tracker';
+
+  function makeTrackerRunKey(messageId: number, moduleId = DEFAULT_MODULE_ID) {
+    return `${messageId}:${moduleId}`;
+  }
+
+  function getModuleStatusText(moduleId = DEFAULT_MODULE_ID) {
+    const module = getOrderedTrackerModules(settingsManager.getSettings(), { includeDisabled: true })
+      .find((candidate) => candidate.id === moduleId);
+    return module?.name ? `${fullTrackerIndicatorText}: ${module.name}` : fullTrackerIndicatorText;
+  }
 
   function resolveSchemaPreset(settings: ExtensionSettings, requestedKey?: string) {
     const presetKeys = Object.keys(settings.schemaPresets ?? {});
@@ -397,13 +427,10 @@ export function createTrackerActions(options: {
 
   function getActiveChatSchemaPreset(settings: ExtensionSettings) {
     const chatMetadata = SillyTavern.getContext().chatMetadata;
-    const extensionMetadata = chatMetadata?.[EXTENSION_KEY];
 
     return resolveSchemaPreset(
       settings,
-      typeof extensionMetadata?.[CHAT_METADATA_SCHEMA_PRESET_KEY] === 'string'
-        ? extensionMetadata[CHAT_METADATA_SCHEMA_PRESET_KEY]
-        : undefined,
+      readModuleChatSchemaPresetKey(chatMetadata),
     );
   }
 
@@ -611,8 +638,8 @@ export function createTrackerActions(options: {
     };
   }
 
-  function hasStoredTracker(messageId: number) {
-    return Boolean(globalContext.chat[messageId]?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY]);
+  function hasStoredTracker(messageId: number, moduleId = DEFAULT_MODULE_ID) {
+    return Boolean(getTrackerModuleRecord(globalContext.chat[messageId], moduleId)?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY]);
   }
 
   function notifyIfExistingTrackerUsesOlderSchema(settings: ExtensionSettings, messageSchemaPresetKey: string) {
@@ -690,7 +717,7 @@ export function createTrackerActions(options: {
     }
 
     return withMessageStatusIndicator(
-      { messageId, text: fullTrackerIndicatorText, statusClassName: FULL_TRACKER_STATUS_CLASS },
+      { messageId, text: getModuleStatusText(options?.moduleId), statusClassName: FULL_TRACKER_STATUS_CLASS },
       callback,
     );
   };
@@ -701,6 +728,7 @@ export function createTrackerActions(options: {
 
     try {
       rollbackTrackerUpdate = applyTrackerUpdateAndRender(options.message as any, {
+        moduleId: options.moduleId,
         trackerData: options.trackerData,
         trackerHtml: options.trackerHtml,
         extensionData: {
@@ -709,7 +737,7 @@ export function createTrackerActions(options: {
           partsMeta: options.partsMeta,
           ...(options.extensionData ?? {}),
         },
-        render: () => renderTrackerWithDeps(options.messageId),
+        render: (moduleId) => renderTrackerWithDeps(options.messageId, moduleId),
       });
       restoreDetailsState(options.messageId, options.detailsState);
     } catch {
@@ -789,6 +817,7 @@ export function createTrackerActions(options: {
    */
   async function sendTextCompletionTrackerRequest(options: {
     messageId: number;
+    runKey: string;
     profile: any;
     connectionSource: 'active' | 'saved';
     selectedApiType: string | undefined;
@@ -830,6 +859,7 @@ export function createTrackerActions(options: {
     const abortController = new AbortController();
     const requestId = createLocalRequestId(options.messageId);
     pendingRequests.set(options.messageId, requestId);
+    pendingRequestsByRun.set(options.runKey, requestId);
     localPendingRequestAborters.set(requestId, abortController);
 
     try {
@@ -899,27 +929,47 @@ export function createTrackerActions(options: {
       );
     } finally {
       localPendingRequestAborters.delete(requestId);
+      pendingRequestsByRun.delete(options.runKey);
       pendingRequests.delete(options.messageId);
     }
   }
 
-  function cancelIfPending(messageId: number): boolean {
-    const token = pendingSequences.get(messageId);
+  function cancelRequestId(requestId: string) {
+    const localAbortController = localPendingRequestAborters.get(requestId);
+    if (localAbortController) {
+      localAbortController.abort();
+    } else {
+      generator.abortRequest(requestId);
+    }
+  }
+
+  function cancelIfPending(messageId: number, moduleId?: string): boolean {
+    const runKeys = moduleId
+      ? [makeTrackerRunKey(messageId, moduleId)]
+      : [...pendingSequences.keys(), ...pendingRequestsByRun.keys()]
+        .filter((key, index, keys) => key.startsWith(`${messageId}:`) && keys.indexOf(key) === index);
     let cancelled = false;
 
-    if (token) {
+    for (const runKey of runKeys) {
+      const token = pendingSequences.get(runKey);
+      const requestId = pendingRequestsByRun.get(runKey);
+
+      if (requestId) {
+        cancelRequestId(requestId);
+        cancelled = true;
+      }
+
+      if (!token) {
+        continue;
+      }
+
       token.cancelled = true;
       cancelled = true;
     }
 
-    if (pendingRequests.has(messageId)) {
+    if (!moduleId && pendingRequests.has(messageId)) {
       const requestId = pendingRequests.get(messageId)!;
-      const localAbortController = localPendingRequestAborters.get(requestId);
-      if (localAbortController) {
-        localAbortController.abort();
-      } else {
-        generator.abortRequest(requestId);
-      }
+      cancelRequestId(requestId);
       cancelled = true;
     }
 
@@ -932,8 +982,8 @@ export function createTrackerActions(options: {
   }
 
   /** Cancels the currently pending tracker run for a message, if one exists. */
-  function cancelTracker(messageId: number): boolean {
-    return cancelIfPending(messageId);
+  function cancelTracker(messageId: number, moduleId?: string): boolean {
+    return cancelIfPending(messageId, moduleId);
   }
 
   const {
@@ -956,7 +1006,7 @@ export function createTrackerActions(options: {
   function makeRequestFactory(
     messageId: number,
     settings: ExtensionSettings,
-    options: { instructName?: string; resolvedConnection?: ResolvedTrackerConnection } = {},
+    options: { instructName?: string; resolvedConnection?: ResolvedTrackerConnection; moduleId?: string } = {},
   ) {
     return (requestMessages: Message[], overideParams?: any): Promise<ExtractedData | undefined> => {
       return new Promise((resolve, reject) => {
@@ -972,6 +1022,7 @@ export function createTrackerActions(options: {
           };
         };
         const resolvedConnection = options.resolvedConnection ?? resolveTrackerConnection(settings, context);
+        const runKey = makeTrackerRunKey(messageId, options.moduleId);
         const profile = resolvedConnection.profile;
         const selectedApiMap = resolvedConnection.apiMap;
         const selectedApi = selectedApiMap?.selected;
@@ -1005,6 +1056,7 @@ export function createTrackerActions(options: {
           if (selectedApi === 'textgenerationwebui') {
             void sendTextCompletionTrackerRequest({
               messageId,
+              runKey,
               profile,
               connectionSource: resolvedConnection.source,
               selectedApiType: selectedApiMap?.type,
@@ -1034,8 +1086,10 @@ export function createTrackerActions(options: {
               abortController,
               onStart: (requestId: string) => {
                 pendingRequests.set(messageId, requestId);
+                pendingRequestsByRun.set(runKey, requestId);
               },
               onFinish: (requestId: string, data: unknown, error: unknown) => {
+                pendingRequestsByRun.delete(runKey);
                 pendingRequests.delete(messageId);
                 if (error) return reject(error);
                 if (!data) return reject(new DOMException('Request aborted by user', 'AbortError'));
@@ -1050,27 +1104,28 @@ export function createTrackerActions(options: {
     };
   }
 
-  async function prepareTrackerGeneration(messageId: number, options?: { schemaPresetKey?: string }) {
+  async function prepareTrackerGeneration(messageId: number, options?: { schemaPresetKey?: string; moduleId?: string }) {
     const message = globalContext.chat[messageId];
     if (!message) {
       throw new Error(`Message with ID ${messageId} not found.`);
     }
 
-    const settings = settingsManager.getSettings();
+    const moduleId = options?.moduleId ?? DEFAULT_MODULE_ID;
+    const settings = getSettingsForTrackerModule(settingsManager.getSettings(), moduleId);
     const context = SillyTavern.getContext();
     const chatMetadata = context.chatMetadata;
     const resolvedConnection = resolveTrackerConnection(settings, context);
     const { profile, apiMap } = resolvedConnection;
 
-    chatMetadata[EXTENSION_KEY] = chatMetadata[EXTENSION_KEY] || {};
-    const storedChatSchemaPresetKey = chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY];
+    getModuleChatMetadataRecord(chatMetadata, moduleId, true);
+    const storedChatSchemaPresetKey = readModuleChatSchemaPresetKey(chatMetadata, moduleId);
     const shouldPersistChatSchemaPreset = options?.schemaPresetKey === undefined;
     const { schemaPresetKey, schemaPreset } = resolveSchemaPreset(
       settings,
       options?.schemaPresetKey ?? (typeof storedChatSchemaPresetKey === 'string' ? storedChatSchemaPresetKey : undefined),
     );
     if (shouldPersistChatSchemaPreset && storedChatSchemaPresetKey !== schemaPresetKey) {
-      chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] = schemaPresetKey;
+      writeModuleChatSchemaPresetKey(chatMetadata, schemaPresetKey, moduleId);
       if (typeof (context as any).saveMetadataDebounced === 'function') {
         (context as any).saveMetadataDebounced();
       }
@@ -1284,7 +1339,8 @@ export function createTrackerActions(options: {
   }
 
   async function generateTrackerFull(id: number, options?: GenerateTrackerOptions) {
-    if (cancelIfPending(id)) return false;
+    const moduleId = options?.moduleId ?? DEFAULT_MODULE_ID;
+    if (cancelIfPending(id, moduleId)) return false;
 
     debugLog(settingsManager, 'generateTracker start', {
       mesId: id,
@@ -1296,9 +1352,10 @@ export function createTrackerActions(options: {
     const regenerateButton = messageBlock?.querySelector('.ztracker-regenerate-button');
     const detailsState = captureDetailsState(id);
     const token = { cancelled: false };
+    const runKey = makeTrackerRunKey(id, moduleId);
     let activeSchemaPresetLabel: string | undefined;
 
-    pendingSequences.set(id, token);
+    pendingSequences.set(runKey, token);
 
     try {
       mainButton?.classList.add('spinning');
@@ -1314,7 +1371,7 @@ export function createTrackerActions(options: {
           chatHtmlValue,
           messages,
           transportInstructName,
-        } = await prepareTrackerGeneration(id);
+        } = await prepareTrackerGeneration(id, { moduleId });
         if (token.cancelled) {
           return false;
         }
@@ -1324,6 +1381,7 @@ export function createTrackerActions(options: {
         const makeRequest = makeRequestFactory(id, settings, {
           instructName: transportInstructName,
           resolvedConnection,
+          moduleId,
         });
         const response = (await requestStructuredTrackerContent({
           messages,
@@ -1342,6 +1400,7 @@ export function createTrackerActions(options: {
 
         await persistTrackerUpdate({
           messageId: id,
+          moduleId,
           message,
           schemaPresetKey,
           trackerData: response,
@@ -1360,14 +1419,15 @@ export function createTrackerActions(options: {
       }
       return false;
     } finally {
-      pendingSequences.delete(id);
+      pendingSequences.delete(runKey);
       mainButton?.classList.remove('spinning');
       regenerateButton?.classList.remove('spinning');
     }
   }
 
   async function generateTrackerSequential(id: number, options?: GenerateTrackerOptions) {
-    if (cancelIfPending(id)) return false;
+    const moduleId = options?.moduleId ?? DEFAULT_MODULE_ID;
+    if (cancelIfPending(id, moduleId)) return false;
     const messageBlock = document.querySelector(`.mes[mesid="${id}"]`);
     const mainButton = messageBlock?.querySelector('.mes_ztracker_button');
     const regenerateButton = messageBlock?.querySelector('.ztracker-regenerate-button');
@@ -1375,7 +1435,8 @@ export function createTrackerActions(options: {
     let activeSchemaPresetLabel: string | undefined;
 
     const token = { cancelled: false };
-    pendingSequences.set(id, token);
+  const runKey = makeTrackerRunKey(id, moduleId);
+  pendingSequences.set(runKey, token);
 
     try {
       mainButton?.classList.add('spinning');
@@ -1391,7 +1452,7 @@ export function createTrackerActions(options: {
           chatHtmlValue,
           messages,
           transportInstructName,
-        } = await prepareTrackerGeneration(id);
+        } = await prepareTrackerGeneration(id, { moduleId });
         if (token.cancelled) {
           return false;
         }
@@ -1405,6 +1466,7 @@ export function createTrackerActions(options: {
         const makeRequest = makeRequestFactory(id, settings, {
           instructName: transportInstructName,
           resolvedConnection,
+          moduleId,
         });
         const baseMessages = structuredClone(messages) as Message[];
         let trackerData: any = {};
@@ -1450,6 +1512,7 @@ export function createTrackerActions(options: {
 
         await persistTrackerUpdate({
           messageId: id,
+          moduleId,
           message,
           schemaPresetKey,
           trackerData,
@@ -1469,7 +1532,7 @@ export function createTrackerActions(options: {
       }
       return false;
     } finally {
-      pendingSequences.delete(id);
+      pendingSequences.delete(runKey);
       mainButton?.classList.remove('spinning');
       regenerateButton?.classList.remove('spinning');
     }
@@ -1477,16 +1540,36 @@ export function createTrackerActions(options: {
 
   /** Dispatches full tracker generation while enforcing the shared skip-first-messages guard for manual and auto flows. */
   async function generateTracker(id: number, options?: GenerateTrackerOptions) {
-    const settings = settingsManager.getSettings();
-    const shouldRespectSkipFirstMessages = options?.silent || !hasStoredTracker(id);
+    const moduleId = options?.moduleId ?? DEFAULT_MODULE_ID;
+    const settings = getSettingsForTrackerModule(settingsManager.getSettings(), moduleId);
+    const shouldRespectSkipFirstMessages = options?.silent || !hasStoredTracker(id, moduleId);
     if (shouldRespectSkipFirstMessages && shouldSkipTrackerGeneration(id, settings, (message) => st_echo('info', message), options?.silent)) {
       return false;
     }
 
     if (settings.sequentialPartGeneration) {
-      return generateTrackerSequential(id, options);
+      return generateTrackerSequential(id, { ...options, moduleId });
     }
-    return generateTrackerFull(id, options);
+    return generateTrackerFull(id, { ...options, moduleId });
+  }
+
+  async function generateTrackersForMessage(id: number, options?: GenerateTrackersForMessageOptions) {
+    const moduleIds = options?.moduleIds ? new Set(options.moduleIds) : undefined;
+    const modules = getOrderedTrackerModules(settingsManager.getSettings())
+      .filter((module) => !moduleIds || moduleIds.has(module.id))
+      .filter((module) => !options?.autoOnly || module.auto.enabled);
+
+    let allSucceeded = true;
+    for (const module of modules) {
+      const succeeded = await generateTracker(id, {
+        silent: options?.silent,
+        showStatusIndicator: options?.showStatusIndicator,
+        moduleId: module.id,
+      });
+      allSucceeded = allSucceeded && succeeded;
+    }
+
+    return allSucceeded;
   }
 
   async function clearTrackerTargetsOnly(messageId: number, targets: TrackerCleanupTarget[]): Promise<TrackerCleanupTarget[]> {
@@ -1649,17 +1732,12 @@ export function createTrackerActions(options: {
     const settings = settingsManager.getSettings();
     const context = SillyTavern.getContext();
     const chatMetadata = context.chatMetadata;
-    if (!chatMetadata[EXTENSION_KEY]) {
-      chatMetadata[EXTENSION_KEY] = {};
-    }
     const { schemaPresetKey: currentPresetKey } = resolveSchemaPreset(
       settings,
-      typeof chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] === 'string'
-        ? chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY]
-        : undefined,
+      readModuleChatSchemaPresetKey(chatMetadata),
     );
-    if (chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] !== currentPresetKey) {
-      chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] = currentPresetKey;
+    if (readModuleChatSchemaPresetKey(chatMetadata) !== currentPresetKey) {
+      writeModuleChatSchemaPresetKey(chatMetadata, currentPresetKey);
       context.saveMetadataDebounced();
     }
 
@@ -1704,7 +1782,7 @@ export function createTrackerActions(options: {
           if (selectElement) {
             const newPresetKey = selectElement.value;
             if (newPresetKey !== currentPresetKey) {
-              chatMetadata[EXTENSION_KEY][CHAT_METADATA_SCHEMA_PRESET_KEY] = newPresetKey;
+              writeModuleChatSchemaPresetKey(chatMetadata, newPresetKey);
               context.saveMetadataDebounced();
               st_echo(
                 'success',
@@ -1722,6 +1800,7 @@ export function createTrackerActions(options: {
     deleteTracker,
     editTracker,
     generateTracker,
+    generateTrackersForMessage,
     openTrackerCleanup,
     generateTrackerPart,
     generateTrackerArrayItem,
