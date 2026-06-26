@@ -11,6 +11,7 @@ const saveSettingsMock = jest.fn();
 const stEchoMock = jest.fn();
 const createObjectUrlMock = jest.fn(() => 'blob:module');
 const revokeObjectUrlMock = jest.fn();
+const readTextFileViaPickerMock = jest.fn<() => Promise<string | null>>();
 let sillyTavernContext: any;
 const profileSelectMock = jest.fn(({ initialSelectedProfileId }: { initialSelectedProfileId?: string }) =>
   React.createElement('div', { 'data-testid': 'profile-select' }, initialSelectedProfileId ?? 'none'),
@@ -285,6 +286,10 @@ jest.unstable_mockModule('sillytavern-utils-lib/config', () => ({
   st_echo: stEchoMock,
 }));
 
+jest.unstable_mockModule('../file-picker.js', () => ({
+  readTextFileViaPicker: readTextFileViaPickerMock,
+}));
+
 jest.unstable_mockModule('sillytavern-utils-lib/components/react', () => ({
   STConnectionProfileSelect: profileSelectMock,
   STPresetSelect: presetSelectMock,
@@ -509,6 +514,8 @@ describe('zTracker settings connection source UI', () => {
     getSchemaDraftStateMock.mockClear();
     getSchemaHtmlDraftStateMock.mockClear();
     validateSchemaPresetDraftPairMock.mockClear();
+    readTextFileViaPickerMock.mockReset();
+    readTextFileViaPickerMock.mockResolvedValue(null);
     document.body.innerHTML = '<div id="root"></div>';
     sillyTavernContext = {
       chatMetadata: { zTracker: { schemaKey: 'default' } },
@@ -1095,7 +1102,7 @@ describe('zTracker settings connection source UI', () => {
 
   test('exports the selected module and imports valid module json', async () => {
     seedModuleSettings();
-    sillyTavernContext.Popup.show.input.mockResolvedValue(JSON.stringify({ module: { name: 'Imported', connection: { source: 'saved' } } }));
+    readTextFileViaPickerMock.mockResolvedValue(JSON.stringify({ module: { name: 'Imported', connection: { source: 'saved' } } }));
     const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
     const container = renderSettings();
 
@@ -1123,13 +1130,14 @@ describe('zTracker settings connection source UI', () => {
     expect(imported?.id).toBe('imported');
     expect(imported?.connection.source).toBe('saved');
     expect(imported?.enabled).toBe(true);
+    expect(stEchoMock).toHaveBeenCalledWith('success', 'Imported Module "Imported".');
 
     clickSpy.mockRestore();
   });
 
-  test('invalid module import shows a warning and does not change modules', async () => {
+  test('cancelled module import does not change modules', async () => {
     seedModuleSettings();
-    sillyTavernContext.Popup.show.input.mockResolvedValue('{bad json');
+    readTextFileViaPickerMock.mockResolvedValue(null);
     const container = renderSettings();
     const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Import');
     if (!(importButton instanceof HTMLButtonElement)) {
@@ -1142,7 +1150,26 @@ describe('zTracker settings connection source UI', () => {
     });
 
     expect(mockSettings.modules.map((module: any) => module.id)).toEqual(['default', 'agenda']);
-    expect(stEchoMock).toHaveBeenCalledWith('warning', 'The pasted Module JSON could not be imported.');
+    expect(stEchoMock).not.toHaveBeenCalled();
+    expect(saveSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test('invalid module import shows a warning and does not change modules', async () => {
+    seedModuleSettings();
+    readTextFileViaPickerMock.mockResolvedValue('{bad json');
+    const container = renderSettings();
+    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Import');
+    if (!(importButton instanceof HTMLButtonElement)) {
+      throw new Error('Import button not found');
+    }
+
+    await act(async () => {
+      importButton.click();
+      await Promise.resolve();
+    });
+
+    expect(mockSettings.modules.map((module: any) => module.id)).toEqual(['default', 'agenda']);
+    expect(stEchoMock).toHaveBeenCalledWith('warning', 'The selected file is not a valid zTracker Module export.');
     expect(saveSettingsMock).not.toHaveBeenCalled();
   });
 });

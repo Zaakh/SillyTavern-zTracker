@@ -1,6 +1,7 @@
 import { DEFAULT_EMBED_SNAPSHOT_HEADER } from '../config.js';
 import type { ExtensionSettings } from '../config.js';
 import type { ExtensionSettingsManager } from 'sillytavern-utils-lib';
+import { normalizePromptSpeakerName } from '../tracker.js';
 
 export type PromptDebugMessage = {
   role: string;
@@ -65,11 +66,7 @@ function toPromptDebugMessage(message: {
   ignoreInstruct?: boolean;
   source?: { name?: string };
 }): PromptDebugMessage {
-  const name = typeof message.name === 'string' && message.name.trim()
-    ? message.name
-    : typeof message.source?.name === 'string' && message.source.name.trim()
-      ? message.source.name
-      : undefined;
+  const name = normalizePromptSpeakerName(message.name) ?? normalizePromptSpeakerName(message.source?.name);
 
   return {
     role: message.role,

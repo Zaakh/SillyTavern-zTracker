@@ -522,6 +522,45 @@ describe('includeZTrackerMessages', () => {
     expect(result[2].content).toMatch(/\nBar:$/);
   });
 
+  it('does not synthesize a terminal assistant cue from a generic assistant label', () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'Bar: As you enter the bar you realize you are the only customer.',
+        source: {
+          name: 'assistant',
+        },
+      },
+      {
+        is_user: true,
+        mes: 'Tobias: "I do not really care."',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer declined the topic.',
+            },
+          },
+        },
+      },
+    ];
+
+    const settings = makeSettings(1, 'assistant', true, 'Scene tracker:');
+    settings.embedZTrackerSnapshotTransformPreset = 'minimal';
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      settings,
+      { preserveTextCompletionTurnAlternation: true, isGroupChat: false },
+    ) as any[];
+
+    expect(result).toHaveLength(2);
+    expect(result[1].is_user).toBe(true);
+    expect(result[1].mes).toContain('Tobias: "I do not really care."\n\nScene tracker:\n');
+    expect(result[1].mes).not.toMatch(/\nassistant:$/);
+  });
+
   it('keeps terminal assistant virtual-character snapshots as assistant turns when the host confirms the solo reply label', () => {
     const messages = [
       {
@@ -837,6 +876,37 @@ describe('includeZTrackerMessages', () => {
       role: 'user',
       name: 'Tobias',
     });
+  });
+
+  it('does not promote generic role source names into text-completion speaker labels', () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'Bar: As you enter the bar you realize you are the only customer.',
+        source: {
+          name: 'assistant',
+          extra: {
+            [EXTENSION_KEY]: {
+              [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { id: 1 },
+            },
+          },
+        },
+      },
+      {
+        role: 'user',
+        content: 'Tobias: "I do not really care."',
+        source: {
+          name: 'user',
+        },
+      },
+    ] as any;
+
+    const prompt = formatTextCompletionPrompt(includeZTrackerMessages(messages, makeSettings(1)) as any[]);
+
+    expect(prompt).not.toContain('assistant: Bar:');
+    expect(prompt).not.toContain('[INST]user: Tobias:');
+    expect(prompt).toContain('Bar: As you enter the bar you realize you are the only customer.</s>');
+    expect(prompt).toContain('[INST]Tobias: "I do not really care."[/INST]');
   });
 
   it('falls back to source message names when prompt-builder keeps speaker attribution there', () => {

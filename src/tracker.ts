@@ -464,16 +464,22 @@ function getMessageText(message: { content?: string; mes?: string }): string {
   return '';
 }
 
+function isGenericRoleSpeakerName(value: string): boolean {
+  return ['user', 'assistant', 'system'].includes(value.trim().toLowerCase());
+}
+
+// Host prompt builders may pass role markers as source.name; those are not display names.
+export function normalizePromptSpeakerName(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 && !isGenericRoleSpeakerName(trimmed) ? trimmed : undefined;
+}
+
 function getMessageSpeakerName(message: { name?: string; source?: { name?: string } }): string | undefined {
-  if (typeof message.name === 'string' && message.name.trim().length > 0) {
-    return message.name.trim();
-  }
-
-  if (typeof message.source?.name === 'string' && message.source.name.trim().length > 0) {
-    return message.source.name.trim();
-  }
-
-  return undefined;
+  return normalizePromptSpeakerName(message.name) ?? normalizePromptSpeakerName(message.source?.name);
 }
 
 function getSingleAssistantReplyLabel(
@@ -510,16 +516,20 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
   // SillyTavern sometimes keeps speaker attribution only on source.name.
   // Promote it onto cloned chat turns so instruct-mode prompt assembly can still emit named dialogue.
   const copyMessages = structuredClone(messages).map((message: T) => {
-    const fallbackName =
-      typeof (message as any).name === 'string' && (message as any).name.trim()
-        ? undefined
-        : typeof (message as any).source?.name === 'string' && (message as any).source.name.trim()
-          ? (message as any).source.name
-          : undefined;
+    const existingName = normalizePromptSpeakerName((message as any).name);
+    const sourceName = normalizePromptSpeakerName((message as any).source?.name);
+    const speakerName = existingName ?? sourceName;
 
-    return fallbackName
-      ? ({ ...message, name: fallbackName } as T)
-      : message;
+    if (speakerName) {
+      return (message as any).name === speakerName ? message : ({ ...message, name: speakerName } as T);
+    }
+
+    if (typeof (message as any).name === 'string' && isGenericRoleSpeakerName((message as any).name)) {
+      const { name: _discardedName, ...messageWithoutRoleName } = message as any;
+      return messageWithoutRoleName as T;
+    }
+
+    return message;
   });
   const embedRole = resolveEmbeddedTrackerRole(settings, options);
   const configuredAssistantReplyLabel =
@@ -768,11 +778,7 @@ export function sanitizeMessagesForGeneration<
   const alignedMessages = insertUserAlignmentMessage(messages, options);
 
   return alignedMessages.map((message) => {
-    const name = typeof message.name === 'string' && message.name.trim()
-      ? message.name
-      : typeof message.source?.name === 'string' && message.source.name.trim()
-        ? message.source.name
-        : undefined;
+    const name = normalizePromptSpeakerName(message.name) ?? normalizePromptSpeakerName(message.source?.name);
     const shouldInlineName =
       !!options.inlineNamesIntoContent &&
       !!name &&

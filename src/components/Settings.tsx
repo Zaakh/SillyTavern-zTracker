@@ -20,6 +20,7 @@ import {
   EXTENSION_KEY,
 } from '../config.js';
 import { useForceUpdate } from '../hooks/useForceUpdate.js';
+import { readTextFileViaPicker } from '../file-picker.js';
 import {
   getCurrentGlobalSystemPromptName,
   hasSystemPromptPreset,
@@ -644,22 +645,24 @@ export const ZTrackerSettings: FC = () => {
   };
 
   const importModule = async () => {
-    const importedText = await SillyTavern.getContext().Popup.show.input(
-      'Import Module',
-      'Paste an exported zTracker Module JSON definition:',
-      '',
-    );
-    const importedModule = parseImportedTrackerModule(importedText ?? '');
+    const importedText = await readTextFileViaPicker('application/json,.json');
+    if (importedText === null) {
+      return;
+    }
+    const importedModule = parseImportedTrackerModule(importedText);
     if (!importedModule) {
-      await st_echo('warning', 'The pasted Module JSON could not be imported.');
+      await st_echo('warning', 'The selected file is not a valid zTracker Module export.');
       return;
     }
 
+    let importedName = '';
     updateModuleList((modules) => {
       const module = createImportedTrackerModule(importedModule, modules);
+      importedName = module.name;
       modules.push(module);
       return module.id;
     });
+    await st_echo('success', `Imported Module "${importedName}".`);
   };
 
   const selectedModuleIndex = orderedModules.findIndex((module) => module.id === selectedModule.id);
@@ -675,22 +678,33 @@ export const ZTrackerSettings: FC = () => {
           <div className="ztracker-container">
             <div className="setting-row">
               <label>Modules</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {orderedModules.map((module) => (
-                    <button
-                      key={module.id}
-                      type="button"
-                      className={`menu_button ${module.id === selectedModule.id ? 'active' : ''}`}
-                      style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}
-                      onClick={() => setSelectedModuleId(module.id)}
-                    >
-                      <span>{module.name}</span>
-                      <span>{module.enabled ? 'Enabled' : 'Disabled'}{module.auto.enabled ? ' / Auto' : ''}</span>
-                    </button>
-                  ))}
+              <div className="ztracker-module-manager">
+                <div className="ztracker-module-list">
+                  {orderedModules.map((module) => {
+                    const isSelected = module.id === selectedModule.id;
+                    return (
+                      <button
+                        key={module.id}
+                        type="button"
+                        aria-pressed={isSelected}
+                        className={`ztracker-module-row ${isSelected ? 'is-selected' : ''} ${module.enabled ? '' : 'is-disabled'}`}
+                        onClick={() => setSelectedModuleId(module.id)}
+                      >
+                        <span className="ztracker-module-row-marker fa-solid fa-pen" aria-hidden="true"></span>
+                        <span className="ztracker-module-row-name">{module.name}</span>
+                        <span className="ztracker-module-row-badges">
+                          <span className={`ztracker-module-badge ${module.enabled ? 'is-on' : 'is-off'}`}>
+                            {module.enabled ? 'Enabled' : 'Disabled'}
+                          </span>
+                          {module.auto.enabled && (
+                            <span className="ztracker-module-badge is-auto">Auto</span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                <div className="ztracker-module-actions">
                   <button type="button" className="menu_button" onClick={addModule}>Add</button>
                   <button type="button" className="menu_button" onClick={cloneModule}>Clone</button>
                   <button type="button" className="menu_button" disabled={selectedModuleIndex <= 0} onClick={() => moveSelectedModule(-1)}>Up</button>
@@ -702,19 +716,27 @@ export const ZTrackerSettings: FC = () => {
               </div>
             </div>
 
-            <div className="setting-row">
-              <label title="Human-readable Module name shown in settings and tracker output.">Module Name</label>
-              <input
-                className="text_pole"
-                value={selectedModule.name}
-                onChange={(e) => updateAndRefresh((currentSettings) => {
-                  const module = currentSettings.modules?.find((candidate) => candidate.id === selectedModule.id);
-                  if (module) {
-                    module.name = e.target.value;
-                  }
-                })}
-              />
-            </div>
+            <div className="ztracker-module-detail">
+              <div className="ztracker-module-detail-header">
+                <span className="fa-solid fa-pen-to-square" aria-hidden="true"></span>
+                <span>
+                  Editing module: <strong>{selectedModule.name}</strong>
+                </span>
+              </div>
+
+              <div className="setting-row">
+                <label title="Human-readable Module name shown in settings and tracker output.">Module Name</label>
+                <input
+                  className="text_pole"
+                  value={selectedModule.name}
+                  onChange={(e) => updateAndRefresh((currentSettings) => {
+                    const module = currentSettings.modules?.find((candidate) => candidate.id === selectedModule.id);
+                    if (module) {
+                      module.name = e.target.value;
+                    }
+                  })}
+                />
+              </div>
 
             <div className="setting-row">
               <label title="Controls whether this Module renders, injects context, and appears in manual generation actions.">Module Enabled</label>
@@ -833,6 +855,7 @@ export const ZTrackerSettings: FC = () => {
             >
               <TrackerInjectionSection settings={moduleSettings} updateAndRefresh={updateSelectedModuleAndRefresh} />
             </SettingsSectionDrawer>
+            </div>
 
             <DiagnosticsSection
               debugLogging={!!settings.debugLogging}
