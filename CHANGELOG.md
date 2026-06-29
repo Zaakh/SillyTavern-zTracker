@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Generating a non-default Module now uses that Module's own prior tracker context instead of injecting Default Module snapshots, preventing mismatched tracker output from being discarded.
 - Tracker injection no longer promotes generic `user`, `assistant`, or `system` role labels into speaker names, preventing duplicated prompt text such as `user: User:` inside an existing user turn.
 - Regenerating one Module now spins that Module's regenerate button instead of the first tracker block on the message.
 

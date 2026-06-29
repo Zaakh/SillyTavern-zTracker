@@ -368,6 +368,11 @@ export function createTrackerActions(options: {
     return `${messageId}:${moduleId}`;
   }
 
+  function getModuleDebugName(moduleId = DEFAULT_MODULE_ID) {
+    return getOrderedTrackerModules(settingsManager.getSettings(), { includeDisabled: true })
+      .find((candidate) => candidate.id === moduleId)?.name;
+  }
+
   function getModuleStatusText(moduleId = DEFAULT_MODULE_ID) {
     const module = getOrderedTrackerModules(settingsManager.getSettings(), { includeDisabled: true })
       .find((candidate) => candidate.id === moduleId);
@@ -682,6 +687,7 @@ export function createTrackerActions(options: {
         instructName: prepared.transportInstructName,
         resolvedConnection: prepared.resolvedConnection,
         moduleId,
+        moduleName: getModuleDebugName(moduleId),
       }),
     };
   };
@@ -1015,7 +1021,7 @@ export function createTrackerActions(options: {
   function makeRequestFactory(
     messageId: number,
     settings: TrackerModuleSettings,
-    options: { instructName?: string; resolvedConnection?: ResolvedTrackerConnection; moduleId?: string } = {},
+    options: { instructName?: string; resolvedConnection?: ResolvedTrackerConnection; moduleId?: string; moduleName?: string } = {},
   ) {
     return (requestMessages: Message[], overideParams?: any): Promise<ExtractedData | undefined> => {
       return new Promise((resolve, reject) => {
@@ -1045,6 +1051,8 @@ export function createTrackerActions(options: {
         });
         captureTrackerRequestDebugSnapshot(settingsManager, {
           messageId,
+          moduleId: options.moduleId,
+          moduleName: options.moduleName,
           connectionSource: resolvedConnection.source,
           profileId: resolvedConnection.profileId || '[active connection]',
           api: selectedApi,
@@ -1192,7 +1200,7 @@ export function createTrackerActions(options: {
       ...(skipCharacterCardInTrackerGeneration ? { ignoreCharacterFields: true } : {}),
     });
 
-    let messages = includeZTrackerMessages(promptResult.result, settings);
+    let messages = includeZTrackerMessages(promptResult.result, settings, { moduleId });
     messages = normalizeTrackerGenerationConversationRoles(messages, settings);
     debugLog(settingsManager, 'prompt built', {
       trackerGenerationConversationRoleMode: settings.trackerGenerationConversationRoleMode ?? 'preserve',
@@ -1410,6 +1418,7 @@ export function createTrackerActions(options: {
           instructName: transportInstructName,
           resolvedConnection,
           moduleId,
+          moduleName: getModuleDebugName(moduleId),
         });
         const response = (await requestStructuredTrackerContent({
           messages,
@@ -1495,6 +1504,7 @@ export function createTrackerActions(options: {
           instructName: transportInstructName,
           resolvedConnection,
           moduleId,
+          moduleName: getModuleDebugName(moduleId),
         });
         const baseMessages = structuredClone(messages) as Message[];
         let trackerData: any = {};

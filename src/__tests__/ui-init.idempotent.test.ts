@@ -12,9 +12,10 @@ import {
 } from '../test-utils/sillytavern-host-harness.js';
 
 const includeZTrackerMessagesMock = jest.fn((chat: unknown[], ..._rest: unknown[]) => [...chat]);
+const stEchoMock = jest.fn();
 
 jest.unstable_mockModule('sillytavern-utils-lib/config', () => ({
-  st_echo: jest.fn(),
+  st_echo: stEchoMock,
   selected_group: false,
 }));
 
@@ -64,6 +65,7 @@ describe('initializeGlobalUI idempotence', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
     includeZTrackerMessagesMock.mockClear();
+    stEchoMock.mockClear();
   });
 
   test('does not duplicate injected UI or click handlers when initialized twice', async () => {
@@ -196,5 +198,34 @@ describe('initializeGlobalUI idempotence', () => {
 
     expect(actions.generateTracker).toHaveBeenCalledTimes(1);
     expect(actions.generateTracker).toHaveBeenCalledWith(0, { showStatusIndicator: true, moduleId: 'agenda' });
+  });
+
+  test('does not fall back to Default when no Module is enabled from the message truck button', async () => {
+    const host = createSillyTavernHost();
+    const actions = createUiInitActions();
+    const disabledModule = createDefaultTrackerModule({ id: 'default', name: 'Default', order: 0 });
+    disabledModule.enabled = false;
+    installSillyTavernHost(host.context);
+    installExtensionsMenuDom();
+    installMessageTemplateDom();
+    installChatMessageDom(0, {
+      innerHtml: '<div class="mes_button mes_ztracker_button"></div><div class="mes_text">Message 0</div>',
+    });
+
+    await initializeGlobalUI({
+      globalContext: host.context,
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'none', modules: [disabledModule] })),
+      } as any,
+      actions,
+      renderTrackerWithDeps: jest.fn(),
+    });
+
+    (document.querySelector('.mes[mesid="0"] .mes_ztracker_button') as HTMLElement).dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
+
+    expect(actions.generateTracker).not.toHaveBeenCalled();
+    expect(stEchoMock).toHaveBeenCalledWith('warning', 'No zTracker Modules are enabled. Enable a Module before generating a tracker.');
   });
 });

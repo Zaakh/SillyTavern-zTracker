@@ -189,6 +189,11 @@ function openManualModuleMenu(options: {
   settings: ExtensionSettings;
 }): void {
   const modules = getOrderedTrackerModules(options.settings);
+  if (modules.length === 0) {
+    st_echo('warning', 'No zTracker Modules are enabled. Enable a Module before generating a tracker.');
+    return;
+  }
+
   if (modules.length <= 1) {
     const moduleId = modules[0]?.id ?? DEFAULT_MODULE_ID;
     options.actions.generateTracker(options.messageId, withModuleActionOption({ showStatusIndicator: true }, moduleId));

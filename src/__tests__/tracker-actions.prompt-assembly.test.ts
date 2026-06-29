@@ -309,6 +309,79 @@ describe('createTrackerActions prompt assembly', () => {
     );
   });
 
+  test('threads the target module id into embedded tracker context injection', async () => {
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const generateRequest = makeGenerateRequest({ content: { location: 'Bar' } });
+    const minimalSettings = makeSettings({
+      schemaPreset: 'minimal',
+      schemaPresets: {
+        minimal: {
+          name: 'Minimal',
+          value: {
+            type: 'object',
+            properties: { location: { type: 'string' } },
+            required: ['location'],
+          },
+          html: '<div>{{data.location}}</div>',
+        },
+      },
+      includeLastXZTrackerMessages: 1,
+    });
+    const defaultModule = createTrackerModuleFromLegacySettings(makeSettings({ includeLastXZTrackerMessages: 1 }), {
+      id: 'default',
+      name: 'Default',
+      order: 0,
+    });
+    defaultModule.enabled = false;
+    const minimalModule = createTrackerModuleFromLegacySettings(minimalSettings, {
+      id: 'minimal',
+      name: 'Minimal',
+      order: 1,
+    });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [
+          {
+            original_avatar: 'avatar.png',
+            extra: {
+              zTracker: {
+                byId: {
+                  default: { schemaValue: [{ Time: '21:00', Topics: ['Ordering'] }] },
+                  minimal: { schemaValue: { location: 'Bar' } },
+                },
+              },
+            },
+          },
+        ],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile()],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ modules: [defaultModule, minimalModule] }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0, { moduleId: 'minimal' });
+
+    expect(includeZTrackerMessagesMock).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({ schemaPreset: 'minimal' }),
+      expect.objectContaining({ moduleId: 'minimal' }),
+    );
+  });
+
   test('generates enabled modules sequentially in module order', async () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
 

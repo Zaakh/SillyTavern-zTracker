@@ -13,6 +13,8 @@ export type PromptDebugMessage = {
 export type TrackerRequestDebugSnapshot = {
   capturedAt: string;
   messageId: number;
+  moduleId?: string;
+  moduleName?: string;
   connectionSource: 'active' | 'saved';
   profileId: string;
   api?: string;
@@ -107,6 +109,8 @@ export function captureTrackerRequestDebugSnapshot(
   settingsManager: ExtensionSettingsManager<ExtensionSettings>,
   snapshot: {
     messageId: number;
+    moduleId?: string;
+    moduleName?: string;
     connectionSource: 'active' | 'saved';
     profileId: string;
     api?: string;
@@ -135,6 +139,8 @@ export function captureTrackerRequestDebugSnapshot(
   const debugSnapshot: TrackerRequestDebugSnapshot = {
     capturedAt: new Date().toISOString(),
     messageId: snapshot.messageId,
+    ...(snapshot.moduleId ? { moduleId: snapshot.moduleId } : {}),
+    ...(snapshot.moduleName ? { moduleName: snapshot.moduleName } : {}),
     connectionSource: snapshot.connectionSource,
     profileId: snapshot.profileId,
     ...pickConnectionDebugFields(snapshot),
@@ -161,6 +167,8 @@ export function formatTrackerRequestDebugSnapshot(snapshot?: TrackerRequestDebug
     'lastTrackerRequest:',
     `capturedAt: ${snapshot.capturedAt}`,
     `messageId: ${snapshot.messageId}`,
+    ...(snapshot.moduleId ? [`moduleId: ${snapshot.moduleId}`] : []),
+    ...(snapshot.moduleName ? [`moduleName: ${snapshot.moduleName}`] : []),
     `connectionSource: ${snapshot.connectionSource}`,
     `profileId: ${snapshot.profileId}`,
     ...formatConnectionDebugFields(snapshot),
