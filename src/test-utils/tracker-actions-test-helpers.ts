@@ -147,6 +147,10 @@ jest.unstable_mockModule('../tracker.js', () => ({
   getTrackerModuleRecord: jest.fn((message: any, moduleId = 'default') => (
     message?.extra?.zTracker?.byId?.[moduleId as string] ?? message?.extra?.zTracker
   )),
+  findRenderedModuleBlock: jest.fn((messageBlock: Element | null | undefined, moduleId: string) => (
+    Array.from(messageBlock?.querySelectorAll('.mes_ztracker') ?? [])
+      .find((element) => (element as HTMLElement).dataset.ztrackerModule === moduleId)
+  )),
   extractLeadingSystemPrompt: jest.fn((messages: Array<{ role: string; content: string }>) => {
     const firstNonSystemIndex = messages.findIndex((message) => message.role !== 'system');
     if (firstNonSystemIndex === 0) {

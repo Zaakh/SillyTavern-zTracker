@@ -370,6 +370,7 @@ describe('createTrackerActions prompt assembly', () => {
     const manualModule = createTrackerModuleFromLegacySettings(makeSettings(), { id: 'manual', name: 'Manual', order: 0 });
     const autoModule = createTrackerModuleFromLegacySettings(makeSettings(), { id: 'auto', name: 'Auto', order: 1 });
     autoModule.auto.enabled = true;
+    autoModule.auto.mode = 'responses' as any;
 
     const actions = createTrackerActions({
       globalContext: {

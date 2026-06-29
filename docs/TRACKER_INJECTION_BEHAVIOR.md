@@ -8,10 +8,10 @@ This document describes the current runtime contract for zTracker snapshot injec
 
 The injected chat shape is primarily controlled by these settings and runtime hints:
 
-- `includeLastXZTrackerMessages`
-- `embedZTrackerRole`
-- `embedZTrackerAsCharacter`
-- `embedZTrackerSnapshotHeader`
+- each enabled Module's `includeLastXZTrackerMessages`
+- each enabled Module's `embedZTrackerRole`
+- each enabled Module's `embedZTrackerAsCharacter`
+- each enabled Module's `embedZTrackerSnapshotHeader`
 - text-completion alternation safety (`preserveTextCompletionTurnAlternation`)
 - host group-chat hint (`isGroupChat`)
 - host-confirmed solo reply label (`assistantReplyLabel`)
@@ -19,13 +19,14 @@ The injected chat shape is primarily controlled by these settings and runtime hi
 ## Core rules
 
 1. zTracker injects each tracker snapshot immediately after the source message that owns that tracker unless a text-completion safety fallback requires a different shape.
-2. `embedZTrackerRole` controls the injected role only for normal generations. It does not affect tracker generation.
-3. `embedZTrackerAsCharacter` is best-effort, not absolute. When zTracker can keep the snapshot as a normal standalone message, it derives a speaker name from `embedZTrackerSnapshotHeader` and removes that header from the injected content. When zTracker must emit raw assistant text to preserve a valid reply cue in text-completion chats, the header stays in content and no `name` field is used.
-4. Assistant-role text-completion injection has three distinct terminal behaviors:
+2. Enabled Modules are evaluated independently in deterministic Module order. A Module with `Include Last X zTracker Messages = 0` does not inject snapshots, but other enabled Modules still can.
+3. `embedZTrackerRole` controls the injected role only for normal generations. It does not affect tracker generation.
+4. `embedZTrackerAsCharacter` is best-effort, not absolute. When zTracker can keep the snapshot as a normal standalone message, it derives a speaker name from `embedZTrackerSnapshotHeader` and removes that header from the injected content. When zTracker must emit raw assistant text to preserve a valid reply cue in text-completion chats, the header stays in content and no `name` field is used.
+5. Assistant-role text-completion injection has three distinct terminal behaviors:
    - standalone raw assistant text when a single-speaker reply cue is safe;
    - inline fallback into the final user turn when the terminal assistant cue would be ambiguous;
    - anchored standalone assistant insertion after the tracked source turn for mid-chat or multi-character flows.
-5. zTracker prefers a host-confirmed solo reply label over history inference when SillyTavern already exposes the active assistant speaker for the current chat.
+6. zTracker prefers a host-confirmed solo reply label over history inference when SillyTavern already exposes the active assistant speaker for the current chat.
 
 ## Behavior matrix
 

@@ -17,3 +17,4 @@ test-output/
 .playwright-mcp/
 openspec/
 .github/
+docs/**

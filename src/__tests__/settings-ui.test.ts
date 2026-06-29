@@ -222,7 +222,7 @@ function createMockModule(overrides: Record<string, any> = {}) {
     name: overrides.name ?? 'Default',
     enabled: overrides.enabled ?? true,
     order: overrides.order ?? 0,
-    auto: { enabled: overrides.auto?.enabled ?? false },
+    auto: { enabled: overrides.auto?.enabled ?? false, mode: overrides.auto?.mode ?? 'none' },
     schema: {
       preset: overrides.schema?.preset ?? 'default',
       presets: overrides.schema?.presets ?? {
@@ -276,6 +276,12 @@ function seedModuleSettings() {
     createMockModule({ id: 'agenda', name: 'Agenda', order: 1, connection: { source: 'active', profileId: 'profile-2' } }),
   ];
   return mockSettings.modules;
+}
+
+function syncDefaultModuleSchemaFromFlatSettings() {
+  const modules = mockSettings.modules ?? seedModuleSettings();
+  modules[0].schema.preset = mockSettings.schemaPreset;
+  modules[0].schema.presets = mockSettings.schemaPresets;
 }
 
 jest.unstable_mockModule('sillytavern-utils-lib', () => ({
@@ -527,6 +533,7 @@ describe('zTracker settings connection source UI', () => {
     (globalThis as any).SillyTavern = {
       getContext: () => sillyTavernContext,
     };
+    seedModuleSettings();
     Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectUrlMock });
     Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectUrlMock });
     createObjectUrlMock.mockClear();
@@ -644,7 +651,7 @@ describe('zTracker settings connection source UI', () => {
       select.dispatchEvent(new Event('change', { bubbles: true }));
     });
 
-    expect(mockSettings.connectionSource).toBe('saved');
+    expect(mockSettings.modules[0].connection.source).toBe('saved');
     expect(saveSettingsMock).toHaveBeenCalled();
     expect(container.querySelector('[data-testid="profile-select"]')).not.toBeNull();
   });
@@ -676,6 +683,7 @@ describe('zTracker settings connection source UI', () => {
         html: '<div>default</div>',
       },
     };
+    syncDefaultModuleSchemaFromFlatSettings();
 
     const container = renderSettings();
     const setSchemaJsonButton = container.querySelector('[data-testid="set-schema-json-location"]');
@@ -716,6 +724,7 @@ describe('zTracker settings connection source UI', () => {
       value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
       html: '<div>alternate</div>',
     };
+    syncDefaultModuleSchemaFromFlatSettings();
 
     const saveMetadataDebounced = jest.fn();
     const context = {
@@ -751,6 +760,7 @@ describe('zTracker settings connection source UI', () => {
       value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
       html: '<div>alternate</div>',
     };
+    syncDefaultModuleSchemaFromFlatSettings();
 
     const saveMetadataDebounced = jest.fn();
     const saveMetadata = jest.fn();
@@ -801,6 +811,7 @@ describe('zTracker settings connection source UI', () => {
       value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
       html: '<div>alternate</div>',
     };
+    syncDefaultModuleSchemaFromFlatSettings();
 
     const saveMetadataDebounced = jest.fn();
     const saveMetadata = jest.fn(async () => undefined);
@@ -837,6 +848,7 @@ describe('zTracker settings connection source UI', () => {
       value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
       html: '<div>alternate</div>',
     };
+    syncDefaultModuleSchemaFromFlatSettings();
 
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     const saveMetadata = jest.fn(async () => {
@@ -909,6 +921,7 @@ describe('zTracker settings connection source UI', () => {
         html: '<div>custom</div>',
       },
     };
+    syncDefaultModuleSchemaFromFlatSettings();
 
     const saveMetadataDebounced = jest.fn();
     const context = {
@@ -950,6 +963,7 @@ describe('zTracker settings connection source UI', () => {
         html: '<div>custom</div>',
       },
     };
+    syncDefaultModuleSchemaFromFlatSettings();
 
     const saveMetadataDebounced = jest.fn();
     const context = {

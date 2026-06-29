@@ -2,7 +2,7 @@ import Handlebars from 'handlebars';
 import type { Message } from 'sillytavern-utils-lib';
 import type { ChatMessage } from 'sillytavern-utils-lib/types';
 import { DEFAULT_EMBED_SNAPSHOT_HEADER, getOrderedTrackerModules } from './config.js';
-import type { ExtensionSettings } from './config.js';
+import type { ExtensionSettings, TrackerModuleSettings } from './config.js';
 import { CHAT_METADATA_SCHEMA_PRESET_KEY, DEFAULT_MODULE_ID, EXTENSION_KEY } from './extension-metadata.js';
 import { formatEmbeddedTrackerSnapshot } from './embed-snapshot-transform.js';
 import { toShortTrackerLabel } from './tracker-helpers.js';
@@ -167,8 +167,8 @@ export interface RenderTrackerOptions {
   moduleId?: string;
 }
 
-function findRenderedModuleBlock(messageBlock: Element, moduleId: string): Element | undefined {
-  return Array.from(messageBlock.querySelectorAll('.mes_ztracker'))
+export function findRenderedModuleBlock(messageBlock: Element | null | undefined, moduleId: string): Element | undefined {
+  return Array.from(messageBlock?.querySelectorAll('.mes_ztracker') ?? [])
     .find((element) => (element as HTMLElement).dataset.ztrackerModule === moduleId);
 }
 
@@ -381,7 +381,7 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
 }
 
 // Keeps the embedded tracker speaker label aligned with the existing configurable header.
-function deriveEmbeddedTrackerSpeakerName(settings: ExtensionSettings): string {
+function deriveEmbeddedTrackerSpeakerName(settings: TrackerModuleSettings): string {
   const header = settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER;
   const trimmedLabel = header.replace(/:+\s*$/, '').trim();
   return trimmedLabel || 'Tracker';
@@ -410,9 +410,9 @@ type IncludeZTrackerMessagesOptions = {
 };
 
 function resolveEmbeddedTrackerRole(
-  settings: ExtensionSettings,
+  settings: TrackerModuleSettings,
   options: IncludeZTrackerMessagesOptions,
-): ExtensionSettings['embedZTrackerRole'] {
+): TrackerModuleSettings['embedZTrackerRole'] {
   const configuredRole = settings.embedZTrackerRole ?? 'user';
   if (!options.preserveTextCompletionTurnAlternation || configuredRole !== 'system') {
     return configuredRole;
@@ -439,7 +439,7 @@ function isAssistantConversationTurn(message: { role?: string; is_user?: boolean
 
 function canInlineEmbeddedTracker(
   message: { role?: string; is_user?: boolean; is_system?: boolean },
-  embedRole: ExtensionSettings['embedZTrackerRole'],
+  embedRole: TrackerModuleSettings['embedZTrackerRole'],
 ): boolean {
   if (embedRole === 'assistant') {
     return isAssistantConversationTurn(message);
@@ -509,7 +509,7 @@ function getSingleAssistantReplyLabel(
 
 export function includeZTrackerMessages<T extends Message | ChatMessage>(
   messages: T[],
-  settings: ExtensionSettings,
+  settings: TrackerModuleSettings,
   options: IncludeZTrackerMessagesOptions = {},
 ): T[] {
   const moduleId = options.moduleId ?? DEFAULT_MODULE_ID;
@@ -699,7 +699,7 @@ export function normalizeTrackerGenerationConversationRoles<
   },
 >(
   messages: T[],
-  settings: Pick<ExtensionSettings, 'trackerGenerationConversationRoleMode'>,
+  settings: Pick<TrackerModuleSettings, 'trackerGenerationConversationRoleMode'>,
 ): T[] {
   if ((settings.trackerGenerationConversationRoleMode ?? 'preserve') !== 'all_assistant') {
     return messages;

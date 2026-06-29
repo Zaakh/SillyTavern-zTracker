@@ -565,9 +565,11 @@ describe('initializeGlobalUI outgoing hold respects Skip First X Messages', () =
     renderMessage(0);
     const skippedModule = createDefaultTrackerModule({ id: 'skipped', name: 'Skipped', order: 0 });
     skippedModule.auto.enabled = true;
+    skippedModule.auto.mode = 'inputs' as any;
     skippedModule.generation.skipFirstXMessages = 5;
     const dueModule = createDefaultTrackerModule({ id: 'due', name: 'Due', order: 1 });
     dueModule.auto.enabled = true;
+    dueModule.auto.mode = 'inputs' as any;
     dueModule.generation.skipFirstXMessages = 0;
 
     const { events, host, actions } = await initializeAutoModeHarness({

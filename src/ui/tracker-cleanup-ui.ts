@@ -1,5 +1,4 @@
-import { EXTENSION_KEY } from '../config.js';
-import { CHAT_MESSAGE_PENDING_REDACTIONS_KEY } from '../tracker.js';
+import { CHAT_MESSAGE_PENDING_REDACTIONS_KEY, getTrackerModuleRecord } from '../tracker.js';
 import {
   buildArrayItemCleanupTarget,
   buildArrayItemFieldCleanupTarget,
@@ -22,8 +21,9 @@ export interface TrackerCleanupPopupRow {
 }
 
 /** Reads the normalized pending-redaction targets currently stored on a message. */
-export function getCurrentPendingRedactions(message: any): TrackerCleanupTarget[] {
-  return getPendingRedactionTargets(message?.extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_PENDING_REDACTIONS_KEY]);
+export function getCurrentPendingRedactions(message: any, moduleId?: string): TrackerCleanupTarget[] {
+  const trackerRecord = getTrackerModuleRecord(message, moduleId);
+  return getPendingRedactionTargets(trackerRecord?.[CHAT_MESSAGE_PENDING_REDACTIONS_KEY]);
 }
 
 /** Builds the hierarchical cleanup target list shown in the popup. */

@@ -1,7 +1,7 @@
 import { FC, useCallback, useMemo, useState } from 'react';
 import { STButton, STTextarea } from 'sillytavern-utils-lib/components/react';
 import { getWorldInfos } from 'sillytavern-utils-lib';
-import { ExtensionSettings, TrackerWorldInfoPolicyMode } from '../../config.js';
+import { TrackerModuleSettings, TrackerWorldInfoPolicyMode } from '../../config.js';
 
 function normalizeWorldInfoAllowlist(text: string): string[] {
   const lines = text
@@ -68,8 +68,8 @@ function getAllWorldInfoBookNamesFromDom(): string[] {
 }
 
 export const WorldInfoPolicySection: FC<{
-  settings: ExtensionSettings;
-  updateAndRefresh: (updater: (current: ExtensionSettings) => void) => void;
+  settings: TrackerModuleSettings;
+  updateAndRefresh: (updater: (current: TrackerModuleSettings) => void) => void;
 }> = ({ settings, updateAndRefresh }) => {
   const worldInfoPolicyMode = settings.trackerWorldInfoPolicyMode ?? TrackerWorldInfoPolicyMode.INCLUDE_ALL;
   const worldInfoAllowlistText = (settings.trackerWorldInfoAllowlistBookNames ?? []).join('\n');

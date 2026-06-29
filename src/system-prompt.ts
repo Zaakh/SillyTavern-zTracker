@@ -1,4 +1,4 @@
-import type { ExtensionSettings } from './config.js';
+import type { TrackerModuleSettings } from './config.js';
 import { ZTRACKER_SYSTEM_PROMPT_PRESET_NAME, ZTRACKER_SYSTEM_PROMPT_TEXT } from './config.js';
 
 type SystemPromptPreset = {
@@ -77,7 +77,7 @@ export function getCurrentGlobalSystemPromptName(
 }
 
 export function shouldWarnAboutSharedSystemPromptSelection(
-  settings: Pick<ExtensionSettings, 'trackerSystemPromptMode' | 'trackerSystemPromptSavedName'>,
+  settings: Pick<TrackerModuleSettings, 'trackerSystemPromptMode' | 'trackerSystemPromptSavedName'>,
   context: SillyTavernContextLike = SillyTavern.getContext(),
 ): boolean {
   if (settings.trackerSystemPromptMode !== 'saved') return false;
@@ -105,7 +105,7 @@ export async function ensureZTrackerSystemPromptPresetInstalled(
 }
 
 export function resolveTrackerSystemPromptName(
-  settings: Pick<ExtensionSettings, 'trackerSystemPromptMode' | 'trackerSystemPromptSavedName'>,
+  settings: Pick<TrackerModuleSettings, 'trackerSystemPromptMode' | 'trackerSystemPromptSavedName'>,
   context: SillyTavernContextLike = SillyTavern.getContext(),
   profile?: { sysprompt?: string; preset?: string; api?: string },
 ): string | undefined {

@@ -1,11 +1,11 @@
 import { FC, useMemo } from 'react';
 import { STPresetSelect, STTextarea, PresetItem } from 'sillytavern-utils-lib/components/react';
-import { DEFAULT_EMBED_SNAPSHOT_HEADER, ExtensionSettings } from '../../config.js';
+import { DEFAULT_EMBED_SNAPSHOT_HEADER, TrackerModuleSettings } from '../../config.js';
 import { reconcilePresetItems, resolvePresetSelection } from './preset-state.js';
 
 export const EmbedSnapshotTransformSection: FC<{
-  settings: ExtensionSettings;
-  updateAndRefresh: (updater: (current: ExtensionSettings) => void) => void;
+  settings: TrackerModuleSettings;
+  updateAndRefresh: (updater: (current: TrackerModuleSettings) => void) => void;
 }> = ({ settings, updateAndRefresh }) => {
   const embedTransformItems = useMemo((): PresetItem[] => {
     const presets = settings.embedZTrackerSnapshotTransformPresets ?? {};
@@ -26,7 +26,7 @@ export const EmbedSnapshotTransformSection: FC<{
   const handleEmbedTransformPresetsListChange = (newItems: PresetItem[]) => {
     updateAndRefresh((s) => {
       const nextState = reconcilePresetItems(s.embedZTrackerSnapshotTransformPresets, s.embedZTrackerSnapshotTransformPreset, newItems);
-      s.embedZTrackerSnapshotTransformPresets = nextState.presets as ExtensionSettings['embedZTrackerSnapshotTransformPresets'];
+      s.embedZTrackerSnapshotTransformPresets = nextState.presets as TrackerModuleSettings['embedZTrackerSnapshotTransformPresets'];
       s.embedZTrackerSnapshotTransformPreset = nextState.activeKey;
     });
   };

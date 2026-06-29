@@ -294,6 +294,24 @@
   max-width: 100%;
 }
 
+.ztracker-module-generate-menu {
+  min-width: 180px;
+  padding: 8px;
+  background-color: var(--ztracker-menu-bg, rgba(0, 0, 0, 0.92));
+  border: 1px solid var(--ztracker-menu-border, rgba(255, 255, 255, 0.12));
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.ztracker-module-generate-option {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
+
 /*
  * Parts menu styles must apply even when the menu is portaled to <body>
  * (to avoid being clipped by chat/message overflow).

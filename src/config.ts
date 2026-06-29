@@ -66,6 +66,7 @@ export interface EmbedSnapshotRegexTransformPreset {
 
 export interface TrackerModuleAutoSettings {
   enabled: boolean;
+  mode: AutoModeOptions;
 }
 
 export interface TrackerModuleSchemaSettings {
@@ -130,6 +131,10 @@ export interface ExtensionSettings {
   version: string;
   formatVersion: string;
   modules: TrackerModule[];
+  debugLogging: boolean;
+}
+
+export interface TrackerModuleSettings extends ExtensionSettings {
   /** Controls whether tracker generation follows the live host connection or a pinned saved profile. */
   connectionSource: TrackerConnectionSource;
   profileId: string;
@@ -175,12 +180,6 @@ export interface ExtensionSettings {
   promptJson: string;
   promptXml: string;
   promptToon: string;
-
-  /**
-   * Enables extra console logging and diagnostics helpers.
-   * Intended for troubleshooting; avoid enabling unless needed.
-   */
-  debugLogging: boolean;
 
   /**
    * Controls what World Info is included in tracker-only generations.
@@ -392,7 +391,7 @@ const DEFAULT_INCLUDE_LAST_X_MESSAGES = 0;
 const DEFAULT_INCLUDE_LAST_ZTRACKER_MESSAGES = 1;
 
 /** Migrates legacy auto-mode values to the canonical SillyTavern enum value used at runtime. */
-export function migrateLegacyAutoMode(settings: Pick<ExtensionSettings, 'autoMode'>): boolean {
+export function migrateLegacyAutoMode(settings: Record<string, any>): boolean {
   if ((settings.autoMode as unknown) !== 'input') {
     return false;
   }
@@ -401,7 +400,7 @@ export function migrateLegacyAutoMode(settings: Pick<ExtensionSettings, 'autoMod
   return true;
 }
 
-export function migrateLegacyPromptTemplates(settings: Pick<ExtensionSettings, 'promptXml' | 'promptToon'>): boolean {
+export function migrateLegacyPromptTemplates(settings: Record<string, any>): boolean {
   let changed = false;
 
   const promptXml = (settings.promptXml ?? '').trim();
@@ -424,10 +423,14 @@ export function migrateLegacyPromptTemplates(settings: Pick<ExtensionSettings, '
 }
 
 /** Repairs malformed saved schema presets whose `required` arrays were moved into `properties.required`. */
-export function migrateCorruptedSchemaPresetRequiredMetadata(settings: Pick<ExtensionSettings, 'schemaPresets'>): boolean {
+export function migrateCorruptedSchemaPresetRequiredMetadata(settings: Record<string, any>): boolean {
   let changed = false;
+  const schemaPresets = settings.schemaPresets;
+  if (!schemaPresets || typeof schemaPresets !== 'object') {
+    return false;
+  }
 
-  for (const [key, preset] of Object.entries(settings.schemaPresets ?? {})) {
+  for (const [key, preset] of Object.entries(schemaPresets as Record<string, Schema>)) {
     const repairedValue = repairCorruptedRequiredMetadata(preset.value);
     const originalSerialized = JSON.stringify(preset.value);
     const repairedSerialized = JSON.stringify(repairedValue);
@@ -435,7 +438,7 @@ export function migrateCorruptedSchemaPresetRequiredMetadata(settings: Pick<Exte
       continue;
     }
 
-    settings.schemaPresets[key] = {
+    schemaPresets[key] = {
       ...preset,
       value: repairedValue as object,
     };
@@ -447,10 +450,7 @@ export function migrateCorruptedSchemaPresetRequiredMetadata(settings: Pick<Exte
 
 /** Repairs invalid persisted numeric settings so runtime requests never use impossible bounds. */
 export function migrateInvalidNumericSettings(
-  settings: Pick<
-    ExtensionSettings,
-    'maxResponseToken' | 'skipFirstXMessages' | 'includeLastXMessages' | 'includeLastXZTrackerMessages'
-  >,
+  settings: Record<string, any>,
 ): boolean {
   let changed = false;
 
@@ -711,6 +711,7 @@ export function createDefaultTrackerModule(options: Partial<Pick<TrackerModule, 
     order: options.order ?? 0,
     auto: {
       enabled: false,
+      mode: AutoModeOptions.NONE,
     },
     schema: {
       preset: 'default',
@@ -754,7 +755,7 @@ export function createDefaultTrackerModule(options: Partial<Pick<TrackerModule, 
 }
 
 export function createTrackerModuleFromLegacySettings(
-  settings: Partial<ExtensionSettings>,
+  settings: Partial<TrackerModuleSettings>,
   options: Partial<Pick<TrackerModule, 'id' | 'name' | 'order'>> = {},
 ): TrackerModule {
   const module = createDefaultTrackerModule(options);
@@ -777,7 +778,8 @@ export function createTrackerModuleFromLegacySettings(
   module.generation.worldInfoAllowlistEntryIds = cloneSettingsValue(
     settings.trackerWorldInfoAllowlistEntryIds ?? module.generation.worldInfoAllowlistEntryIds,
   );
-  module.auto.enabled = settings.autoMode !== undefined && settings.autoMode !== AutoModeOptions.NONE;
+  module.auto.mode = settings.autoMode ?? module.auto.mode;
+  module.auto.enabled = module.auto.mode !== AutoModeOptions.NONE;
   module.schema.preset = settings.schemaPreset ?? module.schema.preset;
   module.schema.presets = cloneSettingsValue(settings.schemaPresets ?? module.schema.presets);
   module.prompts.prompt = settings.prompt ?? module.prompts.prompt;
@@ -812,7 +814,7 @@ export function getOrderedTrackerModules(settings: ExtensionSettings, options: {
     .sort((left, right) => left.order - right.order);
 }
 
-export function getSettingsForTrackerModule(settings: ExtensionSettings, moduleId = DEFAULT_MODULE_ID): ExtensionSettings {
+export function getSettingsForTrackerModule(settings: ExtensionSettings, moduleId = DEFAULT_MODULE_ID): TrackerModuleSettings {
   const module = getTrackerModule(settings, moduleId);
   return {
     ...settings,
@@ -821,7 +823,7 @@ export function getSettingsForTrackerModule(settings: ExtensionSettings, moduleI
     trackerSystemPromptMode: module.systemPrompt.mode,
     trackerSystemPromptSavedName: module.systemPrompt.savedName,
     maxResponseToken: module.generation.maxResponseToken,
-    autoMode: module.auto.enabled ? settings.autoMode : AutoModeOptions.NONE,
+    autoMode: module.auto.enabled ? module.auto.mode : AutoModeOptions.NONE,
     sequentialPartGeneration: module.generation.mode === 'sequential-parts',
     schemaPreset: module.schema.preset,
     schemaPresets: module.schema.presets,
@@ -858,12 +860,13 @@ export function createTrackerModuleId(existingModules: Array<Pick<TrackerModule,
   return id;
 }
 
-export function applySettingsToTrackerModule(module: TrackerModule, settings: ExtensionSettings): void {
+export function applySettingsToTrackerModule(module: TrackerModule, settings: TrackerModuleSettings): void {
   module.connection.source = settings.connectionSource;
   module.connection.profileId = settings.profileId;
   module.systemPrompt.mode = settings.trackerSystemPromptMode;
   module.systemPrompt.savedName = settings.trackerSystemPromptSavedName;
   module.generation.maxResponseToken = settings.maxResponseToken;
+  module.auto.mode = settings.autoMode;
   module.auto.enabled = settings.autoMode !== AutoModeOptions.NONE;
   module.generation.mode = settings.sequentialPartGeneration ? 'sequential-parts' : 'full';
   module.schema.preset = settings.schemaPreset;
@@ -921,34 +924,5 @@ export const defaultSettings: ExtensionSettings = {
   version: VERSION,
   formatVersion: FORMAT_VERSION,
   modules: [defaultTrackerModule],
-  connectionSource: 'saved',
-  profileId: '',
-  trackerSystemPromptMode: 'profile',
-  trackerSystemPromptSavedName: '',
-  maxResponseToken: DEFAULT_MAX_RESPONSE_TOKEN,
-  autoMode: AutoModeOptions.NONE,
-  sequentialPartGeneration: false,
-  schemaPreset: 'default',
-  schemaPresets: defaultTrackerModule.schema.presets,
-  prompt: DEFAULT_PROMPT,
-  skipFirstXMessages: DEFAULT_SKIP_FIRST_X_MESSAGES,
-  includeLastXMessages: DEFAULT_INCLUDE_LAST_X_MESSAGES,
-  skipCharacterCardInTrackerGeneration: false,
-  trackerGenerationConversationRoleMode: 'preserve',
-  includeLastXZTrackerMessages: DEFAULT_INCLUDE_LAST_ZTRACKER_MESSAGES,
-  embedZTrackerRole: 'user',
-  embedZTrackerAsCharacter: false,
-  embedZTrackerSnapshotHeader: DEFAULT_EMBED_SNAPSHOT_HEADER,
-  embedZTrackerSnapshotTransformPreset: 'default',
-  embedZTrackerSnapshotTransformPresets: defaultTrackerModule.injection.transformPresets,
-  promptEngineeringMode: PromptEngineeringMode.NATIVE,
-  promptJson: DEFAULT_PROMPT_JSON,
-  promptXml: DEFAULT_PROMPT_XML,
-
-  promptToon: DEFAULT_PROMPT_TOON,
   debugLogging: false,
-
-  trackerWorldInfoPolicyMode: TrackerWorldInfoPolicyMode.INCLUDE_ALL,
-  trackerWorldInfoAllowlistBookNames: [],
-  trackerWorldInfoAllowlistEntryIds: [],
 };

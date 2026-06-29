@@ -4,6 +4,7 @@ import { ExtensionSettingsManager } from 'sillytavern-utils-lib';
 import { st_echo } from 'sillytavern-utils-lib/config';
 import {
   ExtensionSettings,
+  TrackerModuleSettings,
   TrackerModule,
   CHAT_METADATA_SCHEMA_PRESET_KEY,
   applySettingsToTrackerModule,
@@ -175,7 +176,7 @@ async function persistChatSchemaPreset(context: any, schemaPresetKey: string, mo
 
 /** Resolves one schema preset key against the current settings and falls back to the active default when missing. */
 function resolveSchemaPresetSelection(
-  schemaPresets: ExtensionSettings['schemaPresets'],
+  schemaPresets: TrackerModuleSettings['schemaPresets'],
   fallbackKey: string,
   requestedKey?: string,
 ): ResolvedSchemaPresetSelection | null {
@@ -194,7 +195,7 @@ function resolveSchemaPresetSelection(
 }
 
 /** Reads the active chat schema state from live SillyTavern chat metadata without holding a stale reference. */
-function getCurrentChatSchemaPresetState(settings: ExtensionSettings, moduleId: string): CurrentChatSchemaPresetState {
+function getCurrentChatSchemaPresetState(settings: TrackerModuleSettings, moduleId: string): CurrentChatSchemaPresetState {
   const context = SillyTavern.getContext();
   const chatMetadata = context?.chatMetadata;
   if (!chatMetadata || typeof chatMetadata !== 'object') {
@@ -247,21 +248,17 @@ export const ZTrackerSettings: FC = () => {
   );
 
   const updateSelectedModuleAndRefresh = useCallback(
-    (updater: (currentSettings: ExtensionSettings) => void) => {
+    (updater: (currentSettings: TrackerModuleSettings) => void) => {
       updateAndRefresh((currentSettings) => {
         const module = currentSettings.modules?.find((candidate) => candidate.id === selectedModuleId)
           ?? currentSettings.modules?.[0];
         if (!module) {
-          updater(currentSettings);
           return;
         }
 
         const moduleDraft = getSettingsForTrackerModule(currentSettings, module.id);
         updater(moduleDraft);
         applySettingsToTrackerModule(module, moduleDraft);
-        if (moduleDraft.autoMode !== 'none') {
-          currentSettings.autoMode = moduleDraft.autoMode;
-        }
       });
     },
     [selectedModuleId, updateAndRefresh],
@@ -392,7 +389,7 @@ export const ZTrackerSettings: FC = () => {
             ? [[newKey, { ...preset, name: newKey }]]
             : [[presetKey, preset]]
         )).flat(),
-      ) as ExtensionSettings['schemaPresets'];
+      ) as TrackerModuleSettings['schemaPresets'];
 
       currentSettings.schemaPresets = nextSchemaPresets;
       if (currentSettings.schemaPreset === currentKey) {
@@ -739,7 +736,7 @@ export const ZTrackerSettings: FC = () => {
               </div>
 
             <div className="setting-row">
-              <label title="Controls whether this Module renders, injects context, and appears in manual generation actions.">Module Enabled</label>
+              <label title="Controls whether this Module generates, injects context, and appears in manual generation actions. Existing saved tracker blocks remain visible until deleted.">Module Enabled</label>
               <input
                 type="checkbox"
                 checked={selectedModule.enabled}
@@ -775,7 +772,7 @@ export const ZTrackerSettings: FC = () => {
                   value={connectionSource}
                   onChange={(e) =>
                     updateSelectedModuleAndRefresh((s) => {
-                      s.connectionSource = e.target.value as ExtensionSettings['connectionSource'];
+                      s.connectionSource = e.target.value as TrackerModuleSettings['connectionSource'];
                     })
                   }
                 >

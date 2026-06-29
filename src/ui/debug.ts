@@ -119,6 +119,7 @@ export function captureTrackerRequestDebugSnapshot(
     syspromptName?: string;
     promptEngineeringMode: string;
     maxTokens: number;
+    embedSnapshotHeader?: string;
     overridePayload: unknown;
     requestMessages: Array<{ role: string; content: string; name?: string; ignoreInstruct?: boolean; source?: { name?: string } }>;
     sanitizedPrompt: Array<{ role: string; content: string; name?: string; ignoreInstruct?: boolean; source?: { name?: string } }>;
@@ -139,7 +140,7 @@ export function captureTrackerRequestDebugSnapshot(
     ...pickConnectionDebugFields(snapshot),
     promptEngineeringMode: snapshot.promptEngineeringMode,
     maxTokens: snapshot.maxTokens,
-    embedSnapshotHeader: settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER,
+    embedSnapshotHeader: snapshot.embedSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER,
     overridePayload: snapshot.overridePayload,
     requestMessages,
     sanitizedPrompt,
