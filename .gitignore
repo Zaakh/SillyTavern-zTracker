@@ -15,3 +15,5 @@ __pycache__
 repomix-output.xml
 test-output/
 .playwright-mcp/
+openspec/
+.github/

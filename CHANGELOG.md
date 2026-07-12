@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.12.2] - 2026-06-19
+
+### Fixed
+
+- Outgoing auto mode no longer aborts the first host reply on early messages: when `Skip First X Messages` would skip tracker generation, zTracker now lets the reply run normally instead of stopping and failing to resume it.
+
 ## [1.12.1] - 2026-05-21
 
 ### Fixed
