@@ -327,9 +327,8 @@ describe('createTrackerActions prompt assembly', () => {
           html: '<div>{{data.location}}</div>',
         },
       },
-      includeLastXZTrackerMessages: 1,
     });
-    const defaultModule = createTrackerModuleFromLegacySettings(makeSettings({ includeLastXZTrackerMessages: 1 }), {
+    const defaultModule = createTrackerModuleFromLegacySettings(makeSettings(), {
       id: 'default',
       name: 'Default',
       order: 0,
@@ -346,14 +345,7 @@ describe('createTrackerActions prompt assembly', () => {
         chat: [
           {
             original_avatar: 'avatar.png',
-            extra: {
-              zTracker: {
-                byId: {
-                  default: { schemaValue: [{ Time: '21:00', Topics: ['Ordering'] }] },
-                  minimal: { schemaValue: { location: 'Bar' } },
-                },
-              },
-            },
+            extra: {},
           },
         ],
         saveChat: async () => undefined,

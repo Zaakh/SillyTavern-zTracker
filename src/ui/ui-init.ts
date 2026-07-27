@@ -194,8 +194,8 @@ function openManualModuleMenu(options: {
     return;
   }
 
-  if (modules.length <= 1) {
-    const moduleId = modules[0]?.id ?? DEFAULT_MODULE_ID;
+  if (modules.length === 1) {
+    const moduleId = modules[0].id;
     options.actions.generateTracker(options.messageId, withModuleActionOption({ showStatusIndicator: true }, moduleId));
     return;
   }

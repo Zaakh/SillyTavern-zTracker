@@ -374,9 +374,8 @@ export function createTrackerActions(options: {
   }
 
   function getModuleStatusText(moduleId = DEFAULT_MODULE_ID) {
-    const module = getOrderedTrackerModules(settingsManager.getSettings(), { includeDisabled: true })
-      .find((candidate) => candidate.id === moduleId);
-    return module?.name ? `${fullTrackerIndicatorText}: ${module.name}` : fullTrackerIndicatorText;
+    const moduleName = getModuleDebugName(moduleId);
+    return moduleName ? `${fullTrackerIndicatorText}: ${moduleName}` : fullTrackerIndicatorText;
   }
 
   function resolveSchemaPreset(settings: TrackerModuleSettings, requestedKey?: string) {
