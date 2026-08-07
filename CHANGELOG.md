@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-07
+
 ### Added
 
 - zTracker now supports multiple Modules, so one chat can keep separate trackers with their own schema, prompts, connection, generation, injection, and auto-generation settings.
@@ -13,20 +15,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- Stored settings are upgraded to the new Module format the first time this version runs. The upgrade preserves the previous tracker as the default Module and is a one-way format change.
+- **Breaking:** Stored settings are upgraded to the new Module format the first time this version runs. The upgrade preserves the previous tracker as the default Module, but it is a one-way format change and downgrading to an older zTracker version afterward is not supported.
 - The message truck button now opens a Module chooser when multiple Modules are enabled, so manual generation can target any Module before it has an existing tracker block.
 
 ### Fixed
 
+- Outgoing auto mode no longer aborts the first host reply on early messages: when `Skip First X Messages` would skip tracker generation, zTracker now lets the reply run normally instead of stopping and failing to resume it.
 - Generating a non-default Module now uses that Module's own prior tracker context instead of injecting Default Module snapshots, preventing mismatched tracker output from being discarded.
 - Tracker injection no longer promotes generic `user`, `assistant`, or `system` role labels into speaker names, preventing duplicated prompt text such as `user: User:` inside an existing user turn.
 - Regenerating one Module now spins that Module's regenerate button instead of the first tracker block on the message.
-
-## [1.12.2] - 2026-06-19
-
-### Fixed
-
-- Outgoing auto mode no longer aborts the first host reply on early messages: when `Skip First X Messages` would skip tracker generation, zTracker now lets the reply run normally instead of stopping and failing to resume it.
 
 ## [1.12.1] - 2026-05-21
 

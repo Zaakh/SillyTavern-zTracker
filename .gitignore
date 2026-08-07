@@ -18,3 +18,5 @@ test-output/
 openspec/
 .github/
 docs/**
+.claude/
+CLAUDE.md
