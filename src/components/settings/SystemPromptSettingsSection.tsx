@@ -1,11 +1,11 @@
 import { FC } from 'react';
 import { STButton, PresetItem } from 'sillytavern-utils-lib/components/react';
-import { ExtensionSettings, ZTRACKER_SYSTEM_PROMPT_PRESET_NAME } from '../../config.js';
+import { TrackerModuleSettings, ZTRACKER_SYSTEM_PROMPT_PRESET_NAME } from '../../config.js';
 import type { SettingsUpdateAndRefresh } from './settings-shared.js';
 
 // Contains the tracker-only system prompt selector and the warnings tied to that configuration.
 export const SystemPromptSettingsSection: FC<{
-  settings: ExtensionSettings;
+  settings: TrackerModuleSettings;
   updateAndRefresh: SettingsUpdateAndRefresh;
   systemPromptItems: PresetItem[];
   refreshSystemPromptState: () => void;
@@ -32,7 +32,7 @@ export const SystemPromptSettingsSection: FC<{
         value={settings.trackerSystemPromptMode}
         onChange={(e) =>
           updateAndRefresh((s) => {
-            const mode = e.target.value as ExtensionSettings['trackerSystemPromptMode'];
+            const mode = e.target.value as TrackerModuleSettings['trackerSystemPromptMode'];
             s.trackerSystemPromptMode = mode;
             if (mode === 'saved' && !s.trackerSystemPromptSavedName) {
               s.trackerSystemPromptSavedName = ZTRACKER_SYSTEM_PROMPT_PRESET_NAME;

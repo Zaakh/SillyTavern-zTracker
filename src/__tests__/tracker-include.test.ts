@@ -1,4 +1,5 @@
 import type { ExtensionSettings } from '../config.js';
+import { createDefaultTrackerModule, getSettingsForTrackerModule } from '../config.js';
 import {
   extractLeadingSystemPrompt,
   includeZTrackerMessages,
@@ -7,6 +8,7 @@ import {
   CHAT_MESSAGE_SCHEMA_VALUE_KEY,
 } from '../tracker.js';
 import { EXTENSION_KEY } from '../extension-metadata.js';
+import { CHAT_MESSAGE_MODULES_KEY } from '../tracker.js';
 
 describe('includeZTrackerMessages', () => {
   const makeSettings = (
@@ -94,6 +96,74 @@ describe('includeZTrackerMessages', () => {
     expect(result[1].content).toContain('```json');
     expect(result[1].role).toBe('user');
     expect(result[1]).not.toHaveProperty('name');
+  });
+
+  it('injects only the requested module snapshot', () => {
+    const messages = [
+      {
+        content: 'base',
+        role: 'assistant',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_MODULES_KEY]: {
+              default: { [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { scene: 'Bridge' } },
+              agenda: { [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { goal: 'Find exit' } },
+            },
+          },
+        },
+      },
+      { content: 'current', role: 'user' },
+    ];
+
+    const result = includeZTrackerMessages(messages as any, makeSettings(1), { moduleId: 'agenda' }) as any[];
+
+    expect(result).toHaveLength(3);
+    expect(result[1].content).toContain('Find exit');
+    expect(result[1].content).not.toContain('Bridge');
+  });
+
+  it('composes multiple virtual-character module injections in module order', () => {
+    const sceneModule = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    sceneModule.injection.includeLastXMessages = 1;
+    sceneModule.injection.embedRole = 'assistant';
+    sceneModule.injection.embedAsCharacter = true;
+    sceneModule.injection.snapshotHeader = 'Scene Tracker:';
+    const agendaModule = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
+    agendaModule.injection.includeLastXMessages = 1;
+    agendaModule.injection.embedRole = 'assistant';
+    agendaModule.injection.embedAsCharacter = true;
+    agendaModule.injection.snapshotHeader = 'Agenda Tracker:';
+    const settings = { ...makeSettings(0), modules: [sceneModule, agendaModule] } as ExtensionSettings;
+    const messages = [
+      {
+        content: 'base',
+        role: 'assistant',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_MODULES_KEY]: {
+              scene: { [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { place: 'Bridge' } },
+              agenda: { [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { goal: 'Find exit' } },
+            },
+          },
+        },
+      },
+      { content: 'current', role: 'user' },
+    ];
+
+    const afterAgenda = includeZTrackerMessages(
+      messages as any,
+      getSettingsForTrackerModule(settings, 'agenda'),
+      { moduleId: 'agenda' },
+    ) as any[];
+    const result = includeZTrackerMessages(
+      afterAgenda as any,
+      getSettingsForTrackerModule(settings, 'scene'),
+      { moduleId: 'scene' },
+    ) as any[];
+
+    expect(result.map((message) => message.name).filter(Boolean)).toEqual(['Scene Tracker', 'Agenda Tracker']);
+    expect(result[1].content).toContain('Bridge');
+    expect(result[2].content).toContain('Find exit');
   });
 
   it('can inject tracker snapshots as a virtual character name', () => {
@@ -452,6 +522,45 @@ describe('includeZTrackerMessages', () => {
     expect(result[2].content).toMatch(/\nBar:$/);
   });
 
+  it('does not synthesize a terminal assistant cue from a generic assistant label', () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'Bar: As you enter the bar you realize you are the only customer.',
+        source: {
+          name: 'assistant',
+        },
+      },
+      {
+        is_user: true,
+        mes: 'Tobias: "I do not really care."',
+        extra: {
+          [EXTENSION_KEY]: {
+            [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: {
+              time: '18:30:00; 09/15/2023 (Friday)',
+              location: 'Inside a bar',
+              changes: 'Customer declined the topic.',
+            },
+          },
+        },
+      },
+    ];
+
+    const settings = makeSettings(1, 'assistant', true, 'Scene tracker:');
+    settings.embedZTrackerSnapshotTransformPreset = 'minimal';
+
+    const result = includeZTrackerMessages(
+      messages as any,
+      settings,
+      { preserveTextCompletionTurnAlternation: true, isGroupChat: false },
+    ) as any[];
+
+    expect(result).toHaveLength(2);
+    expect(result[1].is_user).toBe(true);
+    expect(result[1].mes).toContain('Tobias: "I do not really care."\n\nScene tracker:\n');
+    expect(result[1].mes).not.toMatch(/\nassistant:$/);
+  });
+
   it('keeps terminal assistant virtual-character snapshots as assistant turns when the host confirms the solo reply label', () => {
     const messages = [
       {
@@ -767,6 +876,37 @@ describe('includeZTrackerMessages', () => {
       role: 'user',
       name: 'Tobias',
     });
+  });
+
+  it('does not promote generic role source names into text-completion speaker labels', () => {
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'Bar: As you enter the bar you realize you are the only customer.',
+        source: {
+          name: 'assistant',
+          extra: {
+            [EXTENSION_KEY]: {
+              [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { id: 1 },
+            },
+          },
+        },
+      },
+      {
+        role: 'user',
+        content: 'Tobias: "I do not really care."',
+        source: {
+          name: 'user',
+        },
+      },
+    ] as any;
+
+    const prompt = formatTextCompletionPrompt(includeZTrackerMessages(messages, makeSettings(1)) as any[]);
+
+    expect(prompt).not.toContain('assistant: Bar:');
+    expect(prompt).not.toContain('[INST]user: Tobias:');
+    expect(prompt).toContain('Bar: As you enter the bar you realize you are the only customer.</s>');
+    expect(prompt).toContain('[INST]Tobias: "I do not really care."[/INST]');
   });
 
   it('falls back to source message names when prompt-builder keeps speaker attribution there', () => {

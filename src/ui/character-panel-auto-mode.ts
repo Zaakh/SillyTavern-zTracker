@@ -1,4 +1,5 @@
 import type { ExtensionSettings } from '../config.js';
+import { getOrderedTrackerModules } from '../config.js';
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import type { ExtensionSettingsManager } from 'sillytavern-utils-lib';
 import { st_echo } from 'sillytavern-utils-lib/config';
@@ -52,7 +53,7 @@ export function createCharacterPanelButtonController(options: {
       const settings = settingsManager.getSettings();
       syncCharacterAutoModeButton({
         getContext: () => SillyTavern.getContext(),
-        autoModeEnabled: settings.autoMode !== AutoModeOptions.NONE,
+        autoModeEnabled: getOrderedTrackerModules(settings).some((module) => module.auto.enabled && module.auto.mode !== AutoModeOptions.NONE),
         onToggle: ({ excluded }) => {
           st_echo('info', excluded ? 'zTracker auto mode excluded for this character.' : 'zTracker auto mode restored for this character.');
         },

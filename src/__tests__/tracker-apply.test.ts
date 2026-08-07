@@ -1,11 +1,12 @@
 import {
   applyTrackerUpdateAndRender,
+  CHAT_MESSAGE_MODULES_KEY,
   CHAT_MESSAGE_SCHEMA_HTML_KEY,
   CHAT_MESSAGE_PARTS_META_KEY,
   CHAT_MESSAGE_PENDING_REDACTIONS_KEY,
   CHAT_MESSAGE_SCHEMA_VALUE_KEY,
 } from '../tracker.js';
-import { EXTENSION_KEY } from '../extension-metadata.js';
+import { DEFAULT_MODULE_ID, EXTENSION_KEY } from '../extension-metadata.js';
 import { jest } from '@jest/globals';
 
 describe('applyTrackerUpdateAndRender', () => {
@@ -22,6 +23,12 @@ describe('applyTrackerUpdateAndRender', () => {
     expect(render).toHaveBeenCalledTimes(1);
     expect(message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_VALUE_KEY]).toEqual({ time: '10:00' });
     expect(message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_HTML_KEY]).toBe('<div>{{data.time}}</div>');
+    expect(message.extra[EXTENSION_KEY][CHAT_MESSAGE_MODULES_KEY][DEFAULT_MODULE_ID]).toEqual(
+      expect.objectContaining({
+        [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { time: '10:00' },
+        [CHAT_MESSAGE_SCHEMA_HTML_KEY]: '<div>{{data.time}}</div>',
+      }),
+    );
 
     rollback();
     expect(message.extra[EXTENSION_KEY]).toBeUndefined();
@@ -115,5 +122,8 @@ describe('applyTrackerUpdateAndRender', () => {
     });
 
     expect(message.extra[EXTENSION_KEY][CHAT_MESSAGE_PENDING_REDACTIONS_KEY]).toBeUndefined();
+    expect(
+      message.extra[EXTENSION_KEY][CHAT_MESSAGE_MODULES_KEY][DEFAULT_MODULE_ID][CHAT_MESSAGE_PENDING_REDACTIONS_KEY],
+    ).toBeUndefined();
   });
 });

@@ -28,6 +28,8 @@ describe('tracker request debug snapshots', () => {
 
     captureTrackerRequestDebugSnapshot(settingsManager, {
       messageId: 7,
+      moduleId: 'minimal',
+      moduleName: 'Minimal',
       connectionSource: 'saved',
       profileId: 'profile-1',
       api: 'openai',
@@ -67,6 +69,8 @@ describe('tracker request debug snapshots', () => {
     const snapshot = getLastTrackerRequestDebugSnapshot();
     expect(snapshot).toMatchObject({
       messageId: 7,
+      moduleId: 'minimal',
+      moduleName: 'Minimal',
       connectionSource: 'saved',
       profileId: 'profile-1',
       api: 'openai',
@@ -107,6 +111,8 @@ describe('tracker request debug snapshots', () => {
     const lines = formatTrackerRequestDebugSnapshot({
       capturedAt: '2026-04-02T12:00:00.000Z',
       messageId: 3,
+      moduleId: 'agenda',
+      moduleName: 'Agenda',
       connectionSource: 'active',
       profileId: 'profile-2',
       api: 'textgenerationwebui',
@@ -127,6 +133,8 @@ describe('tracker request debug snapshots', () => {
     });
 
     expect(lines.join('\n')).toContain('lastTrackerRequest:');
+    expect(lines.join('\n')).toContain('moduleId: agenda');
+    expect(lines.join('\n')).toContain('moduleName: Agenda');
     expect(lines.join('\n')).toContain('connectionSource: active');
     expect(lines.join('\n')).toContain('profileId: profile-2');
     expect(lines.join('\n')).toContain('api: textgenerationwebui');

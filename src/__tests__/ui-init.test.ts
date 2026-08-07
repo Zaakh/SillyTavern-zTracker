@@ -41,6 +41,7 @@ jest.unstable_mockModule('../tracker.js', () => ({
 }));
 
 const { initializeGlobalUI } = await import('../ui/ui-init.js');
+const { createDefaultTrackerModule } = await import('../config.js');
 
 let sharedUiInitHost: ReturnType<typeof createSillyTavernHost>;
 
@@ -221,6 +222,7 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
       preserveTextCompletionTurnAlternation: true,
       isGroupChat: true,
       assistantReplyLabel: undefined,
+      moduleId: 'default',
     });
     expect(chat).toEqual([{ mes: 'group result' }]);
   });
@@ -241,6 +243,7 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
       preserveTextCompletionTurnAlternation: true,
       isGroupChat: false,
       assistantReplyLabel: 'Bar',
+      moduleId: 'default',
     });
     expect(chat).toEqual([{ mes: 'solo result' }]);
   });
@@ -262,8 +265,45 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
       preserveTextCompletionTurnAlternation: false,
       isGroupChat: false,
       assistantReplyLabel: 'Bar',
+      moduleId: 'default',
     });
     expect(chat).toEqual([{ mes: 'character result' }]);
+  });
+
+  test('runs enabled module injections in reverse call order so final composition follows module order', async () => {
+    const host = createSillyTavernHost({ mainApi: 'openai' });
+    const sceneModule = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    sceneModule.injection.includeLastXMessages = 1;
+    sceneModule.injection.snapshotHeader = 'Scene Tracker:';
+    const agendaModule = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
+    agendaModule.injection.includeLastXMessages = 1;
+    agendaModule.injection.snapshotHeader = 'Agenda Tracker:';
+    const disabledModule = createDefaultTrackerModule({ id: 'disabled', name: 'Disabled', order: 2 });
+    disabledModule.enabled = false;
+
+    await bootExtensionForTest({
+      host,
+      boot: () => initializeGlobalUI({
+        globalContext: host.context,
+        settingsManager: {
+          getSettings: jest.fn(() => ({ autoMode: 'none', modules: [sceneModule, agendaModule, disabledModule] })),
+        } as any,
+        actions: createUiInitActions(),
+        renderTrackerWithDeps: () => undefined,
+      }),
+    });
+
+    const chat = [{ mes: 'hello' }];
+    includeZTrackerMessagesMock.mockImplementation((nextChat: unknown[]) => [...nextChat]);
+
+    (globalThis as any).ztrackerGenerateInterceptor(chat);
+
+    expect(includeZTrackerMessagesMock).toHaveBeenCalledTimes(2);
+    expect(includeZTrackerMessagesMock.mock.calls.map((call) => (call[2] as any).moduleId)).toEqual(['agenda', 'scene']);
+    expect(includeZTrackerMessagesMock.mock.calls.map((call) => (call[1] as any).embedZTrackerSnapshotHeader)).toEqual([
+      'Agenda Tracker:',
+      'Scene Tracker:',
+    ]);
   });
 
   test('delegates the tracker delete button to deleteTracker for the owning message', async () => {

@@ -269,7 +269,9 @@ describe('createTrackerActions cleanup flow', () => {
     await actions.generateTrackerPart(0, 'time');
 
     expect(trackerPartsModule.buildTopLevelPartSchema).toHaveBeenCalledWith(defaultSchema, 'time');
-    expect((SillyTavern.getContext() as any).chatMetadata).toEqual({ zTracker: { schemaKey: 'alternate' } });
+    expect((SillyTavern.getContext() as any).chatMetadata).toEqual({
+      zTracker: { byModule: { default: { schemaKey: 'alternate' } } },
+    });
     expect(saveMetadataDebounced).not.toHaveBeenCalled();
   });
 

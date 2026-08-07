@@ -1,5 +1,5 @@
 import type { Message } from 'sillytavern-utils-lib';
-import type { ExtensionSettings } from '../config.js';
+import type { TrackerModuleSettings } from '../config.js';
 import { getArrayItemIdentityKey } from '../tracker-parts.js';
 
 /** Calculates tracker-part metadata once so render and regeneration flows can reuse the same schema hints. */
@@ -108,7 +108,7 @@ export function getPromptPresetSelections(
   selectedApi: string,
   options: {
     context?: PromptPresetSelectionContextLike;
-    trackerSystemPromptMode?: ExtensionSettings['trackerSystemPromptMode'];
+    trackerSystemPromptMode?: TrackerModuleSettings['trackerSystemPromptMode'];
     trackerSystemPromptName?: string;
     trackerInstructName?: string;
     trackerContextName?: string;
@@ -162,7 +162,7 @@ export function getPromptPresetSelections(
 /** Applies the shared skip-first-messages guard and optionally emits the manual-call info toast. */
 export function shouldSkipTrackerGeneration(
   messageId: number,
-  settings: ExtensionSettings,
+  settings: TrackerModuleSettings,
   notify: (message: string) => void,
   silent?: boolean,
 ): boolean {

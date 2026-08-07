@@ -89,6 +89,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
     partKey: string,
     currentArr: any[],
     locator: ArrayItemLocator,
+    trackerPrompt: string,
   ): {
     index: number;
     promptContext: Record<string, unknown>;
@@ -110,7 +111,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
         promptContext: { part: partKey, matchBy: 'name', name: locator.name, index },
         promptContextLabel: 'Regenerate ONLY this array item (matched by name; previous values intentionally omitted):',
         prompt:
-          `${dependencies.getTrackerPrompt()}\n\nRegenerate ONLY the ${partKey} item with name "${locator.name}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}\n\nIMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
+          `${trackerPrompt}\n\nRegenerate ONLY the ${partKey} item with name "${locator.name}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}\n\nIMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
         promptEngineeringInstruction: preserveLine,
         successMessage: `Updated: ${partKey} (${locator.name})`,
         resolvedTarget: buildArrayItemCleanupTarget(partKey, index, { idKey: 'name', idValue: locator.name }),
@@ -133,7 +134,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
         promptContext: { part: partKey, matchBy: locator.idKey, idValue: locator.idValue, index },
         promptContextLabel: 'Regenerate ONLY this array item (matched by identity; previous values intentionally omitted):',
         prompt:
-          `${dependencies.getTrackerPrompt()}\n\nRegenerate ONLY the ${partKey} item with ${locator.idKey} "${locator.idValue}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}\n\nIMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
+          `${trackerPrompt}\n\nRegenerate ONLY the ${partKey} item with ${locator.idKey} "${locator.idValue}" as an object under key "item". Return a single JSON object matching the provided schema.${preserveLine}\n\nIMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
         promptEngineeringInstruction: preserveLine,
         successMessage: `Updated: ${partKey} (${locator.idKey}=${locator.idValue})`,
         resolvedTarget: buildArrayItemCleanupTarget(partKey, index, { idKey: locator.idKey, idValue: locator.idValue }),
@@ -156,7 +157,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
       promptContext: { part: partKey, index, ...(idKey && idValue ? { idKey, idValue } : {}) },
       promptContextLabel: 'Regenerate ONLY this array item (previous item intentionally omitted):',
       prompt:
-        `${dependencies.getTrackerPrompt()}\n\nRegenerate ONLY ${partKey}[${index}] as an object under key "item". Return a single JSON object matching the provided schema. IMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
+        `${trackerPrompt}\n\nRegenerate ONLY ${partKey}[${index}] as an object under key "item". Return a single JSON object matching the provided schema. IMPORTANT: Generate a fresh item; the previous values have been intentionally omitted and must not be repeated.`,
       successMessage: `Updated: ${partKey}[${index}]`,
       resolvedTarget: buildArrayItemCleanupTarget(partKey, index, idKey && idValue ? { idKey, idValue } : undefined),
       finalizeItem: (item) => item,
@@ -170,6 +171,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
     fieldKey: string,
     currentArr: any[],
     locator: ArrayItemLocator,
+    trackerPrompt: string,
   ): {
     index: number;
     promptContext: Record<string, unknown>;
@@ -200,7 +202,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
         itemContext,
       },
       prompt:
-        `${dependencies.getTrackerPrompt()}\n\nRegenerate ONLY ${partKey}[${index}].${fieldKey}. Return a single JSON object with key "value" that matches the provided schema. Do not change or rename the array item; only update that field. IMPORTANT: Generate a fresh value; the previous value has been intentionally omitted and must not be repeated.`,
+        `${trackerPrompt}\n\nRegenerate ONLY ${partKey}[${index}].${fieldKey}. Return a single JSON object with key "value" that matches the provided schema. Do not change or rename the array item; only update that field. IMPORTANT: Generate a fresh value; the previous value has been intentionally omitted and must not be repeated.`,
       successMessage: `Updated: ${partKey}[${index}].${fieldKey}`,
       resolvedTarget: buildArrayItemFieldCleanupTarget(
         partKey,
@@ -212,8 +214,8 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
   }
 
   /** Regenerates one top-level tracker part through the shared context-menu update flow. */
-  async function generateTrackerPartInternal(id: number, partKey: string, notifySchemaMismatch = true) {
-    if (dependencies.cancelIfPending(id)) return false;
+  async function generateTrackerPartInternal(id: number, partKey: string, notifySchemaMismatch = true, moduleId?: string) {
+    if (dependencies.cancelIfPending(id, moduleId)) return false;
 
     const messageBlock = getMessageBlock(id);
     const partButton = messageBlock?.querySelector(
@@ -227,7 +229,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
       errorContext: 'generating tracker part',
       callback: async () => {
         const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, partsOrder, partsMeta, makeRequest } =
-          await dependencies.prepareExistingTrackerGeneration(id, notifySchemaMismatch);
+          await dependencies.prepareExistingTrackerGeneration(id, notifySchemaMismatch, moduleId);
         if (!currentTracker || typeof currentTracker !== 'object') {
           throw new Error('No existing tracker found for this message. Generate a full tracker first.');
         }
@@ -256,6 +258,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
         const nextTracker = mergeTrackerPart(currentTracker, partKey, partResponse);
         await dependencies.persistResolvedTrackerUpdate({
           messageId: id,
+          moduleId,
           message,
           schemaPresetKey,
           trackerData: nextTracker,
@@ -277,8 +280,9 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
     locator: ArrayItemLocator,
     options: { button: Element | null | undefined; errorContext: string },
     notifySchemaMismatch = true,
+    moduleId?: string,
   ) {
-    if (dependencies.cancelIfPending(id)) return false;
+    if (dependencies.cancelIfPending(id, moduleId)) return false;
 
     const detailsState = captureDetailsState(id);
 
@@ -288,13 +292,13 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
       errorContext: options.errorContext,
       callback: async () => {
         const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, partsOrder, partsMeta, makeRequest } =
-          await dependencies.prepareExistingTrackerGeneration(id, notifySchemaMismatch);
+          await dependencies.prepareExistingTrackerGeneration(id, notifySchemaMismatch, moduleId);
         if (!currentTracker || typeof currentTracker !== 'object') {
           throw new Error('No existing tracker found for this message. Generate a full tracker first.');
         }
 
         const currentArr = getTrackerArrayValue(currentTracker, partKey);
-        const itemRequest = resolveArrayItemRegeneration(chatJsonValue, partKey, currentArr, locator);
+        const itemRequest = resolveArrayItemRegeneration(chatJsonValue, partKey, currentArr, locator, settings.prompt);
         const itemSchema = buildArrayItemSchema(chatJsonValue, partKey);
         const redactedTracker = redactTrackerArrayItemValue(currentTracker, partKey, itemRequest.index);
 
@@ -323,6 +327,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
         const nextTracker = replaceTrackerArrayItem(currentTracker, partKey, itemRequest.index, item);
         await dependencies.persistResolvedTrackerUpdate({
           messageId: id,
+          moduleId,
           message,
           schemaPresetKey,
           trackerData: nextTracker,
@@ -345,8 +350,9 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
     locator: ArrayItemLocator,
     options: { button: Element | null | undefined; errorContext: string },
     notifySchemaMismatch = true,
+    moduleId?: string,
   ) {
-    if (dependencies.cancelIfPending(id)) return false;
+    if (dependencies.cancelIfPending(id, moduleId)) return false;
 
     const detailsState = captureDetailsState(id);
 
@@ -356,13 +362,13 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
       errorContext: options.errorContext,
       callback: async () => {
         const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, partsOrder, partsMeta, makeRequest } =
-          await dependencies.prepareExistingTrackerGeneration(id, notifySchemaMismatch);
+          await dependencies.prepareExistingTrackerGeneration(id, notifySchemaMismatch, moduleId);
         if (!currentTracker || typeof currentTracker !== 'object') {
           throw new Error('No existing tracker found for this message. Generate a full tracker first.');
         }
 
         const currentArr = getTrackerArrayValue(currentTracker, partKey);
-        const fieldRequest = resolveArrayItemFieldRegeneration(chatJsonValue, partKey, fieldKey, currentArr, locator);
+        const fieldRequest = resolveArrayItemFieldRegeneration(chatJsonValue, partKey, fieldKey, currentArr, locator, settings.prompt);
         const redactedTracker = redactTrackerArrayItemFieldValue(currentTracker, partKey, fieldRequest.index, fieldKey);
         const fieldSchema = buildArrayItemFieldSchema(chatJsonValue, partKey, fieldKey);
 
@@ -394,6 +400,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
         const nextTracker = replaceTrackerArrayItemField(currentTracker, partKey, fieldRequest.index, fieldKey, value);
         await dependencies.persistResolvedTrackerUpdate({
           messageId: id,
+          moduleId,
           message,
           schemaPresetKey,
           trackerData: nextTracker,
@@ -409,9 +416,9 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
   }
 
   /** Recreates one cleanup target by routing it through the same context-menu regeneration paths. */
-  async function recreateCleanupTarget(messageId: number, target: TrackerCleanupTarget): Promise<boolean> {
+  async function recreateCleanupTarget(messageId: number, target: TrackerCleanupTarget, moduleId?: string): Promise<boolean> {
     if (target.kind === 'part') {
-      return !!(await generateTrackerPartInternal(messageId, target.partKey, false));
+      return !!(await generateTrackerPartInternal(messageId, target.partKey, false, moduleId));
     }
     if (target.kind === 'array-item') {
       if (typeof target.idKey === 'string' && target.idKey && typeof target.idValue === 'string' && target.idValue) {
@@ -422,6 +429,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
             { kind: 'identity', idKey: target.idKey, idValue: target.idValue },
             { button: undefined, errorContext: 'generating tracker array item (by identity)' },
             false,
+            moduleId,
           )
         );
       }
@@ -432,6 +440,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
           { kind: 'index', index: target.index },
           { button: undefined, errorContext: 'generating tracker array item' },
           false,
+          moduleId,
         )
       );
     }
@@ -444,6 +453,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
           { kind: 'identity', idKey: target.idKey, idValue: target.idValue },
           { button: undefined, errorContext: 'generating tracker array item field (by identity)' },
           false,
+          moduleId,
         )
       );
     }
@@ -455,6 +465,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
         { kind: 'index', index: target.index },
         { button: undefined, errorContext: 'generating tracker array item field' },
         false,
+        moduleId,
       )
     );
   }
@@ -475,36 +486,36 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
   }
 
   return {
-    generateTrackerPart: async (id: number, partKey: string) => generateTrackerPartInternal(id, partKey),
-    generateTrackerArrayItem: async (id: number, partKey: string, index: number) => {
+    generateTrackerPart: async (id: number, partKey: string, moduleId?: string) => generateTrackerPartInternal(id, partKey, true, moduleId),
+    generateTrackerArrayItem: async (id: number, partKey: string, index: number, moduleId?: string) => {
       return generateTrackerArrayItemForLocator(id, partKey, { kind: 'index', index }, {
         button: getArrayItemButton(id, partKey, { kind: 'index', index }),
         errorContext: 'generating tracker array item',
-      });
+      }, true, moduleId);
     },
-    generateTrackerArrayItemByName: async (id: number, partKey: string, name: string) => {
+    generateTrackerArrayItemByName: async (id: number, partKey: string, name: string, moduleId?: string) => {
       return generateTrackerArrayItemForLocator(id, partKey, { kind: 'name', name }, {
         button: getArrayItemButton(id, partKey, { kind: 'name', name }),
         errorContext: 'generating tracker array item (by name)',
-      });
+      }, true, moduleId);
     },
-    generateTrackerArrayItemByIdentity: async (id: number, partKey: string, idKey: string, idValue: string) => {
+    generateTrackerArrayItemByIdentity: async (id: number, partKey: string, idKey: string, idValue: string, moduleId?: string) => {
       return generateTrackerArrayItemForLocator(id, partKey, { kind: 'identity', idKey, idValue }, {
         button: getArrayItemButton(id, partKey, { kind: 'identity', idKey, idValue }),
         errorContext: 'generating tracker array item (by identity)',
-      });
+      }, true, moduleId);
     },
-    generateTrackerArrayItemField: async (id: number, partKey: string, index: number, fieldKey: string) => {
+    generateTrackerArrayItemField: async (id: number, partKey: string, index: number, fieldKey: string, moduleId?: string) => {
       return generateTrackerArrayItemFieldForLocator(id, partKey, fieldKey, { kind: 'index', index }, {
         button: getArrayItemFieldButton(id, partKey, fieldKey, { kind: 'index', index }),
         errorContext: 'generating tracker array item field',
-      });
+      }, true, moduleId);
     },
-    generateTrackerArrayItemFieldByName: async (id: number, partKey: string, name: string, fieldKey: string) => {
+    generateTrackerArrayItemFieldByName: async (id: number, partKey: string, name: string, fieldKey: string, moduleId?: string) => {
       return generateTrackerArrayItemFieldForLocator(id, partKey, fieldKey, { kind: 'name', name }, {
         button: getArrayItemFieldButton(id, partKey, fieldKey, { kind: 'name', name }),
         errorContext: 'generating tracker array item field (by name)',
-      });
+      }, true, moduleId);
     },
     generateTrackerArrayItemFieldByIdentity: async (
       id: number,
@@ -512,11 +523,12 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
       idKey: string,
       idValue: string,
       fieldKey: string,
+      moduleId?: string,
     ) => {
       return generateTrackerArrayItemFieldForLocator(id, partKey, fieldKey, { kind: 'identity', idKey, idValue }, {
         button: getArrayItemFieldButton(id, partKey, fieldKey, { kind: 'identity', idKey, idValue }),
         errorContext: 'generating tracker array item field (by identity)',
-      });
+      }, true, moduleId);
     },
     recreateCleanupTarget,
   };

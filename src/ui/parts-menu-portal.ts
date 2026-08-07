@@ -87,6 +87,12 @@ function portalPartsMenu(details: HTMLDetailsElement): void {
   list.style.position = 'absolute';
   list.style.zIndex = '2147483647';
   list.style.right = 'auto';
+  const moduleId = (details.closest('.mes_ztracker') as HTMLElement | null)?.dataset.ztrackerModule;
+  if (moduleId) {
+    list.dataset.ztrackerModule = moduleId;
+  } else {
+    delete list.dataset.ztrackerModule;
+  }
 
   const messageIdText = details.closest('.mes')?.getAttribute('mesid') ?? '';
   const parsedMessageId = Number(messageIdText);

@@ -1,7 +1,8 @@
-import { EXTENSION_KEY } from '../config.js';
+import { DEFAULT_MODULE_ID, EXTENSION_KEY } from '../config.js';
 
 /** Character-card field name used to persist zTracker's per-character auto-mode exclusion. */
 export const CHARACTER_AUTO_MODE_EXCLUDED_FIELD = 'autoModeExcluded';
+export const CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD = 'autoModeExclusions';
 
 /** DOM id for the character-panel toggle button so repeated sync passes remain idempotent. */
 export const CHARACTER_AUTO_MODE_BUTTON_ID = 'ztracker-character-auto-mode-toggle';
@@ -45,12 +46,38 @@ export function getCharacterZTrackerExtensionData(character: CharacterLike | und
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     return {};
   }
-  return data as Record<string, unknown>;
+  const extensionData = data as Record<string, unknown>;
+  migrateLegacyCharacterAutoModeExclusion(extensionData);
+  return extensionData;
+}
+
+/** Moves the legacy single boolean exclusion into the default Module slot. */
+export function migrateLegacyCharacterAutoModeExclusion(extensionData: Record<string, unknown>): boolean {
+  if (extensionData[CHARACTER_AUTO_MODE_EXCLUDED_FIELD] === undefined) {
+    return false;
+  }
+
+  const exclusions =
+    extensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD]
+    && typeof extensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD] === 'object'
+    && !Array.isArray(extensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD])
+      ? { ...(extensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD] as Record<string, unknown>) }
+      : {};
+
+  if (exclusions[DEFAULT_MODULE_ID] === undefined) {
+    exclusions[DEFAULT_MODULE_ID] = extensionData[CHARACTER_AUTO_MODE_EXCLUDED_FIELD] === true;
+  }
+  extensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD] = exclusions;
+  delete extensionData[CHARACTER_AUTO_MODE_EXCLUDED_FIELD];
+  return true;
 }
 
 /** Reads whether the supplied character is excluded from zTracker auto-mode. */
-export function isCharacterAutoModeExcluded(character: CharacterLike | undefined): boolean {
-  return getCharacterZTrackerExtensionData(character)[CHARACTER_AUTO_MODE_EXCLUDED_FIELD] === true;
+export function isCharacterAutoModeExcluded(character: CharacterLike | undefined, moduleId = DEFAULT_MODULE_ID): boolean {
+  const exclusions = getCharacterZTrackerExtensionData(character)[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD];
+  return !!exclusions && typeof exclusions === 'object' && !Array.isArray(exclusions)
+    ? (exclusions as Record<string, unknown>)[moduleId] === true
+    : false;
 }
 
 /** Resolves a SillyTavern character id from a rendered message's original avatar reference. */
@@ -78,24 +105,28 @@ export function getCurrentCharacterId(context: CharacterContextLike): number | u
 }
 
 /** Determines whether an incoming character-rendered message should be skipped by auto-mode. */
-export function shouldAutoGenerateForCharacterMessage(context: CharacterContextLike, messageId: number): boolean {
+export function shouldAutoGenerateForCharacterMessage(
+  context: CharacterContextLike,
+  messageId: number,
+  moduleId = DEFAULT_MODULE_ID,
+): boolean {
   const message = context.chat?.[messageId];
   const characterId = resolveCharacterIdFromMessage(context.characters, message);
   if (characterId === undefined) {
     return true;
   }
 
-  return !isCharacterAutoModeExcluded(context.characters?.[characterId]);
+  return !isCharacterAutoModeExcluded(context.characters?.[characterId], moduleId);
 }
 
 /** Determines whether an outgoing user-rendered message should be skipped for the active solo character. */
-export function shouldAutoGenerateForUserMessage(context: CharacterContextLike): boolean {
+export function shouldAutoGenerateForUserMessage(context: CharacterContextLike, moduleId = DEFAULT_MODULE_ID): boolean {
   const characterId = getCurrentCharacterId(context);
   if (characterId === undefined) {
     return true;
   }
 
-  return !isCharacterAutoModeExcluded(context.characters?.[characterId]);
+  return !isCharacterAutoModeExcluded(context.characters?.[characterId], moduleId);
 }
 
 /** Persists and mirrors the per-character exclusion flag into the live SillyTavern context. */
@@ -103,6 +134,7 @@ export function setCharacterAutoModeExcluded(
   context: CharacterContextLike,
   characterId: number,
   excluded: boolean,
+  moduleId = DEFAULT_MODULE_ID,
 ): boolean {
   const characters = context.characters;
   if (!Array.isArray(characters) || characterId < 0 || characterId >= characters.length) {
@@ -111,9 +143,18 @@ export function setCharacterAutoModeExcluded(
 
   const character = characters[characterId] ?? {};
   const currentExtensionData = getCharacterZTrackerExtensionData(character);
+  const currentExclusions =
+    currentExtensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD]
+    && typeof currentExtensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD] === 'object'
+    && !Array.isArray(currentExtensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD])
+      ? currentExtensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD] as Record<string, unknown>
+      : {};
   const nextExtensionData = {
     ...currentExtensionData,
-    [CHARACTER_AUTO_MODE_EXCLUDED_FIELD]: excluded,
+    [CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD]: {
+      ...currentExclusions,
+      [moduleId]: excluded,
+    },
   };
 
   character.data = character.data ?? {};

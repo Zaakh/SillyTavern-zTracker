@@ -12,9 +12,10 @@ import {
 } from '../test-utils/sillytavern-host-harness.js';
 
 const includeZTrackerMessagesMock = jest.fn((chat: unknown[], ..._rest: unknown[]) => [...chat]);
+const stEchoMock = jest.fn();
 
 jest.unstable_mockModule('sillytavern-utils-lib/config', () => ({
-  st_echo: jest.fn(),
+  st_echo: stEchoMock,
   selected_group: false,
 }));
 
@@ -42,6 +43,7 @@ jest.unstable_mockModule('../tracker.js', () => ({
 }));
 
 const { initializeGlobalUI } = await import('../ui/ui-init.js');
+const { createDefaultTrackerModule } = await import('../config.js');
 
 function createUiInitActions() {
   return {
@@ -63,6 +65,7 @@ describe('initializeGlobalUI idempotence', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
     includeZTrackerMessagesMock.mockClear();
+    stEchoMock.mockClear();
   });
 
   test('does not duplicate injected UI or click handlers when initialized twice', async () => {
@@ -128,5 +131,101 @@ describe('initializeGlobalUI idempotence', () => {
 
     expect(actions.generateTracker).toHaveBeenCalledTimes(1);
     expect(actions.generateTracker).toHaveBeenCalledWith(0, { showStatusIndicator: true });
+  });
+
+  test('opens a Module chooser for the message truck button when multiple Modules are enabled', async () => {
+    const host = createSillyTavernHost();
+    const actions = createUiInitActions();
+    const defaultModule = createDefaultTrackerModule({ id: 'default', name: 'Default', order: 0 });
+    const agendaModule = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
+    const disabledModule = createDefaultTrackerModule({ id: 'disabled', name: 'Disabled', order: 2 });
+    disabledModule.enabled = false;
+    installSillyTavernHost(host.context);
+    installExtensionsMenuDom();
+    installMessageTemplateDom();
+    installChatMessageDom(0, {
+      innerHtml: '<div class="mes_button mes_ztracker_button"></div><div class="mes_text">Message 0</div>',
+    });
+
+    await initializeGlobalUI({
+      globalContext: host.context,
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'none', modules: [defaultModule, agendaModule, disabledModule] })),
+      } as any,
+      actions,
+      renderTrackerWithDeps: jest.fn(),
+    });
+
+    (document.querySelector('.mes[mesid="0"] .mes_ztracker_button') as HTMLElement).dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
+
+    expect(actions.generateTracker).not.toHaveBeenCalled();
+    expect(document.querySelectorAll('.ztracker-module-generate-option')).toHaveLength(2);
+
+    (document.querySelector('.ztracker-module-generate-option[data-ztracker-module="agenda"]') as HTMLElement).dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
+
+    expect(actions.generateTracker).toHaveBeenCalledTimes(1);
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { showStatusIndicator: true, moduleId: 'agenda' });
+    expect(document.querySelector('.ztracker-module-generate-menu')).toBeNull();
+  });
+
+  test('uses the only enabled Module directly from the message truck button', async () => {
+    const host = createSillyTavernHost();
+    const actions = createUiInitActions();
+    const agendaModule = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 0 });
+    installSillyTavernHost(host.context);
+    installExtensionsMenuDom();
+    installMessageTemplateDom();
+    installChatMessageDom(0, {
+      innerHtml: '<div class="mes_button mes_ztracker_button"></div><div class="mes_text">Message 0</div>',
+    });
+
+    await initializeGlobalUI({
+      globalContext: host.context,
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'none', modules: [agendaModule] })),
+      } as any,
+      actions,
+      renderTrackerWithDeps: jest.fn(),
+    });
+
+    (document.querySelector('.mes[mesid="0"] .mes_ztracker_button') as HTMLElement).dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
+
+    expect(actions.generateTracker).toHaveBeenCalledTimes(1);
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { showStatusIndicator: true, moduleId: 'agenda' });
+  });
+
+  test('does not fall back to Default when no Module is enabled from the message truck button', async () => {
+    const host = createSillyTavernHost();
+    const actions = createUiInitActions();
+    const disabledModule = createDefaultTrackerModule({ id: 'default', name: 'Default', order: 0 });
+    disabledModule.enabled = false;
+    installSillyTavernHost(host.context);
+    installExtensionsMenuDom();
+    installMessageTemplateDom();
+    installChatMessageDom(0, {
+      innerHtml: '<div class="mes_button mes_ztracker_button"></div><div class="mes_text">Message 0</div>',
+    });
+
+    await initializeGlobalUI({
+      globalContext: host.context,
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'none', modules: [disabledModule] })),
+      } as any,
+      actions,
+      renderTrackerWithDeps: jest.fn(),
+    });
+
+    (document.querySelector('.mes[mesid="0"] .mes_ztracker_button') as HTMLElement).dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
+
+    expect(actions.generateTracker).not.toHaveBeenCalled();
+    expect(stEchoMock).toHaveBeenCalledWith('warning', 'No zTracker Modules are enabled. Enable a Module before generating a tracker.');
   });
 });

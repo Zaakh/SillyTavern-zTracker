@@ -1,6 +1,7 @@
 import { DEFAULT_EMBED_SNAPSHOT_HEADER } from '../config.js';
 import type { ExtensionSettings } from '../config.js';
 import type { ExtensionSettingsManager } from 'sillytavern-utils-lib';
+import { normalizePromptSpeakerName } from '../tracker.js';
 
 export type PromptDebugMessage = {
   role: string;
@@ -12,6 +13,8 @@ export type PromptDebugMessage = {
 export type TrackerRequestDebugSnapshot = {
   capturedAt: string;
   messageId: number;
+  moduleId?: string;
+  moduleName?: string;
   connectionSource: 'active' | 'saved';
   profileId: string;
   api?: string;
@@ -65,11 +68,7 @@ function toPromptDebugMessage(message: {
   ignoreInstruct?: boolean;
   source?: { name?: string };
 }): PromptDebugMessage {
-  const name = typeof message.name === 'string' && message.name.trim()
-    ? message.name
-    : typeof message.source?.name === 'string' && message.source.name.trim()
-      ? message.source.name
-      : undefined;
+  const name = normalizePromptSpeakerName(message.name) ?? normalizePromptSpeakerName(message.source?.name);
 
   return {
     role: message.role,
@@ -110,6 +109,8 @@ export function captureTrackerRequestDebugSnapshot(
   settingsManager: ExtensionSettingsManager<ExtensionSettings>,
   snapshot: {
     messageId: number;
+    moduleId?: string;
+    moduleName?: string;
     connectionSource: 'active' | 'saved';
     profileId: string;
     api?: string;
@@ -122,6 +123,7 @@ export function captureTrackerRequestDebugSnapshot(
     syspromptName?: string;
     promptEngineeringMode: string;
     maxTokens: number;
+    embedSnapshotHeader?: string;
     overridePayload: unknown;
     requestMessages: Array<{ role: string; content: string; name?: string; ignoreInstruct?: boolean; source?: { name?: string } }>;
     sanitizedPrompt: Array<{ role: string; content: string; name?: string; ignoreInstruct?: boolean; source?: { name?: string } }>;
@@ -137,12 +139,14 @@ export function captureTrackerRequestDebugSnapshot(
   const debugSnapshot: TrackerRequestDebugSnapshot = {
     capturedAt: new Date().toISOString(),
     messageId: snapshot.messageId,
+    ...(snapshot.moduleId ? { moduleId: snapshot.moduleId } : {}),
+    ...(snapshot.moduleName ? { moduleName: snapshot.moduleName } : {}),
     connectionSource: snapshot.connectionSource,
     profileId: snapshot.profileId,
     ...pickConnectionDebugFields(snapshot),
     promptEngineeringMode: snapshot.promptEngineeringMode,
     maxTokens: snapshot.maxTokens,
-    embedSnapshotHeader: settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER,
+    embedSnapshotHeader: snapshot.embedSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER,
     overridePayload: snapshot.overridePayload,
     requestMessages,
     sanitizedPrompt,
@@ -163,6 +167,8 @@ export function formatTrackerRequestDebugSnapshot(snapshot?: TrackerRequestDebug
     'lastTrackerRequest:',
     `capturedAt: ${snapshot.capturedAt}`,
     `messageId: ${snapshot.messageId}`,
+    ...(snapshot.moduleId ? [`moduleId: ${snapshot.moduleId}`] : []),
+    ...(snapshot.moduleName ? [`moduleName: ${snapshot.moduleName}`] : []),
     `connectionSource: ${snapshot.connectionSource}`,
     `profileId: ${snapshot.profileId}`,
     ...formatConnectionDebugFields(snapshot),

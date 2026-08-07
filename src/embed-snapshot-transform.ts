@@ -1,5 +1,5 @@
 import { encode } from '@toon-format/toon';
-import type { EmbedSnapshotTransformInput, ExtensionSettings } from './config.js';
+import type { EmbedSnapshotTransformInput, TrackerModuleSettings } from './config.js';
 
 // Formats zTracker tracker snapshots for embedding into prompt context.
 
@@ -203,7 +203,7 @@ function getDefaultCodeFenceWrap(presetKey?: string): boolean {
 
 export function formatEmbeddedTrackerSnapshot(
   trackerValue: unknown,
-  settings: Pick<ExtensionSettings, 'embedZTrackerSnapshotTransformPreset' | 'embedZTrackerSnapshotTransformPresets'>,
+  settings: Pick<TrackerModuleSettings, 'embedZTrackerSnapshotTransformPreset' | 'embedZTrackerSnapshotTransformPresets'>,
 ): { lang: string; text: string; wrapInCodeFence: boolean } {
   const presets = settings.embedZTrackerSnapshotTransformPresets;
   const presetKey = settings.embedZTrackerSnapshotTransformPreset;

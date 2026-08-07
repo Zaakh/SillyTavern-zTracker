@@ -4,6 +4,7 @@
 
 import { describe, expect, jest, test } from '@jest/globals';
 import {
+  DEFAULT_MODULE_ID,
   EXTENSION_KEY,
 } from '../config.js';
 import {
@@ -34,6 +35,17 @@ describe('character auto-mode exclusion helpers', () => {
         data: { extensions: { [EXTENSION_KEY]: { autoModeExcluded: true } } },
       }),
     ).toBe(true);
+  });
+
+  test('migrates the legacy exclusion boolean into the default module slot', () => {
+    const character = {
+      data: { extensions: { [EXTENSION_KEY]: { autoModeExcluded: true } } },
+    };
+
+    expect(isCharacterAutoModeExcluded(character)).toBe(true);
+    expect(character.data.extensions[EXTENSION_KEY]).toEqual({
+      autoModeExclusions: { [DEFAULT_MODULE_ID]: true },
+    });
   });
 
   test('accepts string character ids from the live SillyTavern host context', () => {
@@ -69,8 +81,14 @@ describe('character auto-mode exclusion helpers', () => {
     };
 
     expect(setCharacterAutoModeExcluded(context, 0, true)).toBe(true);
-    expect(writeExtensionField).toHaveBeenCalledWith(0, EXTENSION_KEY, { existing: 'value', autoModeExcluded: true });
-    expect(context.characters[0].data.extensions[EXTENSION_KEY]).toEqual({ existing: 'value', autoModeExcluded: true });
+    expect(writeExtensionField).toHaveBeenCalledWith(0, EXTENSION_KEY, {
+      existing: 'value',
+      autoModeExclusions: { [DEFAULT_MODULE_ID]: true },
+    });
+    expect(context.characters[0].data.extensions[EXTENSION_KEY]).toEqual({
+      existing: 'value',
+      autoModeExclusions: { [DEFAULT_MODULE_ID]: true },
+    });
   });
 });
 
@@ -102,7 +120,9 @@ describe('character auto-mode exclusion button sync', () => {
 
     button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    expect(context.writeExtensionField).toHaveBeenCalledWith(0, EXTENSION_KEY, { autoModeExcluded: true });
+    expect(context.writeExtensionField).toHaveBeenCalledWith(0, EXTENSION_KEY, {
+      autoModeExclusions: { [DEFAULT_MODULE_ID]: true },
+    });
     expect(button?.dataset.excluded).toBe('true');
   });
 
@@ -124,8 +144,12 @@ describe('character auto-mode exclusion button sync', () => {
 
     button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    expect(writeExtensionField).toHaveBeenCalledWith(1, EXTENSION_KEY, { autoModeExcluded: true });
-    expect((context.characters[1].data.extensions as Record<string, unknown>)[EXTENSION_KEY]).toEqual({ autoModeExcluded: true });
+    expect(writeExtensionField).toHaveBeenCalledWith(1, EXTENSION_KEY, {
+      autoModeExclusions: { [DEFAULT_MODULE_ID]: true },
+    });
+    expect((context.characters[1].data.extensions as Record<string, unknown>)[EXTENSION_KEY]).toEqual({
+      autoModeExclusions: { [DEFAULT_MODULE_ID]: true },
+    });
     expect((context.characters[0].data.extensions as Record<string, unknown>)[EXTENSION_KEY]).toBeUndefined();
   });
 

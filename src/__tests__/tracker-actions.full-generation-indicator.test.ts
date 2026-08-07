@@ -7,6 +7,7 @@ import {
   applyTrackerUpdateAndRenderMock,
   buildPromptMock,
   createTrackerActions,
+  createTrackerModuleFromLegacySettings,
   installSillyTavernContext,
   makeBuiltPromptResult,
   makeContext,
@@ -27,7 +28,9 @@ function buildMessage(messageId: number): string {
     <div class="mes" mesid="${messageId}">
       <div class="mes_text">Message ${messageId}</div>
       <div class="mes_button mes_ztracker_button"></div>
-      <div class="ztracker-regenerate-button"></div>
+      <div class="mes_ztracker" data-ztracker-module="default">
+        <div class="ztracker-regenerate-button"></div>
+      </div>
     </div>
   `;
 }
@@ -98,6 +101,54 @@ describe('createTrackerActions full generation indicator', () => {
     expect(document.querySelector('.ztracker-full-tracker-status')).toBeNull();
     expect(document.querySelector('.mes_ztracker_button')?.classList.contains('spinning')).toBe(false);
     expect(document.querySelector('.ztracker-regenerate-button')?.classList.contains('spinning')).toBe(false);
+  });
+
+  test('spins only the regenerate button for the active Module block', async () => {
+    document.body.innerHTML = `
+      <div id="extensionsMenu"></div>
+      <div class="mes" mesid="0">
+        <div class="mes_text">Message 0</div>
+        <div class="mes_button mes_ztracker_button"></div>
+        <div class="mes_ztracker" data-ztracker-module="default">
+          <div class="ztracker-regenerate-button default-regenerate"></div>
+        </div>
+        <div class="mes_ztracker" data-ztracker-module="agenda">
+          <div class="ztracker-regenerate-button agenda-regenerate"></div>
+        </div>
+      </div>
+    `;
+
+    let finishRequest: (() => void) | undefined;
+    const generateRequest = jest.fn((_request, hooks) => {
+      hooks.onStart('request-1');
+      finishRequest = () => hooks.onFinish('request-1', { content: { time: '10:00:00' } }, null);
+    });
+    const baseSettings = makeSettings();
+    const defaultModule = createTrackerModuleFromLegacySettings(baseSettings, { id: 'default', name: 'Default', order: 0 });
+    const agendaModule = createTrackerModuleFromLegacySettings(baseSettings, { id: 'agenda', name: 'Agenda', order: 1 });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: { connectionManager: { profiles: [makeProfile()] } },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: { getSettings: () => makeSettings({ modules: [defaultModule, agendaModule] }) } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    const pending = actions.generateTracker(0, { showStatusIndicator: true, moduleId: 'agenda' });
+    await flushAsyncWork();
+
+    expect(document.querySelector('.default-regenerate')?.classList.contains('spinning')).toBe(false);
+    expect(document.querySelector('.agenda-regenerate')?.classList.contains('spinning')).toBe(true);
+
+    finishRequest?.();
+    await pending;
   });
 
   test('shows the same badge during sequential full tracker regeneration', async () => {

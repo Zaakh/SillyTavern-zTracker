@@ -1,9 +1,9 @@
 import Handlebars from 'handlebars';
 import type { Message } from 'sillytavern-utils-lib';
 import type { ChatMessage } from 'sillytavern-utils-lib/types';
-import { DEFAULT_EMBED_SNAPSHOT_HEADER } from './config.js';
-import type { ExtensionSettings } from './config.js';
-import { CHAT_METADATA_SCHEMA_PRESET_KEY, EXTENSION_KEY } from './extension-metadata.js';
+import { DEFAULT_EMBED_SNAPSHOT_HEADER, getOrderedTrackerModules } from './config.js';
+import type { ExtensionSettings, TrackerModuleSettings } from './config.js';
+import { CHAT_METADATA_SCHEMA_PRESET_KEY, DEFAULT_MODULE_ID, EXTENSION_KEY } from './extension-metadata.js';
 import { formatEmbeddedTrackerSnapshot } from './embed-snapshot-transform.js';
 import { toShortTrackerLabel } from './tracker-helpers.js';
 import {
@@ -21,6 +21,104 @@ export const CHAT_MESSAGE_SCHEMA_HTML_KEY = 'html';
 export const CHAT_MESSAGE_PARTS_ORDER_KEY = 'partsOrder';
 export const CHAT_MESSAGE_PARTS_META_KEY = 'partsMeta';
 export const CHAT_MESSAGE_PENDING_REDACTIONS_KEY = 'pendingRedactions';
+export const CHAT_MESSAGE_MODULES_KEY = 'byId';
+
+const TRACKER_RECORD_KEYS = [
+  CHAT_MESSAGE_SCHEMA_PRESET_KEY,
+  CHAT_MESSAGE_SCHEMA_VALUE_KEY,
+  CHAT_MESSAGE_SCHEMA_HTML_KEY,
+  CHAT_MESSAGE_PARTS_ORDER_KEY,
+  CHAT_MESSAGE_PARTS_META_KEY,
+  CHAT_MESSAGE_PENDING_REDACTIONS_KEY,
+];
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hasOwnRecordKey(record: Record<string, any>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(record, key);
+}
+
+function hasLegacyTrackerRecord(extensionData: Record<string, any>): boolean {
+  return TRACKER_RECORD_KEYS.some((key) => hasOwnRecordKey(extensionData, key));
+}
+
+function mirrorDefaultModuleRecord(extensionData: Record<string, any>, moduleRecord: Record<string, any>): void {
+  for (const key of TRACKER_RECORD_KEYS) {
+    if (hasOwnRecordKey(moduleRecord, key)) {
+      extensionData[key] = moduleRecord[key];
+    } else {
+      delete extensionData[key];
+    }
+  }
+}
+
+function migrateLegacyTrackerExtensionData(extensionData: Record<string, any>): boolean {
+  if (isRecord(extensionData[CHAT_MESSAGE_MODULES_KEY]) || !hasLegacyTrackerRecord(extensionData)) {
+    return false;
+  }
+
+  extensionData[CHAT_MESSAGE_MODULES_KEY] = {
+    [DEFAULT_MODULE_ID]: Object.fromEntries(
+      TRACKER_RECORD_KEYS
+        .filter((key) => hasOwnRecordKey(extensionData, key))
+        .map((key) => [key, extensionData[key]]),
+    ),
+  };
+  return true;
+}
+
+export function getTrackerModuleRecordFromExtra(
+  extra: Record<string, any> | undefined,
+  moduleId = DEFAULT_MODULE_ID,
+  createIfMissing = false,
+): Record<string, any> | undefined {
+  if (!extra) {
+    return undefined;
+  }
+
+  if (!isRecord(extra[EXTENSION_KEY])) {
+    if (!createIfMissing) {
+      return undefined;
+    }
+    extra[EXTENSION_KEY] = {};
+  }
+
+  const extensionData = extra[EXTENSION_KEY] as Record<string, any>;
+  migrateLegacyTrackerExtensionData(extensionData);
+
+  if (!isRecord(extensionData[CHAT_MESSAGE_MODULES_KEY])) {
+    if (!createIfMissing) {
+      return undefined;
+    }
+    extensionData[CHAT_MESSAGE_MODULES_KEY] = {};
+  }
+
+  const modules = extensionData[CHAT_MESSAGE_MODULES_KEY] as Record<string, any>;
+  if (!isRecord(modules[moduleId])) {
+    if (!createIfMissing) {
+      return undefined;
+    }
+    modules[moduleId] = {};
+  }
+
+  return modules[moduleId] as Record<string, any>;
+}
+
+export function getTrackerModuleRecord(
+  message: { extra?: Record<string, any> } | undefined,
+  moduleId = DEFAULT_MODULE_ID,
+  createIfMissing = false,
+): Record<string, any> | undefined {
+  if (!message) {
+    return undefined;
+  }
+  if (!message.extra && createIfMissing) {
+    message.extra = {};
+  }
+  return getTrackerModuleRecordFromExtra(message.extra, moduleId, createIfMissing);
+}
 
 function escapeHtmlAttr(value: string): string {
   return String(value)
@@ -65,6 +163,44 @@ export interface RenderTrackerOptions {
   context: TrackerContext;
   document?: Document;
   handlebars?: typeof Handlebars;
+  settings?: ExtensionSettings;
+  moduleId?: string;
+}
+
+export function findRenderedModuleBlock(messageBlock: Element | null | undefined, moduleId: string): Element | undefined {
+  return Array.from(messageBlock?.querySelectorAll('.mes_ztracker') ?? [])
+    .find((element) => (element as HTMLElement).dataset.ztrackerModule === moduleId);
+}
+
+function getRenderableTrackerModules(
+  message: { extra?: Record<string, any> } | undefined,
+  settings?: ExtensionSettings,
+): Array<{ id: string; name: string; record: Record<string, any> }> {
+  const extensionData = message?.extra?.[EXTENSION_KEY];
+  if (!isRecord(extensionData)) {
+    return [];
+  }
+
+  migrateLegacyTrackerExtensionData(extensionData);
+  const records = extensionData[CHAT_MESSAGE_MODULES_KEY];
+  if (!isRecord(records)) {
+    return [];
+  }
+
+  const configuredModules = settings ? getOrderedTrackerModules(settings) : [];
+  const configuredNames = new Map(configuredModules.map((module) => [module.id, module.name]));
+  const orderedIds = configuredModules.length > 0
+    ? configuredModules.map((module) => module.id)
+    : Object.keys(records).sort((left, right) => {
+        if (left === DEFAULT_MODULE_ID) return -1;
+        if (right === DEFAULT_MODULE_ID) return 1;
+        return left.localeCompare(right);
+      });
+  const ids = [...orderedIds, ...Object.keys(records).filter((id) => !orderedIds.includes(id))];
+
+  return ids
+    .map((id) => ({ id, name: configuredNames.get(id) ?? id, record: records[id] }))
+    .filter((module): module is { id: string; name: string; record: Record<string, any> } => isRecord(module.record));
 }
 
 export function renderTracker(messageId: number, options: RenderTrackerOptions): void {
@@ -84,20 +220,33 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
 
   const message = context.chat?.[messageId];
   const messageBlock = doc.querySelector(`.mes[mesid="${messageId}"]`);
-  messageBlock?.querySelector('.mes_ztracker')?.remove();
-
-  if (!message?.extra?.[EXTENSION_KEY]) {
-    return;
-  }
-
-  const trackerData = message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_VALUE_KEY];
-  const trackerHtmlSchema = message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_HTML_KEY];
-  if (!trackerData || !trackerHtmlSchema) {
-    return;
+  if (options.moduleId) {
+    const existingBlock = messageBlock ? findRenderedModuleBlock(messageBlock, options.moduleId) : undefined;
+    existingBlock?.remove();
+  } else {
+    messageBlock?.querySelectorAll('.mes_ztracker').forEach((element) => element.remove());
   }
 
   if (!messageBlock) {
     return;
+  }
+
+  const allModuleEntries = getRenderableTrackerModules(message, options.settings);
+  const moduleEntries = options.moduleId
+    ? allModuleEntries.filter((moduleEntry) => moduleEntry.id === options.moduleId)
+    : allModuleEntries;
+  if (moduleEntries.length === 0) {
+    return;
+  }
+
+  for (const moduleEntry of moduleEntries) {
+    try {
+  const extra = moduleEntry.record;
+
+  const trackerData = extra?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
+  const trackerHtmlSchema = extra?.[CHAT_MESSAGE_SCHEMA_HTML_KEY];
+  if (!trackerData || !trackerHtmlSchema) {
+    continue;
   }
 
   // Escape tracker values by default so LLM output and manual edits do not become live DOM.
@@ -105,8 +254,8 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
   const renderedHtml = template({ data: trackerData });
   const container = doc.createElement('div');
   container.className = 'mes_ztracker';
+  container.dataset.ztrackerModule = moduleEntry.id;
   container.innerHTML = renderedHtml;
-  const extra = message.extra?.[EXTENSION_KEY] as Record<string, any> | undefined;
 
   const partsOrder: string[] =
     (extra?.[CHAT_MESSAGE_PARTS_ORDER_KEY] as any) ?? Object.keys(trackerData ?? {});
@@ -212,13 +361,27 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
     container.prepend(pendingStatus);
   }
 
+  const label = doc.createElement('div');
+  label.className = 'ztracker-module-label';
+  label.textContent = moduleEntry.name;
+  container.prepend(label);
+
   container.prepend(controls);
 
-  messageBlock.querySelector('.mes_text')?.before(container);
+  const moduleIndex = allModuleEntries.findIndex((entry) => entry.id === moduleEntry.id);
+  const followingBlock = allModuleEntries
+    .slice(moduleIndex + 1)
+    .map((entry) => findRenderedModuleBlock(messageBlock, entry.id))
+    .find((element): element is Element => !!element);
+  (followingBlock ?? messageBlock.querySelector('.mes_text'))?.before(container);
+    } catch (error) {
+      console.error(`Error rendering zTracker module ${moduleEntry.id} on message ${messageId}, keeping other modules:`, error);
+    }
+  }
 }
 
 // Keeps the embedded tracker speaker label aligned with the existing configurable header.
-function deriveEmbeddedTrackerSpeakerName(settings: ExtensionSettings): string {
+function deriveEmbeddedTrackerSpeakerName(settings: TrackerModuleSettings): string {
   const header = settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER;
   const trimmedLabel = header.replace(/:+\s*$/, '').trim();
   return trimmedLabel || 'Tracker';
@@ -227,6 +390,7 @@ function deriveEmbeddedTrackerSpeakerName(settings: ExtensionSettings): string {
 const EMBEDDED_TRACKER_SNAPSHOT_MARKER = Symbol('embeddedTrackerSnapshot');
 
 type IncludeZTrackerMessagesOptions = {
+  moduleId?: string;
   /**
    * Text-completion instruct templates only allow cleanly alternating dialogue turns.
    * Inline tracker snapshots into user messages when a standalone injected turn would
@@ -246,9 +410,9 @@ type IncludeZTrackerMessagesOptions = {
 };
 
 function resolveEmbeddedTrackerRole(
-  settings: ExtensionSettings,
+  settings: TrackerModuleSettings,
   options: IncludeZTrackerMessagesOptions,
-): ExtensionSettings['embedZTrackerRole'] {
+): TrackerModuleSettings['embedZTrackerRole'] {
   const configuredRole = settings.embedZTrackerRole ?? 'user';
   if (!options.preserveTextCompletionTurnAlternation || configuredRole !== 'system') {
     return configuredRole;
@@ -275,7 +439,7 @@ function isAssistantConversationTurn(message: { role?: string; is_user?: boolean
 
 function canInlineEmbeddedTracker(
   message: { role?: string; is_user?: boolean; is_system?: boolean },
-  embedRole: ExtensionSettings['embedZTrackerRole'],
+  embedRole: TrackerModuleSettings['embedZTrackerRole'],
 ): boolean {
   if (embedRole === 'assistant') {
     return isAssistantConversationTurn(message);
@@ -300,16 +464,22 @@ function getMessageText(message: { content?: string; mes?: string }): string {
   return '';
 }
 
+function isGenericRoleSpeakerName(value: string): boolean {
+  return ['user', 'assistant', 'system'].includes(value.trim().toLowerCase());
+}
+
+// Host prompt builders may pass role markers as source.name; those are not display names.
+export function normalizePromptSpeakerName(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 && !isGenericRoleSpeakerName(trimmed) ? trimmed : undefined;
+}
+
 function getMessageSpeakerName(message: { name?: string; source?: { name?: string } }): string | undefined {
-  if (typeof message.name === 'string' && message.name.trim().length > 0) {
-    return message.name.trim();
-  }
-
-  if (typeof message.source?.name === 'string' && message.source.name.trim().length > 0) {
-    return message.source.name.trim();
-  }
-
-  return undefined;
+  return normalizePromptSpeakerName(message.name) ?? normalizePromptSpeakerName(message.source?.name);
 }
 
 function getSingleAssistantReplyLabel(
@@ -339,22 +509,27 @@ function getSingleAssistantReplyLabel(
 
 export function includeZTrackerMessages<T extends Message | ChatMessage>(
   messages: T[],
-  settings: ExtensionSettings,
+  settings: TrackerModuleSettings,
   options: IncludeZTrackerMessagesOptions = {},
 ): T[] {
+  const moduleId = options.moduleId ?? DEFAULT_MODULE_ID;
   // SillyTavern sometimes keeps speaker attribution only on source.name.
   // Promote it onto cloned chat turns so instruct-mode prompt assembly can still emit named dialogue.
   const copyMessages = structuredClone(messages).map((message: T) => {
-    const fallbackName =
-      typeof (message as any).name === 'string' && (message as any).name.trim()
-        ? undefined
-        : typeof (message as any).source?.name === 'string' && (message as any).source.name.trim()
-          ? (message as any).source.name
-          : undefined;
+    const existingName = normalizePromptSpeakerName((message as any).name);
+    const sourceName = normalizePromptSpeakerName((message as any).source?.name);
+    const speakerName = existingName ?? sourceName;
 
-    return fallbackName
-      ? ({ ...message, name: fallbackName } as T)
-      : message;
+    if (speakerName) {
+      return (message as any).name === speakerName ? message : ({ ...message, name: speakerName } as T);
+    }
+
+    if (typeof (message as any).name === 'string' && isGenericRoleSpeakerName((message as any).name)) {
+      const { name: _discardedName, ...messageWithoutRoleName } = message as any;
+      return messageWithoutRoleName as T;
+    }
+
+    return message;
   });
   const embedRole = resolveEmbeddedTrackerRole(settings, options);
   const configuredAssistantReplyLabel =
@@ -373,9 +548,13 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
         const message = copyMessages[j];
         const extra = 'source' in message ? (message as Message).source?.extra : (message as ChatMessage).extra;
         // @ts-ignore - we avoid mutating the original object across include iterations
-        if (!message.zTrackerFound && extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY]) {
-          // @ts-ignore - mark so we do not reuse the same tracker entry twice
-          message.zTrackerFound = true;
+        const trackerRecord = getTrackerModuleRecordFromExtra(extra, moduleId);
+        const foundModules = isRecord((message as any).zTrackerFoundModules)
+          ? (message as any).zTrackerFoundModules
+          : {};
+        if (!foundModules[moduleId] && trackerRecord?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY]) {
+          foundModules[moduleId] = true;
+          (message as any).zTrackerFoundModules = foundModules;
           foundMessage = message;
           foundIndex = j;
           break;
@@ -387,7 +566,7 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
           'source' in foundMessage
             ? (foundMessage as Message).source?.extra
             : (foundMessage as ChatMessage).extra;
-        const trackerValue = extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY] || {};
+        const trackerValue = getTrackerModuleRecordFromExtra(extra, moduleId)?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY] || {};
         const useCharacterName = settings.embedZTrackerAsCharacter ?? false;
         const header = settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER;
         const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(trackerValue, settings);
@@ -521,7 +700,7 @@ export function normalizeTrackerGenerationConversationRoles<
   },
 >(
   messages: T[],
-  settings: Pick<ExtensionSettings, 'trackerGenerationConversationRoleMode'>,
+  settings: Pick<TrackerModuleSettings, 'trackerGenerationConversationRoleMode'>,
 ): T[] {
   if ((settings.trackerGenerationConversationRoleMode ?? 'preserve') !== 'all_assistant') {
     return messages;
@@ -600,11 +779,7 @@ export function sanitizeMessagesForGeneration<
   const alignedMessages = insertUserAlignmentMessage(messages, options);
 
   return alignedMessages.map((message) => {
-    const name = typeof message.name === 'string' && message.name.trim()
-      ? message.name
-      : typeof message.source?.name === 'string' && message.source.name.trim()
-        ? message.source.name
-        : undefined;
+    const name = normalizePromptSpeakerName(message.name) ?? normalizePromptSpeakerName(message.source?.name);
     const shouldInlineName =
       !!options.inlineNamesIntoContent &&
       !!name &&
@@ -651,11 +826,12 @@ export function extractLeadingSystemPrompt<
 }
 
 export interface ApplyTrackerUpdateOptions {
+  moduleId?: string;
   trackerData: unknown;
   trackerHtml: string;
   /** Additional fields to store on message.extra[EXTENSION_KEY] (besides value/html). */
   extensionData?: Record<string, unknown>;
-  render: () => void;
+  render: (moduleId?: string) => void;
 }
 
 /**
@@ -690,27 +866,32 @@ export function applyTrackerUpdateAndRender(
   };
 
   message.extra = message.extra || {};
-  message.extra[EXTENSION_KEY] = message.extra[EXTENSION_KEY] || {};
+  const moduleId = options.moduleId ?? DEFAULT_MODULE_ID;
+  const trackerRecord = getTrackerModuleRecord(message, moduleId, true)!;
+  const extensionData = message.extra[EXTENSION_KEY] as Record<string, any>;
 
   if (options.extensionData) {
     for (const [key, value] of Object.entries(options.extensionData)) {
       if (value === undefined) {
-        delete message.extra[EXTENSION_KEY][key];
+        delete trackerRecord[key];
         continue;
       }
 
-      message.extra[EXTENSION_KEY][key] = value;
+      trackerRecord[key] = value;
     }
   }
-  message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_VALUE_KEY] = options.trackerData;
-  message.extra[EXTENSION_KEY][CHAT_MESSAGE_SCHEMA_HTML_KEY] = options.trackerHtml;
+  trackerRecord[CHAT_MESSAGE_SCHEMA_VALUE_KEY] = options.trackerData;
+  trackerRecord[CHAT_MESSAGE_SCHEMA_HTML_KEY] = options.trackerHtml;
+  if (moduleId === DEFAULT_MODULE_ID) {
+    mirrorDefaultModuleRecord(extensionData, trackerRecord);
+  }
   warnOnDependentArrayMismatches(
     options.trackerData,
-    message.extra[EXTENSION_KEY][CHAT_MESSAGE_PARTS_META_KEY] as Record<string, any> | undefined,
+    trackerRecord[CHAT_MESSAGE_PARTS_META_KEY] as Record<string, any> | undefined,
   );
 
   try {
-    options.render();
+    options.render(moduleId);
   } catch (error) {
     rollback();
     throw error;

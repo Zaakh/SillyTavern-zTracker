@@ -9,6 +9,9 @@ import { createRoot, Root } from 'react-dom/client';
 let mockSettings: any = createMockSettings();
 const saveSettingsMock = jest.fn();
 const stEchoMock = jest.fn();
+const createObjectUrlMock = jest.fn(() => 'blob:module');
+const revokeObjectUrlMock = jest.fn();
+const readTextFileViaPickerMock = jest.fn<() => Promise<string | null>>();
 let sillyTavernContext: any;
 const profileSelectMock = jest.fn(({ initialSelectedProfileId }: { initialSelectedProfileId?: string }) =>
   React.createElement('div', { 'data-testid': 'profile-select' }, initialSelectedProfileId ?? 'none'),
@@ -213,12 +216,84 @@ function createMockSettings() {
   };
 }
 
+function createMockModule(overrides: Record<string, any> = {}) {
+  return {
+    id: overrides.id ?? 'default',
+    name: overrides.name ?? 'Default',
+    enabled: overrides.enabled ?? true,
+    order: overrides.order ?? 0,
+    auto: { enabled: overrides.auto?.enabled ?? false, mode: overrides.auto?.mode ?? 'none' },
+    schema: {
+      preset: overrides.schema?.preset ?? 'default',
+      presets: overrides.schema?.presets ?? {
+        default: {
+          name: 'Default',
+          value: { type: 'object', properties: {}, required: [] },
+          html: '<div></div>',
+        },
+      },
+    },
+    prompts: {
+      prompt: overrides.prompts?.prompt ?? 'Generate tracker JSON',
+      promptEngineeringMode: overrides.prompts?.promptEngineeringMode ?? 'native',
+      promptJson: overrides.prompts?.promptJson ?? '',
+      promptXml: overrides.prompts?.promptXml ?? '',
+      promptToon: overrides.prompts?.promptToon ?? '',
+    },
+    systemPrompt: {
+      mode: overrides.systemPrompt?.mode ?? 'profile',
+      savedName: overrides.systemPrompt?.savedName ?? '',
+    },
+    connection: {
+      source: overrides.connection?.source ?? 'active',
+      profileId: overrides.connection?.profileId ?? 'profile-1',
+    },
+    generation: {
+      mode: overrides.generation?.mode ?? 'full',
+      maxResponseToken: overrides.generation?.maxResponseToken ?? 512,
+      skipFirstXMessages: overrides.generation?.skipFirstXMessages ?? 0,
+      includeLastXMessages: overrides.generation?.includeLastXMessages ?? 0,
+      skipCharacterCardInTrackerGeneration: overrides.generation?.skipCharacterCardInTrackerGeneration ?? false,
+      conversationRoleMode: overrides.generation?.conversationRoleMode ?? 'preserve',
+      worldInfoPolicyMode: overrides.generation?.worldInfoPolicyMode ?? 'include_all',
+      worldInfoAllowlistBookNames: overrides.generation?.worldInfoAllowlistBookNames ?? [],
+      worldInfoAllowlistEntryIds: overrides.generation?.worldInfoAllowlistEntryIds ?? [],
+    },
+    injection: {
+      includeLastXMessages: overrides.injection?.includeLastXMessages ?? 0,
+      embedRole: overrides.injection?.embedRole ?? 'user',
+      embedAsCharacter: overrides.injection?.embedAsCharacter ?? false,
+      snapshotHeader: overrides.injection?.snapshotHeader ?? 'Tracker:',
+      transformPreset: overrides.injection?.transformPreset ?? 'default',
+      transformPresets: overrides.injection?.transformPresets ?? {},
+    },
+  };
+}
+
+function seedModuleSettings() {
+  mockSettings.modules = [
+    createMockModule({ id: 'default', name: 'Default', order: 0, connection: { source: 'active', profileId: 'profile-1' } }),
+    createMockModule({ id: 'agenda', name: 'Agenda', order: 1, connection: { source: 'active', profileId: 'profile-2' } }),
+  ];
+  return mockSettings.modules;
+}
+
+function syncDefaultModuleSchemaFromFlatSettings() {
+  const modules = mockSettings.modules ?? seedModuleSettings();
+  modules[0].schema.preset = mockSettings.schemaPreset;
+  modules[0].schema.presets = mockSettings.schemaPresets;
+}
+
 jest.unstable_mockModule('sillytavern-utils-lib', () => ({
   ExtensionSettingsManager: MockExtensionSettingsManager,
 }));
 
 jest.unstable_mockModule('sillytavern-utils-lib/config', () => ({
   st_echo: stEchoMock,
+}));
+
+jest.unstable_mockModule('../file-picker.js', () => ({
+  readTextFileViaPicker: readTextFileViaPickerMock,
 }));
 
 jest.unstable_mockModule('sillytavern-utils-lib/components/react', () => ({
@@ -280,8 +355,10 @@ jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', (
     handleSchemaPresetRename,
     handleCurrentChatSchemaPresetChange,
     handleSchemaPresetsListChange,
+    updateAndRefresh,
   }: {
-    settings: { schemaPreset: string };
+    settings: { schemaPreset: string; connectionSource?: string };
+    updateAndRefresh: (updater: (settings: any) => void) => void;
     schemaPresetItems: Array<{ value: string; label: string }>;
     currentChatSchemaPresetAvailable: boolean;
     schemaText: string;
@@ -307,6 +384,18 @@ jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', (
       'div',
       null,
       React.createElement('div', null, 'Default Schema Preset'),
+      React.createElement('div', { 'data-testid': 'generation-section-connection-source' }, settings.connectionSource ?? ''),
+      React.createElement(
+        'button',
+        {
+          type: 'button',
+          'data-testid': 'set-section-connection-saved',
+          onClick: () => updateAndRefresh((currentSettings) => {
+            currentSettings.connectionSource = 'saved';
+          }),
+        },
+        'set section connection saved',
+      ),
       React.createElement(
         'label',
         null,
@@ -431,15 +520,24 @@ describe('zTracker settings connection source UI', () => {
     getSchemaDraftStateMock.mockClear();
     getSchemaHtmlDraftStateMock.mockClear();
     validateSchemaPresetDraftPairMock.mockClear();
+    readTextFileViaPickerMock.mockReset();
+    readTextFileViaPickerMock.mockResolvedValue(null);
     document.body.innerHTML = '<div id="root"></div>';
     sillyTavernContext = {
       chatMetadata: { zTracker: { schemaKey: 'default' } },
+      chat: [],
+      saveChat: jest.fn(),
       saveMetadataDebounced: jest.fn(),
-      Popup: { show: { confirm: jest.fn() } },
+      Popup: { show: { confirm: jest.fn(), input: jest.fn() } },
     };
     (globalThis as any).SillyTavern = {
       getContext: () => sillyTavernContext,
     };
+    seedModuleSettings();
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectUrlMock });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectUrlMock });
+    createObjectUrlMock.mockClear();
+    revokeObjectUrlMock.mockClear();
   });
 
   afterEach(() => {
@@ -553,7 +651,7 @@ describe('zTracker settings connection source UI', () => {
       select.dispatchEvent(new Event('change', { bubbles: true }));
     });
 
-    expect(mockSettings.connectionSource).toBe('saved');
+    expect(mockSettings.modules[0].connection.source).toBe('saved');
     expect(saveSettingsMock).toHaveBeenCalled();
     expect(container.querySelector('[data-testid="profile-select"]')).not.toBeNull();
   });
@@ -585,6 +683,7 @@ describe('zTracker settings connection source UI', () => {
         html: '<div>default</div>',
       },
     };
+    syncDefaultModuleSchemaFromFlatSettings();
 
     const container = renderSettings();
     const setSchemaJsonButton = container.querySelector('[data-testid="set-schema-json-location"]');
@@ -625,6 +724,7 @@ describe('zTracker settings connection source UI', () => {
       value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
       html: '<div>alternate</div>',
     };
+    syncDefaultModuleSchemaFromFlatSettings();
 
     const saveMetadataDebounced = jest.fn();
     const context = {
@@ -648,7 +748,7 @@ describe('zTracker settings connection source UI', () => {
       await Promise.resolve();
     });
 
-    expect(context.chatMetadata).toEqual({ zTracker: { schemaKey: 'alternate' } });
+    expect(context.chatMetadata).toEqual({ zTracker: { byModule: { default: { schemaKey: 'alternate' } } } });
     expect(saveMetadataDebounced).toHaveBeenCalledTimes(1);
     expect(mockSettings.schemaPreset).toBe('default');
     expect(saveSettingsMock).not.toHaveBeenCalled();
@@ -660,6 +760,7 @@ describe('zTracker settings connection source UI', () => {
       value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
       html: '<div>alternate</div>',
     };
+    syncDefaultModuleSchemaFromFlatSettings();
 
     const saveMetadataDebounced = jest.fn();
     const saveMetadata = jest.fn();
@@ -698,7 +799,7 @@ describe('zTracker settings connection source UI', () => {
       throw new Error('Current chat schema preset select not found after rerender');
     }
 
-    expect(persistedChatMetadata).toEqual({ zTracker: { schemaKey: 'alternate' } });
+    expect(persistedChatMetadata).toEqual({ zTracker: { byModule: { default: { schemaKey: 'alternate' } } } });
     expect(saveMetadata).toHaveBeenCalledTimes(1);
     expect(rerenderedSelect.value).toBe('alternate');
     expect(mockSettings.schemaPreset).toBe('default');
@@ -710,6 +811,7 @@ describe('zTracker settings connection source UI', () => {
       value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
       html: '<div>alternate</div>',
     };
+    syncDefaultModuleSchemaFromFlatSettings();
 
     const saveMetadataDebounced = jest.fn();
     const saveMetadata = jest.fn(async () => undefined);
@@ -735,7 +837,7 @@ describe('zTracker settings connection source UI', () => {
       await Promise.resolve();
     });
 
-    expect(context.chatMetadata).toEqual({ zTracker: { schemaKey: 'alternate' } });
+    expect(context.chatMetadata).toEqual({ zTracker: { byModule: { default: { schemaKey: 'alternate' } } } });
     expect(saveMetadata).toHaveBeenCalledTimes(1);
     expect(saveMetadataDebounced).not.toHaveBeenCalled();
   });
@@ -746,6 +848,7 @@ describe('zTracker settings connection source UI', () => {
       value: { type: 'object', properties: { weather: { type: 'string' } }, required: ['weather'] },
       html: '<div>alternate</div>',
     };
+    syncDefaultModuleSchemaFromFlatSettings();
 
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     const saveMetadata = jest.fn(async () => {
@@ -778,7 +881,7 @@ describe('zTracker settings connection source UI', () => {
       throw new Error('Current chat schema preset select not found after failed save');
     }
 
-    expect(context.chatMetadata).toEqual({ zTracker: { schemaKey: 'default' } });
+    expect(context.chatMetadata).toEqual({ zTracker: { byModule: { default: { schemaKey: 'default' } } } });
     expect(rerenderedSelect.value).toBe('default');
     expect(stEchoMock).toHaveBeenCalledWith('error', 'Current chat schema preset could not be saved. The selector was reverted.');
 
@@ -818,6 +921,7 @@ describe('zTracker settings connection source UI', () => {
         html: '<div>custom</div>',
       },
     };
+    syncDefaultModuleSchemaFromFlatSettings();
 
     const saveMetadataDebounced = jest.fn();
     const context = {
@@ -840,7 +944,7 @@ describe('zTracker settings connection source UI', () => {
       await Promise.resolve();
     });
 
-    expect(context.chatMetadata).toEqual({ zTracker: { schemaKey: 'default' } });
+    expect(context.chatMetadata).toEqual({ zTracker: { byModule: { default: { schemaKey: 'default' } } } });
     expect(saveMetadataDebounced).toHaveBeenCalledTimes(1);
     expect(saveSettingsMock).toHaveBeenCalled();
   });
@@ -859,6 +963,7 @@ describe('zTracker settings connection source UI', () => {
         html: '<div>custom</div>',
       },
     };
+    syncDefaultModuleSchemaFromFlatSettings();
 
     const saveMetadataDebounced = jest.fn();
     const context = {
@@ -881,7 +986,7 @@ describe('zTracker settings connection source UI', () => {
       await Promise.resolve();
     });
 
-    expect(context.chatMetadata).toEqual({ zTracker: { schemaKey: 'renamed-custom' } });
+    expect(context.chatMetadata).toEqual({ zTracker: { byModule: { default: { schemaKey: 'renamed-custom' } } } });
     expect(saveMetadataDebounced).toHaveBeenCalledTimes(1);
     const currentChatSelect = container.querySelector('[data-testid="preset-select-Current Chat Schema Preset"]');
     if (!(currentChatSelect instanceof HTMLSelectElement)) {
@@ -916,5 +1021,169 @@ describe('zTracker settings connection source UI', () => {
     }
 
     expect(select.value).toBe('default');
+  });
+
+  test('detail section updates only the selected module', async () => {
+    const modules = seedModuleSettings();
+    const container = renderSettings();
+    const agendaButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('Agenda'));
+    if (!(agendaButton instanceof HTMLButtonElement)) {
+      throw new Error('Agenda module button not found');
+    }
+
+    await act(async () => {
+      agendaButton.click();
+      await Promise.resolve();
+    });
+
+    const sectionButton = container.querySelector('[data-testid="set-section-connection-saved"]');
+    if (!(sectionButton instanceof HTMLButtonElement)) {
+      throw new Error('Section connection update button not found');
+    }
+
+    await act(async () => {
+      sectionButton.click();
+      await Promise.resolve();
+    });
+
+    expect(modules[0].connection.source).toBe('active');
+    expect(modules[1].connection.source).toBe('saved');
+    expect(saveSettingsMock).toHaveBeenCalled();
+  });
+
+  test('module list can add clone and reorder modules', async () => {
+    seedModuleSettings();
+    const container = renderSettings();
+    const buttons = () => Array.from(container.querySelectorAll('button'));
+    const clickByText = async (text: string) => {
+      const button = buttons().find((candidate) => candidate.textContent === text);
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error(`${text} button not found`);
+      }
+      await act(async () => {
+        button.click();
+        await Promise.resolve();
+      });
+    };
+
+    await clickByText('Add');
+    expect(mockSettings.modules.map((module: any) => module.name)).toContain('Module 3');
+
+    await clickByText('Clone');
+    expect(mockSettings.modules.some((module: any) => module.name === 'Module 3 Copy')).toBe(true);
+
+    const selectedBeforeMove = mockSettings.modules.findIndex((module: any) => module.name === 'Module 3 Copy');
+    await clickByText('Up');
+    const selectedAfterMove = mockSettings.modules.findIndex((module: any) => module.name === 'Module 3 Copy');
+    expect(selectedAfterMove).toBe(selectedBeforeMove - 1);
+    expect(mockSettings.modules.map((module: any) => module.order)).toEqual([0, 1, 2, 3]);
+  });
+
+  test('deleting a module removes its saved tracker data from the current chat', async () => {
+    seedModuleSettings();
+    sillyTavernContext.chat = [
+      { extra: { zTracker: { byId: { agenda: { value: { task: 'old' } }, default: { value: { mood: 'ok' } } } } } },
+      { extra: { zTracker: { byId: { agenda: { value: { task: 'later' } } } } } },
+    ];
+    sillyTavernContext.Popup.show.confirm.mockResolvedValue(true);
+
+    const container = renderSettings();
+    const agendaButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('Agenda'));
+    if (!(agendaButton instanceof HTMLButtonElement)) {
+      throw new Error('Agenda module button not found');
+    }
+
+    await act(async () => {
+      agendaButton.click();
+      await Promise.resolve();
+    });
+
+    const deleteButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Delete');
+    if (!(deleteButton instanceof HTMLButtonElement)) {
+      throw new Error('Delete button not found');
+    }
+
+    await act(async () => {
+      deleteButton.click();
+      await Promise.resolve();
+    });
+
+    expect(mockSettings.modules.map((module: any) => module.id)).toEqual(['default']);
+    expect(sillyTavernContext.chat[0].extra.zTracker.byId).toEqual({ default: { value: { mood: 'ok' } } });
+    expect(sillyTavernContext.chat[1].extra.zTracker.byId).toEqual({});
+    expect(sillyTavernContext.saveChat).toHaveBeenCalledTimes(1);
+  });
+
+  test('exports the selected module and imports valid module json', async () => {
+    seedModuleSettings();
+    readTextFileViaPickerMock.mockResolvedValue(JSON.stringify({ module: { name: 'Imported', connection: { source: 'saved' } } }));
+    const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const container = renderSettings();
+
+    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Export');
+    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Import');
+    if (!(exportButton instanceof HTMLButtonElement) || !(importButton instanceof HTMLButtonElement)) {
+      throw new Error('Import/export buttons not found');
+    }
+
+    await act(async () => {
+      exportButton.click();
+      await Promise.resolve();
+    });
+
+    expect(createObjectUrlMock).toHaveBeenCalledTimes(1);
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(revokeObjectUrlMock).toHaveBeenCalledWith('blob:module');
+
+    await act(async () => {
+      importButton.click();
+      await Promise.resolve();
+    });
+
+    const imported = mockSettings.modules.find((module: any) => module.name === 'Imported');
+    expect(imported?.id).toBe('imported');
+    expect(imported?.connection.source).toBe('saved');
+    expect(imported?.enabled).toBe(true);
+    expect(stEchoMock).toHaveBeenCalledWith('success', 'Imported Module "Imported".');
+
+    clickSpy.mockRestore();
+  });
+
+  test('cancelled module import does not change modules', async () => {
+    seedModuleSettings();
+    readTextFileViaPickerMock.mockResolvedValue(null);
+    const container = renderSettings();
+    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Import');
+    if (!(importButton instanceof HTMLButtonElement)) {
+      throw new Error('Import button not found');
+    }
+
+    await act(async () => {
+      importButton.click();
+      await Promise.resolve();
+    });
+
+    expect(mockSettings.modules.map((module: any) => module.id)).toEqual(['default', 'agenda']);
+    expect(stEchoMock).not.toHaveBeenCalled();
+    expect(saveSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test('invalid module import shows a warning and does not change modules', async () => {
+    seedModuleSettings();
+    readTextFileViaPickerMock.mockResolvedValue('{bad json');
+    const container = renderSettings();
+    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Import');
+    if (!(importButton instanceof HTMLButtonElement)) {
+      throw new Error('Import button not found');
+    }
+
+    await act(async () => {
+      importButton.click();
+      await Promise.resolve();
+    });
+
+    expect(mockSettings.modules.map((module: any) => module.id)).toEqual(['default', 'agenda']);
+    expect(stEchoMock).toHaveBeenCalledWith('warning', 'The selected file is not a valid zTracker Module export.');
+    expect(saveSettingsMock).not.toHaveBeenCalled();
   });
 });

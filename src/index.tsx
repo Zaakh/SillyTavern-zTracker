@@ -9,6 +9,7 @@ import {
   migrateInvalidNumericSettings,
   migrateLegacyAutoMode,
   migrateLegacyPromptTemplates,
+  migrateLegacySettingsToModules,
 } from './config.js';
 import { createTrackerActions } from './ui/tracker-actions.js';
 import { initializeGlobalUI } from './ui/ui-init.js';
@@ -21,8 +22,8 @@ import {
 const globalContext = SillyTavern.getContext();
 const generator = new Generator();
 const pendingRequests = new Map<number, string>();
-const renderTrackerWithDeps = (messageId: number) =>
-  renderTracker(messageId, { context: globalContext, document, handlebars: Handlebars });
+const renderTrackerWithDeps = (messageId: number, moduleId?: string) =>
+  renderTracker(messageId, { context: globalContext, document, handlebars: Handlebars, settings: settingsManager.getSettings(), moduleId });
 
 // --- Handlebars Helper ---
 if (!Handlebars.helpers['join']) {
@@ -67,6 +68,7 @@ async function main() {
     migrateLegacyPromptTemplates(settings),
     migrateCorruptedSchemaPresetRequiredMetadata(settings),
     migrateInvalidNumericSettings(settings),
+    migrateLegacySettingsToModules(settings),
   ].some(Boolean);
 
   if (didMigrateLegacySettings) {

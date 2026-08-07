@@ -22,6 +22,68 @@ describe('createTrackerActions editTracker', () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
   });
 
+  test('edits the selected module record instead of the legacy default tracker', async () => {
+    document.body.innerHTML = '<div class="mes" mesid="0"><div class="mes_ztracker" data-ztracker-module="agenda"><details open><summary>Tracker</summary></details></div><div class="mes_text"></div></div>';
+
+    const saveChat = jest.fn(async () => undefined);
+    let popupContent: HTMLElement | undefined;
+    let popupOptions: { onClose?: (popup: any) => Promise<void> | void } | undefined;
+    const message = {
+      original_avatar: 'avatar.png',
+      extra: {
+        zTracker: {
+          schemaValue: { time: '09:00:00' },
+          schemaHtml: '<div>{{data.time}}</div>',
+          byId: {
+            agenda: {
+              schemaValue: { task: 'Find the exit' },
+              schemaHtml: '<div>{{data.task}}</div>',
+            },
+          },
+        },
+      },
+    };
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [message],
+        saveChat,
+        callGenericPopup: jest.fn((content: string, _type: unknown, _title: string, options: any) => {
+          popupContent = document.createElement('div');
+          popupContent.innerHTML = content;
+          document.body.appendChild(popupContent);
+          popupOptions = options;
+        }),
+        extensionSettings: { connectionManager: { profiles: [makeProfile()] } },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: { getSettings: () => makeSettings() } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.editTracker(0, 'agenda');
+
+    const textarea = popupContent?.querySelector('#ztracker-edit-textarea') as HTMLTextAreaElement | null;
+    expect(textarea?.value).toBe(JSON.stringify({ task: 'Find the exit' }, null, 2));
+    textarea!.value = '{"task":"Open the gate"}';
+
+    await popupOptions?.onClose?.({ result: 'affirmative', content: popupContent });
+
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalledWith(
+      message,
+      expect.objectContaining({
+        moduleId: 'agenda',
+        trackerData: { task: 'Open the gate' },
+        trackerHtml: '<div>{{data.task}}</div>',
+      }),
+    );
+    expect(saveChat).toHaveBeenCalledTimes(1);
+    expect(renderTrackerWithDepsMock).not.toHaveBeenCalled();
+  });
+
   test('does not save invalid tracker edits when rerender validation fails', async () => {
     document.body.innerHTML = '<div class="mes" mesid="0"><div class="mes_ztracker"><details open><summary>Tracker</summary></details></div><div class="mes_text"></div></div>';
 

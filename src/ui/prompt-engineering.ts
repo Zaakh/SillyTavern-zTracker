@@ -1,7 +1,7 @@
 import Handlebars from 'handlebars';
 import type { Message } from 'sillytavern-utils-lib';
 import type { ExtractedData } from 'sillytavern-utils-lib/types';
-import type { ExtensionSettings } from '../config.js';
+import type { TrackerModuleSettings } from '../config.js';
 import { PromptEngineeringMode } from '../config.js';
 import { parseResponse } from '../parser.js';
 import { schemaToExample, schemaToPromptSchema } from '../schema-to-example.js';
@@ -44,7 +44,7 @@ export function createPromptEngineeringHelpers() {
   }
 
   /** Selects the prompt template that matches the currently requested prompt-engineering format. */
-  function getPromptEngineeringTemplate(settings: ExtensionSettings, format: PromptEngineeredFormat): string {
+  function getPromptEngineeringTemplate(settings: TrackerModuleSettings, format: PromptEngineeredFormat): string {
     switch (format) {
       case 'xml':
         return settings.promptXml;
@@ -103,7 +103,7 @@ export function createPromptEngineeringHelpers() {
   async function requestPromptEngineeredResponse(
     makeRequest: PromptEngineeredRequest,
     requestMessages: Message[],
-    settings: ExtensionSettings,
+    settings: TrackerModuleSettings,
     schema: object,
     suffix = '',
   ): Promise<object> {

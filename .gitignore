@@ -17,3 +17,6 @@ test-output/
 .playwright-mcp/
 openspec/
 .github/
+docs/**
+.claude/
+CLAUDE.md

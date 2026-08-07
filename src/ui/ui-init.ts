@@ -1,5 +1,5 @@
 import type { ExtensionSettings } from '../config.js';
-import { EXTENSION_KEY } from '../config.js';
+import { DEFAULT_MODULE_ID, EXTENSION_KEY, getOrderedTrackerModules, getSettingsForTrackerModule } from '../config.js';
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import type { ChatMessage } from 'sillytavern-utils-lib/types';
 import { EventNames } from 'sillytavern-utils-lib/types';
@@ -21,6 +21,47 @@ import { shouldSkipTrackerGeneration } from './tracker-action-helpers.js';
 
 const incomingTypes = [AutoModeOptions.RESPONSES, AutoModeOptions.BOTH];
 const outgoingTypes = [AutoModeOptions.INPUT, AutoModeOptions.BOTH];
+
+function getDueAutoModuleIds(options: {
+  settings: ExtensionSettings;
+  messageId: number;
+  characterContext: Parameters<typeof shouldAutoGenerateForUserMessage>[0];
+  direction: 'incoming' | 'outgoing';
+}): string[] {
+  return getOrderedTrackerModules(options.settings)
+    .filter((module) => module.auto.enabled)
+    .filter((module) => (options.direction === 'incoming' ? incomingTypes : outgoingTypes).includes(module.auto.mode))
+    .filter((module) => (
+      options.direction === 'incoming'
+        ? shouldAutoGenerateForCharacterMessage(options.characterContext, options.messageId, module.id)
+        : shouldAutoGenerateForUserMessage(options.characterContext, module.id)
+    ))
+    .filter((module) => !shouldSkipTrackerGeneration(
+      options.messageId,
+      getSettingsForTrackerModule(options.settings, module.id),
+      () => {},
+      true,
+    ))
+    .map((module) => module.id);
+}
+
+/** Returns whether any configured Module wants automatic generation for one host event direction. */
+function hasAutoModuleForDirection(settings: ExtensionSettings, directionModes: AutoModeOptions[]): boolean {
+  return getOrderedTrackerModules(settings).some((module) => module.auto.enabled && directionModes.includes(module.auto.mode));
+}
+
+function generateDueAutoModules(actions: TrackerActions, messageId: number, moduleIds: string[]) {
+  if (typeof actions.generateTrackersForMessage === 'function') {
+    return actions.generateTrackersForMessage(messageId, {
+      silent: true,
+      showStatusIndicator: false,
+      autoOnly: true,
+      moduleIds,
+    });
+  }
+
+  return actions.generateTracker(messageId, { silent: true, showStatusIndicator: false });
+}
 
 type InitializeGlobalUIOptions = {
   globalContext: any;
@@ -51,8 +92,11 @@ const registeredHostEventSources = new WeakSet<object>();
 
 let activeTrackerActionHandler: {
   actions: TrackerActions;
+  settingsManager: ExtensionSettingsManager<ExtensionSettings>;
   getPortaledPartsMessageId: (target: HTMLElement) => number | null;
 } | null = null;
+
+let activeManualModuleMenu: HTMLElement | null = null;
 
 function normalizeSpeakerLabel(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
@@ -100,6 +144,95 @@ function resolveMessageIdFromTarget(
   return getPortaledPartsMessageId(target);
 }
 
+/** Resolves which rendered tracker module owns one clicked control. */
+function resolveModuleIdFromTarget(target: HTMLElement): string {
+  const moduleElement = target.closest('[data-ztracker-module]') as HTMLElement | null;
+  return moduleElement?.dataset.ztrackerModule || DEFAULT_MODULE_ID;
+}
+
+/** Builds an optional action argument for non-default module controls. */
+function getModuleActionArgs(moduleId: string): [string] | [] {
+  return moduleId === DEFAULT_MODULE_ID ? [] : [moduleId];
+}
+
+/** Adds a module id to action options only when a non-default tracker owns the control. */
+function withModuleActionOption<T extends Record<string, unknown>>(options: T, moduleId: string): T & { moduleId?: string } {
+  return moduleId === DEFAULT_MODULE_ID ? options : { ...options, moduleId };
+}
+
+/** Closes the message-level manual Module chooser, if it is open. */
+function closeManualModuleMenu(): void {
+  activeManualModuleMenu?.remove();
+  activeManualModuleMenu = null;
+}
+
+/** Places the manual Module chooser next to the message truck button. */
+function positionManualModuleMenu(menu: HTMLElement, button: HTMLElement): void {
+  const rect = button.getBoundingClientRect();
+  const viewportMargin = 8;
+  const width = Math.max(menu.offsetWidth, 180);
+  const left = Math.max(
+    window.scrollX + viewportMargin,
+    Math.min(rect.right + window.scrollX - width, window.scrollX + window.innerWidth - viewportMargin - width),
+  );
+  const top = rect.bottom + window.scrollY + 6;
+
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.top = `${Math.round(top)}px`;
+}
+
+/** Lets the truck button target any enabled Module when multiple Modules are available. */
+function openManualModuleMenu(options: {
+  actions: TrackerActions;
+  button: HTMLElement;
+  messageId: number;
+  settings: ExtensionSettings;
+}): void {
+  const modules = getOrderedTrackerModules(options.settings);
+  if (modules.length === 0) {
+    st_echo('warning', 'No zTracker Modules are enabled. Enable a Module before generating a tracker.');
+    return;
+  }
+
+  if (modules.length === 1) {
+    const moduleId = modules[0].id;
+    options.actions.generateTracker(options.messageId, withModuleActionOption({ showStatusIndicator: true }, moduleId));
+    return;
+  }
+
+  closeManualModuleMenu();
+
+  const menu = document.createElement('div');
+  menu.className = 'ztracker-module-generate-menu';
+  menu.setAttribute('role', 'menu');
+  menu.style.position = 'absolute';
+  menu.style.visibility = 'hidden';
+  menu.style.zIndex = '2147483647';
+
+  for (const module of modules) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'ztracker-module-generate-option menu_button';
+    item.dataset.ztrackerModule = module.id;
+    item.textContent = module.name || module.id;
+    item.title = `Generate ${module.name || module.id}`;
+    item.addEventListener('click', (event) => {
+      event.stopPropagation();
+      closeManualModuleMenu();
+      options.actions.generateTracker(
+        options.messageId,
+        withModuleActionOption({ showStatusIndicator: true }, module.id),
+      );
+    });
+    menu.append(item);
+  }
+
+  document.body.append(menu);
+  activeManualModuleMenu = menu;
+  positionManualModuleMenu(menu, options.button);
+  menu.style.visibility = '';
+}
+
 /** Applies tracker-specific click actions for message buttons and parts-menu controls. */
 function installTrackerActionClickHandler(): void {
   if (trackerActionClickHandlerInstalled) {
@@ -119,6 +252,8 @@ function installTrackerActionClickHandler(): void {
     }
 
     const { actions } = runtime;
+    const moduleId = resolveModuleIdFromTarget(target);
+    const moduleArgs = getModuleActionArgs(moduleId);
 
     const fieldButton = target.closest('.ztracker-array-item-field-regenerate-button') as HTMLElement | null;
     if (fieldButton) {
@@ -131,13 +266,13 @@ function installTrackerActionClickHandler(): void {
 
       if (partKey && fieldKey && idKey && idValue && 'generateTrackerArrayItemFieldByIdentity' in actions) {
         // @ts-ignore - optional capability depending on build/version.
-        actions.generateTrackerArrayItemFieldByIdentity(messageId, partKey, idKey, idValue, fieldKey);
+        actions.generateTrackerArrayItemFieldByIdentity(messageId, partKey, idKey, idValue, fieldKey, ...moduleArgs);
       } else if (partKey && fieldKey && name && 'generateTrackerArrayItemFieldByName' in actions) {
         // @ts-ignore - optional capability depending on build/version.
-        actions.generateTrackerArrayItemFieldByName(messageId, partKey, name, fieldKey);
+        actions.generateTrackerArrayItemFieldByName(messageId, partKey, name, fieldKey, ...moduleArgs);
       } else if (partKey && fieldKey && !Number.isNaN(index) && 'generateTrackerArrayItemField' in actions) {
         // @ts-ignore - optional capability depending on build/version.
-        actions.generateTrackerArrayItemField(messageId, partKey, index, fieldKey);
+        actions.generateTrackerArrayItemField(messageId, partKey, index, fieldKey, ...moduleArgs);
       }
 
       return;
@@ -153,11 +288,11 @@ function installTrackerActionClickHandler(): void {
 
       if (partKey && idKey && idValue && 'generateTrackerArrayItemByIdentity' in actions) {
         // @ts-ignore - optional capability depending on build/version.
-        actions.generateTrackerArrayItemByIdentity(messageId, partKey, idKey, idValue);
+        actions.generateTrackerArrayItemByIdentity(messageId, partKey, idKey, idValue, ...moduleArgs);
       } else if (partKey && name) {
-        actions.generateTrackerArrayItemByName(messageId, partKey, name);
+        actions.generateTrackerArrayItemByName(messageId, partKey, name, ...moduleArgs);
       } else if (partKey && !Number.isNaN(index)) {
-        actions.generateTrackerArrayItem(messageId, partKey, index);
+        actions.generateTrackerArrayItem(messageId, partKey, index, ...moduleArgs);
       }
       return;
     }
@@ -166,24 +301,43 @@ function installTrackerActionClickHandler(): void {
     if (partButton) {
       const partKey = partButton.getAttribute('data-ztracker-part') ?? '';
       if (partKey) {
-        actions.generateTrackerPart(messageId, partKey);
+        actions.generateTrackerPart(messageId, partKey, ...moduleArgs);
       }
       return;
     }
 
     if (target.classList.contains('mes_ztracker_button')) {
-      actions.generateTracker(messageId, { showStatusIndicator: true });
+      openManualModuleMenu({
+        actions,
+        button: target,
+        messageId,
+        settings: runtime.settingsManager.getSettings(),
+      });
     } else if (target.classList.contains('ztracker-cleanup-button') && 'openTrackerCleanup' in actions) {
       // @ts-ignore - optional capability depending on build/version.
-      actions.openTrackerCleanup(messageId);
+      actions.openTrackerCleanup(messageId, ...moduleArgs);
     } else if (target.classList.contains('ztracker-edit-button')) {
-      actions.editTracker(messageId);
+      actions.editTracker(messageId, ...moduleArgs);
     } else if (target.classList.contains('ztracker-regenerate-button')) {
-      actions.generateTracker(messageId, { showStatusIndicator: true });
+      actions.generateTracker(messageId, withModuleActionOption({ showStatusIndicator: true }, moduleId));
     } else if (target.classList.contains('ztracker-delete-button')) {
-      actions.deleteTracker(messageId);
+      actions.deleteTracker(messageId, ...moduleArgs);
     }
   });
+
+  document.addEventListener('mousedown', (event) => {
+    if (!activeManualModuleMenu || activeManualModuleMenu.contains(event.target as Node)) {
+      return;
+    }
+
+    closeManualModuleMenu();
+  }, true);
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeManualModuleMenu();
+    }
+  }, true);
 
   trackerActionClickHandlerInstalled = true;
 }
@@ -246,6 +400,7 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
   ensureMessageTemplateButton();
   activeTrackerActionHandler = {
     actions,
+    settingsManager,
     getPortaledPartsMessageId: partsMenuPortal.getMessageIdForTarget,
   };
   installTrackerActionClickHandler();
@@ -259,14 +414,20 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
       EventNames.CHARACTER_MESSAGE_RENDERED,
       (messageId: number) => {
         const settings = settingsManager.getSettings();
-        if (!incomingTypes.includes(settings.autoMode)) return;
+        if (!hasAutoModuleForDirection(settings, incomingTypes)) return;
 
         const context = SillyTavern.getContext();
-        if (!shouldAutoGenerateForCharacterMessage({ chat: context.chat, characters: context.characters }, messageId)) {
+        const moduleIds = getDueAutoModuleIds({
+          settings,
+          messageId,
+          characterContext: { chat: context.chat, characters: context.characters },
+          direction: 'incoming',
+        });
+        if (moduleIds.length === 0) {
           return;
         }
 
-        actions.generateTracker(messageId, { silent: true, showStatusIndicator: false });
+        generateDueAutoModules(actions, messageId, moduleIds);
       },
     );
     globalContext.eventSource.on(EventNames.USER_MESSAGE_RENDERED, (messageId: number) => {
@@ -276,19 +437,16 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
       EventNames.MESSAGE_SENT,
       (messageId: number) => {
         const settings = settingsManager.getSettings();
-        if (!outgoingTypes.includes(settings.autoMode)) return;
+        if (!hasAutoModuleForDirection(settings, outgoingTypes)) return;
 
         const context = SillyTavern.getContext();
-        if (!shouldAutoGenerateForUserMessage({ characterId: (context as any).characterId, characters: context.characters })) {
-          return;
-        }
-
-        // Skip the host-reply hold entirely when this message would be skipped by Skip First X Messages:
-        // there is no tracker to generate first, so stopping and re-issuing the reply would needlessly
-        // abort the first reply and race SillyTavern's generation teardown.
-        // This guard MUST mirror generateTracker's silent skip decision (see tracker-actions.ts);
-        // both pass silent=true so the gate never diverges from what the action would actually do.
-        if (shouldSkipTrackerGeneration(messageId, settings, () => {}, true)) {
+        const moduleIds = getDueAutoModuleIds({
+          settings,
+          messageId,
+          characterContext: { characterId: (context as any).characterId, characters: context.characters },
+          direction: 'outgoing',
+        });
+        if (moduleIds.length === 0) {
           return;
         }
 
@@ -297,7 +455,7 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
 
         void (async () => {
           try {
-            await actions.generateTracker(messageId, { silent: true, showStatusIndicator: false });
+            await generateDueAutoModules(actions, messageId, moduleIds);
           } catch (error) {
             console.error('zTracker auto mode failed to generate a tracker before reply.', error);
           }
@@ -332,11 +490,24 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
   (globalThis as any).ztrackerGenerateInterceptor = (chat: ChatMessage[]) => {
     const textCompletionSafeContext = SillyTavern.getContext() as GenerateInterceptorContext;
     const isGroupChat = Boolean(textCompletionSafeContext?.selected_group ?? selected_group);
-    const newChat = includeZTrackerMessages(chat, settingsManager.getSettings(), {
+    const settings = settingsManager.getSettings();
+    const interceptorOptions = {
       preserveTextCompletionTurnAlternation: textCompletionSafeContext?.mainApi === 'textgenerationwebui',
       isGroupChat,
       assistantReplyLabel: isGroupChat ? undefined : resolveAssistantReplyLabel(textCompletionSafeContext),
-    });
+    };
+    let newChat = chat;
+    for (const module of [...getOrderedTrackerModules(settings)].reverse()) {
+      const moduleSettings = getSettingsForTrackerModule(settings, module.id);
+      if (moduleSettings.includeLastXZTrackerMessages <= 0) {
+        continue;
+      }
+
+      newChat = includeZTrackerMessages(newChat, moduleSettings, {
+        ...interceptorOptions,
+        moduleId: module.id,
+      });
+    }
     chat.length = 0;
     chat.push(...newChat);
   };

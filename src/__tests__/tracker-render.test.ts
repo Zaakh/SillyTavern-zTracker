@@ -3,15 +3,18 @@
  */
 
 import Handlebars from 'handlebars';
+import { jest } from '@jest/globals';
+import { createDefaultTrackerModule } from '../config.js';
 import {
   renderTracker,
+  CHAT_MESSAGE_MODULES_KEY,
   CHAT_MESSAGE_SCHEMA_VALUE_KEY,
   CHAT_MESSAGE_SCHEMA_HTML_KEY,
   CHAT_MESSAGE_PARTS_META_KEY,
   CHAT_MESSAGE_PENDING_REDACTIONS_KEY,
   TrackerContext,
 } from '../tracker.js';
-import { EXTENSION_KEY } from '../extension-metadata.js';
+import { DEFAULT_MODULE_ID, EXTENSION_KEY } from '../extension-metadata.js';
 
 describe('renderTracker', () => {
   const template = '<div class="tracker-content">{{data.time}}</div>';
@@ -41,6 +44,148 @@ describe('renderTracker', () => {
     expect(tracker).not.toBeNull();
     expect(tracker?.querySelector('.tracker-content')?.textContent).toBe('10:00');
     expect(tracker?.querySelector('.ztracker-controls')).not.toBeNull();
+  });
+
+  it('renders one labeled tracker block per module in module order', () => {
+    const agendaModule = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 0 });
+    const defaultModule = createDefaultTrackerModule({ id: DEFAULT_MODULE_ID, name: 'Scene', order: 1 });
+    const context: TrackerContext = {
+      chat: [
+        {
+          extra: {
+            [EXTENSION_KEY]: {
+              [CHAT_MESSAGE_MODULES_KEY]: {
+                [DEFAULT_MODULE_ID]: {
+                  [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { time: '10:00' },
+                  [CHAT_MESSAGE_SCHEMA_HTML_KEY]: '<div class="scene-content">{{data.time}}</div>',
+                },
+                agenda: {
+                  [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { task: 'Find the exit' },
+                  [CHAT_MESSAGE_SCHEMA_HTML_KEY]: '<div class="agenda-content">{{data.task}}</div>',
+                },
+              },
+            },
+          },
+        } as any,
+      ],
+    };
+
+    renderTracker(0, {
+      context,
+      document,
+      handlebars: Handlebars,
+      settings: { modules: [defaultModule, agendaModule] } as any,
+    });
+
+    const trackers = Array.from(document.querySelectorAll('.mes_ztracker')) as HTMLElement[];
+    expect(trackers).toHaveLength(2);
+    expect(trackers.map((tracker) => tracker.dataset.ztrackerModule)).toEqual(['agenda', DEFAULT_MODULE_ID]);
+    expect(trackers.map((tracker) => tracker.querySelector('.ztracker-module-label')?.textContent)).toEqual(['Agenda', 'Scene']);
+    expect(trackers[0].querySelector('.agenda-content')?.textContent).toBe('Find the exit');
+    expect(trackers[1].querySelector('.scene-content')?.textContent).toBe('10:00');
+  });
+
+  it('isolates one module render failure without dropping other modules', () => {
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const brokenModule = createDefaultTrackerModule({ id: 'broken', name: 'Broken', order: 0 });
+    const defaultModule = createDefaultTrackerModule({ id: DEFAULT_MODULE_ID, name: 'Scene', order: 1 });
+    const context: TrackerContext = {
+      chat: [
+        {
+          extra: {
+            [EXTENSION_KEY]: {
+              [CHAT_MESSAGE_MODULES_KEY]: {
+                broken: {
+                  [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { time: '10:00' },
+                  [CHAT_MESSAGE_SCHEMA_HTML_KEY]: '<div>{{data.missing.value}}</div>',
+                },
+                [DEFAULT_MODULE_ID]: {
+                  [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { time: '10:00' },
+                  [CHAT_MESSAGE_SCHEMA_HTML_KEY]: '<div class="scene-content">{{data.time}}</div>',
+                },
+              },
+            },
+          },
+        } as any,
+      ],
+    };
+
+    renderTracker(0, {
+      context,
+      document,
+      handlebars: Handlebars,
+      settings: { modules: [brokenModule, defaultModule] } as any,
+    });
+
+    const trackers = Array.from(document.querySelectorAll('.mes_ztracker')) as HTMLElement[];
+    expect(trackers).toHaveLength(1);
+    expect(trackers[0].dataset.ztrackerModule).toBe(DEFAULT_MODULE_ID);
+    expect(trackers[0].querySelector('.scene-content')?.textContent).toBe('10:00');
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Error rendering zTracker module broken'),
+      expect.any(Error),
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('re-renders one module block without replacing other module blocks', () => {
+    const agendaModule = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 0 });
+    const defaultModule = createDefaultTrackerModule({ id: DEFAULT_MODULE_ID, name: 'Scene', order: 1 });
+    const context: TrackerContext = {
+      chat: [
+        {
+          extra: {
+            [EXTENSION_KEY]: {
+              [CHAT_MESSAGE_MODULES_KEY]: {
+                agenda: {
+                  [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { task: 'Find the exit' },
+                  [CHAT_MESSAGE_SCHEMA_HTML_KEY]: '<div class="agenda-content">{{data.task}}</div>',
+                },
+                [DEFAULT_MODULE_ID]: {
+                  [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { time: '10:00' },
+                  [CHAT_MESSAGE_SCHEMA_HTML_KEY]: '<div class="scene-content">{{data.time}}</div>',
+                },
+              },
+            },
+          },
+        } as any,
+      ],
+    };
+    const settings = { modules: [agendaModule, defaultModule] } as any;
+
+    renderTracker(0, { context, document, handlebars: Handlebars, settings });
+    const originalAgendaBlock = document.querySelector('.mes_ztracker[data-ztracker-module="agenda"]');
+    const originalDefaultBlock = document.querySelector(`.mes_ztracker[data-ztracker-module="${DEFAULT_MODULE_ID}"]`);
+
+    context.chat[0].extra![EXTENSION_KEY][CHAT_MESSAGE_MODULES_KEY].agenda[CHAT_MESSAGE_SCHEMA_VALUE_KEY] = {
+      task: 'Open the gate',
+    };
+    renderTracker(0, { context, document, handlebars: Handlebars, settings, moduleId: 'agenda' });
+
+    const nextAgendaBlock = document.querySelector('.mes_ztracker[data-ztracker-module="agenda"]');
+    const nextDefaultBlock = document.querySelector(`.mes_ztracker[data-ztracker-module="${DEFAULT_MODULE_ID}"]`);
+    const trackers = Array.from(document.querySelectorAll('.mes_ztracker')) as HTMLElement[];
+
+    expect(nextAgendaBlock).not.toBe(originalAgendaBlock);
+    expect(nextAgendaBlock?.querySelector('.agenda-content')?.textContent).toBe('Open the gate');
+    expect(nextDefaultBlock).toBe(originalDefaultBlock);
+    expect(trackers.map((tracker) => tracker.dataset.ztrackerModule)).toEqual(['agenda', DEFAULT_MODULE_ID]);
+  });
+
+  it('wraps legacy tracker data under the default module while rendering', () => {
+    const context = createContext();
+
+    renderTracker(0, { context, document, handlebars: Handlebars });
+    const migratedRecord = context.chat[0].extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_MODULES_KEY]?.[DEFAULT_MODULE_ID];
+    renderTracker(0, { context, document, handlebars: Handlebars });
+
+    expect(context.chat[0].extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_MODULES_KEY]?.[DEFAULT_MODULE_ID]).toBe(migratedRecord);
+    expect(migratedRecord).toEqual(
+      expect.objectContaining({
+        [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { time: '10:00' },
+        [CHAT_MESSAGE_SCHEMA_HTML_KEY]: template,
+      }),
+    );
   });
 
   it('escapes tracker values instead of rendering them as live HTML', () => {
@@ -188,7 +333,9 @@ describe('renderTracker', () => {
     const context = createContext();
     renderTracker(0, { context, document, handlebars: Handlebars });
 
-    delete context.chat[0].extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY];
+    delete context.chat[0].extra?.[EXTENSION_KEY]?.[CHAT_MESSAGE_MODULES_KEY]?.[DEFAULT_MODULE_ID]?.[
+      CHAT_MESSAGE_SCHEMA_VALUE_KEY
+    ];
     renderTracker(0, { context, document, handlebars: Handlebars });
 
     expect(document.querySelector('.mes_ztracker')).toBeNull();

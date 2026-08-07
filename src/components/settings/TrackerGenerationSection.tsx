@@ -1,6 +1,6 @@
 import { FC } from 'react';
 import { PresetItem } from 'sillytavern-utils-lib/components/react';
-import { ExtensionSettings } from '../../config.js';
+import { TrackerModuleSettings } from '../../config.js';
 import { GenerationBehaviorSection } from './GenerationBehaviorSection.js';
 import { GenerationPromptTemplatesSection } from './GenerationPromptTemplatesSection.js';
 import { SchemaPresetSection } from './SchemaPresetSection.js';
@@ -10,7 +10,7 @@ import { WorldInfoPolicySection } from './WorldInfoPolicySection.js';
 
 // Renders settings that control tracker generation, prompt construction, and tracker schema editing.
 export const TrackerGenerationSection: FC<{
-  settings: ExtensionSettings;
+  settings: TrackerModuleSettings;
   updateAndRefresh: SettingsUpdateAndRefresh;
   schemaPresetItems: PresetItem[];
   currentChatSchemaPresetKey?: string;
