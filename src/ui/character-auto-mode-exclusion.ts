@@ -27,8 +27,24 @@ type CharacterContextLike = {
 
 type CharacterPanelButtonSyncOptions = {
   autoModeEnabled: boolean;
-  /** Ids of every currently configured tracker Module; the toggle acts as one kill-switch across all of them. */
+  /**
+   * Ids of every Module the toggle writes exclusion to (the kill-switch's write scope).
+   * Resolved once per call; pass `getModuleIds` instead when the configured Module list can
+   * change while the button stays mounted (e.g. Modules added/removed in Settings), since a
+   * static array here would go stale for later clicks.
+   */
   moduleIds?: string[];
+  /** Live alternative to `moduleIds`, invoked fresh on every sync and on every click. */
+  getModuleIds?: () => string[];
+  /**
+   * Ids of every Module the "fully excluded" display/toggle-direction check reads.
+   * Defaults to the write scope (`moduleIds`/`getModuleIds`) when omitted. Callers that write
+   * broadly (including disabled Modules, to preserve intent) but want the button to describe
+   * only currently-enabled Modules should pass a narrower read scope here.
+   */
+  readModuleIds?: string[];
+  /** Live alternative to `readModuleIds`, invoked fresh on every sync and on every click. */
+  getReadModuleIds?: () => string[];
   root?: ParentNode;
   context?: CharacterContextLike;
   getContext?: () => CharacterContextLike;
@@ -40,6 +56,22 @@ function resolveCharacterContext(options: CharacterPanelButtonSyncOptions): Char
     return options.getContext();
   }
   return options.context ?? null;
+}
+
+/** Resolves the write-scope Module id list fresh from `options`, favoring the live getter. */
+function resolveWriteModuleIds(options: CharacterPanelButtonSyncOptions): string[] {
+  if (typeof options.getModuleIds === 'function') {
+    return options.getModuleIds();
+  }
+  return options.moduleIds ?? [DEFAULT_MODULE_ID];
+}
+
+/** Resolves the read-scope Module id list fresh from `options`, falling back to the write scope. */
+function resolveReadModuleIds(options: CharacterPanelButtonSyncOptions, writeModuleIds: string[]): string[] {
+  if (typeof options.getReadModuleIds === 'function') {
+    return options.getReadModuleIds();
+  }
+  return options.readModuleIds ?? writeModuleIds;
 }
 
 /** Returns the zTracker extension payload stored on a character card, if present. */
@@ -91,6 +123,16 @@ export function isCharacterAutoModeExcluded(character: CharacterLike | undefined
  */
 export function isCharacterFullyAutoModeExcluded(character: CharacterLike | undefined, moduleIds: string[]): boolean {
   return moduleIds.length > 0 && moduleIds.every((moduleId) => isCharacterAutoModeExcluded(character, moduleId));
+}
+
+/**
+ * Reads whether the supplied character is excluded from some, but not all, Module ids in
+ * `moduleIds`. Used only to pick a more accurate tooltip; the button's excluded/included
+ * visual state still follows `isCharacterFullyAutoModeExcluded`.
+ */
+export function isCharacterPartiallyAutoModeExcluded(character: CharacterLike | undefined, moduleIds: string[]): boolean {
+  const excludedCount = moduleIds.filter((moduleId) => isCharacterAutoModeExcluded(character, moduleId)).length;
+  return excludedCount > 0 && excludedCount < moduleIds.length;
 }
 
 /** Resolves a SillyTavern character id from a rendered message's original avatar reference. */
@@ -147,12 +189,14 @@ export function shouldAutoGenerateForUserMessage(context: CharacterContextLike, 
  * Writes the same `excluded` value to every id in `moduleIds` in a single
  * `writeExtensionField` call so the character-panel toggle acts as one kill-switch across
  * all currently configured tracker Modules, instead of only the default Module.
+ * `moduleIds` is required (no implicit default) so a caller cannot silently regress to a
+ * single-Module write by forgetting the argument.
  */
 export function setCharacterAutoModeExcluded(
   context: CharacterContextLike,
   characterId: number,
   excluded: boolean,
-  moduleIds: string[] = [DEFAULT_MODULE_ID],
+  moduleIds: string[],
 ): boolean {
   const characters = context.characters;
   if (!Array.isArray(characters) || characterId < 0 || characterId >= characters.length) {
@@ -185,22 +229,25 @@ export function setCharacterAutoModeExcluded(
 }
 
 /**
- * Toggles the exclusion flag for the currently active solo character across every id in
- * `moduleIds`. The next state negates "fully excluded" (all of `moduleIds` excluded), so a
- * partially-excluded character (e.g. left over from a prior single-module-only write)
- * normalizes to fully excluded on the very next click rather than staying ambiguous.
+ * Toggles the exclusion flag for the currently active solo character, writing to every id in
+ * `writeModuleIds`. The next state negates "fully excluded" as read over `readModuleIds`
+ * (defaults to `writeModuleIds`), so a partially-excluded character (e.g. left over from a
+ * prior single-module-only write) normalizes to fully excluded on the very next click rather
+ * than staying ambiguous. `writeModuleIds` is required so a caller cannot silently regress to
+ * a single-Module write by forgetting the argument.
  */
 export function toggleCurrentCharacterAutoModeExcluded(
   context: CharacterContextLike,
-  moduleIds: string[] = [DEFAULT_MODULE_ID],
+  writeModuleIds: string[],
+  readModuleIds: string[] = writeModuleIds,
 ): { characterId: number; excluded: boolean } | null {
   const characterId = getCurrentCharacterId(context);
   if (characterId === undefined) {
     return null;
   }
 
-  const nextExcluded = !isCharacterFullyAutoModeExcluded(context.characters?.[characterId], moduleIds);
-  if (!setCharacterAutoModeExcluded(context, characterId, nextExcluded, moduleIds)) {
+  const nextExcluded = !isCharacterFullyAutoModeExcluded(context.characters?.[characterId], readModuleIds);
+  if (!setCharacterAutoModeExcluded(context, characterId, nextExcluded, writeModuleIds)) {
     return null;
   }
 
@@ -233,9 +280,10 @@ export function findCharacterPanelButtonRow(root: ParentNode = document): HTMLEl
 function buildCharacterAutoModeButtonTitle(options: {
   hasCharacter: boolean;
   excluded: boolean;
+  partial: boolean;
   autoModeEnabled: boolean;
 }): string {
-  const { hasCharacter, excluded, autoModeEnabled } = options;
+  const { hasCharacter, excluded, partial, autoModeEnabled } = options;
   if (!hasCharacter) {
     return 'zTracker: Open a character card to toggle auto-mode exclusion.';
   }
@@ -244,6 +292,11 @@ function buildCharacterAutoModeButtonTitle(options: {
       ? 'zTracker: This character stays excluded while auto mode is disabled globally.'
       : 'zTracker: Auto mode is disabled globally. Enable it to use this character exclusion toggle.';
   }
+  if (partial) {
+    // Displays as "included" (see isCharacterFullyAutoModeExcluded), but says so explicitly
+    // rather than implying every Module is active, since only some of them actually are.
+    return 'zTracker: Auto mode excluded for some Modules for this character. Click to exclude for all.';
+  }
   return excluded
     ? 'zTracker: Auto mode excluded for this character. Click to include.'
     : 'zTracker: Auto mode active for this character. Click to exclude.';
@@ -251,7 +304,7 @@ function buildCharacterAutoModeButtonTitle(options: {
 
 /** Creates or refreshes the character-panel exclusion button and keeps its state in sync. */
 export function syncCharacterAutoModeButton(options: CharacterPanelButtonSyncOptions): HTMLElement | null {
-  const { autoModeEnabled, moduleIds = [DEFAULT_MODULE_ID], root = document, onToggle } = options;
+  const { autoModeEnabled, root = document, onToggle } = options;
   const buttonRow = findCharacterPanelButtonRow(root);
   if (!buttonRow) {
     return null;
@@ -269,13 +322,18 @@ export function syncCharacterAutoModeButton(options: CharacterPanelButtonSyncOpt
     button.className = 'menu_button interactable fa-solid fa-truck ztracker-character-auto-mode-button';
     button.setAttribute('role', 'button');
     button.tabIndex = 0;
+    // Resolve module ids fresh on every click, not just once at attach time: `options` here
+    // is whichever sync call first created this button, but `getModuleIds`/`getReadModuleIds`
+    // (when supplied) re-read live settings on every invocation rather than freezing a list.
     button.addEventListener('click', () => {
       const nextContext = resolveCharacterContext(options);
       if (!nextContext) {
         return;
       }
 
-      const result = toggleCurrentCharacterAutoModeExcluded(nextContext, moduleIds);
+      const writeModuleIds = resolveWriteModuleIds(options);
+      const readModuleIds = resolveReadModuleIds(options, writeModuleIds);
+      const result = toggleCurrentCharacterAutoModeExcluded(nextContext, writeModuleIds, readModuleIds);
       if (!result) {
         return;
       }
@@ -285,15 +343,19 @@ export function syncCharacterAutoModeButton(options: CharacterPanelButtonSyncOpt
     buttonRow.appendChild(button);
   }
 
+  const writeModuleIds = resolveWriteModuleIds(options);
+  const readModuleIds = resolveReadModuleIds(options, writeModuleIds);
   const characterId = getCurrentCharacterId(context);
-  const excluded = characterId !== undefined && isCharacterFullyAutoModeExcluded(context.characters?.[characterId], moduleIds);
+  const character = characterId !== undefined ? context.characters?.[characterId] : undefined;
+  const excluded = characterId !== undefined && isCharacterFullyAutoModeExcluded(character, readModuleIds);
+  const partial = characterId !== undefined && isCharacterPartiallyAutoModeExcluded(character, readModuleIds);
   const hasCharacter = characterId !== undefined;
 
   button.dataset.excluded = String(excluded);
   button.setAttribute('aria-pressed', String(excluded));
   button.style.color = !autoModeEnabled ? 'var(--SmartThemeEmColor, #888)' : excluded ? 'var(--SmartThemeQuoteColor, #e74c3c)' : '';
   button.style.opacity = !autoModeEnabled ? '0.7' : '1';
-  button.title = buildCharacterAutoModeButtonTitle({ hasCharacter, excluded, autoModeEnabled });
+  button.title = buildCharacterAutoModeButtonTitle({ hasCharacter, excluded, partial, autoModeEnabled });
 
   return button;
 }

@@ -13,6 +13,7 @@ import {
   getCurrentCharacterId,
   isCharacterAutoModeExcluded,
   isCharacterFullyAutoModeExcluded,
+  isCharacterPartiallyAutoModeExcluded,
   resolveCharacterIdFromMessage,
   setCharacterAutoModeExcluded,
   shouldAutoGenerateForCharacterMessage,
@@ -82,7 +83,7 @@ describe('character auto-mode exclusion helpers', () => {
       writeExtensionField,
     };
 
-    expect(setCharacterAutoModeExcluded(context, 0, true)).toBe(true);
+    expect(setCharacterAutoModeExcluded(context, 0, true, [DEFAULT_MODULE_ID])).toBe(true);
     expect(writeExtensionField).toHaveBeenCalledWith(0, EXTENSION_KEY, {
       existing: 'value',
       autoModeExclusions: { [DEFAULT_MODULE_ID]: true },
@@ -100,6 +101,16 @@ describe('character auto-mode exclusion helpers', () => {
 
     expect(isCharacterFullyAutoModeExcluded(character, ['sceneMod'])).toBe(true);
     expect(isCharacterFullyAutoModeExcluded(character, ['sceneMod', 'agendaMod'])).toBe(false);
+  });
+
+  test('reports partially excluded only when some but not all configured Module ids are excluded', () => {
+    const character = {
+      data: { extensions: { [EXTENSION_KEY]: { autoModeExclusions: { sceneMod: true, agendaMod: false } } } },
+    };
+
+    expect(isCharacterPartiallyAutoModeExcluded(character, ['sceneMod', 'agendaMod'])).toBe(true);
+    expect(isCharacterPartiallyAutoModeExcluded(character, ['sceneMod'])).toBe(false);
+    expect(isCharacterPartiallyAutoModeExcluded(character, ['agendaMod'])).toBe(false);
   });
 
   test('toggling with multiple configured Modules excludes all of them in one click', () => {
@@ -281,6 +292,74 @@ describe('character auto-mode exclusion button sync', () => {
     expect(writeExtensionField).toHaveBeenCalledWith(0, EXTENSION_KEY, {
       autoModeExclusions: { sceneMod: true, agendaMod: true },
     });
+    expect(button?.dataset.excluded).toBe('true');
+  });
+
+  test('shows a distinct tooltip when the character is excluded from only some configured Modules', () => {
+    document.body.innerHTML = '<div id="form_create"><div class="avatar_button_row"></div></div>';
+    const context = {
+      characterId: 0,
+      characters: [
+        {
+          avatar: 'alice.png',
+          data: { extensions: { [EXTENSION_KEY]: { autoModeExclusions: { sceneMod: true, agendaMod: false } } } },
+        },
+      ],
+    };
+
+    const button = syncCharacterAutoModeButton({
+      getContext: () => context,
+      autoModeEnabled: true,
+      moduleIds: ['sceneMod', 'agendaMod'],
+    });
+
+    expect(button?.title).toBe('zTracker: Auto mode excluded for some Modules for this character. Click to exclude for all.');
+  });
+
+  test('resolves getModuleIds fresh on every click instead of freezing the list from button creation', () => {
+    document.body.innerHTML = '<div id="form_create"><div class="avatar_button_row"></div></div>';
+    const writeExtensionField = jest.fn();
+    const context = {
+      characterId: 0,
+      characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+      writeExtensionField,
+    };
+    // Simulates a Module added in Settings after the button was first created: the live
+    // getter must reflect the mutation at click time, not the list captured on first sync.
+    let configuredModuleIds = ['sceneMod'];
+    const getModuleIds = () => configuredModuleIds;
+
+    const button = syncCharacterAutoModeButton({ getContext: () => context, autoModeEnabled: true, getModuleIds });
+    configuredModuleIds = ['sceneMod', 'agendaMod'];
+    button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(writeExtensionField).toHaveBeenCalledWith(0, EXTENSION_KEY, {
+      autoModeExclusions: { sceneMod: true, agendaMod: true },
+    });
+  });
+
+  test('reads a narrower scope than it writes when write and read module ids differ', () => {
+    document.body.innerHTML = '<div id="form_create"><div class="avatar_button_row"></div></div>';
+    const context = {
+      characterId: 0,
+      characters: [
+        {
+          avatar: 'alice.png',
+          // Only the enabled Module is excluded; the disabled one (write-only scope) is not.
+          data: { extensions: { [EXTENSION_KEY]: { autoModeExclusions: { enabledMod: true } } } },
+        },
+      ],
+    };
+
+    const button = syncCharacterAutoModeButton({
+      getContext: () => context,
+      autoModeEnabled: true,
+      moduleIds: ['enabledMod', 'disabledMod'],
+      readModuleIds: ['enabledMod'],
+    });
+
+    // Fully excluded when read over the enabled-only scope, even though the disabled Module
+    // (write scope only) has no exclusion entry at all.
     expect(button?.dataset.excluded).toBe('true');
   });
 });
