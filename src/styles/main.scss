@@ -222,6 +222,97 @@
 		}
 	}
 
+	.ztracker-generation-order {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.ztracker-generation-order-list {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.ztracker-generation-order-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 6px 10px;
+		border-radius: 6px;
+		border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.18));
+		background: var(--black30a, rgba(0, 0, 0, 0.3));
+
+		.ztracker-generation-order-index {
+			flex: 0 0 auto;
+			opacity: 0.7;
+		}
+
+		.ztracker-generation-order-name {
+			flex: 1 1 auto;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
+		.ztracker-generation-order-controls {
+			flex: 0 0 auto;
+			display: flex;
+			gap: 4px;
+		}
+
+		&.is-disabled .ztracker-generation-order-name {
+			opacity: 0.65;
+			font-style: italic;
+		}
+	}
+
+	.ztracker-include-modules-body {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		flex: 1;
+	}
+
+	.ztracker-include-modules-list {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.ztracker-include-module-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 4px 8px;
+		border-radius: 6px;
+		border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.18));
+		background: var(--black30a, rgba(0, 0, 0, 0.3));
+
+		.ztracker-include-module-name {
+			flex: 1 1 auto;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
+		input[type='number'] {
+			flex: 0 0 72px;
+		}
+
+		&.is-dormant {
+			opacity: 0.7;
+			border-style: dashed;
+
+			.ztracker-include-module-dormant-flag {
+				color: var(--warning, #e1a324);
+			}
+		}
+	}
+
 	.ztracker-settings-section {
 		margin-top: 4px;
 	}

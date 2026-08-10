@@ -258,6 +258,7 @@ function createMockModule(overrides: Record<string, any> = {}) {
       worldInfoPolicyMode: overrides.generation?.worldInfoPolicyMode ?? 'include_all',
       worldInfoAllowlistBookNames: overrides.generation?.worldInfoAllowlistBookNames ?? [],
       worldInfoAllowlistEntryIds: overrides.generation?.worldInfoAllowlistEntryIds ?? [],
+      includeModules: overrides.generation?.includeModules ?? [{ target: 'self', count: 1 }],
     },
     injection: {
       includeLastXMessages: overrides.injection?.includeLastXMessages ?? 0,
@@ -1112,6 +1113,40 @@ describe('zTracker settings connection source UI', () => {
     expect(sillyTavernContext.chat[0].extra.zTracker.byId).toEqual({ default: { value: { mood: 'ok' } } });
     expect(sillyTavernContext.chat[1].extra.zTracker.byId).toEqual({});
     expect(sillyTavernContext.saveChat).toHaveBeenCalledTimes(1);
+  });
+
+  test('deleting a module prunes include-list references on other modules', async () => {
+    const modules = seedModuleSettings();
+    modules[0].generation.includeModules = [
+      { target: 'self', count: 1 },
+      { target: 'agenda', count: 3 },
+    ];
+    sillyTavernContext.chat = [];
+    sillyTavernContext.Popup.show.confirm.mockResolvedValue(true);
+
+    const container = renderSettings();
+    const agendaButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('Agenda'));
+    if (!(agendaButton instanceof HTMLButtonElement)) {
+      throw new Error('Agenda module button not found');
+    }
+
+    await act(async () => {
+      agendaButton.click();
+      await Promise.resolve();
+    });
+
+    const deleteButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Delete');
+    if (!(deleteButton instanceof HTMLButtonElement)) {
+      throw new Error('Delete button not found');
+    }
+
+    await act(async () => {
+      deleteButton.click();
+      await Promise.resolve();
+    });
+
+    expect(mockSettings.modules.map((module: any) => module.id)).toEqual(['default']);
+    expect(mockSettings.modules[0].generation.includeModules).toEqual([{ target: 'self', count: 1 }]);
   });
 
   test('exports the selected module and imports valid module json', async () => {

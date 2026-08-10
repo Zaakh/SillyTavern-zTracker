@@ -1,8 +1,9 @@
 import { FC } from 'react';
 import { PresetItem } from 'sillytavern-utils-lib/components/react';
-import { TrackerModuleSettings } from '../../config.js';
+import { TrackerModule, TrackerModuleSettings } from '../../config.js';
 import { GenerationBehaviorSection } from './GenerationBehaviorSection.js';
 import { GenerationPromptTemplatesSection } from './GenerationPromptTemplatesSection.js';
+import { IncludeModulesSection } from './IncludeModulesSection.js';
 import { SchemaPresetSection } from './SchemaPresetSection.js';
 import type { SettingsUpdateAndRefresh } from './settings-shared.js';
 import { SystemPromptSettingsSection } from './SystemPromptSettingsSection.js';
@@ -11,6 +12,7 @@ import { WorldInfoPolicySection } from './WorldInfoPolicySection.js';
 // Renders settings that control tracker generation, prompt construction, and tracker schema editing.
 export const TrackerGenerationSection: FC<{
   settings: TrackerModuleSettings;
+  selectedModule: TrackerModule;
   updateAndRefresh: SettingsUpdateAndRefresh;
   schemaPresetItems: PresetItem[];
   currentChatSchemaPresetKey?: string;
@@ -47,6 +49,7 @@ export const TrackerGenerationSection: FC<{
   currentGlobalSystemPromptName?: string;
 }> = ({
   settings,
+  selectedModule,
   updateAndRefresh,
   schemaPresetItems,
   currentChatSchemaPresetKey,
@@ -85,6 +88,8 @@ export const TrackerGenerationSection: FC<{
   return (
     <>
       <GenerationBehaviorSection settings={settings} updateAndRefresh={updateAndRefresh} />
+
+      <IncludeModulesSection settings={settings} selectedModule={selectedModule} updateAndRefresh={updateAndRefresh} />
 
       <SchemaPresetSection
         schemaPresetKey={settings.schemaPreset}

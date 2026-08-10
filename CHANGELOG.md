@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Each Module now has a generation "Include Module History" list that pulls other Modules' past tracker snapshots into its own generation context, independent of the raw chat message window and of downstream tracker-snapshot injection into normal generations. Every Module always has a "self" entry for its own history; chained entries can only reference a Module that generates earlier, and reuse that Module's own snapshot formatting.
+- A new "Generation Order" view in settings lists all Modules in the order they generate, since a Module can only chain in another Module's history if that Module is listed earlier.
+
+### Changed
+
+- Stored settings are upgraded once more so each Module's self-history count is copied from its existing snapshot-injection count. After the upgrade, self-history and tracker-snapshot injection are configured independently.
+
 ## [2.0.0] - 2026-08-07
 
 ### Added

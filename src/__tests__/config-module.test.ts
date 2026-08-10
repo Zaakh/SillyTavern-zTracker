@@ -10,6 +10,8 @@ import {
   createDefaultTrackerModule,
   migrateLegacySettingsToModules,
   migrateLegacyChatMetadataToModules,
+  migrateTrackerModuleIncludeLists,
+  pruneTrackerModuleIncludeReferences,
   readModuleChatSchemaPresetKey,
   writeModuleChatSchemaPresetKey,
 } from '../config.js';
@@ -41,6 +43,12 @@ describe('tracker module defaults', () => {
     expect(module.generation.conversationRoleMode).toBe('preserve');
     expect(module.injection.transformPreset).toBe('default');
     expect(module.injection.transformPresets.default.name).toBe('Default (JSON)');
+  });
+
+  test('new modules default to a self-only generation include list', () => {
+    const module = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
+
+    expect(module.generation.includeModules).toEqual([{ target: 'self', count: 1 }]);
   });
 
   test('legacy flat settings migrate into the default module', () => {
@@ -130,6 +138,8 @@ describe('tracker module defaults', () => {
         transformPreset: 'plain',
       }),
     );
+    // The mandatory self entry is seeded once from the legacy self-history value (5) during this same upgrade.
+    expect(legacySettings.modules[0].generation.includeModules).toEqual([{ target: 'self', count: 5 }]);
   });
 
   test('settings migration is idempotent after the format bump', () => {
@@ -156,5 +166,61 @@ describe('tracker module defaults', () => {
 
     expect(readModuleChatSchemaPresetKey(chatMetadata)).toBe('agenda');
     expect(readModuleChatSchemaPresetKey(chatMetadata, 'stats')).toBe('stats');
+  });
+});
+
+describe('migrateTrackerModuleIncludeLists', () => {
+  test('seeds a self entry from a non-zero legacy self-history count', () => {
+    const module = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    module.injection.includeLastXMessages = 3;
+    (module.generation as any).includeModules = undefined;
+    const settings: any = { ...structuredClone(defaultSettings), modules: [module] };
+
+    expect(migrateTrackerModuleIncludeLists(settings)).toBe(true);
+    expect(settings.modules[0].generation.includeModules).toEqual([{ target: 'self', count: 3 }]);
+  });
+
+  test('preserves a legacy zero as no self-history', () => {
+    const module = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    module.injection.includeLastXMessages = 0;
+    (module.generation as any).includeModules = undefined;
+    const settings: any = { ...structuredClone(defaultSettings), modules: [module] };
+
+    expect(migrateTrackerModuleIncludeLists(settings)).toBe(true);
+    expect(settings.modules[0].generation.includeModules).toEqual([{ target: 'self', count: 0 }]);
+  });
+
+  test('does not re-run for a module that already has an include list', () => {
+    const module = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    module.injection.includeLastXMessages = 9;
+    module.generation.includeModules = [{ target: 'self', count: 2 }];
+    const settings: any = { ...structuredClone(defaultSettings), modules: [module] };
+
+    expect(migrateTrackerModuleIncludeLists(settings)).toBe(false);
+    expect(settings.modules[0].generation.includeModules).toEqual([{ target: 'self', count: 2 }]);
+  });
+});
+
+describe('pruneTrackerModuleIncludeReferences', () => {
+  test('removes only entries that reference the deleted module id', () => {
+    const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    const agenda = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
+    agenda.generation.includeModules = [
+      { target: 'self', count: 1 },
+      { target: 'scene', count: 2 },
+    ];
+    const inventory = createDefaultTrackerModule({ id: 'inventory', name: 'Inventory', order: 2 });
+    inventory.generation.includeModules = [
+      { target: 'self', count: 1 },
+      { target: 'agenda', count: 1 },
+    ];
+
+    pruneTrackerModuleIncludeReferences([scene, agenda, inventory], 'scene');
+
+    expect(agenda.generation.includeModules).toEqual([{ target: 'self', count: 1 }]);
+    expect(inventory.generation.includeModules).toEqual([
+      { target: 'self', count: 1 },
+      { target: 'agenda', count: 1 },
+    ]);
   });
 });

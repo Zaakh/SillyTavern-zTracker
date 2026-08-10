@@ -12,6 +12,7 @@ import {
   createTrackerModuleId,
   getOrderedTrackerModules,
   getSettingsForTrackerModule,
+  pruneTrackerModuleIncludeReferences,
   purgeTrackerModuleDataFromChat,
   readModuleChatSchemaPresetKey,
   writeModuleChatSchemaPresetKey,
@@ -44,6 +45,7 @@ import {
   validateSchemaPresetDraftPair,
   validateSchemaHtmlDraft,
 } from './settings/schema-editor-state.js';
+import { GenerationOrderSection } from './settings/GenerationOrderSection.js';
 import { SettingsSectionDrawer } from './settings/SettingsSectionDrawer.js';
 import { TrackerGenerationSection } from './settings/TrackerGenerationSection.js';
 import { TrackerInjectionSection } from './settings/TrackerInjectionSection.js';
@@ -233,6 +235,7 @@ export const ZTrackerSettings: FC = () => {
   const [systemPromptRefreshRevision, setSystemPromptRefreshRevision] = useState(0);
   const [isGenerationOpen, setGenerationOpen] = useState(true);
   const [isInjectionOpen, setInjectionOpen] = useState(true);
+  const [isOrderOpen, setOrderOpen] = useState(false);
 
   const [schemaText, setSchemaText] = useState(formatSchemaText(moduleSettings.schemaPresets[moduleSettings.schemaPreset]));
   const [schemaHtmlText, setSchemaHtmlText] = useState(formatSchemaHtml(moduleSettings.schemaPresets[moduleSettings.schemaPreset]));
@@ -559,6 +562,7 @@ export const ZTrackerSettings: FC = () => {
           ...module.generation,
           worldInfoAllowlistBookNames: [...module.generation.worldInfoAllowlistBookNames],
           worldInfoAllowlistEntryIds: [...module.generation.worldInfoAllowlistEntryIds],
+          includeModules: module.generation.includeModules.map((entry) => ({ ...entry })),
         },
         injection: { ...module.injection, transformPresets: JSON.parse(JSON.stringify(module.injection.transformPresets)) },
         auto: { ...module.auto },
@@ -591,17 +595,19 @@ export const ZTrackerSettings: FC = () => {
     });
   };
 
-  const moveSelectedModule = (direction: -1 | 1) => {
+  const moveModuleById = (moduleId: string, direction: -1 | 1) => {
     updateModuleList((modules) => {
-      const index = modules.findIndex((module) => module.id === selectedModule.id);
+      const index = modules.findIndex((module) => module.id === moduleId);
       const nextIndex = index + direction;
       if (index < 0 || nextIndex < 0 || nextIndex >= modules.length) {
         return undefined;
       }
       [modules[index], modules[nextIndex]] = [modules[nextIndex], modules[index]];
-      return selectedModule.id;
+      return selectedModuleId;
     });
   };
+
+  const moveSelectedModule = (direction: -1 | 1) => moveModuleById(selectedModule.id, direction);
 
   const deleteSelectedModule = async () => {
     if (orderedModules.length <= 1) {
@@ -625,7 +631,10 @@ export const ZTrackerSettings: FC = () => {
 
     updateModuleList((modules) => {
       const index = modules.findIndex((module) => module.id === selectedModule.id);
-      modules.splice(index, 1);
+      const [deletedModule] = modules.splice(index, 1);
+      if (deletedModule) {
+        pruneTrackerModuleIncludeReferences(modules, deletedModule.id);
+      }
       return modules[Math.max(0, index - 1)]?.id ?? modules[0]?.id;
     });
   };
@@ -712,6 +721,14 @@ export const ZTrackerSettings: FC = () => {
                 </div>
               </div>
             </div>
+
+            <SettingsSectionDrawer
+              title="Generation Order"
+              isOpen={isOrderOpen}
+              onToggle={() => setOrderOpen((value) => !value)}
+            >
+              <GenerationOrderSection orderedModules={orderedModules} moveModule={moveModuleById} />
+            </SettingsSectionDrawer>
 
             <div className="ztracker-module-detail">
               <div className="ztracker-module-detail-header">
@@ -808,6 +825,7 @@ export const ZTrackerSettings: FC = () => {
             >
               <TrackerGenerationSection
                 settings={moduleSettings}
+                selectedModule={selectedModule}
                 updateAndRefresh={updateSelectedModuleAndRefresh}
                 schemaPresetItems={schemaPresetItems}
                 currentChatSchemaPresetKey={currentChatSchemaPresetState.selection?.key}

@@ -92,6 +92,16 @@ export interface TrackerModuleConnectionSettings {
   profileId: string;
 }
 
+/**
+ * One entry in a Module's generation include list. `target: 'self'` is a reserved sentinel for
+ * that Module's own tracker history; any other value is another Module's id. `count` follows the
+ * same "0 means none" convention as `includeLastXZTrackerMessages`.
+ */
+export interface TrackerModuleIncludeEntry {
+  target: 'self' | string;
+  count: number;
+}
+
 export interface TrackerModuleGenerationSettings {
   mode: TrackerGenerationMode;
   maxResponseToken: number;
@@ -102,6 +112,8 @@ export interface TrackerModuleGenerationSettings {
   worldInfoPolicyMode: TrackerWorldInfoPolicyMode;
   worldInfoAllowlistBookNames: string[];
   worldInfoAllowlistEntryIds: number[];
+  /** Which Modules' stored tracker history (including this Module's own) feed this Module's own generation context. Always contains a 'self' entry. */
+  includeModules: TrackerModuleIncludeEntry[];
 }
 
 export interface TrackerModuleInjectionSettings {
@@ -152,6 +164,8 @@ export interface TrackerModuleSettings extends ExtensionSettings {
   /** Minimum 0-indexed message threshold before tracker generation is allowed. 0 disables the guard. */
   skipFirstXMessages: number;
   includeLastXMessages: number; // 0 means all messages
+  /** This Module's generation include list (self plus any chained Modules). See `TrackerModuleIncludeEntry`. */
+  includeModules: TrackerModuleIncludeEntry[];
   /** When true, tracker generation omits character-card prompt fields such as description, personality, and scenario. */
   skipCharacterCardInTrackerGeneration: boolean;
   /** Controls how user/assistant chat turns are labeled before tracker-generation requests are sent. */
@@ -742,6 +756,7 @@ export function createDefaultTrackerModule(options: Partial<Pick<TrackerModule, 
       worldInfoPolicyMode: TrackerWorldInfoPolicyMode.INCLUDE_ALL,
       worldInfoAllowlistBookNames: [],
       worldInfoAllowlistEntryIds: [],
+      includeModules: [{ target: 'self', count: DEFAULT_INCLUDE_LAST_ZTRACKER_MESSAGES }],
     },
     injection: {
       includeLastXMessages: DEFAULT_INCLUDE_LAST_ZTRACKER_MESSAGES,
@@ -796,6 +811,9 @@ export function createTrackerModuleFromLegacySettings(
   module.injection.transformPresets = cloneSettingsValue(
     settings.embedZTrackerSnapshotTransformPresets ?? module.injection.transformPresets,
   );
+  // Preserve prior self-history behavior: seed the mandatory self entry from the same legacy value
+  // that used to double as both self-history and downstream-injection count.
+  module.generation.includeModules = [{ target: 'self', count: module.injection.includeLastXMessages }];
   return module;
 }
 
@@ -830,6 +848,7 @@ export function getSettingsForTrackerModule(settings: ExtensionSettings, moduleI
     prompt: module.prompts.prompt,
     skipFirstXMessages: module.generation.skipFirstXMessages,
     includeLastXMessages: module.generation.includeLastXMessages,
+    includeModules: module.generation.includeModules,
     skipCharacterCardInTrackerGeneration: module.generation.skipCharacterCardInTrackerGeneration,
     trackerGenerationConversationRoleMode: module.generation.conversationRoleMode,
     includeLastXZTrackerMessages: module.injection.includeLastXMessages,
@@ -878,6 +897,7 @@ export function applySettingsToTrackerModule(module: TrackerModule, settings: Tr
   module.prompts.promptToon = settings.promptToon;
   module.generation.skipFirstXMessages = settings.skipFirstXMessages;
   module.generation.includeLastXMessages = settings.includeLastXMessages;
+  module.generation.includeModules = cloneSettingsValue(settings.includeModules);
   module.generation.skipCharacterCardInTrackerGeneration = settings.skipCharacterCardInTrackerGeneration;
   module.generation.conversationRoleMode = settings.trackerGenerationConversationRoleMode;
   module.injection.includeLastXMessages = settings.includeLastXZTrackerMessages;
@@ -889,6 +909,13 @@ export function applySettingsToTrackerModule(module: TrackerModule, settings: Tr
   module.generation.worldInfoPolicyMode = settings.trackerWorldInfoPolicyMode;
   module.generation.worldInfoAllowlistBookNames = cloneSettingsValue(settings.trackerWorldInfoAllowlistBookNames);
   module.generation.worldInfoAllowlistEntryIds = cloneSettingsValue(settings.trackerWorldInfoAllowlistEntryIds);
+}
+
+/** Removes any include-list entry across all Modules that references a deleted Module id, leaving other entries untouched. */
+export function pruneTrackerModuleIncludeReferences(modules: TrackerModule[], deletedModuleId: string): void {
+  for (const module of modules) {
+    module.generation.includeModules = module.generation.includeModules.filter((entry) => entry.target !== deletedModuleId);
+  }
 }
 
 export function purgeTrackerModuleDataFromChat(chat: Array<{ extra?: Record<string, any> }> | undefined, moduleId: string): number {
@@ -916,6 +943,25 @@ export function migrateLegacySettingsToModules(settings: ExtensionSettings): boo
   settings.modules = [createTrackerModuleFromLegacySettings(settings, { id: DEFAULT_MODULE_ID, name: 'Default', order: 0 })];
   settings.formatVersion = FORMAT_VERSION;
   return true;
+}
+
+/**
+ * Seeds each Module's generation include list with a self-only entry the first time this
+ * version runs, copying the count from that Module's legacy `injection.includeLastXMessages`
+ * value so upgrading users see unchanged self-history behavior. Runs after
+ * `migrateLegacySettingsToModules` (it requires `settings.modules` to already exist) and is
+ * idempotent: a Module that already has a non-empty `includeModules` list is left untouched.
+ */
+export function migrateTrackerModuleIncludeLists(settings: ExtensionSettings): boolean {
+  let changed = false;
+  for (const module of settings.modules ?? []) {
+    if (Array.isArray(module.generation?.includeModules) && module.generation.includeModules.length > 0) {
+      continue;
+    }
+    module.generation.includeModules = [{ target: 'self', count: module.injection.includeLastXMessages }];
+    changed = true;
+  }
+  return changed;
 }
 
 const defaultTrackerModule = createDefaultTrackerModule();

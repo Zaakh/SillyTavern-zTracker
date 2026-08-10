@@ -10,6 +10,7 @@ Forked from [SillyTavern WTracker](https://github.com/bmen25124/SillyTavern-WTra
 
 - Optional **Sequential generation** (generate trackers in smaller steps).
 - **Modules** let one chat run separate trackers for different use cases, each with its own schema, prompts, generation, injection, and auto-generation settings.
+- Modules can **chain in other Modules' tracker history** as generation context via **Include Module History**, in addition to their own self-history.
 - The extension settings are grouped into **Tracker Generation** and **Tracker Injection** sections so generation tuning and prompt-context embedding are easier to find.
 - **Regenerate only what you need** from the parts menu (one section, one list item like a character, or even one field).
 - **Clear and recreate stale tracker sections** with a cleanup action when several parts are wrong at once.
@@ -35,6 +36,12 @@ The original single tracker is upgraded into the **Default** Module the first ti
 You can add, clone, reorder, delete, export, and import Modules from the settings panel. Export downloads a `.json` file with the Module's full configuration (schema presets, prompts, system prompt, connection, generation, and injection settings); Import reads such a file back through a file picker. Deleting a Module also removes that Module's saved tracker data from the current chat history.
 
 When more than one Module is enabled, the message truck button opens a Module chooser for manual generation. Disabling a Module removes it from generation, injection, and that chooser, but already-saved tracker blocks stay visible until you delete them.
+
+### Chaining tracker history across Modules
+
+Each Module has an **Include Module History** list under **Tracker Generation** that controls which Modules' past tracker snapshots are pulled into that Module's own generation context, separate from the raw chat message window and from **Tracker Injection**'s embedding into normal generations. Every Module always has a **self** entry for its own history. You can add chained entries for other Modules that generate earlier than the current one; a count of `0` on any entry (self or chained) means that entry contributes nothing.
+
+A Module can only chain in another Module that is listed earlier in the **Generation Order** view (a dedicated list of all Modules in generation order, since Modules already generate in that order for each message). If a chained Module is later disabled or reordered so it is no longer earlier, that entry goes dormant (shown with a warning icon) and stops contributing until you fix the order, re-enable the Module, or remove the entry. Chained snapshots are always formatted using the referenced Module's own **Tracker Injection** settings (header, virtual-character mode, transform preset).
 
 ## Installation
 

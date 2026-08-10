@@ -149,7 +149,9 @@ const { SystemPromptSettingsSection } = await import('../components/settings/Sys
 const { WorldInfoPolicySection } = await import('../components/settings/WorldInfoPolicySection.js');
 const { EmbedSnapshotTransformSection } = await import('../components/settings/EmbedSnapshotTransformSection.js');
 const { DiagnosticsSection } = await import('../components/settings/DiagnosticsSection.js');
-const { TrackerWorldInfoPolicyMode } = await import('../config.js');
+const { GenerationOrderSection } = await import('../components/settings/GenerationOrderSection.js');
+const { IncludeModulesSection } = await import('../components/settings/IncludeModulesSection.js');
+const { TrackerWorldInfoPolicyMode, createDefaultTrackerModule } = await import('../config.js');
 
 /** Renders one React element into the shared jsdom root container. */
 function renderElement(element: React.ReactElement) {
@@ -553,5 +555,149 @@ describe('settings sections', () => {
     expect(setDiagnosticsText).toHaveBeenCalledWith(expect.stringContaining('template: dist/templates/buttons'));
     expect(setDiagnosticsText).toHaveBeenCalledWith(expect.stringContaining('lastTrackerRequest:'));
     expect(consoleDebugSpy).toHaveBeenCalledWith(expect.stringContaining('prompt ok'));
+  });
+
+  test('lists the self entry with an editable count and no delete control', () => {
+    const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    scene.generation.includeModules = [{ target: 'self', count: 2 }];
+    const settings = { modules: [scene], includeModules: scene.generation.includeModules } as any;
+    const updateAndRefresh = (updater: (current: any) => void) => updater(settings);
+
+    ({ root } = renderElement(
+      React.createElement(IncludeModulesSection, { settings, selectedModule: scene, updateAndRefresh }),
+    ));
+
+    const rows = document.querySelectorAll('.ztracker-include-module-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].querySelector('.ztracker-include-module-name')?.textContent).toBe('Self (this module)');
+    expect(rows[0].querySelector('button')).toBeNull();
+
+    const countInput = rows[0].querySelector('input[type="number"]');
+    if (!(countInput instanceof HTMLInputElement)) {
+      throw new Error('Self entry count input not found');
+    }
+    expect(countInput.value).toBe('2');
+  });
+
+  test('offers only enabled, strictly-earlier-order modules in the add picker and adds a chained entry', () => {
+    const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    const disabledEarlier = createDefaultTrackerModule({ id: 'disabled-earlier', name: 'Disabled Earlier', order: 1 });
+    disabledEarlier.enabled = false;
+    const agenda = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 2 });
+    agenda.generation.includeModules = [{ target: 'self', count: 1 }];
+    const laterModule = createDefaultTrackerModule({ id: 'later', name: 'Later', order: 3 });
+    const settings = {
+      modules: [scene, disabledEarlier, agenda, laterModule],
+      includeModules: agenda.generation.includeModules,
+    } as any;
+    const updateAndRefresh = (updater: (current: any) => void) => updater(settings);
+
+    ({ root } = renderElement(
+      React.createElement(IncludeModulesSection, { settings, selectedModule: agenda, updateAndRefresh }),
+    ));
+
+    const picker = document.querySelector('.ztracker-include-modules-body select');
+    if (!(picker instanceof HTMLSelectElement)) {
+      throw new Error('Add chained module picker not found');
+    }
+    const optionValues = Array.from(picker.options).map((option) => option.value);
+    expect(optionValues).toEqual(['', 'scene']);
+
+    act(() => {
+      setSelectValue(picker, 'scene');
+    });
+
+    expect(agenda.generation.includeModules).toEqual([
+      { target: 'self', count: 1 },
+      { target: 'scene', count: 1 },
+    ]);
+
+    act(() => {
+      root?.render(React.createElement(IncludeModulesSection, { settings, selectedModule: agenda, updateAndRefresh }));
+    });
+
+    const rows = document.querySelectorAll('.ztracker-include-module-row');
+    expect(rows).toHaveLength(2);
+    expect(rows[1].querySelector('.ztracker-include-module-name')?.textContent).toBe('Scene');
+    expect(rows[1].querySelector('button')).not.toBeNull();
+  });
+
+  test('flags a dormant chained entry without altering its stored count', () => {
+    const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    scene.enabled = false;
+    const agenda = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
+    agenda.generation.includeModules = [
+      { target: 'self', count: 1 },
+      { target: 'scene', count: 5 },
+    ];
+    const settings = { modules: [scene, agenda], includeModules: agenda.generation.includeModules } as any;
+    const updateAndRefresh = (updater: (current: any) => void) => updater(settings);
+
+    ({ root } = renderElement(
+      React.createElement(IncludeModulesSection, { settings, selectedModule: agenda, updateAndRefresh }),
+    ));
+
+    const dormantRow = document.querySelector('.ztracker-include-module-row.is-dormant');
+    if (!dormantRow) {
+      throw new Error('Dormant row not found');
+    }
+    expect(dormantRow.querySelector('.ztracker-include-module-dormant-flag')).not.toBeNull();
+    const countInput = dormantRow.querySelector('input[type="number"]');
+    expect(countInput instanceof HTMLInputElement && countInput.value).toBe('5');
+    expect(agenda.generation.includeModules[1]).toEqual({ target: 'scene', count: 5 });
+  });
+
+  test('removes a chained entry via its Remove button', () => {
+    const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    const agenda = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
+    agenda.generation.includeModules = [
+      { target: 'self', count: 1 },
+      { target: 'scene', count: 2 },
+    ];
+    const settings = { modules: [scene, agenda], includeModules: agenda.generation.includeModules } as any;
+    const updateAndRefresh = (updater: (current: any) => void) => updater(settings);
+
+    ({ root } = renderElement(
+      React.createElement(IncludeModulesSection, { settings, selectedModule: agenda, updateAndRefresh }),
+    ));
+
+    const removeButton = document.querySelector('.ztracker-include-module-row button');
+    if (!(removeButton instanceof HTMLButtonElement)) {
+      throw new Error('Remove button not found');
+    }
+
+    act(() => {
+      removeButton.click();
+    });
+
+    expect(agenda.generation.includeModules).toEqual([{ target: 'self', count: 1 }]);
+  });
+
+  test('lists modules in generation order and calls moveModule with the right module id and direction', () => {
+    const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    const agenda = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
+    agenda.enabled = false;
+    const moveModule = jest.fn();
+
+    ({ root } = renderElement(
+      React.createElement(GenerationOrderSection, { orderedModules: [scene, agenda], moveModule }),
+    ));
+
+    const rows = document.querySelectorAll('.ztracker-generation-order-row');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector('.ztracker-generation-order-name')?.textContent).toBe('Scene');
+    expect(rows[1].querySelector('.ztracker-generation-order-name')?.textContent).toBe('Agenda');
+    expect(rows[1].querySelector('.ztracker-module-badge')?.textContent).toBe('Disabled');
+
+    const firstRowButtons = Array.from(rows[0].querySelectorAll('button'));
+    const secondRowButtons = Array.from(rows[1].querySelectorAll('button'));
+    expect(firstRowButtons.find((button) => button.textContent === 'Up')?.hasAttribute('disabled')).toBe(true);
+    expect(secondRowButtons.find((button) => button.textContent === 'Down')?.hasAttribute('disabled')).toBe(true);
+
+    act(() => {
+      secondRowButtons.find((button) => button.textContent === 'Up')?.click();
+    });
+
+    expect(moveModule).toHaveBeenCalledWith('agenda', -1);
   });
 });

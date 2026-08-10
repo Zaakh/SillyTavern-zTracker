@@ -7,10 +7,12 @@ import {
   extensionName,
   getOrderedTrackerModules,
   getSettingsForTrackerModule,
+  getTrackerModule,
   getModuleChatMetadataRecord,
   readModuleChatSchemaPresetKey,
   writeModuleChatSchemaPresetKey,
 } from '../config.js';
+import { applyTrackerModuleIncludeList } from '../tracker-module-chaining.js';
 import type { ExtensionSettingsManager } from 'sillytavern-utils-lib';
 import { buildPrompt, Generator, getWorldInfos, Message } from 'sillytavern-utils-lib';
 import type { ExtractedData } from 'sillytavern-utils-lib/types';
@@ -34,7 +36,6 @@ import {
   CHAT_MESSAGE_SCHEMA_VALUE_KEY,
   CHAT_MESSAGE_PARTS_ORDER_KEY,
   extractLeadingSystemPrompt,
-  includeZTrackerMessages,
   findRenderedModuleBlock,
   getTrackerModuleRecord,
   normalizeTrackerGenerationConversationRoles,
@@ -1199,7 +1200,8 @@ export function createTrackerActions(options: {
       ...(skipCharacterCardInTrackerGeneration ? { ignoreCharacterFields: true } : {}),
     });
 
-    let messages = includeZTrackerMessages(promptResult.result, settings, { moduleId });
+    const currentModule = getTrackerModule(settingsManager.getSettings(), moduleId);
+    let messages = applyTrackerModuleIncludeList(promptResult.result, currentModule, settings);
     messages = normalizeTrackerGenerationConversationRoles(messages, settings);
     debugLog(settingsManager, 'prompt built', {
       trackerGenerationConversationRoleMode: settings.trackerGenerationConversationRoleMode ?? 'preserve',

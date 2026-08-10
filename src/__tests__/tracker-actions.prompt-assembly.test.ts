@@ -316,6 +316,8 @@ describe('createTrackerActions prompt assembly', () => {
     const generateRequest = makeGenerateRequest({ content: { location: 'Bar' } });
     const minimalSettings = makeSettings({
       schemaPreset: 'minimal',
+      // Non-zero so the include-list self entry is active and includeZTrackerMessages actually runs.
+      includeLastXZTrackerMessages: 1,
       schemaPresets: {
         minimal: {
           name: 'Minimal',
@@ -717,7 +719,8 @@ describe('createTrackerActions prompt assembly', () => {
         CONNECT_API_MAP: { openai: { selected: 'openai' } },
       },
       settingsManager: {
-        getSettings: () => makeSettings({ trackerGenerationConversationRoleMode: 'all_assistant' }),
+        // Non-zero so the include-list self entry is active and includeZTrackerMessages actually runs.
+        getSettings: () => makeSettings({ trackerGenerationConversationRoleMode: 'all_assistant', includeLastXZTrackerMessages: 1 }),
       } as any,
       generator: { generateRequest, abortRequest: jest.fn() } as any,
       pendingRequests: new Map(),

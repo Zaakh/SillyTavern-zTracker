@@ -10,6 +10,7 @@ import {
   migrateLegacyAutoMode,
   migrateLegacyPromptTemplates,
   migrateLegacySettingsToModules,
+  migrateTrackerModuleIncludeLists,
 } from './config.js';
 import { createTrackerActions } from './ui/tracker-actions.js';
 import { initializeGlobalUI } from './ui/ui-init.js';
@@ -69,6 +70,7 @@ async function main() {
     migrateCorruptedSchemaPresetRequiredMetadata(settings),
     migrateInvalidNumericSettings(settings),
     migrateLegacySettingsToModules(settings),
+    migrateTrackerModuleIncludeLists(settings),
   ].some(Boolean);
 
   if (didMigrateLegacySettings) {
