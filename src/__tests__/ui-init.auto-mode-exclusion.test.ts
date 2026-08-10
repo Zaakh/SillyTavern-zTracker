@@ -500,6 +500,28 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     expect(actions.generateTracker).not.toHaveBeenCalled();
   });
 
+  test('manual generation via the message truck button ignores auto-mode exclusion', async () => {
+    document.body.innerHTML = '';
+    installChatMessageDom(0, {
+      innerHtml: '<div class="mes_button mes_ztracker_button"></div><div class="mes_text">Message 0</div>',
+    });
+
+    const { actions } = await initializeAutoModeHarness({
+      host: {
+        chat: [{ original_avatar: 'alice.png' }],
+        // Fully excluded from auto mode for the only configured Module.
+        characters: [{ avatar: 'alice.png', data: { extensions: { zTracker: { autoModeExclusions: { default: true } } } } }],
+        characterId: 0,
+      },
+    });
+
+    (document.querySelector('.mes[mesid="0"] .mes_ztracker_button') as HTMLElement).dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
+
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { showStatusIndicator: true });
+  });
+
   test('does not resume host generation after chat changes during the pending outgoing auto-mode hold', async () => {
     renderMessage(0);
     let resolveTracker: (value: boolean) => void = () => undefined;

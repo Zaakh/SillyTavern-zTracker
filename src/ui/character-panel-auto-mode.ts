@@ -50,10 +50,19 @@ export function createCharacterPanelButtonController(options: {
     characterPanelButtonSyncTimer = window.setTimeout(() => {
       characterPanelButtonSyncTimer = undefined;
       attachCharacterPanelObserver();
-      const settings = settingsManager.getSettings();
+      // Both getters re-read settingsManager.getSettings() at call time (sync AND click), not
+      // just when this timeout fires, so the toggle never freezes on a Module list captured
+      // before Modules were added/removed/reordered while the panel stayed open.
+      // Write scope includes disabled Modules to preserve exclusion intent if re-enabled later;
+      // read scope (display + toggle direction) is enabled-only so the button describes the
+      // character's actual current auto-mode exposure, not a Module that cannot generate anyway.
+      const getModuleIds = () => getOrderedTrackerModules(settingsManager.getSettings(), { includeDisabled: true }).map((module) => module.id);
+      const getReadModuleIds = () => getOrderedTrackerModules(settingsManager.getSettings()).map((module) => module.id);
       syncCharacterAutoModeButton({
         getContext: () => SillyTavern.getContext(),
-        autoModeEnabled: getOrderedTrackerModules(settings).some((module) => module.auto.enabled && module.auto.mode !== AutoModeOptions.NONE),
+        autoModeEnabled: getOrderedTrackerModules(settingsManager.getSettings()).some((module) => module.auto.enabled && module.auto.mode !== AutoModeOptions.NONE),
+        getModuleIds,
+        getReadModuleIds,
         onToggle: ({ excluded }) => {
           st_echo('info', excluded ? 'zTracker auto mode excluded for this character.' : 'zTracker auto mode restored for this character.');
         },
