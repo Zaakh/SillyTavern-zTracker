@@ -147,6 +147,10 @@ jest.unstable_mockModule('../tracker.js', () => ({
   getTrackerModuleRecord: jest.fn((message: any, moduleId = 'default') => (
     message?.extra?.zTracker?.byId?.[moduleId as string] ?? message?.extra?.zTracker
   )),
+  deriveEmbeddedTrackerSpeakerName: jest.fn((settings: { embedZTrackerSnapshotHeader?: string }) => {
+    const trimmed = (settings.embedZTrackerSnapshotHeader ?? '').replace(/:+\s*$/, '').trim();
+    return trimmed || 'Tracker';
+  }),
   findRenderedModuleBlock: jest.fn((messageBlock: Element | null | undefined, moduleId: string) => (
     Array.from(messageBlock?.querySelectorAll('.mes_ztracker') ?? [])
       .find((element) => (element as HTMLElement).dataset.ztrackerModule === moduleId)

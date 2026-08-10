@@ -1184,6 +1184,42 @@ describe('zTracker settings connection source UI', () => {
     clickSpy.mockRestore();
   });
 
+  test('importing a module with a malformed include list is repaired instead of crashing the settings panel', async () => {
+    const modules = seedModuleSettings();
+    readTextFileViaPickerMock.mockResolvedValue(JSON.stringify({
+      module: { name: 'Malformed', generation: { includeModules: [{ target: modules[1].id, count: 3 }] } },
+    }));
+    const container = renderSettings();
+    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Import');
+    if (!(importButton instanceof HTMLButtonElement)) {
+      throw new Error('Import button not found');
+    }
+
+    await act(async () => {
+      importButton.click();
+      await Promise.resolve();
+    });
+
+    const imported = mockSettings.modules.find((module: any) => module.name === 'Malformed');
+    // The mandatory self entry is added even though the imported JSON never included one.
+    expect(imported?.generation.includeModules).toEqual([
+      { target: 'self', count: expect.any(Number) },
+      { target: modules[1].id, count: 3 },
+    ]);
+
+    // Selecting the imported module and re-rendering must not throw despite the repaired list.
+    // (TrackerGenerationSection/IncludeModulesSection render is mocked out in this test file;
+    // see settings-sections.test.ts for the real IncludeModulesSection render-safety coverage.)
+    const importedButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('Malformed'));
+    if (!(importedButton instanceof HTMLButtonElement)) {
+      throw new Error('Imported module button not found');
+    }
+    await act(async () => {
+      importedButton.click();
+      await Promise.resolve();
+    });
+  });
+
   test('cancelled module import does not change modules', async () => {
     seedModuleSettings();
     readTextFileViaPickerMock.mockResolvedValue(null);

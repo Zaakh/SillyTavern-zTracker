@@ -12,7 +12,7 @@ import {
   readModuleChatSchemaPresetKey,
   writeModuleChatSchemaPresetKey,
 } from '../config.js';
-import { applyTrackerModuleIncludeList } from '../tracker-module-chaining.js';
+import { applyTrackerModuleIncludeList, resolveTrackerModuleIncludeEntries } from '../tracker-module-chaining.js';
 import type { ExtensionSettingsManager } from 'sillytavern-utils-lib';
 import { buildPrompt, Generator, getWorldInfos, Message } from 'sillytavern-utils-lib';
 import type { ExtractedData } from 'sillytavern-utils-lib/types';
@@ -1201,7 +1201,20 @@ export function createTrackerActions(options: {
     });
 
     const currentModule = getTrackerModule(settingsManager.getSettings(), moduleId);
-    let messages = applyTrackerModuleIncludeList(promptResult.result, currentModule, settings);
+    // Chained (non-self) entries scan globalContext.chat directly so they stay independent of
+    // the raw messageIndexesBetween window used above; self-history stays window-bound.
+    debugLog(settingsManager, 'include list resolved', {
+      moduleId,
+      entries: resolveTrackerModuleIncludeEntries(currentModule, settingsManager.getSettings().modules ?? []).map((resolved) => ({
+        target: resolved.entry.target,
+        count: resolved.entry.count,
+        status: !resolved.eligible ? 'dormant' : resolved.entry.count === 0 ? 'zero-count' : 'active',
+      })),
+    });
+    let messages = applyTrackerModuleIncludeList(promptResult.result, currentModule, settings, {
+      chat: globalContext.chat,
+      messageId,
+    });
     messages = normalizeTrackerGenerationConversationRoles(messages, settings);
     debugLog(settingsManager, 'prompt built', {
       trackerGenerationConversationRoleMode: settings.trackerGenerationConversationRoleMode ?? 'preserve',

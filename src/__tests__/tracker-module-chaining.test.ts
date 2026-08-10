@@ -1,6 +1,6 @@
 import type { ExtensionSettings, TrackerModule } from '../config.js';
 import { createDefaultTrackerModule, getSettingsForTrackerModule } from '../config.js';
-import { CHAT_MESSAGE_MODULES_KEY, CHAT_MESSAGE_SCHEMA_VALUE_KEY } from '../tracker.js';
+import { CHAT_MESSAGE_MODULES_KEY, CHAT_MESSAGE_SCHEMA_VALUE_KEY, normalizeTrackerGenerationConversationRoles } from '../tracker.js';
 import { EXTENSION_KEY } from '../extension-metadata.js';
 import {
   applyTrackerModuleIncludeList,
@@ -10,7 +10,7 @@ import {
 } from '../tracker-module-chaining.js';
 
 // Builds a message carrying stored tracker data for one or more Modules, matching the
-// `message.extra.zTracker.byId[moduleId]` storage shape read by includeZTrackerMessages.
+// `message.extra.zTracker.byId[moduleId]` storage shape read by `getTrackerModuleRecord`.
 function buildMessageWithModuleTrackers(byModuleId: Record<string, Record<string, unknown>>) {
   return {
     content: 'base',
@@ -96,7 +96,7 @@ describe('applyTrackerModuleIncludeList', () => {
     return { version: '0', formatVersion: 'test', modules, debugLogging: false };
   }
 
-  test('reads a chained module snapshot into the source module generation context', () => {
+  test('reads a chained module snapshot from full chat history, independent of the prompt window', () => {
     const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
     scene.injection.snapshotHeader = 'Scene Tracker:';
     const agenda = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
@@ -107,17 +107,17 @@ describe('applyTrackerModuleIncludeList', () => {
     const rawSettings = buildSettings([scene, agenda]);
     const agendaSettings = getSettingsForTrackerModule(rawSettings, 'agenda');
 
-    const messages = [
-      buildMessageWithModuleTrackers({ scene: { place: 'Bridge' }, agenda: { goal: 'Find exit' } }),
-      { content: 'current', role: 'user' },
-    ];
+    // The chained module already generated its snapshot on the current message (index 0, earlier
+    // generation order) - the prompt window (`messages`) does not need to contain that message at all.
+    const chat = [buildMessageWithModuleTrackers({ scene: { place: 'Bridge' }, agenda: { goal: 'Find exit' } })];
+    const messages = [{ content: 'current', role: 'user' }];
 
-    const result = applyTrackerModuleIncludeList(messages as any, agenda, agendaSettings) as any[];
+    const result = applyTrackerModuleIncludeList(messages as any, agenda, agendaSettings, { chat: chat as any, messageId: 0 }) as any[];
 
-    expect(result).toHaveLength(3);
-    expect(result[1].content).toContain('Scene Tracker:');
-    expect(result[1].content).toContain('Bridge');
-    expect(result[1].content).not.toContain('Find exit');
+    expect(result).toHaveLength(2);
+    expect(result[0].content).toContain('Scene Tracker:');
+    expect(result[0].content).toContain('Bridge');
+    expect(result[0].content).not.toContain('Find exit');
   });
 
   test('self entry count is independent of injection.includeLastXMessages', () => {
@@ -138,6 +138,25 @@ describe('applyTrackerModuleIncludeList', () => {
     expect(result[1].content).toContain('Bridge');
   });
 
+  test('a non-zero injection.includeLastXMessages does not resurrect a self entry explicitly set to 0', () => {
+    // Confirms isolation in the other direction from the "independent of injection" test above:
+    // downstream generate_interceptor embedding config must have zero influence here.
+    const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    scene.injection.includeLastXMessages = 5; // would matter for generate_interceptor, not here
+    scene.generation.includeModules = [{ target: 'self', count: 0 }];
+    const rawSettings = buildSettings([scene]);
+    const sceneSettings = getSettingsForTrackerModule(rawSettings, 'scene');
+
+    const messages = [
+      buildMessageWithModuleTrackers({ scene: { place: 'Bridge' } }),
+      { content: 'current', role: 'user' },
+    ];
+
+    const result = applyTrackerModuleIncludeList(messages as any, scene, sceneSettings) as any[];
+
+    expect(result).toHaveLength(2);
+  });
+
   test('a zero-count entry (self or chained) contributes nothing', () => {
     const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
     const agenda = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
@@ -148,14 +167,12 @@ describe('applyTrackerModuleIncludeList', () => {
     const rawSettings = buildSettings([scene, agenda]);
     const agendaSettings = getSettingsForTrackerModule(rawSettings, 'agenda');
 
-    const messages = [
-      buildMessageWithModuleTrackers({ scene: { place: 'Bridge' }, agenda: { goal: 'Find exit' } }),
-      { content: 'current', role: 'user' },
-    ];
+    const chat = [buildMessageWithModuleTrackers({ scene: { place: 'Bridge' }, agenda: { goal: 'Find exit' } })];
+    const messages = [{ content: 'current', role: 'user' }];
 
-    const result = applyTrackerModuleIncludeList(messages as any, agenda, agendaSettings) as any[];
+    const result = applyTrackerModuleIncludeList(messages as any, agenda, agendaSettings, { chat: chat as any, messageId: 0 }) as any[];
 
-    expect(result).toHaveLength(2);
+    expect(result).toHaveLength(1);
   });
 
   test('a dormant chained entry (target reordered past the source) contributes nothing', () => {
@@ -168,14 +185,12 @@ describe('applyTrackerModuleIncludeList', () => {
     const rawSettings = buildSettings([scene, agenda]);
     const agendaSettings = getSettingsForTrackerModule(rawSettings, 'agenda');
 
-    const messages = [
-      buildMessageWithModuleTrackers({ scene: { place: 'Bridge' }, agenda: { goal: 'Find exit' } }),
-      { content: 'current', role: 'user' },
-    ];
+    const chat = [buildMessageWithModuleTrackers({ scene: { place: 'Bridge' }, agenda: { goal: 'Find exit' } })];
+    const messages = [{ content: 'current', role: 'user' }];
 
-    const result = applyTrackerModuleIncludeList(messages as any, agenda, agendaSettings) as any[];
+    const result = applyTrackerModuleIncludeList(messages as any, agenda, agendaSettings, { chat: chat as any, messageId: 0 }) as any[];
 
-    expect(result).toHaveLength(2);
+    expect(result).toHaveLength(1);
     // The stored entry itself is untouched by the dormant read.
     expect(agenda.generation.includeModules).toEqual([{ target: 'self', count: 0 }, { target: 'scene', count: 1 }]);
   });
@@ -191,14 +206,29 @@ describe('applyTrackerModuleIncludeList', () => {
     const rawSettings = buildSettings([scene, agenda]);
     const agendaSettings = getSettingsForTrackerModule(rawSettings, 'agenda');
 
-    const messages = [
-      buildMessageWithModuleTrackers({ scene: { place: 'Bridge' }, agenda: { goal: 'Find exit' } }),
-      { content: 'current', role: 'user' },
+    const chat = [buildMessageWithModuleTrackers({ scene: { place: 'Bridge' }, agenda: { goal: 'Find exit' } })];
+    const messages = [{ content: 'current', role: 'user' }];
+
+    const result = applyTrackerModuleIncludeList(messages as any, agenda, agendaSettings, { chat: chat as any, messageId: 0 }) as any[];
+
+    expect(result).toHaveLength(1);
+  });
+
+  test('a chained entry with no chat context supplied contributes nothing (graceful degradation)', () => {
+    const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    const agenda = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
+    agenda.generation.includeModules = [
+      { target: 'self', count: 0 },
+      { target: 'scene', count: 1 },
     ];
+    const rawSettings = buildSettings([scene, agenda]);
+    const agendaSettings = getSettingsForTrackerModule(rawSettings, 'agenda');
+
+    const messages = [{ content: 'current', role: 'user' }];
 
     const result = applyTrackerModuleIncludeList(messages as any, agenda, agendaSettings) as any[];
 
-    expect(result).toHaveLength(2);
+    expect(result).toHaveLength(1);
   });
 
   test('chained snapshot formatting is sourced from the target module, not the source module', () => {
@@ -215,17 +245,15 @@ describe('applyTrackerModuleIncludeList', () => {
     const rawSettings = buildSettings([scene, agenda]);
     const agendaSettings = getSettingsForTrackerModule(rawSettings, 'agenda');
 
-    const messages = [
-      buildMessageWithModuleTrackers({ scene: { place: 'Bridge' } }),
-      { content: 'current', role: 'user' },
-    ];
+    const chat = [buildMessageWithModuleTrackers({ scene: { place: 'Bridge' } })];
+    const messages = [{ content: 'current', role: 'user' }];
 
-    const result = applyTrackerModuleIncludeList(messages as any, agenda, agendaSettings) as any[];
+    const result = applyTrackerModuleIncludeList(messages as any, agenda, agendaSettings, { chat: chat as any, messageId: 0 }) as any[];
 
     // Scene's own injection uses embedAsCharacter, so the pulled-in snapshot uses a `name` field
     // and its own "Scene Tracker" label - not Agenda's header/formatting.
-    expect(result[1].name).toBe('Scene Tracker');
-    expect(result[1].content).not.toContain('Agenda Tracker:');
+    expect(result[0].name).toBe('Scene Tracker');
+    expect(result[0].content).not.toContain('Agenda Tracker:');
   });
 
   test('composes self and multiple chained entries in include-list order', () => {
@@ -243,22 +271,58 @@ describe('applyTrackerModuleIncludeList', () => {
     const rawSettings = buildSettings([scene, inventory, agenda]);
     const agendaSettings = getSettingsForTrackerModule(rawSettings, 'agenda');
 
+    // Chained snapshots (scene, inventory) are read from full chat history; self stays bound to
+    // the windowed `messages`, interleaved inline as before.
+    const chat = [buildMessageWithModuleTrackers({ scene: { place: 'Bridge' }, inventory: { item: 'Flashlight' } })];
     const messages = [
-      buildMessageWithModuleTrackers({
-        scene: { place: 'Bridge' },
-        agenda: { goal: 'Find exit' },
-        inventory: { item: 'Flashlight' },
-      }),
+      buildMessageWithModuleTrackers({ agenda: { goal: 'Find exit' } }),
       { content: 'current', role: 'user' },
     ];
 
-    const result = applyTrackerModuleIncludeList(messages as any, agenda, agendaSettings) as any[];
+    const result = applyTrackerModuleIncludeList(messages as any, agenda, agendaSettings, { chat: chat as any, messageId: 0 }) as any[];
 
-    // Each entry re-scans from the start of the array, so all three land right after the source message
-    // in include-list order: scene, self (agenda), inventory.
+    // Chained entries are prepended ahead of the window in include-list order (scene, inventory);
+    // self still interleaves inline right after the windowed message that owns it, so the
+    // windowed message stays in place and self's snapshot lands directly after it.
     expect(result).toHaveLength(5);
-    expect(result[1].content).toContain('Scene Tracker:');
-    expect(result[2].content).toContain('Agenda Tracker:');
-    expect(result[3].content).toContain('Inventory Tracker:');
+    expect(result[0].content).toContain('Scene Tracker:');
+    expect(result[1].content).toContain('Inventory Tracker:');
+    expect(result[3].content).toContain('Agenda Tracker:');
+    expect(result[4].content).toBe('current');
+  });
+
+  test('self-history keeps its embedded-snapshot role protection even with active chained entries', () => {
+    // Regression guard for the marker-loss bug that existed when chaining re-cloned `messages`
+    // once per active entry: self is now the only remaining includeZTrackerMessages call site
+    // per invocation, so its embedded-snapshot marker can no longer be destroyed by a later clone.
+    const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    const agenda = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
+    agenda.injection.embedRole = 'user';
+    agenda.generation.conversationRoleMode = 'all_assistant';
+    agenda.generation.includeModules = [
+      { target: 'self', count: 1 },
+      { target: 'scene', count: 1 },
+    ];
+    const rawSettings = buildSettings([scene, agenda]);
+    const agendaSettings = getSettingsForTrackerModule(rawSettings, 'agenda');
+
+    const chat = [buildMessageWithModuleTrackers({ scene: { place: 'Bridge' } })];
+    const messages = [
+      buildMessageWithModuleTrackers({ agenda: { goal: 'Find exit' } }),
+      { content: 'current', role: 'user' },
+    ];
+
+    const withIncludeList = applyTrackerModuleIncludeList(
+      messages as any,
+      agenda,
+      agendaSettings,
+      { chat: chat as any, messageId: 0 },
+    ) as any[];
+    const normalized = normalizeTrackerGenerationConversationRoles(withIncludeList, agendaSettings) as any[];
+
+    const selfSnapshot = normalized.find((message) => typeof message.content === 'string' && message.content.includes('Find exit'));
+    expect(selfSnapshot?.role).toBe('user');
+    const currentTurn = normalized.find((message) => message.content === 'current');
+    expect(currentTurn?.role).toBe('assistant');
   });
 });

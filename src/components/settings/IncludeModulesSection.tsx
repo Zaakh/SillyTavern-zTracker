@@ -18,7 +18,9 @@ export const IncludeModulesSection: FC<SettingsSectionProps & { selectedModule: 
   const allModules = settings.modules ?? [];
   const resolvedEntries = resolveTrackerModuleIncludeEntries(selectedModule, allModules);
   const chainedTargetIds = new Set(
-    selectedModule.generation.includeModules.filter((entry) => entry.target !== 'self').map((entry) => entry.target),
+    (selectedModule.generation.includeModules ?? [])
+      .filter((entry) => entry.target !== 'self')
+      .map((entry) => entry.target),
   );
   const addableModules = getEligibleChainableModules(selectedModule, allModules).filter(
     (module) => !chainedTargetIds.has(module.id),

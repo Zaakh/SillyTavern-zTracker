@@ -381,7 +381,9 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
 }
 
 // Keeps the embedded tracker speaker label aligned with the existing configurable header.
-function deriveEmbeddedTrackerSpeakerName(settings: TrackerModuleSettings): string {
+// Exported for reuse by chained-history assembly (`tracker-module-chaining.ts`), which formats
+// standalone prepended snapshots using the same virtual-character label convention.
+export function deriveEmbeddedTrackerSpeakerName(settings: TrackerModuleSettings): string {
   const header = settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER;
   const trimmedLabel = header.replace(/:+\s*$/, '').trim();
   return trimmedLabel || 'Tracker';

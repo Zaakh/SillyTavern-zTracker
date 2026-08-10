@@ -622,6 +622,25 @@ describe('settings sections', () => {
     expect(rows[1].querySelector('button')).not.toBeNull();
   });
 
+  test('renders without throwing when a Module has a malformed (missing/non-array) include list', () => {
+    const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    const agenda = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
+    (agenda.generation as any).includeModules = undefined;
+    const settings = { modules: [scene, agenda], includeModules: agenda.generation.includeModules } as any;
+    const updateAndRefresh = (updater: (current: any) => void) => updater(settings);
+
+    expect(() => {
+      ({ root } = renderElement(
+        React.createElement(IncludeModulesSection, { settings, selectedModule: agenda, updateAndRefresh }),
+      ));
+    }).not.toThrow();
+
+    // resolveTrackerModuleIncludeEntries defaults a missing list to [], so no rows render, but
+    // the section itself (and its add-chained-module picker) still renders safely.
+    expect(document.querySelectorAll('.ztracker-include-module-row')).toHaveLength(0);
+    expect(document.querySelector('.ztracker-include-modules-body select')).not.toBeNull();
+  });
+
   test('flags a dormant chained entry without altering its stored count', () => {
     const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
     scene.enabled = false;

@@ -64,6 +64,9 @@ function renderReactSettings() {
 
 async function main() {
   const settings = settingsManager.getSettings();
+  // Order matters: migrateTrackerModuleIncludeLists reads/writes settings.modules, so it must
+  // run after migrateLegacySettingsToModules has populated that collection (array evaluation
+  // order below is what enforces this - do not reorder or run these two independently).
   const didMigrateLegacySettings = [
     migrateLegacyAutoMode(settings),
     migrateLegacyPromptTemplates(settings),

@@ -12,6 +12,7 @@ import {
   createTrackerModuleId,
   getOrderedTrackerModules,
   getSettingsForTrackerModule,
+  normalizeTrackerModuleIncludeList,
   pruneTrackerModuleIncludeReferences,
   purgeTrackerModuleDataFromChat,
   readModuleChatSchemaPresetKey,
@@ -110,6 +111,7 @@ function parseImportedTrackerModule(text: string): ImportedTrackerModule | null 
 function createImportedTrackerModule(importedModule: ImportedTrackerModule, modules: TrackerModule[]): TrackerModule {
   const id = createTrackerModuleId(modules, importedModule.id || importedModule.name);
   const base = createDefaultTrackerModule({ id, name: importedModule.name.trim(), order: modules.length });
+  const mergedGeneration = { ...base.generation, ...importedModule.generation };
   return {
     ...base,
     ...JSON.parse(JSON.stringify(importedModule)),
@@ -122,7 +124,13 @@ function createImportedTrackerModule(importedModule: ImportedTrackerModule, modu
     prompts: { ...base.prompts, ...importedModule.prompts },
     systemPrompt: { ...base.systemPrompt, ...importedModule.systemPrompt },
     connection: { ...base.connection, ...importedModule.connection },
-    generation: { ...base.generation, ...importedModule.generation },
+    generation: {
+      ...mergedGeneration,
+      // The include list is validated on its own: a missing/malformed/self-less imported value
+      // must never leave the Module without its mandatory self entry (settings UI and generation
+      // assembly both assume it is always present).
+      includeModules: normalizeTrackerModuleIncludeList(mergedGeneration.includeModules, base.generation.includeModules[0].count),
+    },
     injection: { ...base.injection, ...importedModule.injection },
   };
 }

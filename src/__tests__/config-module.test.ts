@@ -7,10 +7,13 @@ import {
   DEFAULT_SCHEMA_HTML,
   DEFAULT_SCHEMA_VALUE,
   defaultSettings,
+  applySettingsToTrackerModule,
   createDefaultTrackerModule,
+  getSettingsForTrackerModule,
   migrateLegacySettingsToModules,
   migrateLegacyChatMetadataToModules,
   migrateTrackerModuleIncludeLists,
+  normalizeTrackerModuleIncludeList,
   pruneTrackerModuleIncludeReferences,
   readModuleChatSchemaPresetKey,
   writeModuleChatSchemaPresetKey,
@@ -198,6 +201,67 @@ describe('migrateTrackerModuleIncludeLists', () => {
 
     expect(migrateTrackerModuleIncludeLists(settings)).toBe(false);
     expect(settings.modules[0].generation.includeModules).toEqual([{ target: 'self', count: 2 }]);
+  });
+
+  test('repairs a non-empty include list that is missing the mandatory self entry', () => {
+    const module = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    module.injection.includeLastXMessages = 4;
+    // Non-empty but self-less - e.g. a hand-edited or corrupted import.
+    (module.generation.includeModules as any) = [{ target: 'agenda', count: 1 }];
+    const settings: any = { ...structuredClone(defaultSettings), modules: [module] };
+
+    expect(migrateTrackerModuleIncludeLists(settings)).toBe(true);
+    expect(settings.modules[0].generation.includeModules).toEqual([
+      { target: 'self', count: 4 },
+      { target: 'agenda', count: 1 },
+    ]);
+  });
+});
+
+describe('normalizeTrackerModuleIncludeList', () => {
+  test('adds a missing self entry using the fallback count', () => {
+    expect(normalizeTrackerModuleIncludeList(undefined, 3)).toEqual([{ target: 'self', count: 3 }]);
+    expect(normalizeTrackerModuleIncludeList(null, 3)).toEqual([{ target: 'self', count: 3 }]);
+    expect(normalizeTrackerModuleIncludeList([], 3)).toEqual([{ target: 'self', count: 3 }]);
+  });
+
+  test('preserves an existing valid self entry and sanitizes malformed chained entries', () => {
+    const result = normalizeTrackerModuleIncludeList(
+      [
+        { target: 'self', count: 2 },
+        { target: 'agenda', count: -5 },
+        { target: '', count: 1 },
+        { target: 42, count: 1 },
+        'not-an-entry',
+      ],
+      99,
+    );
+
+    expect(result).toEqual([
+      { target: 'self', count: 2 },
+      { target: 'agenda', count: 0 },
+    ]);
+  });
+});
+
+describe('getSettingsForTrackerModule / applySettingsToTrackerModule round trip for includeModules', () => {
+  test('an edit made on the flattened settings persists back onto the real Module via a clone, not a shared reference', () => {
+    const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    const agenda = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
+    agenda.generation.includeModules = [{ target: 'self', count: 1 }];
+    const settings: any = { ...structuredClone(defaultSettings), modules: [scene, agenda] };
+
+    const flattened = getSettingsForTrackerModule(settings, 'agenda');
+    flattened.includeModules = [...flattened.includeModules, { target: 'scene', count: 2 }];
+    applySettingsToTrackerModule(agenda, flattened);
+
+    expect(agenda.generation.includeModules).toEqual([
+      { target: 'self', count: 1 },
+      { target: 'scene', count: 2 },
+    ]);
+    // The real Module's stored array must be its own clone, not the same array reference the
+    // settings-UI mutated, so a later unrelated edit to that UI-local array can't corrupt it.
+    expect(agenda.generation.includeModules).not.toBe(flattened.includeModules);
   });
 });
 

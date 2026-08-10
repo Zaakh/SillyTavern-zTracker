@@ -914,8 +914,42 @@ export function applySettingsToTrackerModule(module: TrackerModule, settings: Tr
 /** Removes any include-list entry across all Modules that references a deleted Module id, leaving other entries untouched. */
 export function pruneTrackerModuleIncludeReferences(modules: TrackerModule[], deletedModuleId: string): void {
   for (const module of modules) {
-    module.generation.includeModules = module.generation.includeModules.filter((entry) => entry.target !== deletedModuleId);
+    module.generation.includeModules = (module.generation.includeModules ?? [])
+      .filter((entry) => entry.target !== deletedModuleId);
   }
+}
+
+/**
+ * Normalizes an arbitrary (possibly corrupted, hand-authored, or imported) include-list value
+ * into a well-formed `TrackerModuleIncludeEntry[]`: always exactly one `self` entry (using its
+ * own count when present and valid, otherwise `fallbackSelfCount`), plus any chained entries
+ * with a non-empty string target and a sanitized non-negative integer count. Shared by the
+ * legacy self-entry migration and Module import so both agree on what a valid list looks like.
+ */
+export function normalizeTrackerModuleIncludeList(
+  includeModules: unknown,
+  fallbackSelfCount: number,
+): TrackerModuleIncludeEntry[] {
+  const rawEntries = Array.isArray(includeModules) ? includeModules : [];
+  const isEntryLike = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+
+  const existingSelf = rawEntries.find((entry) => isEntryLike(entry) && entry.target === 'self');
+  const selfCount = sanitizeIntegerSetting(isEntryLike(existingSelf) ? existingSelf.count : undefined, {
+    fallback: fallbackSelfCount,
+    min: 0,
+  });
+
+  const chainedEntries = rawEntries
+    .filter(
+      (entry): entry is Record<string, unknown> =>
+        isEntryLike(entry) && typeof entry.target === 'string' && entry.target !== 'self' && entry.target.trim().length > 0,
+    )
+    .map((entry) => ({
+      target: entry.target as string,
+      count: sanitizeIntegerSetting(entry.count, { fallback: 0, min: 0 }),
+    }));
+
+  return [{ target: 'self', count: selfCount }, ...chainedEntries];
 }
 
 export function purgeTrackerModuleDataFromChat(chat: Array<{ extra?: Record<string, any> }> | undefined, moduleId: string): number {
@@ -946,19 +980,26 @@ export function migrateLegacySettingsToModules(settings: ExtensionSettings): boo
 }
 
 /**
- * Seeds each Module's generation include list with a self-only entry the first time this
- * version runs, copying the count from that Module's legacy `injection.includeLastXMessages`
- * value so upgrading users see unchanged self-history behavior. Runs after
- * `migrateLegacySettingsToModules` (it requires `settings.modules` to already exist) and is
- * idempotent: a Module that already has a non-empty `includeModules` list is left untouched.
+ * Seeds each Module's generation include list with a self entry the first time this version
+ * runs, copying the count from that Module's legacy `injection.includeLastXMessages` value so
+ * upgrading users see unchanged self-history behavior. Runs after `migrateLegacySettingsToModules`
+ * (it requires `settings.modules` to already exist) and is idempotent: a Module that already has
+ * a self entry is left untouched. Also repairs a Module whose stored `includeModules` is missing,
+ * malformed, or non-empty but lacking the mandatory self entry (e.g. from a hand-edited import),
+ * since the include-list UI and generation assembly both require self to always be present.
  */
 export function migrateTrackerModuleIncludeLists(settings: ExtensionSettings): boolean {
   let changed = false;
   for (const module of settings.modules ?? []) {
-    if (Array.isArray(module.generation?.includeModules) && module.generation.includeModules.length > 0) {
+    const hasSelfEntry = Array.isArray(module.generation?.includeModules)
+      && module.generation.includeModules.some((entry) => entry?.target === 'self');
+    if (hasSelfEntry) {
       continue;
     }
-    module.generation.includeModules = [{ target: 'self', count: module.injection.includeLastXMessages }];
+    module.generation.includeModules = normalizeTrackerModuleIncludeList(
+      module.generation.includeModules,
+      module.injection.includeLastXMessages,
+    );
     changed = true;
   }
   return changed;
