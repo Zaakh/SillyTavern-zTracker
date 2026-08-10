@@ -51,9 +51,13 @@ export function createCharacterPanelButtonController(options: {
       characterPanelButtonSyncTimer = undefined;
       attachCharacterPanelObserver();
       const settings = settingsManager.getSettings();
+      // Read live so the toggle always acts as a kill-switch across every Module currently
+      // configured, even if Modules were added/removed/reordered while the panel was open.
+      const moduleIds = getOrderedTrackerModules(settings, { includeDisabled: true }).map((module) => module.id);
       syncCharacterAutoModeButton({
         getContext: () => SillyTavern.getContext(),
         autoModeEnabled: getOrderedTrackerModules(settings).some((module) => module.auto.enabled && module.auto.mode !== AutoModeOptions.NONE),
+        moduleIds,
         onToggle: ({ excluded }) => {
           st_echo('info', excluded ? 'zTracker auto mode excluded for this character.' : 'zTracker auto mode restored for this character.');
         },

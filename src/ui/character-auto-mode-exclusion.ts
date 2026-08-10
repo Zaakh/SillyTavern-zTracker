@@ -27,6 +27,8 @@ type CharacterContextLike = {
 
 type CharacterPanelButtonSyncOptions = {
   autoModeEnabled: boolean;
+  /** Ids of every currently configured tracker Module; the toggle acts as one kill-switch across all of them. */
+  moduleIds?: string[];
   root?: ParentNode;
   context?: CharacterContextLike;
   getContext?: () => CharacterContextLike;
@@ -80,6 +82,17 @@ export function isCharacterAutoModeExcluded(character: CharacterLike | undefined
     : false;
 }
 
+/**
+ * Reads whether the supplied character is excluded from every Module id in `moduleIds`.
+ * Backs the character-panel toggle's single kill-switch semantics: the button only shows
+ * "excluded" when ALL configured Modules are excluded, so a partial state (e.g. left over
+ * from a prior single-module-only write) displays as "included" until the next click
+ * normalizes it. An empty `moduleIds` list is vacuously "not excluded".
+ */
+export function isCharacterFullyAutoModeExcluded(character: CharacterLike | undefined, moduleIds: string[]): boolean {
+  return moduleIds.length > 0 && moduleIds.every((moduleId) => isCharacterAutoModeExcluded(character, moduleId));
+}
+
 /** Resolves a SillyTavern character id from a rendered message's original avatar reference. */
 export function resolveCharacterIdFromMessage(
   characters: CharacterLike[] | undefined,
@@ -129,12 +142,17 @@ export function shouldAutoGenerateForUserMessage(context: CharacterContextLike, 
   return !isCharacterAutoModeExcluded(context.characters?.[characterId], moduleId);
 }
 
-/** Persists and mirrors the per-character exclusion flag into the live SillyTavern context. */
+/**
+ * Persists and mirrors the per-character exclusion flag into the live SillyTavern context.
+ * Writes the same `excluded` value to every id in `moduleIds` in a single
+ * `writeExtensionField` call so the character-panel toggle acts as one kill-switch across
+ * all currently configured tracker Modules, instead of only the default Module.
+ */
 export function setCharacterAutoModeExcluded(
   context: CharacterContextLike,
   characterId: number,
   excluded: boolean,
-  moduleId = DEFAULT_MODULE_ID,
+  moduleIds: string[] = [DEFAULT_MODULE_ID],
 ): boolean {
   const characters = context.characters;
   if (!Array.isArray(characters) || characterId < 0 || characterId >= characters.length) {
@@ -149,12 +167,13 @@ export function setCharacterAutoModeExcluded(
     && !Array.isArray(currentExtensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD])
       ? currentExtensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD] as Record<string, unknown>
       : {};
+  const nextExclusions = { ...currentExclusions };
+  for (const moduleId of moduleIds) {
+    nextExclusions[moduleId] = excluded;
+  }
   const nextExtensionData = {
     ...currentExtensionData,
-    [CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD]: {
-      ...currentExclusions,
-      [moduleId]: excluded,
-    },
+    [CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD]: nextExclusions,
   };
 
   character.data = character.data ?? {};
@@ -165,17 +184,23 @@ export function setCharacterAutoModeExcluded(
   return true;
 }
 
-/** Toggles the exclusion flag for the currently active solo character. */
+/**
+ * Toggles the exclusion flag for the currently active solo character across every id in
+ * `moduleIds`. The next state negates "fully excluded" (all of `moduleIds` excluded), so a
+ * partially-excluded character (e.g. left over from a prior single-module-only write)
+ * normalizes to fully excluded on the very next click rather than staying ambiguous.
+ */
 export function toggleCurrentCharacterAutoModeExcluded(
   context: CharacterContextLike,
+  moduleIds: string[] = [DEFAULT_MODULE_ID],
 ): { characterId: number; excluded: boolean } | null {
   const characterId = getCurrentCharacterId(context);
   if (characterId === undefined) {
     return null;
   }
 
-  const nextExcluded = !isCharacterAutoModeExcluded(context.characters?.[characterId]);
-  if (!setCharacterAutoModeExcluded(context, characterId, nextExcluded)) {
+  const nextExcluded = !isCharacterFullyAutoModeExcluded(context.characters?.[characterId], moduleIds);
+  if (!setCharacterAutoModeExcluded(context, characterId, nextExcluded, moduleIds)) {
     return null;
   }
 
@@ -226,7 +251,7 @@ function buildCharacterAutoModeButtonTitle(options: {
 
 /** Creates or refreshes the character-panel exclusion button and keeps its state in sync. */
 export function syncCharacterAutoModeButton(options: CharacterPanelButtonSyncOptions): HTMLElement | null {
-  const { autoModeEnabled, root = document, onToggle } = options;
+  const { autoModeEnabled, moduleIds = [DEFAULT_MODULE_ID], root = document, onToggle } = options;
   const buttonRow = findCharacterPanelButtonRow(root);
   if (!buttonRow) {
     return null;
@@ -250,7 +275,7 @@ export function syncCharacterAutoModeButton(options: CharacterPanelButtonSyncOpt
         return;
       }
 
-      const result = toggleCurrentCharacterAutoModeExcluded(nextContext);
+      const result = toggleCurrentCharacterAutoModeExcluded(nextContext, moduleIds);
       if (!result) {
         return;
       }
@@ -261,7 +286,7 @@ export function syncCharacterAutoModeButton(options: CharacterPanelButtonSyncOpt
   }
 
   const characterId = getCurrentCharacterId(context);
-  const excluded = characterId !== undefined && isCharacterAutoModeExcluded(context.characters?.[characterId]);
+  const excluded = characterId !== undefined && isCharacterFullyAutoModeExcluded(context.characters?.[characterId], moduleIds);
   const hasCharacter = characterId !== undefined;
 
   button.dataset.excluded = String(excluded);

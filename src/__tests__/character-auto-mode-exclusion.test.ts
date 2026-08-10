@@ -12,11 +12,13 @@ import {
   findCharacterPanelButtonRow,
   getCurrentCharacterId,
   isCharacterAutoModeExcluded,
+  isCharacterFullyAutoModeExcluded,
   resolveCharacterIdFromMessage,
   setCharacterAutoModeExcluded,
   shouldAutoGenerateForCharacterMessage,
   shouldAutoGenerateForUserMessage,
   syncCharacterAutoModeButton,
+  toggleCurrentCharacterAutoModeExcluded,
 } from '../ui/character-auto-mode-exclusion.js';
 
 describe('character auto-mode exclusion helpers', () => {
@@ -88,6 +90,73 @@ describe('character auto-mode exclusion helpers', () => {
     expect(context.characters[0].data.extensions[EXTENSION_KEY]).toEqual({
       existing: 'value',
       autoModeExclusions: { [DEFAULT_MODULE_ID]: true },
+    });
+  });
+
+  test('reports fully excluded only when every configured Module id is excluded', () => {
+    const character = {
+      data: { extensions: { [EXTENSION_KEY]: { autoModeExclusions: { sceneMod: true, agendaMod: false } } } },
+    };
+
+    expect(isCharacterFullyAutoModeExcluded(character, ['sceneMod'])).toBe(true);
+    expect(isCharacterFullyAutoModeExcluded(character, ['sceneMod', 'agendaMod'])).toBe(false);
+  });
+
+  test('toggling with multiple configured Modules excludes all of them in one click', () => {
+    const writeExtensionField = jest.fn();
+    const context = {
+      characterId: 0,
+      characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+      writeExtensionField,
+    };
+
+    const result = toggleCurrentCharacterAutoModeExcluded(context, ['sceneMod', 'agendaMod']);
+
+    expect(result).toEqual({ characterId: 0, excluded: true });
+    expect(writeExtensionField).toHaveBeenCalledWith(0, EXTENSION_KEY, {
+      autoModeExclusions: { sceneMod: true, agendaMod: true },
+    });
+  });
+
+  test('toggling a fully excluded character includes it for every configured Module again', () => {
+    const writeExtensionField = jest.fn();
+    const context = {
+      characterId: 0,
+      characters: [
+        {
+          avatar: 'alice.png',
+          data: { extensions: { [EXTENSION_KEY]: { autoModeExclusions: { sceneMod: true, agendaMod: true } } } },
+        },
+      ],
+      writeExtensionField,
+    };
+
+    const result = toggleCurrentCharacterAutoModeExcluded(context, ['sceneMod', 'agendaMod']);
+
+    expect(result).toEqual({ characterId: 0, excluded: false });
+    expect(writeExtensionField).toHaveBeenCalledWith(0, EXTENSION_KEY, {
+      autoModeExclusions: { sceneMod: false, agendaMod: false },
+    });
+  });
+
+  test('toggling a partially excluded character normalizes to fully excluded for all configured Modules', () => {
+    const writeExtensionField = jest.fn();
+    const context = {
+      characterId: 0,
+      characters: [
+        {
+          avatar: 'alice.png',
+          data: { extensions: { [EXTENSION_KEY]: { autoModeExclusions: { sceneMod: true, agendaMod: false } } } },
+        },
+      ],
+      writeExtensionField,
+    };
+
+    const result = toggleCurrentCharacterAutoModeExcluded(context, ['sceneMod', 'agendaMod']);
+
+    expect(result).toEqual({ characterId: 0, excluded: true });
+    expect(writeExtensionField).toHaveBeenCalledWith(0, EXTENSION_KEY, {
+      autoModeExclusions: { sceneMod: true, agendaMod: true },
     });
   });
 });
@@ -165,5 +234,53 @@ describe('character auto-mode exclusion button sync', () => {
 
     expect(findCharacterPanelButtonRow()).toBeNull();
     expect(syncCharacterAutoModeButton({ getContext: () => ({ characterId: 0, characters: [] }), autoModeEnabled: true })).toBeNull();
+  });
+
+  test('displays included when the character is excluded from only some configured Modules', () => {
+    document.body.innerHTML = '<div id="form_create"><div class="avatar_button_row"></div></div>';
+    const context = {
+      characterId: 0,
+      characters: [
+        {
+          avatar: 'alice.png',
+          data: { extensions: { [EXTENSION_KEY]: { autoModeExclusions: { sceneMod: true, agendaMod: false } } } },
+        },
+      ],
+    };
+
+    const button = syncCharacterAutoModeButton({
+      getContext: () => context,
+      autoModeEnabled: true,
+      moduleIds: ['sceneMod', 'agendaMod'],
+    });
+
+    expect(button?.dataset.excluded).toBe('false');
+  });
+
+  test('clicking while partially excluded normalizes storage to fully excluded for all configured Modules', () => {
+    document.body.innerHTML = '<div id="form_create"><div class="avatar_button_row"></div></div>';
+    const writeExtensionField = jest.fn();
+    const context = {
+      characterId: 0,
+      characters: [
+        {
+          avatar: 'alice.png',
+          data: { extensions: { [EXTENSION_KEY]: { autoModeExclusions: { sceneMod: true, agendaMod: false } } } },
+        },
+      ],
+      writeExtensionField,
+    };
+
+    const button = syncCharacterAutoModeButton({
+      getContext: () => context,
+      autoModeEnabled: true,
+      moduleIds: ['sceneMod', 'agendaMod'],
+    });
+    button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(writeExtensionField).toHaveBeenCalledWith(0, EXTENSION_KEY, {
+      autoModeExclusions: { sceneMod: true, agendaMod: true },
+    });
+    expect(button?.dataset.excluded).toBe('true');
   });
 });

@@ -1,11 +1,13 @@
 # Spec: Per-character auto-mode exclusion
 
-Status: In Progress
-Last updated: 2026-04-14
+Status: Implemented (superseded in part by multi-module support)
+Last updated: 2026-08-10
 
 ## Summary
 
 Allow users to exclude specific characters from automatic tracker generation. When auto-mode is active, interactions tied to an excluded character are silently skipped. A toggle button on the character edit panel provides a visible, per-character on/off switch with dynamic color feedback.
+
+> **Multi-module update (2026-08-10):** this design predates the multi-module tracker feature and describes a single implicit exclusion flag. The shipped implementation instead stores exclusion per tracker Module id (`autoModeExclusions: Record<moduleId, boolean>` on the character card, see `src/ui/character-auto-mode-exclusion.ts`). The character-panel toggle button acts as a single kill-switch: one click sets the exclusion flag uniformly across every currently configured Module, and the button's excluded/included display reflects whether the character is excluded from *all* configured Modules. A character excluded from only some configured Modules displays as "included" until the next click normalizes it to fully excluded. See the `fix-character-exclusion-all-modules` OpenSpec change for the bug this corrected (the toggle previously wrote/read only the default Module's exclusion flag).
 
 ## Motivation
 
