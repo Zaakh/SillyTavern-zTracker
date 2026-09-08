@@ -64,9 +64,17 @@ export interface EmbedSnapshotRegexTransformPreset {
   wrapInCodeFence?: boolean;
 }
 
+/**
+ * Trigger direction for automatic tracker generation, independent of whether auto mode is
+ * enabled. `NONE` is intentionally excluded: "no auto trigger" is expressed by `enabled: false`,
+ * not by the direction, so a direction value always survives disabling auto mode and is ready to
+ * use again the moment auto mode (or a per-character "on" override) re-enables it.
+ */
+export type TrackerModuleAutoDirection = Exclude<AutoModeOptions, AutoModeOptions.NONE>;
+
 export interface TrackerModuleAutoSettings {
   enabled: boolean;
-  mode: AutoModeOptions;
+  direction: TrackerModuleAutoDirection;
 }
 
 export interface TrackerModuleSchemaSettings {
@@ -153,7 +161,10 @@ export interface TrackerModuleSettings extends ExtensionSettings {
   trackerSystemPromptMode: TrackerSystemPromptMode;
   trackerSystemPromptSavedName: string;
   maxResponseToken: number;
-  autoMode: AutoModeOptions;
+  /** Standalone auto-mode on/off flag, independent of `autoModeDirection`. Mirrors `module.auto.enabled`. */
+  autoModeEnabled: boolean;
+  /** Auto-mode trigger direction, persisted even while `autoModeEnabled` is false. Mirrors `module.auto.direction`. */
+  autoModeDirection: TrackerModuleAutoDirection;
 
   /** When enabled, zTracker generates the tracker in smaller parts, sequentially. */
   sequentialPartGeneration: boolean;
@@ -725,7 +736,7 @@ export function createDefaultTrackerModule(options: Partial<Pick<TrackerModule, 
     order: options.order ?? 0,
     auto: {
       enabled: false,
-      mode: AutoModeOptions.NONE,
+      direction: AutoModeOptions.BOTH,
     },
     schema: {
       preset: 'default',
@@ -793,8 +804,15 @@ export function createTrackerModuleFromLegacySettings(
   module.generation.worldInfoAllowlistEntryIds = cloneSettingsValue(
     settings.trackerWorldInfoAllowlistEntryIds ?? module.generation.worldInfoAllowlistEntryIds,
   );
-  module.auto.mode = settings.autoMode ?? module.auto.mode;
-  module.auto.enabled = module.auto.mode !== AutoModeOptions.NONE;
+  // Reads the raw top-level legacy `autoMode` field from very old pre-Module settings JSON.
+  // Not part of `TrackerModuleSettings` (superseded by `autoModeEnabled`/`autoModeDirection`), so
+  // it is read here as an untyped legacy property rather than a typed field.
+  const legacyAutoMode = (settings as Record<string, unknown>).autoMode as AutoModeOptions | undefined
+    ?? (module.auto.enabled ? module.auto.direction : AutoModeOptions.NONE);
+  module.auto.enabled = legacyAutoMode !== AutoModeOptions.NONE;
+  if (legacyAutoMode !== AutoModeOptions.NONE) {
+    module.auto.direction = legacyAutoMode;
+  }
   module.schema.preset = settings.schemaPreset ?? module.schema.preset;
   module.schema.presets = cloneSettingsValue(settings.schemaPresets ?? module.schema.presets);
   module.prompts.prompt = settings.prompt ?? module.prompts.prompt;
@@ -841,7 +859,8 @@ export function getSettingsForTrackerModule(settings: ExtensionSettings, moduleI
     trackerSystemPromptMode: module.systemPrompt.mode,
     trackerSystemPromptSavedName: module.systemPrompt.savedName,
     maxResponseToken: module.generation.maxResponseToken,
-    autoMode: module.auto.enabled ? module.auto.mode : AutoModeOptions.NONE,
+    autoModeEnabled: module.auto.enabled,
+    autoModeDirection: module.auto.direction,
     sequentialPartGeneration: module.generation.mode === 'sequential-parts',
     schemaPreset: module.schema.preset,
     schemaPresets: module.schema.presets,
@@ -885,8 +904,8 @@ export function applySettingsToTrackerModule(module: TrackerModule, settings: Tr
   module.systemPrompt.mode = settings.trackerSystemPromptMode;
   module.systemPrompt.savedName = settings.trackerSystemPromptSavedName;
   module.generation.maxResponseToken = settings.maxResponseToken;
-  module.auto.mode = settings.autoMode;
-  module.auto.enabled = settings.autoMode !== AutoModeOptions.NONE;
+  module.auto.enabled = settings.autoModeEnabled;
+  module.auto.direction = settings.autoModeDirection;
   module.generation.mode = settings.sequentialPartGeneration ? 'sequential-parts' : 'full';
   module.schema.preset = settings.schemaPreset;
   module.schema.presets = cloneSettingsValue(settings.schemaPresets);
@@ -977,6 +996,35 @@ export function migrateLegacySettingsToModules(settings: ExtensionSettings): boo
   settings.modules = [createTrackerModuleFromLegacySettings(settings, { id: DEFAULT_MODULE_ID, name: 'Default', order: 0 })];
   settings.formatVersion = FORMAT_VERSION;
   return true;
+}
+
+/**
+ * Migrates a Module's legacy single `auto.mode` field into the independent `auto.enabled` +
+ * `auto.direction` fields. `NONE` migrates to `enabled: false, direction: BOTH` (no prior
+ * direction to recover, so the broadest default is used). Any other mode migrates to
+ * `enabled: true, direction: <mode>`. Runs after `migrateLegacySettingsToModules` (it requires
+ * `settings.modules` to already exist) and is idempotent: a Module whose stored `auto` no longer
+ * carries a `mode` field is left untouched.
+ */
+export function migrateTrackerModuleAutoSettings(settings: ExtensionSettings): boolean {
+  let changed = false;
+  for (const module of settings.modules ?? []) {
+    // Defends against missing/malformed `auto` the same way sibling migrations defend against
+    // missing `generation`/`includeModules` (e.g. hand-edited or corrupted imports), instead of
+    // assuming `module.auto` is always an object.
+    const legacyAuto = module.auto as unknown as { mode?: AutoModeOptions } | undefined;
+    if (legacyAuto?.mode === undefined) {
+      continue;
+    }
+
+    const legacyMode = legacyAuto.mode;
+    module.auto = {
+      enabled: legacyMode !== AutoModeOptions.NONE,
+      direction: legacyMode !== AutoModeOptions.NONE ? legacyMode : AutoModeOptions.BOTH,
+    };
+    changed = true;
+  }
+  return changed;
 }
 
 /**

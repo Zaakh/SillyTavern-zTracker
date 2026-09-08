@@ -12,6 +12,7 @@ import {
   getSettingsForTrackerModule,
   migrateLegacySettingsToModules,
   migrateLegacyChatMetadataToModules,
+  migrateTrackerModuleAutoSettings,
   migrateTrackerModuleIncludeLists,
   normalizeTrackerModuleIncludeList,
   pruneTrackerModuleIncludeReferences,
@@ -34,6 +35,7 @@ describe('tracker module defaults', () => {
     expect(module.order).toBe(1);
     expect(module.enabled).toBe(true);
     expect(module.auto.enabled).toBe(false);
+    expect(module.auto.direction).toBe('both');
   });
 
   test('module owns schema, prompt, generation, and injection defaults', () => {
@@ -215,6 +217,35 @@ describe('migrateTrackerModuleIncludeLists', () => {
       { target: 'self', count: 4 },
       { target: 'agenda', count: 1 },
     ]);
+  });
+});
+
+describe('migrateTrackerModuleAutoSettings', () => {
+  test('migrates a disabled legacy mode to enabled: false with a default direction', () => {
+    const module = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    (module.auto as any) = { enabled: false, mode: 'none' };
+    const settings: any = { ...structuredClone(defaultSettings), modules: [module] };
+
+    expect(migrateTrackerModuleAutoSettings(settings)).toBe(true);
+    expect(settings.modules[0].auto).toEqual({ enabled: false, direction: 'both' });
+  });
+
+  test('migrates an enabled legacy mode to enabled: true with that mode as the direction', () => {
+    const module = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    (module.auto as any) = { enabled: true, mode: 'responses' };
+    const settings: any = { ...structuredClone(defaultSettings), modules: [module] };
+
+    expect(migrateTrackerModuleAutoSettings(settings)).toBe(true);
+    expect(settings.modules[0].auto).toEqual({ enabled: true, direction: 'responses' });
+  });
+
+  test('does not re-run for a module that already stores enabled/direction', () => {
+    const module = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    module.auto = { enabled: true, direction: 'inputs' as any };
+    const settings: any = { ...structuredClone(defaultSettings), modules: [module] };
+
+    expect(migrateTrackerModuleAutoSettings(settings)).toBe(false);
+    expect(settings.modules[0].auto).toEqual({ enabled: true, direction: 'inputs' });
   });
 });
 

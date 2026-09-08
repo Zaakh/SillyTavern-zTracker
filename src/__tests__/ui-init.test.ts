@@ -199,8 +199,8 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
 
       const button = buttonRow.querySelector('#ztracker-character-auto-mode-toggle') as HTMLElement | null;
       expect(button).not.toBeNull();
-      expect(button?.dataset.excluded).toBe('false');
-      expect(button?.title).toContain('Auto mode is disabled globally');
+      expect(button?.dataset.override).toBe('default');
+      expect(button?.title).toContain("uses the Module's default setting");
     } finally {
       jest.useRealTimers();
     }

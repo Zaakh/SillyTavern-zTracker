@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-09-08
+
+### Added
+
+- Each Module's Auto Mode now has an independent enabled flag and trigger direction (`Process inputs`/`Process responses`/`Process both`), so its configured direction is remembered even while Auto Mode is off for that Module.
+- The character-panel Auto Mode control now supports a per-character, per-Module override with three states: **Default** (use that Module's own Auto Mode setting), **Off** (never auto-generate for this character on that Module), and **On** (always auto-generate for this character on that Module, using its configured direction, even while Auto Mode is off for everyone else). With multiple Modules configured, the control opens a small menu to set each Module's override independently.
+
+### Changed
+
+- Stored settings and character-card data are upgraded once more: each Module's Auto Mode splits into its enabled flag and direction, and existing per-character Auto Mode exclusions migrate into the new per-Module override.
+
 ## [2.1.1] - 2026-08-10
 
 ### Fixed

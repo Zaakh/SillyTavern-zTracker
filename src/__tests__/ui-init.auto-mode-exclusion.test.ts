@@ -500,6 +500,47 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     expect(actions.generateTracker).not.toHaveBeenCalled();
   });
 
+  test('an "on" override forces outgoing auto-generation and engages the hold even while the module is globally disabled', async () => {
+    const { events, actions } = await initializeAutoModeHarness({
+      host: {
+        chat: [],
+        characters: [
+          { avatar: 'alice.png', data: { extensions: { zTracker: { autoModeOverrides: { default: 'on' } } } } },
+        ],
+        characterId: 0,
+      },
+      // Globally disabled: without the per-character "on" override, this Module would never
+      // auto-generate for anyone.
+      settings: { autoMode: 'none' },
+    });
+
+    events.emit('MESSAGE_SENT', 0);
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true, showStatusIndicator: false });
+  });
+
+  test('a hard-disabled module never auto-generates even with an "on" override for the active character', async () => {
+    const disabledModule = createDefaultTrackerModule({ id: 'default', name: 'Default', order: 0 });
+    disabledModule.enabled = false;
+    disabledModule.auto = { enabled: false, direction: 'both' as any };
+
+    const { events, actions } = await initializeAutoModeHarness({
+      host: {
+        chat: [],
+        characters: [
+          { avatar: 'alice.png', data: { extensions: { zTracker: { autoModeOverrides: { default: 'on' } } } } },
+        ],
+        characterId: 0,
+      },
+      // The Module's own hard `enabled` switch (not auto mode) is off. A per-character "on"
+      // override only affects auto-mode participation and must never resurrect a hard-disabled
+      // Module - `getOrderedTrackerModules` filters it out before override resolution ever runs.
+      settings: { modules: [disabledModule] },
+    });
+
+    events.emit('MESSAGE_SENT', 0);
+    expect(actions.generateTracker).not.toHaveBeenCalled();
+  });
+
   test('manual generation via the message truck button ignores auto-mode exclusion', async () => {
     document.body.innerHTML = '';
     installChatMessageDom(0, {
@@ -587,11 +628,11 @@ describe('initializeGlobalUI outgoing hold respects Skip First X Messages', () =
     renderMessage(0);
     const skippedModule = createDefaultTrackerModule({ id: 'skipped', name: 'Skipped', order: 0 });
     skippedModule.auto.enabled = true;
-    skippedModule.auto.mode = 'inputs' as any;
+    skippedModule.auto.direction = 'inputs' as any;
     skippedModule.generation.skipFirstXMessages = 5;
     const dueModule = createDefaultTrackerModule({ id: 'due', name: 'Due', order: 1 });
     dueModule.auto.enabled = true;
-    dueModule.auto.mode = 'inputs' as any;
+    dueModule.auto.direction = 'inputs' as any;
     dueModule.generation.skipFirstXMessages = 0;
 
     const { events, host, actions } = await initializeAutoModeHarness({

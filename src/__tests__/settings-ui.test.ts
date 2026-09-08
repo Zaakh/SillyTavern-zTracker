@@ -222,7 +222,7 @@ function createMockModule(overrides: Record<string, any> = {}) {
     name: overrides.name ?? 'Default',
     enabled: overrides.enabled ?? true,
     order: overrides.order ?? 0,
-    auto: { enabled: overrides.auto?.enabled ?? false, mode: overrides.auto?.mode ?? 'none' },
+    auto: { enabled: overrides.auto?.enabled ?? false, direction: overrides.auto?.direction ?? 'both' },
     schema: {
       preset: overrides.schema?.preset ?? 'default',
       presets: overrides.schema?.presets ?? {
@@ -1218,6 +1218,50 @@ describe('zTracker settings connection source UI', () => {
       importedButton.click();
       await Promise.resolve();
     });
+  });
+
+  test('importing a module exported with the legacy {enabled, mode} auto shape preserves its configured direction', async () => {
+    seedModuleSettings();
+    // Simulates a Module JSON exported before auto-mode split into independent enabled/direction
+    // fields: `enabled` was always derived from `mode !== 'none'`, so only `mode` carries real
+    // information here.
+    readTextFileViaPickerMock.mockResolvedValue(JSON.stringify({
+      module: { name: 'Legacy Auto', auto: { enabled: true, mode: 'responses' } },
+    }));
+    const container = renderSettings();
+    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Import');
+    if (!(importButton instanceof HTMLButtonElement)) {
+      throw new Error('Import button not found');
+    }
+
+    await act(async () => {
+      importButton.click();
+      await Promise.resolve();
+    });
+
+    const imported = mockSettings.modules.find((module: any) => module.name === 'Legacy Auto');
+    expect(imported?.auto).toEqual({ enabled: true, direction: 'responses' });
+  });
+
+  test('importing a module exported with a legacy disabled {enabled, mode} auto shape falls back to the default direction', async () => {
+    seedModuleSettings();
+    readTextFileViaPickerMock.mockResolvedValue(JSON.stringify({
+      module: { name: 'Legacy Disabled Auto', auto: { enabled: false, mode: 'none' } },
+    }));
+    const container = renderSettings();
+    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Import');
+    if (!(importButton instanceof HTMLButtonElement)) {
+      throw new Error('Import button not found');
+    }
+
+    await act(async () => {
+      importButton.click();
+      await Promise.resolve();
+    });
+
+    const imported = mockSettings.modules.find((module: any) => module.name === 'Legacy Disabled Auto');
+    expect(imported?.auto).toEqual({ enabled: false, direction: 'both' });
+    expect((imported?.auto as any)?.mode).toBeUndefined();
   });
 
   test('cancelled module import does not change modules', async () => {
