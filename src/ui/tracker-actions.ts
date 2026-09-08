@@ -1607,9 +1607,13 @@ export function createTrackerActions(options: {
 
   async function generateTrackersForMessage(id: number, options?: GenerateTrackersForMessageOptions) {
     const moduleIds = options?.moduleIds ? new Set(options.moduleIds) : undefined;
+    // When the caller supplies an explicit moduleIds set, trust it completely rather than
+    // re-filtering by module.auto.enabled: callers with per-character context (e.g. auto-mode
+    // dispatch in src/ui/ui-init.ts) may have already resolved a Module as due via a
+    // per-character "on" override even though that Module's global auto.enabled is false, and
+    // re-applying a global-only autoOnly filter here would incorrectly drop it again.
     const modules = getOrderedTrackerModules(settingsManager.getSettings())
-      .filter((module) => !moduleIds || moduleIds.has(module.id))
-      .filter((module) => !options?.autoOnly || module.auto.enabled);
+      .filter((module) => (moduleIds ? moduleIds.has(module.id) : !options?.autoOnly || module.auto.enabled));
 
     let allSucceeded = true;
     for (const module of modules) {

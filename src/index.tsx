@@ -10,6 +10,7 @@ import {
   migrateLegacyAutoMode,
   migrateLegacyPromptTemplates,
   migrateLegacySettingsToModules,
+  migrateTrackerModuleAutoSettings,
   migrateTrackerModuleIncludeLists,
 } from './config.js';
 import { createTrackerActions } from './ui/tracker-actions.js';
@@ -64,15 +65,17 @@ function renderReactSettings() {
 
 async function main() {
   const settings = settingsManager.getSettings();
-  // Order matters: migrateTrackerModuleIncludeLists reads/writes settings.modules, so it must
-  // run after migrateLegacySettingsToModules has populated that collection (array evaluation
-  // order below is what enforces this - do not reorder or run these two independently).
+  // Order matters: migrateTrackerModuleAutoSettings and migrateTrackerModuleIncludeLists read/write
+  // settings.modules, so they must run after migrateLegacySettingsToModules has populated that
+  // collection (array evaluation order below is what enforces this - do not reorder or run these
+  // independently).
   const didMigrateLegacySettings = [
     migrateLegacyAutoMode(settings),
     migrateLegacyPromptTemplates(settings),
     migrateCorruptedSchemaPresetRequiredMetadata(settings),
     migrateInvalidNumericSettings(settings),
     migrateLegacySettingsToModules(settings),
+    migrateTrackerModuleAutoSettings(settings),
     migrateTrackerModuleIncludeLists(settings),
   ].some(Boolean);
 

@@ -1,6 +1,6 @@
 import { FC } from 'react';
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
-import type { TrackerGenerationConversationRoleMode } from '../../config.js';
+import type { TrackerGenerationConversationRoleMode, TrackerModuleSettings } from '../../config.js';
 import { sanitizeIntegerSetting } from '../../settings-numeric.js';
 import type { SettingsSectionProps } from './settings-shared.js';
 
@@ -9,20 +9,35 @@ export const GenerationBehaviorSection: FC<SettingsSectionProps> = ({ settings, 
   return (
     <>
       <div className="setting-row">
-        <label title="Controls when zTracker automatically generates trackers: never, on incoming assistant messages, on your inputs, or both.">
-          Auto Mode
+        <label title="Turns automatic tracker generation on or off for this Module. The trigger direction below is remembered even while this is off.">
+          Auto Mode Enabled
+        </label>
+        <input
+          type="checkbox"
+          title="Turns automatic tracker generation on or off for this Module. The trigger direction below is remembered even while this is off."
+          checked={settings.autoModeEnabled}
+          onChange={(e) =>
+            updateAndRefresh((s) => {
+              s.autoModeEnabled = e.target.checked;
+            })
+          }
+        />
+      </div>
+
+      <div className="setting-row">
+        <label title="Controls which chat events trigger automatic generation for this Module: incoming assistant messages, your inputs, or both. Stays editable even while Auto Mode Enabled is off, since a per-character 'on' override uses this direction regardless.">
+          Direction
         </label>
         <select
           className="text_pole"
-          title="Controls when zTracker automatically generates trackers: never, on incoming assistant messages, on your inputs, or both."
-          value={settings.autoMode}
+          title="Controls which chat events trigger automatic generation for this Module: incoming assistant messages, your inputs, or both. Stays editable even while Auto Mode Enabled is off, since a per-character 'on' override uses this direction regardless."
+          value={settings.autoModeDirection}
           onChange={(e) =>
             updateAndRefresh((s) => {
-              s.autoMode = e.target.value as AutoModeOptions;
+              s.autoModeDirection = e.target.value as TrackerModuleSettings['autoModeDirection'];
             })
           }
         >
-          <option value={AutoModeOptions.NONE}>None</option>
           <option value={AutoModeOptions.RESPONSES}>Process responses</option>
           <option value={AutoModeOptions.INPUT}>Process inputs</option>
           <option value={AutoModeOptions.BOTH}>Process both</option>

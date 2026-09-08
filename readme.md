@@ -16,7 +16,7 @@ Forked from [SillyTavern WTracker](https://github.com/bmen25124/SillyTavern-WTra
 - **Clear and recreate stale tracker sections** with a cleanup action when several parts are wrong at once.
 - Manual tracker generation now shows a message-local status badge while the full tracker or a parts-menu update is in flight, so the active tracker job stays visible even if the initiating control scrolls away.
 - **Filter World Info used for tracker generation** (allow only selected lorebooks/entries when needed).
-- **Exclude specific characters from Auto Mode** directly from the character panel when you do not want zTracker to auto-generate trackers for them.
+- **Override Auto Mode per character and per Module** directly from the character panel: force it off, force it on, or leave it at each Module's own default.
 - Optional **embed recent tracker snapshots** into normal generations for better continuity (either full JSON or a compact plain-text format).
 - Tracker generation now preserves speaker labels in prompt context where available, so turns like `Tobias:` and `Bar:` stay clearer for pronoun-heavy scenes.
 - Normal instruct-mode chat interception also preserves speaker labels when SillyTavern stores them on source messages instead of flattening them directly into turn content.
@@ -90,7 +90,7 @@ If character-card prose is adding noise to extraction, enable **Skip character c
 
 If the model seems to over-weight who said a line instead of the scene content itself, change **Conversation role handling** in **Extensions → zTracker** from **Preserve user and assistant roles** to **Treat all chat turns as assistant**. This only changes how zTracker labels chat turns during tracker-generation requests; it does not affect normal chat generation or tracker snapshot injection.
 
-If a specific character should never trigger zTracker automatically, open that character's panel and click the zTracker truck toggle in the avatar action row. This excludes that character from **Auto Mode** only; manual tracker generation from message controls still works.
+To change how a specific character participates in **Auto Mode**, open that character's panel and use the zTracker truck control in the avatar action row. With one Module configured, clicking it cycles that Module's override for this character: **Default** (use the Module's own Auto Mode setting) → **Off** (never auto-generate for this character on that Module) → **On** (always auto-generate for this character on that Module, using that Module's configured direction, even if Auto Mode is off for everyone else) → back to **Default**. With multiple Modules configured, clicking the control opens a small menu so you can set each Module's override independently. This only affects **Auto Mode**; manual tracker generation from message controls always works regardless of the override.
 
 When a tracker is rendered on a message, use the tracker controls:
 - **Regenerate Tracker** (rotate icon) regenerates the whole tracker.

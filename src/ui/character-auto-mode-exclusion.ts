@@ -1,11 +1,46 @@
+import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
+import type { TrackerModule, TrackerModuleAutoDirection } from '../config.js';
 import { DEFAULT_MODULE_ID, EXTENSION_KEY } from '../config.js';
 
-/** Character-card field name used to persist zTracker's per-character auto-mode exclusion. */
-export const CHARACTER_AUTO_MODE_EXCLUDED_FIELD = 'autoModeExcluded';
-export const CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD = 'autoModeExclusions';
+/** Character-card field name used to persist zTracker's per-character, per-Module auto-mode override. */
+export const CHARACTER_AUTO_MODE_OVERRIDES_FIELD = 'autoModeOverrides';
+/** Legacy field names, kept only so `getCharacterZTrackerExtensionData` can migrate old data. */
+const LEGACY_CHARACTER_AUTO_MODE_EXCLUDED_FIELD = 'autoModeExcluded';
+const LEGACY_CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD = 'autoModeExclusions';
 
 /** DOM id for the character-panel toggle button so repeated sync passes remain idempotent. */
 export const CHARACTER_AUTO_MODE_BUTTON_ID = 'ztracker-character-auto-mode-toggle';
+
+/**
+ * Per-character, per-Module auto-mode override.
+ * - `default`: follow that Module's own global `auto.enabled`/`auto.direction`.
+ * - `off`: never auto-generate for this character on that Module, regardless of global state.
+ * - `on`: always auto-generate for this character on that Module, using that Module's configured
+ *   `auto.direction`, even while that Module's `auto.enabled` is globally false.
+ */
+export type CharacterAutoModeOverride = 'default' | 'off' | 'on';
+
+/** A Module's auto-generation participation as resolved for one specific character. */
+export interface EffectiveAutoModeState {
+  enabled: boolean;
+  direction: TrackerModuleAutoDirection;
+}
+
+/** Auto-mode directions that count as "incoming" (assistant reply) vs "outgoing" (user message). */
+export const INCOMING_AUTO_MODE_DIRECTIONS: AutoModeOptions[] = [AutoModeOptions.RESPONSES, AutoModeOptions.BOTH];
+export const OUTGOING_AUTO_MODE_DIRECTIONS: AutoModeOptions[] = [AutoModeOptions.INPUT, AutoModeOptions.BOTH];
+
+const OVERRIDE_CYCLE: Record<CharacterAutoModeOverride, CharacterAutoModeOverride> = {
+  default: 'off',
+  off: 'on',
+  on: 'default',
+};
+
+const OVERRIDE_LABELS: Record<CharacterAutoModeOverride, string> = {
+  default: 'Default',
+  off: 'Off',
+  on: 'On',
+};
 
 type CharacterLike = {
   avatar?: string;
@@ -26,29 +61,14 @@ type CharacterContextLike = {
 };
 
 type CharacterPanelButtonSyncOptions = {
-  autoModeEnabled: boolean;
-  /**
-   * Ids of every Module the toggle writes exclusion to (the kill-switch's write scope).
-   * Resolved once per call; pass `getModuleIds` instead when the configured Module list can
-   * change while the button stays mounted (e.g. Modules added/removed in Settings), since a
-   * static array here would go stale for later clicks.
-   */
-  moduleIds?: string[];
-  /** Live alternative to `moduleIds`, invoked fresh on every sync and on every click. */
-  getModuleIds?: () => string[];
-  /**
-   * Ids of every Module the "fully excluded" display/toggle-direction check reads.
-   * Defaults to the write scope (`moduleIds`/`getModuleIds`) when omitted. Callers that write
-   * broadly (including disabled Modules, to preserve intent) but want the button to describe
-   * only currently-enabled Modules should pass a narrower read scope here.
-   */
-  readModuleIds?: string[];
-  /** Live alternative to `readModuleIds`, invoked fresh on every sync and on every click. */
-  getReadModuleIds?: () => string[];
+  /** Modules to render controls for. Prefer `getModules` when the configured Module list can change while the button stays mounted. */
+  modules?: TrackerModule[];
+  /** Live alternative to `modules`, invoked fresh on every sync and on every click. */
+  getModules?: () => TrackerModule[];
   root?: ParentNode;
   context?: CharacterContextLike;
   getContext?: () => CharacterContextLike;
-  onToggle?: (result: { characterId: number; excluded: boolean }) => void;
+  onOverrideChange?: (result: { characterId: number; moduleId: string; override: CharacterAutoModeOverride }) => void;
 };
 
 function resolveCharacterContext(options: CharacterPanelButtonSyncOptions): CharacterContextLike | null {
@@ -58,20 +78,12 @@ function resolveCharacterContext(options: CharacterPanelButtonSyncOptions): Char
   return options.context ?? null;
 }
 
-/** Resolves the write-scope Module id list fresh from `options`, favoring the live getter. */
-function resolveWriteModuleIds(options: CharacterPanelButtonSyncOptions): string[] {
-  if (typeof options.getModuleIds === 'function') {
-    return options.getModuleIds();
+/** Resolves the Module list fresh from `options`, favoring the live getter over a captured snapshot. */
+function resolveModules(options: CharacterPanelButtonSyncOptions): TrackerModule[] {
+  if (typeof options.getModules === 'function') {
+    return options.getModules();
   }
-  return options.moduleIds ?? [DEFAULT_MODULE_ID];
-}
-
-/** Resolves the read-scope Module id list fresh from `options`, falling back to the write scope. */
-function resolveReadModuleIds(options: CharacterPanelButtonSyncOptions, writeModuleIds: string[]): string[] {
-  if (typeof options.getReadModuleIds === 'function') {
-    return options.getReadModuleIds();
-  }
-  return options.readModuleIds ?? writeModuleIds;
+  return options.modules ?? [];
 }
 
 /** Returns the zTracker extension payload stored on a character card, if present. */
@@ -82,57 +94,86 @@ export function getCharacterZTrackerExtensionData(character: CharacterLike | und
   }
   const extensionData = data as Record<string, unknown>;
   migrateLegacyCharacterAutoModeExclusion(extensionData);
+  migrateLegacyCharacterAutoModeOverrides(extensionData);
   return extensionData;
 }
 
-/** Moves the legacy single boolean exclusion into the default Module slot. */
+/** Moves the oldest single boolean exclusion into the legacy per-Module exclusion map's default slot. */
 export function migrateLegacyCharacterAutoModeExclusion(extensionData: Record<string, unknown>): boolean {
-  if (extensionData[CHARACTER_AUTO_MODE_EXCLUDED_FIELD] === undefined) {
+  if (extensionData[LEGACY_CHARACTER_AUTO_MODE_EXCLUDED_FIELD] === undefined) {
     return false;
   }
 
   const exclusions =
-    extensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD]
-    && typeof extensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD] === 'object'
-    && !Array.isArray(extensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD])
-      ? { ...(extensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD] as Record<string, unknown>) }
+    extensionData[LEGACY_CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD]
+    && typeof extensionData[LEGACY_CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD] === 'object'
+    && !Array.isArray(extensionData[LEGACY_CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD])
+      ? { ...(extensionData[LEGACY_CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD] as Record<string, unknown>) }
       : {};
 
   if (exclusions[DEFAULT_MODULE_ID] === undefined) {
-    exclusions[DEFAULT_MODULE_ID] = extensionData[CHARACTER_AUTO_MODE_EXCLUDED_FIELD] === true;
+    exclusions[DEFAULT_MODULE_ID] = extensionData[LEGACY_CHARACTER_AUTO_MODE_EXCLUDED_FIELD] === true;
   }
-  extensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD] = exclusions;
-  delete extensionData[CHARACTER_AUTO_MODE_EXCLUDED_FIELD];
+  extensionData[LEGACY_CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD] = exclusions;
+  delete extensionData[LEGACY_CHARACTER_AUTO_MODE_EXCLUDED_FIELD];
   return true;
 }
 
-/** Reads whether the supplied character is excluded from zTracker auto-mode. */
-export function isCharacterAutoModeExcluded(character: CharacterLike | undefined, moduleId = DEFAULT_MODULE_ID): boolean {
-  const exclusions = getCharacterZTrackerExtensionData(character)[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD];
-  return !!exclusions && typeof exclusions === 'object' && !Array.isArray(exclusions)
-    ? (exclusions as Record<string, unknown>)[moduleId] === true
-    : false;
+/** Moves the legacy per-Module boolean exclusion map into the tri-state override map (`true` -> `off`, `false`/absent -> `default`). */
+export function migrateLegacyCharacterAutoModeOverrides(extensionData: Record<string, unknown>): boolean {
+  const legacyExclusions = extensionData[LEGACY_CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD];
+  if (!legacyExclusions || typeof legacyExclusions !== 'object' || Array.isArray(legacyExclusions)) {
+    return false;
+  }
+
+  const overrides =
+    extensionData[CHARACTER_AUTO_MODE_OVERRIDES_FIELD]
+    && typeof extensionData[CHARACTER_AUTO_MODE_OVERRIDES_FIELD] === 'object'
+    && !Array.isArray(extensionData[CHARACTER_AUTO_MODE_OVERRIDES_FIELD])
+      ? { ...(extensionData[CHARACTER_AUTO_MODE_OVERRIDES_FIELD] as Record<string, CharacterAutoModeOverride>) }
+      : {};
+
+  for (const [moduleId, excluded] of Object.entries(legacyExclusions as Record<string, unknown>)) {
+    if (overrides[moduleId] === undefined) {
+      overrides[moduleId] = excluded === true ? 'off' : 'default';
+    }
+  }
+
+  extensionData[CHARACTER_AUTO_MODE_OVERRIDES_FIELD] = overrides;
+  delete extensionData[LEGACY_CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD];
+  return true;
+}
+
+/** Reads the supplied character's stored override for one Module, defaulting to `'default'` when unset. */
+export function getCharacterModuleOverride(character: CharacterLike | undefined, moduleId = DEFAULT_MODULE_ID): CharacterAutoModeOverride {
+  const overrides = getCharacterZTrackerExtensionData(character)[CHARACTER_AUTO_MODE_OVERRIDES_FIELD];
+  if (overrides && typeof overrides === 'object' && !Array.isArray(overrides)) {
+    const value = (overrides as Record<string, unknown>)[moduleId];
+    if (value === 'off' || value === 'on') {
+      return value;
+    }
+  }
+  return 'default';
 }
 
 /**
- * Reads whether the supplied character is excluded from every Module id in `moduleIds`.
- * Backs the character-panel toggle's single kill-switch semantics: the button only shows
- * "excluded" when ALL configured Modules are excluded, so a partial state (e.g. left over
- * from a prior single-module-only write) displays as "included" until the next click
- * normalizes it. An empty `moduleIds` list is vacuously "not excluded".
+ * Resolves a Module's effective auto-generation state for one character, applying the override's
+ * fallback rule: `off` forces disabled, `on` forces enabled using the Module's own direction, and
+ * `default` passes the Module's own global state through unchanged.
  */
-export function isCharacterFullyAutoModeExcluded(character: CharacterLike | undefined, moduleIds: string[]): boolean {
-  return moduleIds.length > 0 && moduleIds.every((moduleId) => isCharacterAutoModeExcluded(character, moduleId));
+export function resolveEffectiveAutoModeState(module: TrackerModule, override: CharacterAutoModeOverride): EffectiveAutoModeState {
+  if (override === 'off') {
+    return { enabled: false, direction: module.auto.direction };
+  }
+  if (override === 'on') {
+    return { enabled: true, direction: module.auto.direction };
+  }
+  return { enabled: module.auto.enabled, direction: module.auto.direction };
 }
 
-/**
- * Reads whether the supplied character is excluded from some, but not all, Module ids in
- * `moduleIds`. Used only to pick a more accurate tooltip; the button's excluded/included
- * visual state still follows `isCharacterFullyAutoModeExcluded`.
- */
-export function isCharacterPartiallyAutoModeExcluded(character: CharacterLike | undefined, moduleIds: string[]): boolean {
-  const excludedCount = moduleIds.filter((moduleId) => isCharacterAutoModeExcluded(character, moduleId)).length;
-  return excludedCount > 0 && excludedCount < moduleIds.length;
+/** Reads whether the supplied character effectively auto-generates for at least one of the given Modules. */
+export function isCharacterEffectivelyActiveForAnyModule(character: CharacterLike | undefined, modules: TrackerModule[]): boolean {
+  return modules.some((module) => resolveEffectiveAutoModeState(module, getCharacterModuleOverride(character, module.id)).enabled);
 }
 
 /** Resolves a SillyTavern character id from a rendered message's original avatar reference. */
@@ -159,44 +200,38 @@ export function getCurrentCharacterId(context: CharacterContextLike): number | u
   return Number.isInteger(characterId) && characterId >= 0 ? characterId : undefined;
 }
 
-/** Determines whether an incoming character-rendered message should be skipped by auto-mode. */
+/** Resolves whether a Module's effective state (for the given character, or `default` when unresolvable) permits one of `directions`. Shared by the incoming/outgoing checks below so the override-resolution + direction-membership logic isn't duplicated per direction. */
+function isModuleDueForCharacter(character: CharacterLike | undefined, module: TrackerModule, directions: AutoModeOptions[]): boolean {
+  const override = getCharacterModuleOverride(character, module.id);
+  const effective = resolveEffectiveAutoModeState(module, override);
+  return effective.enabled && directions.includes(effective.direction);
+}
+
+/** Determines whether a Module should auto-generate for an incoming (assistant) rendered message. */
 export function shouldAutoGenerateForCharacterMessage(
   context: CharacterContextLike,
   messageId: number,
-  moduleId = DEFAULT_MODULE_ID,
+  module: TrackerModule,
 ): boolean {
   const message = context.chat?.[messageId];
   const characterId = resolveCharacterIdFromMessage(context.characters, message);
-  if (characterId === undefined) {
-    return true;
-  }
-
-  return !isCharacterAutoModeExcluded(context.characters?.[characterId], moduleId);
+  const character = characterId === undefined ? undefined : context.characters?.[characterId];
+  return isModuleDueForCharacter(character, module, INCOMING_AUTO_MODE_DIRECTIONS);
 }
 
-/** Determines whether an outgoing user-rendered message should be skipped for the active solo character. */
-export function shouldAutoGenerateForUserMessage(context: CharacterContextLike, moduleId = DEFAULT_MODULE_ID): boolean {
+/** Determines whether a Module should auto-generate for an outgoing (user) rendered message for the active solo character. */
+export function shouldAutoGenerateForUserMessage(context: CharacterContextLike, module: TrackerModule): boolean {
   const characterId = getCurrentCharacterId(context);
-  if (characterId === undefined) {
-    return true;
-  }
-
-  return !isCharacterAutoModeExcluded(context.characters?.[characterId], moduleId);
+  const character = characterId === undefined ? undefined : context.characters?.[characterId];
+  return isModuleDueForCharacter(character, module, OUTGOING_AUTO_MODE_DIRECTIONS);
 }
 
-/**
- * Persists and mirrors the per-character exclusion flag into the live SillyTavern context.
- * Writes the same `excluded` value to every id in `moduleIds` in a single
- * `writeExtensionField` call so the character-panel toggle acts as one kill-switch across
- * all currently configured tracker Modules, instead of only the default Module.
- * `moduleIds` is required (no implicit default) so a caller cannot silently regress to a
- * single-Module write by forgetting the argument.
- */
-export function setCharacterAutoModeExcluded(
+/** Persists one Module's override for one character and mirrors it into the live SillyTavern context. */
+export function setCharacterModuleOverride(
   context: CharacterContextLike,
   characterId: number,
-  excluded: boolean,
-  moduleIds: string[],
+  moduleId: string,
+  override: CharacterAutoModeOverride,
 ): boolean {
   const characters = context.characters;
   if (!Array.isArray(characters) || characterId < 0 || characterId >= characters.length) {
@@ -205,19 +240,15 @@ export function setCharacterAutoModeExcluded(
 
   const character = characters[characterId] ?? {};
   const currentExtensionData = getCharacterZTrackerExtensionData(character);
-  const currentExclusions =
-    currentExtensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD]
-    && typeof currentExtensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD] === 'object'
-    && !Array.isArray(currentExtensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD])
-      ? currentExtensionData[CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD] as Record<string, unknown>
+  const currentOverrides =
+    currentExtensionData[CHARACTER_AUTO_MODE_OVERRIDES_FIELD]
+    && typeof currentExtensionData[CHARACTER_AUTO_MODE_OVERRIDES_FIELD] === 'object'
+    && !Array.isArray(currentExtensionData[CHARACTER_AUTO_MODE_OVERRIDES_FIELD])
+      ? currentExtensionData[CHARACTER_AUTO_MODE_OVERRIDES_FIELD] as Record<string, CharacterAutoModeOverride>
       : {};
-  const nextExclusions = { ...currentExclusions };
-  for (const moduleId of moduleIds) {
-    nextExclusions[moduleId] = excluded;
-  }
   const nextExtensionData = {
     ...currentExtensionData,
-    [CHARACTER_AUTO_MODE_EXCLUSIONS_FIELD]: nextExclusions,
+    [CHARACTER_AUTO_MODE_OVERRIDES_FIELD]: { ...currentOverrides, [moduleId]: override },
   };
 
   character.data = character.data ?? {};
@@ -228,30 +259,22 @@ export function setCharacterAutoModeExcluded(
   return true;
 }
 
-/**
- * Toggles the exclusion flag for the currently active solo character, writing to every id in
- * `writeModuleIds`. The next state negates "fully excluded" as read over `readModuleIds`
- * (defaults to `writeModuleIds`), so a partially-excluded character (e.g. left over from a
- * prior single-module-only write) normalizes to fully excluded on the very next click rather
- * than staying ambiguous. `writeModuleIds` is required so a caller cannot silently regress to
- * a single-Module write by forgetting the argument.
- */
-export function toggleCurrentCharacterAutoModeExcluded(
+/** Cycles one Module's override (`default` -> `off` -> `on` -> `default`) for the currently active solo character. */
+export function cycleCharacterModuleOverride(
   context: CharacterContextLike,
-  writeModuleIds: string[],
-  readModuleIds: string[] = writeModuleIds,
-): { characterId: number; excluded: boolean } | null {
+  moduleId: string,
+): { characterId: number; override: CharacterAutoModeOverride } | null {
   const characterId = getCurrentCharacterId(context);
   if (characterId === undefined) {
     return null;
   }
 
-  const nextExcluded = !isCharacterFullyAutoModeExcluded(context.characters?.[characterId], readModuleIds);
-  if (!setCharacterAutoModeExcluded(context, characterId, nextExcluded, writeModuleIds)) {
+  const nextOverride = OVERRIDE_CYCLE[getCharacterModuleOverride(context.characters?.[characterId], moduleId)];
+  if (!setCharacterModuleOverride(context, characterId, moduleId, nextOverride)) {
     return null;
   }
 
-  return { characterId, excluded: nextExcluded };
+  return { characterId, override: nextOverride };
 }
 
 /** Finds the character edit-panel action row where zTracker should inject its toggle button. */
@@ -277,34 +300,177 @@ export function findCharacterPanelButtonRow(root: ParentNode = document): HTMLEl
   return null;
 }
 
-function buildCharacterAutoModeButtonTitle(options: {
-  hasCharacter: boolean;
-  excluded: boolean;
-  partial: boolean;
-  autoModeEnabled: boolean;
-}): string {
-  const { hasCharacter, excluded, partial, autoModeEnabled } = options;
-  if (!hasCharacter) {
-    return 'zTracker: Open a character card to toggle auto-mode exclusion.';
-  }
-  if (!autoModeEnabled) {
-    return excluded
-      ? 'zTracker: This character stays excluded while auto mode is disabled globally.'
-      : 'zTracker: Auto mode is disabled globally. Enable it to use this character exclusion toggle.';
-  }
-  if (partial) {
-    // Displays as "included" (see isCharacterFullyAutoModeExcluded), but says so explicitly
-    // rather than implying every Module is active, since only some of them actually are.
-    return 'zTracker: Auto mode excluded for some Modules for this character. Click to exclude for all.';
-  }
-  return excluded
-    ? 'zTracker: Auto mode excluded for this character. Click to include.'
-    : 'zTracker: Auto mode active for this character. Click to exclude.';
+/** Suffix appended to a tooltip when the owning Module is hard-disabled, since a disabled Module cannot generate regardless of any override set here. */
+function disabledModuleSuffix(module: TrackerModule): string {
+  return module.enabled ? '' : ' (Module is currently disabled and will not generate until re-enabled.)';
 }
 
-/** Creates or refreshes the character-panel exclusion button and keeps its state in sync. */
+/** Builds the tooltip for the single-Module inline toggle, describing that Module's current override. */
+function buildSingleModuleButtonTitle(hasCharacter: boolean, module: TrackerModule, override: CharacterAutoModeOverride): string {
+  if (!hasCharacter) {
+    return 'zTracker: Open a character card to set this Module\'s auto-mode override.';
+  }
+  const label = module.name || module.id;
+  const suffix = disabledModuleSuffix(module);
+  if (override === 'off') {
+    return `zTracker: ${label} auto mode is off for this character. Click to force it on.${suffix}`;
+  }
+  if (override === 'on') {
+    return `zTracker: ${label} auto mode is forced on for this character. Click to return to the default.${suffix}`;
+  }
+  return `zTracker: ${label} auto mode uses the Module's default setting for this character. Click to turn it off.${suffix}`;
+}
+
+/** Builds the tooltip for the multi-Module popup trigger, summarizing whether any Module is effectively active. */
+function buildPopupTriggerButtonTitle(hasCharacter: boolean, active: boolean): string {
+  if (!hasCharacter) {
+    return 'zTracker: Open a character card to set each Module\'s auto-mode override.';
+  }
+  return active
+    ? 'zTracker: Auto mode is active for this character on at least one Module. Click to review each Module\'s override.'
+    : 'zTracker: Auto mode is inactive for this character on every Module. Click to review each Module\'s override.';
+}
+
+/** Builds the per-row tooltip shown inside the multi-Module override popup. */
+function buildOverrideRowTitle(module: TrackerModule, override: CharacterAutoModeOverride): string {
+  const label = module.name || module.id;
+  const suffix = disabledModuleSuffix(module);
+  if (override === 'off') {
+    return `${label}: off for this character. Click to force it on.${suffix}`;
+  }
+  if (override === 'on') {
+    return `${label}: forced on for this character. Click to return to the default.${suffix}`;
+  }
+  return `${label}: using the Module's default setting for this character. Click to turn it off.${suffix}`;
+}
+
+let activeOverridePopup: HTMLElement | null = null;
+/** The trigger button whose click opened `activeOverridePopup`, excluded from the outside-click check below since that same click bubbles to `document` and would otherwise close the popup immediately after opening it. */
+let activeOverrideAnchor: HTMLElement | null = null;
+let overridePopupOutsideClickHandlerInstalled = false;
+
+/**
+ * Removes the currently open multi-Module override popup, if any. Exported so callers that
+ * detect the active character or panel changed out from under an open popup (e.g. the
+ * character-panel DOM observer in `character-panel-auto-mode.ts`) can proactively close it
+ * instead of leaving it displaying a now-stale character's override state.
+ */
+export function closeActiveOverridePopup(): void {
+  activeOverridePopup?.remove();
+  activeOverridePopup = null;
+  activeOverrideAnchor = null;
+}
+
+/**
+ * Installs a single document-level listener that closes the popup on any outside click.
+ * Not shared with `openManualModuleMenu` (`src/ui/ui-init.ts`): that menu's closing behavior is
+ * wired into the broader per-message click-delegation system, and reusing it here would require
+ * coupling this character-panel control to that unrelated message-action dispatch path.
+ */
+function installOverridePopupOutsideClickHandler(): void {
+  if (overridePopupOutsideClickHandlerInstalled || typeof document === 'undefined') {
+    return;
+  }
+  overridePopupOutsideClickHandlerInstalled = true;
+  document.addEventListener('click', (event) => {
+    if (!activeOverridePopup) {
+      return;
+    }
+    const target = event.target as Node | null;
+    if (target && (activeOverridePopup.contains(target) || activeOverrideAnchor?.contains(target))) {
+      return;
+    }
+    closeActiveOverridePopup();
+  });
+}
+
+/** Positions the popup near its anchor button, keeping it within the viewport and capping its height so a long Module list scrolls instead of overflowing off-screen. */
+function positionOverridePopup(popup: HTMLElement, anchor: HTMLElement): void {
+  const rect = anchor.getBoundingClientRect();
+  const viewportMargin = 8;
+  const width = Math.max(popup.offsetWidth, 220);
+  const left = Math.max(
+    window.scrollX + viewportMargin,
+    Math.min(rect.right + window.scrollX - width, window.scrollX + window.innerWidth - viewportMargin - width),
+  );
+  const top = rect.bottom + window.scrollY + 6;
+  const maxHeight = Math.max(120, window.innerHeight - (top - window.scrollY) - viewportMargin);
+  popup.style.left = `${Math.round(left)}px`;
+  popup.style.top = `${Math.round(top)}px`;
+  popup.style.maxHeight = `${Math.round(maxHeight)}px`;
+  popup.style.overflowY = 'auto';
+}
+
+/** Opens the popup listing every configured Module with its own 3-state override cycling control. */
+function openCharacterModuleOverridePopup(params: {
+  modules: TrackerModule[];
+  anchor: HTMLElement;
+  options: CharacterPanelButtonSyncOptions;
+  root: ParentNode;
+}): void {
+  const { modules, anchor, options, root } = params;
+  closeActiveOverridePopup();
+  installOverridePopupOutsideClickHandler();
+
+  const context = resolveCharacterContext(options);
+  const characterId = context ? getCurrentCharacterId(context) : undefined;
+  const character = context && characterId !== undefined ? context.characters?.[characterId] : undefined;
+
+  const popup = document.createElement('div');
+  popup.className = 'ztracker-character-auto-mode-popup';
+  popup.setAttribute('role', 'menu');
+  popup.style.position = 'absolute';
+  popup.style.visibility = 'hidden';
+  popup.style.zIndex = '2147483647';
+
+  for (const module of modules) {
+    const row = document.createElement('div');
+    row.className = 'ztracker-character-auto-mode-popup-row';
+
+    const label = document.createElement('span');
+    label.className = 'ztracker-character-auto-mode-popup-name';
+    label.textContent = module.name || module.id;
+    row.appendChild(label);
+
+    const override = getCharacterModuleOverride(character, module.id);
+    const cycleButton = document.createElement('button');
+    cycleButton.type = 'button';
+    cycleButton.className = 'menu_button ztracker-character-auto-mode-popup-cycle';
+    cycleButton.dataset.ztrackerModule = module.id;
+    cycleButton.dataset.override = override;
+    cycleButton.textContent = OVERRIDE_LABELS[override];
+    cycleButton.title = buildOverrideRowTitle(module, override);
+    cycleButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const clickContext = resolveCharacterContext(options);
+      if (!clickContext) {
+        return;
+      }
+      const result = cycleCharacterModuleOverride(clickContext, module.id);
+      if (!result) {
+        return;
+      }
+      cycleButton.dataset.override = result.override;
+      cycleButton.textContent = OVERRIDE_LABELS[result.override];
+      cycleButton.title = buildOverrideRowTitle(module, result.override);
+      syncCharacterAutoModeButton({ ...options, root });
+      options.onOverrideChange?.({ characterId: result.characterId, moduleId: module.id, override: result.override });
+    });
+
+    row.appendChild(cycleButton);
+    popup.appendChild(row);
+  }
+
+  document.body.appendChild(popup);
+  positionOverridePopup(popup, anchor);
+  popup.style.visibility = 'visible';
+  activeOverridePopup = popup;
+  activeOverrideAnchor = anchor;
+}
+
+/** Creates or refreshes the character-panel auto-mode override control and keeps its state in sync. */
 export function syncCharacterAutoModeButton(options: CharacterPanelButtonSyncOptions): HTMLElement | null {
-  const { autoModeEnabled, root = document, onToggle } = options;
+  const { root = document } = options;
   const buttonRow = findCharacterPanelButtonRow(root);
   if (!buttonRow) {
     return null;
@@ -322,40 +488,52 @@ export function syncCharacterAutoModeButton(options: CharacterPanelButtonSyncOpt
     button.className = 'menu_button interactable fa-solid fa-truck ztracker-character-auto-mode-button';
     button.setAttribute('role', 'button');
     button.tabIndex = 0;
-    // Resolve module ids fresh on every click, not just once at attach time: `options` here
-    // is whichever sync call first created this button, but `getModuleIds`/`getReadModuleIds`
-    // (when supplied) re-read live settings on every invocation rather than freezing a list.
+    // Resolve Modules fresh on every click, not just once at attach time: `options` here is
+    // whichever sync call first created this button, but `getModules` (when supplied) re-reads
+    // live settings on every invocation rather than freezing a list captured at creation.
     button.addEventListener('click', () => {
-      const nextContext = resolveCharacterContext(options);
-      if (!nextContext) {
+      const clickContext = resolveCharacterContext(options);
+      if (!clickContext) {
+        return;
+      }
+      const modules = resolveModules(options);
+      if (modules.length === 0) {
         return;
       }
 
-      const writeModuleIds = resolveWriteModuleIds(options);
-      const readModuleIds = resolveReadModuleIds(options, writeModuleIds);
-      const result = toggleCurrentCharacterAutoModeExcluded(nextContext, writeModuleIds, readModuleIds);
-      if (!result) {
+      if (modules.length === 1) {
+        const result = cycleCharacterModuleOverride(clickContext, modules[0].id);
+        if (!result) {
+          return;
+        }
+        syncCharacterAutoModeButton({ ...options, root });
+        options.onOverrideChange?.({ characterId: result.characterId, moduleId: modules[0].id, override: result.override });
         return;
       }
-      syncCharacterAutoModeButton({ ...options, root });
-      onToggle?.(result);
+
+      openCharacterModuleOverridePopup({ modules, anchor: button as HTMLElement, options, root });
     });
     buttonRow.appendChild(button);
   }
 
-  const writeModuleIds = resolveWriteModuleIds(options);
-  const readModuleIds = resolveReadModuleIds(options, writeModuleIds);
+  const modules = resolveModules(options);
   const characterId = getCurrentCharacterId(context);
   const character = characterId !== undefined ? context.characters?.[characterId] : undefined;
-  const excluded = characterId !== undefined && isCharacterFullyAutoModeExcluded(character, readModuleIds);
-  const partial = characterId !== undefined && isCharacterPartiallyAutoModeExcluded(character, readModuleIds);
   const hasCharacter = characterId !== undefined;
+  const active = hasCharacter && isCharacterEffectivelyActiveForAnyModule(character, modules);
 
-  button.dataset.excluded = String(excluded);
-  button.setAttribute('aria-pressed', String(excluded));
-  button.style.color = !autoModeEnabled ? 'var(--SmartThemeEmColor, #888)' : excluded ? 'var(--SmartThemeQuoteColor, #e74c3c)' : '';
-  button.style.opacity = !autoModeEnabled ? '0.7' : '1';
-  button.title = buildCharacterAutoModeButtonTitle({ hasCharacter, excluded, partial, autoModeEnabled });
+  button.dataset.active = String(active);
+  button.setAttribute('aria-pressed', String(active));
+  button.style.color = active ? 'var(--SmartThemeQuoteColor, #e74c3c)' : '';
+
+  if (modules.length === 1) {
+    const override = getCharacterModuleOverride(character, modules[0].id);
+    button.dataset.override = override;
+    button.title = buildSingleModuleButtonTitle(hasCharacter, modules[0], override);
+  } else {
+    delete button.dataset.override;
+    button.title = buildPopupTriggerButtonTitle(hasCharacter, active);
+  }
 
   return button;
 }

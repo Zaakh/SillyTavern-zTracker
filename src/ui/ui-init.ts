@@ -9,6 +9,8 @@ import { includeZTrackerMessages } from '../tracker.js';
 import { selected_group, st_echo } from 'sillytavern-utils-lib/config';
 import {
   getCurrentCharacterId,
+  INCOMING_AUTO_MODE_DIRECTIONS,
+  OUTGOING_AUTO_MODE_DIRECTIONS,
   shouldAutoGenerateForCharacterMessage,
   shouldAutoGenerateForUserMessage,
 } from './character-auto-mode-exclusion.js';
@@ -19,9 +21,12 @@ import { createOutgoingAutoModeController } from './outgoing-auto-mode.js';
 import { installPartsMenuPortalHandlers } from './parts-menu-portal.js';
 import { shouldSkipTrackerGeneration } from './tracker-action-helpers.js';
 
-const incomingTypes = [AutoModeOptions.RESPONSES, AutoModeOptions.BOTH];
-const outgoingTypes = [AutoModeOptions.INPUT, AutoModeOptions.BOTH];
-
+/**
+ * Resolves which configured Modules are due to auto-generate for one host event, using each
+ * Module's effective per-character state (its own global auto settings, overridden per-character
+ * by `default`/`off`/`on`) rather than only that Module's global `auto.enabled`/`auto.direction` -
+ * a Module forced "on" for this character must be included here even while globally disabled.
+ */
 function getDueAutoModuleIds(options: {
   settings: ExtensionSettings;
   messageId: number;
@@ -29,12 +34,10 @@ function getDueAutoModuleIds(options: {
   direction: 'incoming' | 'outgoing';
 }): string[] {
   return getOrderedTrackerModules(options.settings)
-    .filter((module) => module.auto.enabled)
-    .filter((module) => (options.direction === 'incoming' ? incomingTypes : outgoingTypes).includes(module.auto.mode))
     .filter((module) => (
       options.direction === 'incoming'
-        ? shouldAutoGenerateForCharacterMessage(options.characterContext, options.messageId, module.id)
-        : shouldAutoGenerateForUserMessage(options.characterContext, module.id)
+        ? shouldAutoGenerateForCharacterMessage(options.characterContext, options.messageId, module)
+        : shouldAutoGenerateForUserMessage(options.characterContext, module)
     ))
     .filter((module) => !shouldSkipTrackerGeneration(
       options.messageId,
@@ -45,9 +48,15 @@ function getDueAutoModuleIds(options: {
     .map((module) => module.id);
 }
 
-/** Returns whether any configured Module wants automatic generation for one host event direction. */
+/**
+ * Fast-path check for whether ANY configured Module's direction could possibly fire for a host
+ * event, before paying for the full per-character resolution in `getDueAutoModuleIds`. Checks
+ * `auto.direction` only (not `auto.enabled`): a per-character "on" override can force a globally
+ * disabled Module to fire using its own configured direction, so a globally-disabled Module must
+ * still pass this gate when its direction matches.
+ */
 function hasAutoModuleForDirection(settings: ExtensionSettings, directionModes: AutoModeOptions[]): boolean {
-  return getOrderedTrackerModules(settings).some((module) => module.auto.enabled && directionModes.includes(module.auto.mode));
+  return getOrderedTrackerModules(settings).some((module) => directionModes.includes(module.auto.direction));
 }
 
 function generateDueAutoModules(actions: TrackerActions, messageId: number, moduleIds: string[]) {
@@ -414,7 +423,7 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
       EventNames.CHARACTER_MESSAGE_RENDERED,
       (messageId: number) => {
         const settings = settingsManager.getSettings();
-        if (!hasAutoModuleForDirection(settings, incomingTypes)) return;
+        if (!hasAutoModuleForDirection(settings, INCOMING_AUTO_MODE_DIRECTIONS)) return;
 
         const context = SillyTavern.getContext();
         const moduleIds = getDueAutoModuleIds({
@@ -437,7 +446,7 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
       EventNames.MESSAGE_SENT,
       (messageId: number) => {
         const settings = settingsManager.getSettings();
-        if (!hasAutoModuleForDirection(settings, outgoingTypes)) return;
+        if (!hasAutoModuleForDirection(settings, OUTGOING_AUTO_MODE_DIRECTIONS)) return;
 
         const context = SillyTavern.getContext();
         const moduleIds = getDueAutoModuleIds({

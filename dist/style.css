@@ -389,6 +389,36 @@
   text-align: left;
 }
 
+.ztracker-character-auto-mode-popup {
+  min-width: 220px;
+  padding: 8px;
+  background-color: var(--ztracker-menu-bg, rgba(0, 0, 0, 0.92));
+  border: 1px solid var(--ztracker-menu-border, rgba(255, 255, 255, 0.12));
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.ztracker-character-auto-mode-popup-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ztracker-character-auto-mode-popup-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ztracker-character-auto-mode-popup-cycle {
+  flex-shrink: 0;
+  min-width: 64px;
+}
+
 /*
  * Parts menu styles must apply even when the menu is portaled to <body>
  * (to avoid being clipped by chat/message overflow).

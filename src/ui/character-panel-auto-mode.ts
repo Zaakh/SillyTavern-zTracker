@@ -1,9 +1,8 @@
 import type { ExtensionSettings } from '../config.js';
 import { getOrderedTrackerModules } from '../config.js';
-import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import type { ExtensionSettingsManager } from 'sillytavern-utils-lib';
 import { st_echo } from 'sillytavern-utils-lib/config';
-import { syncCharacterAutoModeButton } from './character-auto-mode-exclusion.js';
+import { closeActiveOverridePopup, getCurrentCharacterId, syncCharacterAutoModeButton } from './character-auto-mode-exclusion.js';
 
 /** Keeps the character-card auto-mode exclusion button synced with the live host panel DOM. */
 export function createCharacterPanelButtonController(options: {
@@ -13,6 +12,11 @@ export function createCharacterPanelButtonController(options: {
   let characterPanelButtonSyncTimer: number | undefined;
   let observedCharacterPanel: HTMLElement | null = null;
   let characterPanelObserver: MutationObserver | null = null;
+  // Tracks which character the multi-Module override popup (if open) currently displays, so a
+  // panel mutation that swaps the active character (without an intervening outside click, which
+  // is the popup's only other close trigger) closes the now-stale popup instead of letting a
+  // click on it silently write the override to the wrong character.
+  let lastSyncedCharacterId: number | undefined;
 
   /** Reattaches the narrow observer that watches the active character panel subtree. */
   const attachCharacterPanelObserver = () => {
@@ -50,21 +54,27 @@ export function createCharacterPanelButtonController(options: {
     characterPanelButtonSyncTimer = window.setTimeout(() => {
       characterPanelButtonSyncTimer = undefined;
       attachCharacterPanelObserver();
-      // Both getters re-read settingsManager.getSettings() at call time (sync AND click), not
-      // just when this timeout fires, so the toggle never freezes on a Module list captured
-      // before Modules were added/removed/reordered while the panel stayed open.
-      // Write scope includes disabled Modules to preserve exclusion intent if re-enabled later;
-      // read scope (display + toggle direction) is enabled-only so the button describes the
-      // character's actual current auto-mode exposure, not a Module that cannot generate anyway.
-      const getModuleIds = () => getOrderedTrackerModules(settingsManager.getSettings(), { includeDisabled: true }).map((module) => module.id);
-      const getReadModuleIds = () => getOrderedTrackerModules(settingsManager.getSettings()).map((module) => module.id);
+
+      // A panel mutation (this timeout's trigger) can mean the host swapped which character is
+      // active, e.g. re-populating the panel in place without removing/re-adding #form_create.
+      // If an override popup is open and still showing the previous character, close it now
+      // rather than risk a stale click writing an override to the wrong character.
+      const currentCharacterId = getCurrentCharacterId(SillyTavern.getContext() as any);
+      if (currentCharacterId !== lastSyncedCharacterId) {
+        closeActiveOverridePopup();
+      }
+      lastSyncedCharacterId = currentCharacterId;
+
+      // Re-reads settingsManager.getSettings() at call time (sync AND click), not just when this
+      // timeout fires, so the control never freezes on a Module list captured before Modules
+      // were added/removed/reordered while the panel stayed open. Includes disabled Modules so a
+      // per-character override can be pre-configured before that Module is re-enabled.
+      const getModules = () => getOrderedTrackerModules(settingsManager.getSettings(), { includeDisabled: true });
       syncCharacterAutoModeButton({
         getContext: () => SillyTavern.getContext(),
-        autoModeEnabled: getOrderedTrackerModules(settingsManager.getSettings()).some((module) => module.auto.enabled && module.auto.mode !== AutoModeOptions.NONE),
-        getModuleIds,
-        getReadModuleIds,
-        onToggle: ({ excluded }) => {
-          st_echo('info', excluded ? 'zTracker auto mode excluded for this character.' : 'zTracker auto mode restored for this character.');
+        getModules,
+        onOverrideChange: ({ moduleId, override }) => {
+          st_echo('info', `zTracker auto mode for "${moduleId}" set to "${override}" for this character.`);
         },
       });
     }, 20);

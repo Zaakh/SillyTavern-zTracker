@@ -2,6 +2,7 @@ import { FC, useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { STConnectionProfileSelect, PresetItem } from 'sillytavern-utils-lib/components/react';
 import { ExtensionSettingsManager } from 'sillytavern-utils-lib';
 import { st_echo } from 'sillytavern-utils-lib/config';
+import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import {
   ExtensionSettings,
   TrackerModuleSettings,
@@ -88,6 +89,32 @@ function normalizeModuleOrder(modules: TrackerModule[]): void {
   });
 }
 
+/**
+ * Normalizes an imported Module's `auto` settings into the current `{ enabled, direction }`
+ * shape. A Module exported before that split shipped carries the legacy `{ enabled, mode }`
+ * shape instead; without this translation, spreading it directly over the default `auto` would
+ * silently discard the exported trigger direction (replacing it with the default) while leaving
+ * a stray `mode` field on the Module.
+ */
+function normalizeImportedTrackerModuleAuto(
+  importedAuto: (Partial<TrackerModule['auto']> & { mode?: AutoModeOptions }) | undefined,
+  baseAuto: TrackerModule['auto'],
+): TrackerModule['auto'] {
+  if (!importedAuto) {
+    return { ...baseAuto };
+  }
+  if (importedAuto.mode !== undefined && importedAuto.direction === undefined) {
+    return {
+      enabled: importedAuto.mode !== AutoModeOptions.NONE,
+      direction: importedAuto.mode !== AutoModeOptions.NONE ? importedAuto.mode : baseAuto.direction,
+    };
+  }
+  return {
+    enabled: importedAuto.enabled ?? baseAuto.enabled,
+    direction: importedAuto.direction ?? baseAuto.direction,
+  };
+}
+
 function parseImportedTrackerModule(text: string): ImportedTrackerModule | null {
   try {
     const parsed = JSON.parse(text) as unknown;
@@ -119,7 +146,7 @@ function createImportedTrackerModule(importedModule: ImportedTrackerModule, modu
     name: importedModule.name.trim(),
     enabled: importedModule.enabled ?? base.enabled,
     order: modules.length,
-    auto: { ...base.auto, ...importedModule.auto },
+    auto: normalizeImportedTrackerModuleAuto(importedModule.auto, base.auto),
     schema: { ...base.schema, ...importedModule.schema },
     prompts: { ...base.prompts, ...importedModule.prompts },
     systemPrompt: { ...base.systemPrompt, ...importedModule.systemPrompt },
@@ -769,20 +796,6 @@ export const ZTrackerSettings: FC = () => {
                   const module = currentSettings.modules?.find((candidate) => candidate.id === selectedModule.id);
                   if (module) {
                     module.enabled = e.target.checked;
-                  }
-                })}
-              />
-            </div>
-
-            <div className="setting-row">
-              <label title="Controls whether this Module participates in incoming or outgoing automatic generation.">Auto Generate</label>
-              <input
-                type="checkbox"
-                checked={selectedModule.auto.enabled}
-                onChange={(e) => updateAndRefresh((currentSettings) => {
-                  const module = currentSettings.modules?.find((candidate) => candidate.id === selectedModule.id);
-                  if (module) {
-                    module.auto.enabled = e.target.checked;
                   }
                 })}
               />
