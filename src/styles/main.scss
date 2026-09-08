@@ -795,4 +795,10 @@
 			}
 		}
 	}
+
+	// Minimal one-line steering-directive template (Plot Steer pre-made Module); matches the
+	// smaller font size of the standard tracker template without the table/details layout.
+	.ztracker_plot_steer_mes_template {
+		font-size: smaller;
+	}
 }

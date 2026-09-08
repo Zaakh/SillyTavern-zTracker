@@ -43,6 +43,17 @@ Each Module has an **Include Module History** list under **Tracker Generation** 
 
 A Module can only chain in another Module that is listed earlier in the **Generation Order** view (a dedicated list of all Modules in generation order, since Modules already generate in that order for each message). If a chained Module is later disabled or reordered so it is no longer earlier, that entry goes dormant (shown with a warning icon) and stops contributing until you fix the order, re-enable the Module, or remove the entry. Chained snapshots are always formatted using the referenced Module's own **Tracker Injection** settings (header, virtual-character mode, transform preset).
 
+### Pre-made Modules
+
+`templates/modules/` in this repository (and the same folder inside a built copy of the extension, under `dist/templates/modules/`) ships ready-to-import Module pairs. Import them the same way as any exported Module (Modules -> **Import**, then pick the file).
+
+- **Plot Log** (`plot-log.json`) tracks ongoing story plot state - current arc, open threads, recent events, and stakes - and renders normally like any other tracker. It is never embedded into live generation.
+- **Plot Steer** (`plot-steer.json`) reads Plot Log's stored history and suggests the single next story beat (plus a pacing hint: escalate, resolve, hold, or twist). Unlike Plot Log, its suggestion **is injected** into the next generation request, not just displayed - only the single most recent suggestion is ever embedded, and its tracker display is a one-line summary rather than a full table.
+
+**Import Plot Log before Plot Steer.** Plot Steer's history of Plot Log is a chained include entry, which only works when its target Module was imported earlier and is ordered earlier in **Generation Order**. Importing Plot Steer first leaves that entry dormant (shown with a warning icon in Settings) until you also import Plot Log and confirm the order.
+
+**Plot Steer auto-generates by default**, right after each of your messages and before the character's reply, using whichever SillyTavern connection is currently active in the chat. This means one extra LLM call every turn once imported - disable its Auto Mode in Settings if you'd rather trigger it manually.
+
 ## Installation
 
 Install via the SillyTavern extension installer:
