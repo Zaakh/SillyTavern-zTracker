@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "module": {
+    "id": "plot-log",
+    "name": "Plot Log",
+    "enabled": true,
+    "order": 0,
+    "auto": {
+      "enabled": false,
+      "direction": "both"
+    },
+    "schema": {
+      "preset": "default",
+      "presets": {
+        "default": {
+          "name": "Plot Log",
+          "value": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "title": "PlotLogTracker",
+            "description": "Schema for tracking ongoing story plot state",
+            "type": "object",
+            "properties": {
+              "arc": {
+                "type": "string",
+                "description": "Current story arc or chapter label, e.g. 'Investigating the missing shipment'"
+              },
+              "openThreads": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "description": "Short phrase describing one unresolved plot thread"
+                },
+                "description": "Unresolved plot threads currently in play"
+              },
+              "recentEvents": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "description": "Short phrase describing one significant recent event"
+                },
+                "description": "The last few significant story beats, oldest first"
+              },
+              "stakes": {
+                "type": "string",
+                "description": "What is currently at risk or driving tension"
+              }
+            },
+            "required": ["arc", "openThreads", "recentEvents", "stakes"]
+          },
+          "html": "<div class=\"ztracker_default_mes_template\">\n    <table>\n        <tbody>\n            <tr><td>Arc:</td><td>{{data.arc}}</td></tr>\n            <tr><td>Stakes:</td><td>{{data.stakes}}</td></tr>\n        </tbody>\n    </table>\n    <details>\n        <summary><span>Plot Details</span></summary>\n        <table>\n            <tbody>\n                <tr><td>Open Threads:</td><td>{{join data.openThreads ', '}}</td></tr>\n                <tr><td>Recent Events:</td><td>{{join data.recentEvents ', '}}</td></tr>\n            </tbody>\n        </table>\n    </details>\n</div>\n<hr>"
+        }
+      }
+    },
+    "prompts": {
+      "prompt": "You are a Plot Tracker Assistant. Track the ongoing story's plot state: the current arc or chapter, unresolved plot threads, the most recent significant events, and what is currently at stake. Use the latest messages and any previous plot tracker snapshot to keep this up to date. Keep entries short and specific. Do not include scene-level details like time, location, or character appearance - that is handled by other trackers. Only add to recentEvents when something significant actually changed, not for routine dialogue.",
+      "promptEngineeringMode": "json",
+      "promptJson": "You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid JSON object that strictly adheres to the provided JSON schema.\n\n**CRITICAL INSTRUCTIONS:**\n1.  You MUST wrap the entire JSON object in a markdown code block (```json\\n...\\n```).\n2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.\n3.  The JSON object inside the code block MUST be valid and conform to the schema.\n\n**JSON SCHEMA TO FOLLOW:**\n```json\n{{schema}}\n```\n\n**EXAMPLE OF A PERFECT RESPONSE:**\n```json\n{{example_response}}\n```\n",
+      "promptXml": "You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid XML structure that strictly adheres to the provided example.\n\n**CRITICAL INSTRUCTIONS:**\n1.  You MUST wrap the entire XML object in a markdown code block (```xml\\n...\\n```).\n2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.\n3.  The XML object inside the code block MUST be valid.\n\n**XML SCHEMA DESCRIPTION TO FOLLOW:**\n```xml\n{{schema}}\n```\n\n**EXAMPLE OF A PERFECT RESPONSE:**\n```xml\n<root>\n{{example_response}}\n</root>\n```\n",
+      "promptToon": "You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid TOON structure that strictly adheres to the provided schema and example.\n\nRules:\n- Return exactly one ```toon code block and nothing else.\n- Use TOON syntax only, not JSON or XML.\n- Match the field names, nesting, and required fields from the schema.\n- Keep every array count accurate: each [N] must match the number of items or rows.\n- When the example shows a tabular array, reuse that header shape and keep rows tab-separated.\n- Do not add wrapper keys unless the schema requires them.\n\nSchema:\n```toon\n{{schema}}\n```\n\nExample:\n```toon\n{{example_response}}\n```\n"
+    },
+    "systemPrompt": {
+      "mode": "profile",
+      "savedName": ""
+    },
+    "connection": {
+      "source": "active",
+      "profileId": ""
+    },
+    "generation": {
+      "mode": "full",
+      "maxResponseToken": 16000,
+      "skipFirstXMessages": 0,
+      "includeLastXMessages": 0,
+      "skipCharacterCardInTrackerGeneration": false,
+      "conversationRoleMode": "preserve",
+      "worldInfoPolicyMode": "exclude_all",
+      "worldInfoAllowlistBookNames": [],
+      "worldInfoAllowlistEntryIds": [],
+      "includeModules": [
+        { "target": "self", "count": 1 }
+      ]
+    },
+    "injection": {
+      "includeLastXMessages": 0,
+      "embedRole": "user",
+      "embedAsCharacter": false,
+      "snapshotHeader": "Tracker:",
+      "transformPreset": "default",
+      "transformPresets": {
+        "default": {
+          "name": "Default (JSON)",
+          "input": "pretty_json",
+          "pattern": "",
+          "flags": "g",
+          "replacement": "",
+          "codeFenceLang": "json",
+          "wrapInCodeFence": true
+        },
+        "minimal": {
+          "name": "Minimal (top-level properties)",
+          "input": "top_level_lines",
+          "pattern": "^[\\t ]*\"([^\"]+)\"[\\t ]*:[\\t ]*(.*?)(?:,)?[\\t ]*$",
+          "flags": "gm",
+          "replacement": "$1: $2",
+          "codeFenceLang": "text",
+          "wrapInCodeFence": false
+        },
+        "toon": {
+          "name": "TOON (compact)",
+          "input": "toon",
+          "pattern": "",
+          "flags": "g",
+          "replacement": "",
+          "codeFenceLang": "toon",
+          "wrapInCodeFence": true
+        }
+      }
+    }
+  }
+}

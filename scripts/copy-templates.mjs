@@ -11,6 +11,14 @@ async function copyFile(src, dest) {
   await fs.copyFile(src, dest);
 }
 
+/** Copies every file matching `filter` from `srcDir` into `destDir` (non-recursive) and returns the count copied. */
+async function copyDirFiles(srcDir, destDir, filter) {
+  const entries = await fs.readdir(srcDir, { withFileTypes: true });
+  const names = entries.filter((ent) => ent.isFile() && filter(ent.name)).map((ent) => ent.name);
+  await Promise.all(names.map((name) => copyFile(path.join(srcDir, name), path.join(destDir, name))));
+  return names.length;
+}
+
 async function main() {
   const thisFile = fileURLToPath(import.meta.url);
   const repoRoot = path.resolve(path.dirname(thisFile), '..');
@@ -19,17 +27,18 @@ async function main() {
 
   await ensureDir(outDir);
 
-  const entries = await fs.readdir(templatesDir, { withFileTypes: true });
-  const htmlFiles = entries
-    .filter((ent) => ent.isFile() && ent.name.toLowerCase().endsWith('.html'))
-    .map((ent) => ent.name);
+  const htmlCount = await copyDirFiles(templatesDir, outDir, (name) => name.toLowerCase().endsWith('.html'));
 
-  await Promise.all(
-    htmlFiles.map((name) => copyFile(path.join(templatesDir, name), path.join(outDir, name))),
-  );
+  // Pre-made Module templates (importable via the Settings "Import" button) ship as JSON files
+  // under templates/modules/ and are bundled the same way, so they sit on disk next to any built
+  // copy of the extension instead of only being retrievable from the GitHub repo.
+  const modulesSrcDir = path.join(templatesDir, 'modules');
+  const modulesOutDir = path.join(outDir, 'modules');
+  await ensureDir(modulesOutDir);
+  const moduleCount = await copyDirFiles(modulesSrcDir, modulesOutDir, (name) => name.toLowerCase().endsWith('.json'));
 
   // eslint-disable-next-line no-console
-  console.log(`Copied ${htmlFiles.length} template(s) to dist/templates`);
+  console.log(`Copied ${htmlCount} template(s) to dist/templates and ${moduleCount} Module template(s) to dist/templates/modules`);
 }
 
 main().catch((error) => {

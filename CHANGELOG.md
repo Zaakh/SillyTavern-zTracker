@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-09-08
+
+### Added
+
+- Two pre-made, importable Module templates under `templates/modules/`: **Plot Log** (tracks story arc, open threads, recent events, and stakes) and **Plot Steer** (reads Plot Log's history and injects a single suggested next beat, with a pacing hint, into the next generation). Import them the same way as any exported Module.
+
 ## [2.2.0] - 2026-09-08
 
 ### Added

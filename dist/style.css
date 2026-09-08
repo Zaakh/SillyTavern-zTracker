@@ -712,3 +712,6 @@
 .mes_ztracker .ztracker_default_mes_template details .mes_ztracker_characters {
   padding-left: 20px;
 }
+.mes_ztracker .ztracker_plot_steer_mes_template {
+  font-size: smaller;
+}
