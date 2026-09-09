@@ -179,7 +179,9 @@ export const ZTrackerSettings: FC = () => {
   const selectedModule = orderedModules.find((module) => module.id === selectedModuleId) ?? orderedModules[0] ?? defaultSettings.modules[0];
   const moduleSettings = getSettingsForTrackerModule(settings, selectedModule.id);
   const connectionSource = moduleSettings.connectionSource ?? 'saved';
-  const previousSchemaPresetRef = useRef(moduleSettings.schemaPreset);
+  // Tracks the (Module, schema preset) pair the drafts below were last synced from, so a Module switch is
+  // always detected as a selection change even when both Modules use the same schema preset key (e.g. "default").
+  const previousSchemaSelectionRef = useRef({ moduleId: selectedModule.id, schemaPreset: moduleSettings.schemaPreset });
 
   const [diagnosticsText, setDiagnosticsText] = useState<string>('');
   const [systemPromptRefreshRevision, setSystemPromptRefreshRevision] = useState(0);
@@ -270,14 +272,16 @@ export const ZTrackerSettings: FC = () => {
     schemaPresetPairValidation.isValid;
 
   useEffect(() => {
-    const activePresetChanged = previousSchemaPresetRef.current !== moduleSettings.schemaPreset;
-    previousSchemaPresetRef.current = moduleSettings.schemaPreset;
+    const activeSelectionChanged =
+      previousSchemaSelectionRef.current.moduleId !== selectedModule.id ||
+      previousSchemaSelectionRef.current.schemaPreset !== moduleSettings.schemaPreset;
+    previousSchemaSelectionRef.current = { moduleId: selectedModule.id, schemaPreset: moduleSettings.schemaPreset };
 
     if (
       shouldSyncSchemaTextFromSettings({
         currentText: schemaText,
         persistedText: activeSchemaText,
-        activePresetChanged,
+        activeSelectionChanged,
       }) &&
       schemaText !== activeSchemaText
     ) {
@@ -288,13 +292,13 @@ export const ZTrackerSettings: FC = () => {
       shouldSyncSchemaHtmlFromSettings({
         currentText: schemaHtmlText,
         persistedText: activeSchemaHtml,
-        activePresetChanged,
+        activeSelectionChanged,
       }) &&
       schemaHtmlText !== activeSchemaHtml
     ) {
       setSchemaHtmlText(activeSchemaHtml);
     }
-  }, [activeSchemaHtml, activeSchemaText, schemaHtmlText, schemaText, moduleSettings.schemaPreset]);
+  }, [activeSchemaHtml, activeSchemaText, schemaHtmlText, schemaText, selectedModule.id, moduleSettings.schemaPreset]);
 
   // Handler for when a new schema preset is selected
   const handleSchemaPresetChange = (newValue?: string) => {
@@ -357,7 +361,7 @@ export const ZTrackerSettings: FC = () => {
     });
 
     if (renamedActivePreset) {
-      previousSchemaPresetRef.current = newKey;
+      previousSchemaSelectionRef.current = { moduleId: selectedModule.id, schemaPreset: newKey };
     }
 
     if (shouldMigrateChatSchemaState) {
