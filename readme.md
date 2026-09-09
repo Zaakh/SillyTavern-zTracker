@@ -31,7 +31,7 @@ zTracker follows the SillyTavern chat type of whichever connection it is current
 
 In **Extensions -> zTracker**, use **Modules** when you want more than one tracker in the same chat, such as a scene tracker plus an agenda tracker. Each Module has its own schema presets, prompt templates, system prompt source, connection settings, generation behavior, injection settings, and auto-generation toggle.
 
-The original single tracker is upgraded into the **Default** Module the first time this version runs. That settings format upgrade is one-way. Existing saved tracker data, current-chat schema choices, and character auto-mode exclusions are preserved under the Default Module.
+The original single tracker is upgraded into the **Default** Module the first time this version runs. That settings format upgrade is one-way. Existing saved tracker data, current-chat schema choices, and character auto-mode exclusions are preserved under the Default Module. A brand-new install instead starts with this same built-in Module named **Scene Tracker**.
 
 You can add, clone, reorder, delete, export, and import Modules from the settings panel. Export downloads a `.json` file with the Module's full configuration (schema presets, prompts, system prompt, connection, generation, and injection settings); Import reads such a file back through a file picker. Deleting a Module also removes that Module's saved tracker data from the current chat history.
 
