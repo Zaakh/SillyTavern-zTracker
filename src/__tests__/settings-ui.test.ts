@@ -5,6 +5,7 @@
 import { jest } from '@jest/globals';
 import React, { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
+import { shouldSyncSchemaDraftFromSettings } from '../test-utils/schema-sync-test-mock.js';
 
 let mockSettings: any = createMockSettings();
 const saveSettingsMock = jest.fn();
@@ -317,13 +318,16 @@ jest.unstable_mockModule('../components/settings/preset-state.js', () => ({
   resolvePresetSelection: resolvePresetSelectionMock,
 }));
 
+// shouldSyncSchemaDraftFromSettings mirrors the real shouldSyncSchema*FromSettings logic so Settings.tsx's
+// Module/preset-switch resync effect is exercised for real in this suite; see schema-sync-test-mock.ts for
+// why it's a maintained mirror rather than an import, and schema-editor-state.test.ts for the drift check.
 jest.unstable_mockModule('../components/settings/schema-editor-state.js', () => ({
   formatSchemaHtml: jest.fn((schema?: { html?: string }) => schema?.html ?? ''),
   formatSchemaText: jest.fn((schema?: { value?: unknown }) => (schema ? JSON.stringify(schema.value, null, 2) : '')),
   getSchemaDraftState: getSchemaDraftStateMock,
   getSchemaHtmlDraftState: getSchemaHtmlDraftStateMock,
-  shouldSyncSchemaHtmlFromSettings: jest.fn(() => false),
-  shouldSyncSchemaTextFromSettings: jest.fn(() => false),
+  shouldSyncSchemaHtmlFromSettings: jest.fn(shouldSyncSchemaDraftFromSettings),
+  shouldSyncSchemaTextFromSettings: jest.fn(shouldSyncSchemaDraftFromSettings),
   validateSchemaDraft: validateSchemaDraftMock,
   validateSchemaHtmlDraft: validateSchemaHtmlDraftMock,
   validateSchemaPresetDraftPair: validateSchemaPresetDraftPairMock,
@@ -1052,6 +1056,120 @@ describe('zTracker settings connection source UI', () => {
     expect(saveSettingsMock).toHaveBeenCalled();
   });
 
+  // Both modules intentionally use the shipped "default" schema preset key, matching every shipped
+  // Module template, so this exercises the case where the preset key alone cannot distinguish them.
+  function seedModulesWithMatchingPresetKeyDistinctSchemas() {
+    const modules = seedModuleSettings();
+    modules[0].schema.preset = 'default';
+    modules[0].schema.presets = {
+      default: {
+        name: 'Default',
+        value: { type: 'object', properties: { mood: { type: 'string' } }, required: ['mood'] },
+        html: '<div>default module</div>',
+      },
+    };
+    modules[1].schema.preset = 'default';
+    modules[1].schema.presets = {
+      default: {
+        name: 'Default',
+        value: { type: 'object', properties: { task: { type: 'string' } }, required: ['task'] },
+        html: '<div>agenda module</div>',
+      },
+    };
+    return modules;
+  }
+
+  function getSchemaTextareas(container: HTMLElement) {
+    const schemaJsonTextarea = container.querySelector('[data-testid="schema-json-textarea"]');
+    const schemaHtmlTextarea = container.querySelector('[data-testid="schema-html-textarea"]');
+    if (!(schemaJsonTextarea instanceof HTMLTextAreaElement) || !(schemaHtmlTextarea instanceof HTMLTextAreaElement)) {
+      throw new Error('Schema textareas not found');
+    }
+    return { schemaJsonTextarea, schemaHtmlTextarea };
+  }
+
+  test('switching modules refreshes the schema editor even when both modules use the same schema preset key', async () => {
+    seedModulesWithMatchingPresetKeyDistinctSchemas();
+    const container = renderSettings();
+
+    const initialTextareas = getSchemaTextareas(container);
+    expect(initialTextareas.schemaJsonTextarea.value).toContain('mood');
+    expect(initialTextareas.schemaHtmlTextarea.value).toBe('<div>default module</div>');
+
+    const agendaButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('Agenda'));
+    if (!(agendaButton instanceof HTMLButtonElement)) {
+      throw new Error('Agenda module button not found');
+    }
+
+    await act(async () => {
+      agendaButton.click();
+      await Promise.resolve();
+    });
+
+    const switchedTextareas = getSchemaTextareas(container);
+    expect(switchedTextareas.schemaJsonTextarea.value).toContain('task');
+    expect(switchedTextareas.schemaJsonTextarea.value).not.toContain('mood');
+    expect(switchedTextareas.schemaHtmlTextarea.value).toBe('<div>agenda module</div>');
+  });
+
+  test('switching modules discards an unsaved schema draft instead of carrying it over', async () => {
+    seedModulesWithMatchingPresetKeyDistinctSchemas();
+    const container = renderSettings();
+
+    const setSchemaJsonLocationButton = container.querySelector('[data-testid="set-schema-json-location"]');
+    if (!(setSchemaJsonLocationButton instanceof HTMLButtonElement)) {
+      throw new Error('Set schema JSON button not found');
+    }
+
+    // Leave an unsaved draft on the first module without saving it.
+    await act(async () => {
+      setSchemaJsonLocationButton.click();
+      await Promise.resolve();
+    });
+
+    expect(getSchemaTextareas(container).schemaJsonTextarea.value).toContain('location');
+
+    const agendaButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('Agenda'));
+    if (!(agendaButton instanceof HTMLButtonElement)) {
+      throw new Error('Agenda module button not found');
+    }
+
+    await act(async () => {
+      agendaButton.click();
+      await Promise.resolve();
+    });
+
+    // The unsaved "location" draft must be discarded, replaced by the newly selected module's own text.
+    const switchedTextareas = getSchemaTextareas(container);
+    expect(switchedTextareas.schemaJsonTextarea.value).not.toContain('location');
+    expect(switchedTextareas.schemaJsonTextarea.value).toContain('task');
+  });
+
+  test('deleting the selected module refreshes the schema editor to the fallback module', async () => {
+    seedModulesWithMatchingPresetKeyDistinctSchemas();
+    sillyTavernContext.chat = [];
+    sillyTavernContext.Popup.show.confirm.mockResolvedValue(true);
+
+    const container = renderSettings();
+    expect(getSchemaTextareas(container).schemaJsonTextarea.value).toContain('mood');
+
+    const deleteButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Delete');
+    if (!(deleteButton instanceof HTMLButtonElement)) {
+      throw new Error('Delete button not found');
+    }
+
+    await act(async () => {
+      deleteButton.click();
+      await Promise.resolve();
+    });
+
+    expect(mockSettings.modules.map((module: any) => module.id)).toEqual(['agenda']);
+    const fallbackTextareas = getSchemaTextareas(container);
+    expect(fallbackTextareas.schemaJsonTextarea.value).toContain('task');
+    expect(fallbackTextareas.schemaJsonTextarea.value).not.toContain('mood');
+    expect(fallbackTextareas.schemaHtmlTextarea.value).toBe('<div>agenda module</div>');
+  });
+
   test('module list can add clone and reorder modules', async () => {
     seedModuleSettings();
     const container = renderSettings();
@@ -1069,9 +1187,15 @@ describe('zTracker settings connection source UI', () => {
 
     await clickByText('Add');
     expect(mockSettings.modules.map((module: any) => module.name)).toContain('Module 3');
+    // The newly added Module becomes selected and uses zTracker's real default schema (title
+    // "SceneTracker"), distinct from the placeholder schema on the two seeded mock Modules, so this
+    // also confirms the schema editor followed the selection to the new Module rather than showing
+    // a stale previously-selected Module's text.
+    expect(getSchemaTextareas(container).schemaJsonTextarea.value).toContain('SceneTracker');
 
     await clickByText('Clone');
     expect(mockSettings.modules.some((module: any) => module.name === 'Module 3 Copy')).toBe(true);
+    expect(getSchemaTextareas(container).schemaJsonTextarea.value).toContain('SceneTracker');
 
     const selectedBeforeMove = mockSettings.modules.findIndex((module: any) => module.name === 'Module 3 Copy');
     await clickByText('Up');
@@ -1180,6 +1304,10 @@ describe('zTracker settings connection source UI', () => {
     expect(imported?.connection.source).toBe('saved');
     expect(imported?.enabled).toBe(true);
     expect(stEchoMock).toHaveBeenCalledWith('success', 'Imported Module "Imported".');
+    // The imported Module (no schema in the import payload, so it falls back to zTracker's real
+    // default schema) becomes selected; confirms the schema editor followed the selection rather
+    // than showing the previously-selected default mock Module's placeholder schema.
+    expect(getSchemaTextareas(container).schemaJsonTextarea.value).toContain('SceneTracker');
 
     clickSpy.mockRestore();
   });

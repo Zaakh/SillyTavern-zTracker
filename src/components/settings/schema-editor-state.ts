@@ -66,13 +66,13 @@ export function getSchemaDraftState(options: { currentText: string; persistedTex
   };
 }
 
-// Preserve any unsaved JSON draft while staying on the same preset.
+// Preserve any unsaved JSON draft unless the active Module or schema preset selection changed underneath it.
 export function shouldSyncSchemaTextFromSettings(options: {
   currentText: string;
   persistedText: string;
-  activePresetChanged: boolean;
+  activeSelectionChanged: boolean;
 }): boolean {
-  if (options.activePresetChanged) {
+  if (options.activeSelectionChanged) {
     return true;
   }
 
@@ -199,13 +199,13 @@ export function getSchemaHtmlDraftState(options: { currentText: string; persiste
   };
 }
 
-// Preserve any unsaved HTML draft while staying on the same preset.
+// Preserve any unsaved HTML draft unless the active Module or schema preset selection changed underneath it.
 export function shouldSyncSchemaHtmlFromSettings(options: {
   currentText: string;
   persistedText: string;
-  activePresetChanged: boolean;
+  activeSelectionChanged: boolean;
 }): boolean {
-  if (options.activePresetChanged) {
+  if (options.activeSelectionChanged) {
     return true;
   }
 

@@ -13,6 +13,7 @@ import {
   validateSchemaHtmlDraft,
   validateSchemaPresetDraftPair,
 } from '../components/settings/schema-editor-state.js';
+import { shouldSyncSchemaDraftFromSettings } from '../test-utils/schema-sync-test-mock.js';
 
 describe('schema-editor-state helpers', () => {
   test('reports JSON validation errors for invalid schema drafts', () => {
@@ -68,7 +69,7 @@ describe('schema-editor-state helpers', () => {
         persistedText: `{
   "scene": "kept"
 }`,
-        activePresetChanged: false,
+        activeSelectionChanged: false,
       }),
     ).toBe(false);
   });
@@ -80,19 +81,19 @@ describe('schema-editor-state helpers', () => {
         persistedText: `{
   "scene": "kept"
 }`,
-        activePresetChanged: false,
+        activeSelectionChanged: false,
       }),
     ).toBe(false);
   });
 
-  test('resyncs the editor when the active schema preset changes', () => {
+  test('resyncs the editor when the active module or schema preset selection changes', () => {
     expect(
       shouldSyncSchemaTextFromSettings({
         currentText: '{"scene":',
         persistedText: `{
   "scene": "kept"
 }`,
-        activePresetChanged: true,
+        activeSelectionChanged: true,
       }),
     ).toBe(true);
   });
@@ -214,7 +215,7 @@ describe('schema-editor-state helpers', () => {
       shouldSyncSchemaHtmlFromSettings({
         currentText: '<div>{{ data.scene }}</div>',
         persistedText: '<div>{{data.scene}}</div>',
-        activePresetChanged: false,
+        activeSelectionChanged: false,
       }),
     ).toBe(false);
   });
@@ -224,17 +225,17 @@ describe('schema-editor-state helpers', () => {
       shouldSyncSchemaHtmlFromSettings({
         currentText: '{{#if data.scene}}',
         persistedText: '<div>{{data.scene}}</div>',
-        activePresetChanged: false,
+        activeSelectionChanged: false,
       }),
     ).toBe(false);
   });
 
-  test('resyncs the HTML editor when the active schema preset changes', () => {
+  test('resyncs the HTML editor when the active module or schema preset selection changes', () => {
     expect(
       shouldSyncSchemaHtmlFromSettings({
         currentText: '{{#if data.scene}}',
         persistedText: '<div>{{data.scene}}</div>',
-        activePresetChanged: true,
+        activeSelectionChanged: true,
       }),
     ).toBe(true);
   });
@@ -247,5 +248,27 @@ describe('schema-editor-state helpers', () => {
         html: '<div>{{data.scene}}</div>',
       }),
     ).toBe('<div>{{data.scene}}</div>');
+  });
+
+  // settings-ui.test.ts cannot import the real shouldSyncSchema*FromSettings functions (see
+  // schema-sync-test-mock.ts for why) and instead maintains a hand-written mirror of their formula.
+  // This cross-check fails if the real formula and the mirror ever diverge, so a future change to
+  // shouldSyncSchemaTextFromSettings/shouldSyncSchemaHtmlFromSettings can't silently stop being
+  // exercised by settings-ui.test.ts's Module-switch regression coverage.
+  describe('shouldSyncSchemaDraftFromSettings test mirror stays in sync with the real functions', () => {
+    const representativeInputs = [
+      { currentText: 'a', persistedText: 'a', activeSelectionChanged: false },
+      { currentText: 'a', persistedText: 'b', activeSelectionChanged: false },
+      { currentText: 'a', persistedText: 'b', activeSelectionChanged: true },
+      { currentText: 'a', persistedText: 'a', activeSelectionChanged: true },
+    ];
+
+    test.each(representativeInputs)('matches shouldSyncSchemaTextFromSettings for %j', (options) => {
+      expect(shouldSyncSchemaDraftFromSettings(options)).toBe(shouldSyncSchemaTextFromSettings(options));
+    });
+
+    test.each(representativeInputs)('matches shouldSyncSchemaHtmlFromSettings for %j', (options) => {
+      expect(shouldSyncSchemaDraftFromSettings(options)).toBe(shouldSyncSchemaHtmlFromSettings(options));
+    });
   });
 });
