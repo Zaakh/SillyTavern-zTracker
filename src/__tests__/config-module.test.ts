@@ -10,6 +10,7 @@ import {
   applySettingsToTrackerModule,
   createDefaultTrackerModule,
   getSettingsForTrackerModule,
+  getTrackerModule,
   migrateLegacySettingsToModules,
   migrateLegacyChatMetadataToModules,
   migrateTrackerModuleAutoSettings,
@@ -25,6 +26,17 @@ describe('tracker module defaults', () => {
     expect(defaultSettings.modules).toHaveLength(1);
     expect(defaultSettings.modules[0].id).toBe(DEFAULT_MODULE_ID);
     expect(defaultSettings.modules[0].order).toBe(0);
+  });
+
+  test('fresh-install default module is named descriptively, not "Default"', () => {
+    expect(defaultSettings.modules[0].name).toBe('Scene Tracker');
+    expect(createDefaultTrackerModule().name).toBe('Scene Tracker');
+  });
+
+  test('recovering a missing module collection also uses the descriptive name', () => {
+    const settingsWithNoModules: any = { ...structuredClone(defaultSettings), modules: [] };
+
+    expect(getTrackerModule(settingsWithNoModules).name).toBe('Scene Tracker');
   });
 
   test('new modules default to enabled with auto mode off', () => {

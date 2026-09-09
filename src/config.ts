@@ -731,7 +731,7 @@ function cloneSettingsValue<T>(value: T): T {
 export function createDefaultTrackerModule(options: Partial<Pick<TrackerModule, 'id' | 'name' | 'order'>> = {}): TrackerModule {
   return {
     id: options.id ?? DEFAULT_MODULE_ID,
-    name: options.name ?? 'Default',
+    name: options.name ?? 'Scene Tracker',
     enabled: true,
     order: options.order ?? 0,
     auto: {
@@ -838,7 +838,7 @@ export function createTrackerModuleFromLegacySettings(
 export function getTrackerModule(settings: ExtensionSettings, moduleId = DEFAULT_MODULE_ID): TrackerModule {
   return settings.modules?.find((module) => module.id === moduleId)
     ?? settings.modules?.[0]
-    ?? createTrackerModuleFromLegacySettings(settings, { id: DEFAULT_MODULE_ID, name: 'Default', order: 0 });
+    ?? createTrackerModuleFromLegacySettings(settings, { id: DEFAULT_MODULE_ID, name: 'Scene Tracker', order: 0 });
 }
 
 export function getOrderedTrackerModules(settings: ExtensionSettings, options: { includeDisabled?: boolean } = {}): TrackerModule[] {
