@@ -1,6 +1,9 @@
 import { jest } from '@jest/globals';
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import {
+  checkModuleSystemPromptPresetExists,
+  ensureModuleSystemPromptPresetInstalled,
+  ensureSystemPromptPresetInstalled,
   ensureZTrackerSystemPromptPresetInstalled,
   getCurrentGlobalSystemPromptName,
   getSystemPromptPresetContent,
@@ -15,9 +18,9 @@ import {
   LEGACY_PROMPT_XML,
   ZTRACKER_SYSTEM_PROMPT_PRESET_NAME,
   ZTRACKER_SYSTEM_PROMPT_TEXT,
-  DEFAULT_PROMPT_TOON,
+  PLACEHOLDER_PROMPT_TOON,
   PREVIOUS_DEFAULT_PROMPT_TOON,
-  DEFAULT_PROMPT_XML,
+  PLACEHOLDER_PROMPT_XML,
   PREVIOUS_DEFAULT_PROMPT_XML,
   migrateCorruptedSchemaPresetRequiredMetadata,
   migrateLegacyAutoMode,
@@ -257,8 +260,8 @@ describe('system prompt helpers', () => {
     };
 
     expect(migrateLegacyPromptTemplates(legacySettings)).toBe(true);
-    expect(legacySettings.promptXml).toBe(DEFAULT_PROMPT_XML);
-    expect(legacySettings.promptToon).toBe(DEFAULT_PROMPT_TOON);
+    expect(legacySettings.promptXml).toBe(PLACEHOLDER_PROMPT_XML);
+    expect(legacySettings.promptToon).toBe(PLACEHOLDER_PROMPT_TOON);
 
     const customizedSettings = {
       promptXml: `${LEGACY_PROMPT_XML}\ncustomized`,
@@ -273,23 +276,23 @@ describe('system prompt helpers', () => {
   test('migrates the previous XML schema-wrapper prompt to the current default', () => {
     const settings = {
       promptXml: PREVIOUS_DEFAULT_PROMPT_XML,
-      promptToon: DEFAULT_PROMPT_TOON,
+      promptToon: PLACEHOLDER_PROMPT_TOON,
     };
 
     expect(migrateLegacyPromptTemplates(settings)).toBe(true);
-    expect(settings.promptXml).toBe(DEFAULT_PROMPT_XML);
-    expect(settings.promptToon).toBe(DEFAULT_PROMPT_TOON);
+    expect(settings.promptXml).toBe(PLACEHOLDER_PROMPT_XML);
+    expect(settings.promptToon).toBe(PLACEHOLDER_PROMPT_TOON);
   });
 
   test('migrates the previous TOON prompt to the stronger current default', () => {
     const settings = {
-      promptXml: DEFAULT_PROMPT_XML,
+      promptXml: PLACEHOLDER_PROMPT_XML,
       promptToon: PREVIOUS_DEFAULT_PROMPT_TOON,
     };
 
     expect(migrateLegacyPromptTemplates(settings)).toBe(true);
-    expect(settings.promptXml).toBe(DEFAULT_PROMPT_XML);
-    expect(settings.promptToon).toBe(DEFAULT_PROMPT_TOON);
+    expect(settings.promptXml).toBe(PLACEHOLDER_PROMPT_XML);
+    expect(settings.promptToon).toBe(PLACEHOLDER_PROMPT_TOON);
   });
 
   test('migrates the legacy input auto-mode value to the canonical enum value', () => {
@@ -327,9 +330,112 @@ describe('system prompt helpers', () => {
   });
 
   test('ships a lean TOON prompt that relies on the example instead of verbose syntax prose', () => {
-    expect(DEFAULT_PROMPT_TOON).toContain('Return exactly one ```toon code block and nothing else.');
-    expect(DEFAULT_PROMPT_TOON).toContain('Keep every array count accurate: each `[N]` must match the number of items or rows.');
-    expect(DEFAULT_PROMPT_TOON).toContain('Do not add wrapper keys unless the schema requires them.');
-    expect(DEFAULT_PROMPT_TOON).not.toContain('For arrays of scalars, use the `fieldName[count\\t]: item1\\titem2` layout shown in the example.');
+    expect(PLACEHOLDER_PROMPT_TOON).toContain('Return exactly one ```toon code block and nothing else.');
+    expect(PLACEHOLDER_PROMPT_TOON).toContain('Keep every array count accurate: each `[N]` must match the number of items or rows.');
+    expect(PLACEHOLDER_PROMPT_TOON).toContain('Do not add wrapper keys unless the schema requires them.');
+    expect(PLACEHOLDER_PROMPT_TOON).not.toContain('For arrays of scalars, use the `fieldName[count\t]: item1\titem2` layout shown in the example.');
+  });
+});
+
+describe('per-Module system-prompt preset installation (creation-time self-heal only)', () => {
+  test('ensureSystemPromptPresetInstalled creates a named preset when missing', async () => {
+    const savePreset = jest.fn(async () => undefined);
+
+    const installed = await ensureSystemPromptPresetInstalled('zTracker-Custom-1.0', 'custom text', {
+      getPresetManager: () => ({
+        getCompletionPresetByName: () => undefined,
+        getPresetList: () => ({ presets: [], preset_names: [] }),
+        savePreset,
+      }),
+    });
+
+    expect(installed).toBe(true);
+    expect(savePreset).toHaveBeenCalledWith('zTracker-Custom-1.0', { name: 'zTracker-Custom-1.0', content: 'custom text' });
+  });
+
+  test('ensureSystemPromptPresetInstalled leaves an existing preset untouched', async () => {
+    const savePreset = jest.fn(async () => undefined);
+
+    const installed = await ensureSystemPromptPresetInstalled('zTracker-Custom-1.0', 'custom text', {
+      getPresetManager: () => ({
+        getCompletionPresetByName: () => ({ name: 'zTracker-Custom-1.0', content: 'user-customized' }),
+        getPresetList: () => ({ presets: [], preset_names: [] }),
+        savePreset,
+      }),
+    });
+
+    expect(installed).toBe(false);
+    expect(savePreset).not.toHaveBeenCalled();
+  });
+
+  test('ensureModuleSystemPromptPresetInstalled no-ops for a Module with empty content', async () => {
+    const savePreset = jest.fn(async () => undefined);
+
+    const installed = await ensureModuleSystemPromptPresetInstalled(
+      { systemPrompt: { mode: 'profile', savedName: '', content: '' } },
+      {
+        getPresetManager: () => ({
+          getCompletionPresetByName: () => undefined,
+          getPresetList: () => ({ presets: [], preset_names: [] }),
+          savePreset,
+        }),
+      },
+    );
+
+    expect(installed).toBe(false);
+    expect(savePreset).not.toHaveBeenCalled();
+  });
+
+  test('ensureModuleSystemPromptPresetInstalled creates the Module\'s own preset when missing', async () => {
+    const savePreset = jest.fn(async () => undefined);
+
+    const installed = await ensureModuleSystemPromptPresetInstalled(
+      { systemPrompt: { mode: 'saved', savedName: 'zTracker-SceneTracker-1.0', content: 'scene extraction text' } },
+      {
+        getPresetManager: () => ({
+          getCompletionPresetByName: () => undefined,
+          getPresetList: () => ({ presets: [], preset_names: [] }),
+          savePreset,
+        }),
+      },
+    );
+
+    expect(installed).toBe(true);
+    expect(savePreset).toHaveBeenCalledWith('zTracker-SceneTracker-1.0', {
+      name: 'zTracker-SceneTracker-1.0',
+      content: 'scene extraction text',
+    });
+  });
+
+  test('checkModuleSystemPromptPresetExists reports a missing preset without creating it', () => {
+    const savePreset = jest.fn(async () => undefined);
+
+    const exists = checkModuleSystemPromptPresetExists(
+      { systemPrompt: { mode: 'saved', savedName: 'zTracker-SceneTracker-1.0', content: 'scene extraction text' } },
+      {
+        getPresetManager: () => ({
+          getCompletionPresetByName: () => undefined,
+          getPresetList: () => ({ presets: [], preset_names: [] }),
+          savePreset,
+        }),
+      },
+    );
+
+    expect(exists).toBe(false);
+    expect(savePreset).not.toHaveBeenCalled();
+  });
+
+  test('checkModuleSystemPromptPresetExists reports true when the preset is present', () => {
+    const exists = checkModuleSystemPromptPresetExists(
+      { systemPrompt: { mode: 'saved', savedName: 'zTracker-SceneTracker-1.0', content: 'scene extraction text' } },
+      {
+        getPresetManager: () => ({
+          getCompletionPresetByName: () => ({ name: 'zTracker-SceneTracker-1.0', content: 'scene extraction text' }),
+          getPresetList: () => ({ presets: [], preset_names: [] }),
+        }),
+      },
+    );
+
+    expect(exists).toBe(true);
   });
 });

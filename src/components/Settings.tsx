@@ -12,6 +12,7 @@ import {
   createTrackerModuleId,
   getOrderedTrackerModules,
   getSettingsForTrackerModule,
+  getTrackerModule,
   normalizeTrackerModuleIncludeList,
   pruneTrackerModuleIncludeReferences,
   purgeTrackerModuleDataFromChat,
@@ -25,6 +26,8 @@ import {
 import { useForceUpdate } from '../hooks/useForceUpdate.js';
 import { readTextFileViaPicker } from '../file-picker.js';
 import {
+  checkModuleSystemPromptPresetExists,
+  ensureModuleSystemPromptPresetInstalled,
   getCurrentGlobalSystemPromptName,
   hasSystemPromptPreset,
   listSystemPromptPresetNames,
@@ -75,6 +78,24 @@ function normalizeModuleOrder(modules: TrackerModule[]): void {
   modules.forEach((module, index) => {
     module.order = index;
   });
+}
+
+/**
+ * Finds (or self-heals and persists) the currently selected Module within `currentSettings`.
+ * `currentSettings.modules` can be a real empty array if every fresh-install seed template failed
+ * (see src/fresh-install-seeding.ts) - getTrackerModule()'s read-time recovery fallback is
+ * transient and NOT persisted on its own, so without this every field edit here would silently
+ * no-op. Mirrors how updateModuleList already self-heals via getOrderedTrackerModules.
+ */
+function resolveOrCreateModule(currentSettings: ExtensionSettings, moduleId: string): TrackerModule {
+  const existing = currentSettings.modules?.find((candidate) => candidate.id === moduleId)
+    ?? currentSettings.modules?.[0];
+  if (existing) {
+    return existing;
+  }
+  const fallback = getTrackerModule(currentSettings);
+  currentSettings.modules = [fallback];
+  return fallback;
 }
 
 /** Returns the current chat's extension metadata record, creating it only when explicitly requested. */
@@ -175,8 +196,8 @@ export const ZTrackerSettings: FC = () => {
   const forceUpdate = useForceUpdate();
   const settings = settingsManager.getSettings();
   const orderedModules = getOrderedTrackerModules(settings, { includeDisabled: true });
-  const [selectedModuleId, setSelectedModuleId] = useState(() => orderedModules[0]?.id ?? defaultSettings.modules[0].id);
-  const selectedModule = orderedModules.find((module) => module.id === selectedModuleId) ?? orderedModules[0] ?? defaultSettings.modules[0];
+  const [selectedModuleId, setSelectedModuleId] = useState(() => orderedModules[0]?.id ?? getTrackerModule(settings).id);
+  const selectedModule = orderedModules.find((module) => module.id === selectedModuleId) ?? orderedModules[0] ?? getTrackerModule(settings);
   const moduleSettings = getSettingsForTrackerModule(settings, selectedModule.id);
   const connectionSource = moduleSettings.connectionSource ?? 'saved';
   // Tracks the (Module, schema preset) pair the drafts below were last synced from, so a Module switch is
@@ -185,6 +206,7 @@ export const ZTrackerSettings: FC = () => {
 
   const [diagnosticsText, setDiagnosticsText] = useState<string>('');
   const [systemPromptRefreshRevision, setSystemPromptRefreshRevision] = useState(0);
+  const [isRecreatingSystemPrompt, setRecreatingSystemPrompt] = useState(false);
   const [isGenerationOpen, setGenerationOpen] = useState(true);
   const [isInjectionOpen, setInjectionOpen] = useState(true);
   const [isOrderOpen, setOrderOpen] = useState(false);
@@ -205,12 +227,7 @@ export const ZTrackerSettings: FC = () => {
   const updateSelectedModuleAndRefresh = useCallback(
     (updater: (currentSettings: TrackerModuleSettings) => void) => {
       updateAndRefresh((currentSettings) => {
-        const module = currentSettings.modules?.find((candidate) => candidate.id === selectedModuleId)
-          ?? currentSettings.modules?.[0];
-        if (!module) {
-          return;
-        }
-
+        const module = resolveOrCreateModule(currentSettings, selectedModuleId);
         const moduleDraft = getSettingsForTrackerModule(currentSettings, module.id);
         updater(moduleDraft);
         applySettingsToTrackerModule(module, moduleDraft);
@@ -223,8 +240,8 @@ export const ZTrackerSettings: FC = () => {
     if (orderedModules.some((module) => module.id === selectedModuleId)) {
       return;
     }
-    setSelectedModuleId(orderedModules[0]?.id ?? defaultSettings.modules[0].id);
-  }, [orderedModules, selectedModuleId]);
+    setSelectedModuleId(orderedModules[0]?.id ?? getTrackerModule(settings).id);
+  }, [orderedModules, selectedModuleId, settings]);
 
   // Memoized data for the schema preset dropdown
   const schemaPresetItems = useMemo((): PresetItem[] => {
@@ -249,10 +266,27 @@ export const ZTrackerSettings: FC = () => {
     moduleSettings.trackerSystemPromptSavedName.trim().length > 0 &&
     systemPromptItems.length > 0 &&
     !hasSystemPromptPreset(moduleSettings.trackerSystemPromptSavedName);
+  // Only Modules with their own shipped/imported prompt text can self-heal a missing preset -
+  // hand-created or legacy-migrated Modules keep today's warn-only behavior (see system-prompt.ts).
+  // checkModuleSystemPromptPresetExists reports `true` (nothing to recreate) for content-less
+  // Modules, so this also implicitly gates the action on non-empty content.
+  const showRecreateSystemPromptAction = showMissingSavedSystemPromptWarning && !checkModuleSystemPromptPresetExists(selectedModule);
 
   const refreshSystemPromptState = useCallback(() => {
     setSystemPromptRefreshRevision((revision) => revision + 1);
   }, []);
+
+  const recreateModuleSystemPromptPreset = useCallback(async () => {
+    setRecreatingSystemPrompt(true);
+    try {
+      const installed = await ensureModuleSystemPromptPresetInstalled(selectedModule);
+      if (installed) {
+        refreshSystemPromptState();
+      }
+    } finally {
+      setRecreatingSystemPrompt(false);
+    }
+  }, [selectedModule, refreshSystemPromptState]);
 
   const activeSchemaText = formatSchemaText(moduleSettings.schemaPresets[moduleSettings.schemaPreset]);
   const schemaDraftState = getSchemaDraftState({ currentText: schemaText, persistedText: activeSchemaText });
@@ -616,12 +650,20 @@ export const ZTrackerSettings: FC = () => {
     }
 
     let importedName = '';
+    let importedModuleRef: TrackerModule | undefined;
     updateModuleList((modules) => {
       const module = createImportedTrackerModule(importedModule, modules);
       importedName = module.name;
+      importedModuleRef = module;
       modules.push(module);
       return module.id;
     });
+    if (importedModuleRef) {
+      // Auto-installs the imported Module's own system-prompt preset (if it carries content) before
+      // the success toast, so it's usable immediately without a reload - see system-prompt.ts.
+      await ensureModuleSystemPromptPresetInstalled(importedModuleRef);
+      refreshSystemPromptState();
+    }
     await st_echo('success', `Imported Module "${importedName}".`);
   };
 
@@ -698,10 +740,8 @@ export const ZTrackerSettings: FC = () => {
                   className="text_pole"
                   value={selectedModule.name}
                   onChange={(e) => updateAndRefresh((currentSettings) => {
-                    const module = currentSettings.modules?.find((candidate) => candidate.id === selectedModule.id);
-                    if (module) {
-                      module.name = e.target.value;
-                    }
+                    const module = resolveOrCreateModule(currentSettings, selectedModule.id);
+                    module.name = e.target.value;
                   })}
                 />
               </div>
@@ -712,10 +752,8 @@ export const ZTrackerSettings: FC = () => {
                 type="checkbox"
                 checked={selectedModule.enabled}
                 onChange={(e) => updateAndRefresh((currentSettings) => {
-                  const module = currentSettings.modules?.find((candidate) => candidate.id === selectedModule.id);
-                  if (module) {
-                    module.enabled = e.target.checked;
-                  }
+                  const module = resolveOrCreateModule(currentSettings, selectedModule.id);
+                  module.enabled = e.target.checked;
                 })}
               />
             </div>
@@ -799,6 +837,9 @@ export const ZTrackerSettings: FC = () => {
                 refreshSystemPromptState={refreshSystemPromptState}
                 showMissingSavedSystemPromptWarning={showMissingSavedSystemPromptWarning}
                 showSharedSystemPromptWarning={showSharedSystemPromptWarning}
+                showRecreateSystemPromptAction={showRecreateSystemPromptAction}
+                recreateModuleSystemPromptPreset={recreateModuleSystemPromptPreset}
+                isRecreatingSystemPrompt={isRecreatingSystemPrompt}
                 currentGlobalSystemPromptName={currentGlobalSystemPromptName}
               />
             </SettingsSectionDrawer>

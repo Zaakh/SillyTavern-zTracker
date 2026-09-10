@@ -5,6 +5,7 @@
  * Module/import/render pipeline silently breaking a shipped template: each file must still
  * parse, import, and render exactly like a real user-exported Module would.
  */
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join as joinPath } from 'node:path';
 // Jest runs from the repo root, so resolving relative to process.cwd() avoids needing
@@ -49,6 +50,35 @@ function renderModuleHtml(module: TrackerModule, data: unknown): string {
 }
 
 describe('pre-made Module templates (templates/modules/*.json)', () => {
+  test('scene-tracker.json parses, imports, and renders with representative data', () => {
+    const imported = loadTemplate('scene-tracker.json');
+    const sceneTracker = createImportedTrackerModule(imported, []);
+
+    expect(sceneTracker.id).toBe('scene-tracker');
+    expect(sceneTracker.enabled).toBe(true);
+    expect(sceneTracker.systemPrompt.content.length).toBeGreaterThan(0);
+    expect(sceneTracker.systemPrompt.savedName).toBe('zTracker-SceneTracker-1.0');
+
+    const html = renderModuleHtml(sceneTracker, {
+      time: '08:00:00; 01/01/2026 (Thursday)',
+      location: 'Kitchen, downtown apartment, Chicago, IL',
+      weather: 'Clear, 60F',
+      topics: { primaryTopic: 'breakfast', emotionalTone: 'calm', interactionTheme: 'domestic' },
+      charactersPresent: ['Alex'],
+      characters: [
+        {
+          name: 'Alex',
+          hair: 'Tied back',
+          makeup: 'None',
+          outfit: 'Grey hoodie, jeans',
+          stateOfDress: 'Put together',
+          postureAndInteraction: 'Sitting at the table',
+        },
+      ],
+    });
+    expect(html).toContain('Kitchen, downtown apartment, Chicago, IL');
+  });
+
   test('plot-log.json parses, imports, and renders with representative data', () => {
     const imported = loadTemplate('plot-log.json');
     const plotLog = createImportedTrackerModule(imported, []);
@@ -57,6 +87,8 @@ describe('pre-made Module templates (templates/modules/*.json)', () => {
     expect(plotLog.injection.includeLastXMessages).toBe(0);
     expect(plotLog.auto.enabled).toBe(false);
     expect(plotLog.connection.source).toBe('active');
+    expect(plotLog.systemPrompt.content.length).toBeGreaterThan(0);
+    expect(plotLog.systemPrompt.savedName).toBe('zTracker-PlotLog-1.0');
 
     const html = renderModuleHtml(plotLog, {
       arc: 'Investigating the missing shipment',
@@ -79,6 +111,10 @@ describe('pre-made Module templates (templates/modules/*.json)', () => {
     expect(plotSteer.auto.direction).toBe('inputs');
     expect(plotSteer.injection.includeLastXMessages).toBe(1);
     expect(plotSteer.connection.source).toBe('active');
+    expect(plotSteer.systemPrompt.content.length).toBeGreaterThan(0);
+    expect(plotSteer.systemPrompt.savedName).toBe('zTracker-PlotSteer-1.0');
+    // Plot Log and Plot Steer each carry their own tailored prompt, not a shared/duplicated one.
+    expect(plotSteer.systemPrompt.content).not.toBe(plotLog.systemPrompt.content);
 
     const html = renderModuleHtml(plotSteer, { nextBeat: 'Reveal the dockmaster was bribed.', pacing: 'twist' });
     expect(html).toContain('Reveal the dockmaster was bribed.');
@@ -94,6 +130,29 @@ describe('pre-made Module templates (templates/modules/*.json)', () => {
     expect(chainedEntry?.entry).toEqual({ target: 'plot-log', count: 3 });
     expect(chainedEntry?.eligible).toBe(true);
   });
+
+  // Self-heal (ensureModuleSystemPromptPresetInstalled) only ever creates a missing preset - it
+  // never detects or repairs stale preset text, so a content edit that forgets to bump the
+  // matching savedName version would silently strand existing users on the old preset forever.
+  // This hash must be updated (and the corresponding savedName suffix bumped) whenever a shipped
+  // template's systemPrompt.content intentionally changes - see design.md "Preset naming".
+  const EXPECTED_SYSTEM_PROMPT_CONTENT_HASH: Record<string, string> = {
+    'zTracker-SceneTracker-1.0': 'cdecf934ae2a',
+    'zTracker-PlotLog-1.0': '0ec04f04cf72',
+    'zTracker-PlotSteer-1.0': '40a23137b36b',
+  };
+
+  test.each(['scene-tracker.json', 'plot-log.json', 'plot-steer.json'])(
+    '%s system-prompt content hash matches its declared preset version',
+    (fileName) => {
+      const { systemPrompt } = loadTemplate(fileName);
+      const savedName = systemPrompt?.savedName ?? '';
+      const content = systemPrompt?.content ?? '';
+      const actualHash = createHash('sha256').update(content).digest('hex').slice(0, 12);
+
+      expect(EXPECTED_SYSTEM_PROMPT_CONTENT_HASH[savedName]).toBe(actualHash);
+    },
+  );
 
   test('plot-steer.json chained entry goes dormant (not an error) when imported before Plot Log', () => {
     // Simulates a user importing the files in the wrong order: Plot Steer ends up with an

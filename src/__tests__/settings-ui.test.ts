@@ -244,6 +244,7 @@ function createMockModule(overrides: Record<string, any> = {}) {
     systemPrompt: {
       mode: overrides.systemPrompt?.mode ?? 'profile',
       savedName: overrides.systemPrompt?.savedName ?? '',
+      content: overrides.systemPrompt?.content ?? '',
     },
     connection: {
       source: overrides.connection?.source ?? 'active',
@@ -306,11 +307,18 @@ jest.unstable_mockModule('sillytavern-utils-lib/components/react', () => ({
   PresetItem: class PresetItemMock {},
 }));
 
+const ensureModuleSystemPromptPresetInstalledMock = jest.fn<() => Promise<boolean>>().mockResolvedValue(false);
+const checkModuleSystemPromptPresetExistsMock = jest.fn(() => true);
+const hasSystemPromptPresetMock = jest.fn(() => false);
+const listSystemPromptPresetNamesMock = jest.fn((): string[] => []);
+
 jest.unstable_mockModule('../system-prompt.js', () => ({
   getCurrentGlobalSystemPromptName: () => undefined,
-  hasSystemPromptPreset: () => false,
-  listSystemPromptPresetNames: () => [],
+  hasSystemPromptPreset: hasSystemPromptPresetMock,
+  listSystemPromptPresetNames: listSystemPromptPresetNamesMock,
   shouldWarnAboutSharedSystemPromptSelection: () => false,
+  ensureModuleSystemPromptPresetInstalled: ensureModuleSystemPromptPresetInstalledMock,
+  checkModuleSystemPromptPresetExists: checkModuleSystemPromptPresetExistsMock,
 }));
 
 jest.unstable_mockModule('../components/settings/preset-state.js', () => ({
@@ -527,6 +535,10 @@ describe('zTracker settings connection source UI', () => {
     validateSchemaPresetDraftPairMock.mockClear();
     readTextFileViaPickerMock.mockReset();
     readTextFileViaPickerMock.mockResolvedValue(null);
+    ensureModuleSystemPromptPresetInstalledMock.mockReset().mockResolvedValue(false);
+    checkModuleSystemPromptPresetExistsMock.mockReset().mockReturnValue(true);
+    hasSystemPromptPresetMock.mockReset().mockReturnValue(false);
+    listSystemPromptPresetNamesMock.mockReset().mockReturnValue([]);
     document.body.innerHTML = '<div id="root"></div>';
     sillyTavernContext = {
       chatMetadata: { zTracker: { schemaKey: 'default' } },
@@ -1056,6 +1068,35 @@ describe('zTracker settings connection source UI', () => {
     expect(saveSettingsMock).toHaveBeenCalled();
   });
 
+  test('editing a field self-heals instead of silently no-opping when modules is a genuinely empty array', async () => {
+    // Simulates every fresh-install seed template failing (see src/fresh-install-seeding.ts):
+    // settings.modules is a real empty array, not undefined/missing.
+    mockSettings.modules = [];
+    const container = renderSettings();
+
+    const nameLabel = Array.from(container.querySelectorAll('label')).find((label) => label.textContent === 'Module Name');
+    const nameInput = nameLabel?.parentElement?.querySelector('input');
+    if (!(nameInput instanceof HTMLInputElement)) {
+      throw new Error('Module Name input not found');
+    }
+
+    await act(async () => {
+      // React tracks a text <input>'s value via a hidden internal tracker so it can tell native
+      // DOM mutations apart from its own reconciliation; a plain `.value = ...` assignment doesn't
+      // update that tracker, so the synthetic onChange never fires. Using the native property
+      // setter (bypassing React's overridden setter) before dispatching 'input' is the standard
+      // workaround - see React's ChangeEventPlugin / react-dom-test-utils Simulate internals.
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+      nativeInputValueSetter?.call(nameInput, 'Renamed Tracker');
+      nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    // Before the self-heal fix, this would silently no-op: mockSettings.modules would still be [].
+    expect(mockSettings.modules).toHaveLength(1);
+    expect(saveSettingsMock).toHaveBeenCalled();
+  });
+
   // Both modules intentionally use the shipped "default" schema preset key, matching every shipped
   // Module template, so this exercises the case where the preset key alone cannot distinguish them.
   function seedModulesWithMatchingPresetKeyDistinctSchemas() {
@@ -1187,15 +1228,15 @@ describe('zTracker settings connection source UI', () => {
 
     await clickByText('Add');
     expect(mockSettings.modules.map((module: any) => module.name)).toContain('Module 3');
-    // The newly added Module becomes selected and uses zTracker's real default schema (title
-    // "SceneTracker"), distinct from the placeholder schema on the two seeded mock Modules, so this
+    // The newly added Module becomes selected and uses zTracker's generic placeholder schema (title
+    // "CustomTracker"), distinct from the placeholder schema on the two seeded mock Modules, so this
     // also confirms the schema editor followed the selection to the new Module rather than showing
     // a stale previously-selected Module's text.
-    expect(getSchemaTextareas(container).schemaJsonTextarea.value).toContain('SceneTracker');
+    expect(getSchemaTextareas(container).schemaJsonTextarea.value).toContain('CustomTracker');
 
     await clickByText('Clone');
     expect(mockSettings.modules.some((module: any) => module.name === 'Module 3 Copy')).toBe(true);
-    expect(getSchemaTextareas(container).schemaJsonTextarea.value).toContain('SceneTracker');
+    expect(getSchemaTextareas(container).schemaJsonTextarea.value).toContain('CustomTracker');
 
     const selectedBeforeMove = mockSettings.modules.findIndex((module: any) => module.name === 'Module 3 Copy');
     await clickByText('Up');
@@ -1304,12 +1345,43 @@ describe('zTracker settings connection source UI', () => {
     expect(imported?.connection.source).toBe('saved');
     expect(imported?.enabled).toBe(true);
     expect(stEchoMock).toHaveBeenCalledWith('success', 'Imported Module "Imported".');
-    // The imported Module (no schema in the import payload, so it falls back to zTracker's real
-    // default schema) becomes selected; confirms the schema editor followed the selection rather
-    // than showing the previously-selected default mock Module's placeholder schema.
-    expect(getSchemaTextareas(container).schemaJsonTextarea.value).toContain('SceneTracker');
+    // The imported Module (no schema in the import payload, so it falls back to zTracker's generic
+    // placeholder schema) becomes selected; confirms the schema editor followed the selection
+    // rather than showing the previously-selected default mock Module's placeholder schema.
+    expect(getSchemaTextareas(container).schemaJsonTextarea.value).toContain('CustomTracker');
 
     clickSpy.mockRestore();
+  });
+
+  test('importing a module with its own system-prompt content installs its preset immediately', async () => {
+    seedModuleSettings();
+    readTextFileViaPickerMock.mockResolvedValue(
+      JSON.stringify({
+        module: {
+          name: 'Imported With Prompt',
+          systemPrompt: { mode: 'saved', savedName: 'zTracker-Custom-1.0', content: 'custom system prompt text' },
+        },
+      }),
+    );
+    const container = renderSettings();
+
+    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Import');
+    if (!(importButton instanceof HTMLButtonElement)) {
+      throw new Error('Import button not found');
+    }
+
+    await act(async () => {
+      importButton.click();
+      await Promise.resolve();
+    });
+
+    expect(ensureModuleSystemPromptPresetInstalledMock).toHaveBeenCalledTimes(1);
+    const [installedModule] = ensureModuleSystemPromptPresetInstalledMock.mock.calls[0] as any[];
+    expect(installedModule.systemPrompt).toEqual({
+      mode: 'saved',
+      savedName: 'zTracker-Custom-1.0',
+      content: 'custom system prompt text',
+    });
   });
 
   test('importing a module with a malformed include list is repaired instead of crashing the settings panel', async () => {

@@ -46,6 +46,9 @@ export const TrackerGenerationSection: FC<{
   refreshSystemPromptState: () => void;
   showMissingSavedSystemPromptWarning: boolean;
   showSharedSystemPromptWarning: boolean;
+  showRecreateSystemPromptAction: boolean;
+  recreateModuleSystemPromptPreset: () => void | Promise<void>;
+  isRecreatingSystemPrompt: boolean;
   currentGlobalSystemPromptName?: string;
 }> = ({
   settings,
@@ -83,6 +86,9 @@ export const TrackerGenerationSection: FC<{
   refreshSystemPromptState,
   showMissingSavedSystemPromptWarning,
   showSharedSystemPromptWarning,
+  showRecreateSystemPromptAction,
+  recreateModuleSystemPromptPreset,
+  isRecreatingSystemPrompt,
   currentGlobalSystemPromptName,
 }) => {
   return (
@@ -130,6 +136,9 @@ export const TrackerGenerationSection: FC<{
         refreshSystemPromptState={refreshSystemPromptState}
         showMissingSavedSystemPromptWarning={showMissingSavedSystemPromptWarning}
         showSharedSystemPromptWarning={showSharedSystemPromptWarning}
+        showRecreateSystemPromptAction={showRecreateSystemPromptAction}
+        recreateModuleSystemPromptPreset={recreateModuleSystemPromptPreset}
+        isRecreatingSystemPrompt={isRecreatingSystemPrompt}
         currentGlobalSystemPromptName={currentGlobalSystemPromptName}
       />
 

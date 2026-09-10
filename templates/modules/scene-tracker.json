@@ -1,0 +1,194 @@
+{
+  "version": 1,
+  "module": {
+    "id": "scene-tracker",
+    "name": "Scene Tracker",
+    "enabled": true,
+    "order": 0,
+    "auto": {
+      "enabled": false,
+      "direction": "both"
+    },
+    "schema": {
+      "preset": "default",
+      "presets": {
+        "default": {
+          "name": "Scene Tracker",
+          "value": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "title": "SceneTracker",
+            "description": "Schema for tracking roleplay scene details",
+            "type": "object",
+            "properties": {
+              "time": {
+                "type": "string",
+                "description": "Format: HH:MM:SS; MM/DD/YYYY (Day Name)"
+              },
+              "location": {
+                "type": "string",
+                "description": "Specific scene location with increasing specificity"
+              },
+              "weather": {
+                "type": "string",
+                "description": "Current weather conditions and temperature"
+              },
+              "topics": {
+                "type": "object",
+                "properties": {
+                  "primaryTopic": {
+                    "type": "string",
+                    "description": "1-2 word main topic of interaction"
+                  },
+                  "emotionalTone": {
+                    "type": "string",
+                    "description": "Dominant emotional tone of scene"
+                  },
+                  "interactionTheme": {
+                    "type": "string",
+                    "description": "Type of character interaction"
+                  }
+                },
+                "required": [
+                  "primaryTopic",
+                  "emotionalTone",
+                  "interactionTheme"
+                ]
+              },
+              "charactersPresent": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "description": "Character names"
+                },
+                "description": "List of character names present in scene"
+              },
+              "characters": {
+                "type": "array",
+                "x-ztracker-dependsOn": [
+                  "charactersPresent"
+                ],
+                "x-ztracker-idKey": "name",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Character name"
+                    },
+                    "hair": {
+                      "type": "string",
+                      "description": "Hairstyle and condition"
+                    },
+                    "makeup": {
+                      "type": "string",
+                      "description": "Makeup description or 'None'"
+                    },
+                    "outfit": {
+                      "type": "string",
+                      "description": "Complete outfit including underwear"
+                    },
+                    "stateOfDress": {
+                      "type": "string",
+                      "description": "How put-together/disheveled character appears"
+                    },
+                    "postureAndInteraction": {
+                      "type": "string",
+                      "description": "Character's physical positioning and interaction"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "hair",
+                    "makeup",
+                    "outfit",
+                    "stateOfDress",
+                    "postureAndInteraction"
+                  ]
+                },
+                "description": "Array of character objects"
+              }
+            },
+            "required": [
+              "time",
+              "location",
+              "weather",
+              "topics",
+              "charactersPresent",
+              "characters"
+            ]
+          },
+          "html": "<div class=\"ztracker_default_mes_template\">\n    <!-- Main Scene Information -->\n    <table>\n        <tbody>\n            <tr>\n                <td>Time:</td>\n                <td>{{data.time}}</td>\n            </tr>\n            <tr>\n                <td>Location:</td>\n                <td>{{data.location}}</td>\n            </tr>\n            <tr>\n                <td>Weather:</td>\n                <td>{{data.weather}}</td>\n            </tr>\n        </tbody>\n    </table>\n\n    <!-- Collapsible Detailed Tracker -->\n    <details>\n        <summary><span>Tracker Details</span></summary>\n        <table>\n            <tbody>\n                <tr>\n                    <td>Topics:</td>\n                    <td>\n                        <!-- Accessing nested object properties -->\n                        {{data.topics.primaryTopic}}; {{data.topics.emotionalTone}}; {{data.topics.interactionTheme}}\n                    </td>\n                </tr>\n                <tr>\n                    <td>Present:</td>\n                    <td>\n                        <!-- Joining an array of strings. Assumes a 'join' helper. -->\n                        {{join data.charactersPresent ', '}}\n                    </td>\n                </tr>\n            </tbody>\n        </table>\n\n        <!-- Character Details Section -->\n        <div class=\"mes_ztracker_characters\">\n            <!-- Looping through the array of character objects -->\n            {{#each data.characters as |character|}}\n            <hr>\n            <strong>{{character.name}}:</strong><br>\n            <table>\n                <tbody>\n                    <tr>\n                        <td>Hair:</td>\n                        <td>{{character.hair}}</td>\n                    </tr>\n                    <tr>\n                        <td>Makeup:</td>\n                        <td>{{character.makeup}}</td>\n                    </tr>\n                    <tr>\n                        <td>Outfit:</td>\n                        <td>{{character.outfit}}</td>\n                    </tr>\n                    <tr>\n                        <td>State:</td>\n                        <td>{{character.stateOfDress}}</td>\n                    </tr>\n                    <tr>\n                        <td>Position:</td>\n                        <td>{{character.postureAndInteraction}}</td>\n                    </tr>\n                </tbody>\n            </table>\n            {{/each}}\n        </div>\n    </details>\n</div>\n<hr>"
+        }
+      }
+    },
+    "prompts": {
+      "prompt": "You are a Scene Tracker Assistant, tasked with providing clear, consistent, and structured updates to a scene tracker for a roleplay. Use the latest message, previous tracker details, and context from recent messages to accurately update the tracker. Your response must ensuring that each field is filled and complete. If specific information is not provided, make reasonable assumptions based on prior descriptions, logical inferences, or default character details.\n\n### Key Instructions:\n1. **Default Assumptions for Missing Information**:\n   - **Character Details**: If no new details are provided for a character, assume reasonable defaults (e.g., hairstyle, posture, or attire based on previous entries or context).\n   - **Outfit**: Describe the complete outfit for each character, using specific details for color, fabric, and style (e.g., “fitted black leather jacket with silver studs on the collar”). **Underwear must always be included in the outfit description.** If underwear is intentionally missing, specify this clearly in the description (e.g., \"No bra\", \"No panties\"). If the character is undressed, list the entire outfit.\n   - **StateOfDress**: Describe how put-together or disheveled the character appears, including any removed clothing. If the character is undressed, indicate where discarded items are placed.\n2. **Incremental Time Progression**:\n   - Adjust time in small increments, ideally only a few seconds per update, to reflect realistic scene progression. Avoid large jumps unless a significant time skip (e.g., sleep, travel) is explicitly stated.\n   - Format the time as \"HH:MM:SS; MM/DD/YYYY (Day Name)\".\n3. **Context-Appropriate Times**:\n   - Ensure that the time aligns with the setting. For example, if the scene takes place in a public venue (e.g., a mall), choose an appropriate time within standard operating hours.\n4. **Location Format**: Avoid unintended reuse of specific locations from previous examples or responses. Provide specific, relevant, and detailed locations based on the context, using the format:\n   - **Example**: “Food court, second floor near east wing entrance, Madison Square Mall, Los Angeles, CA”\n5. **Topics Format**: Ensure topics are one- or two-word keywords relevant to the scene to help trigger contextual information. Avoid long phrases.\n6. **Avoid Redundancies**: Use only details provided or logically inferred from context. Do not introduce speculative or unnecessary information.\n7. **Focus and Pause**: Treat each scene update as a standalone, complete entry. Respond with the full tracker every time, even if there are only minor updates.\n\n### Important Reminders:\n1. **Recent Messages and Current Tracker**: Before updating, always consider the recent messages to ensure all changes are accurately represented.\n\nYour primary objective is to ensure clarity, consistency, providing complete details even when specifics are not explicitly stated.",
+      "promptEngineeringMode": "native",
+      "promptJson": "You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid JSON object that strictly adheres to the provided JSON schema.\n\n**CRITICAL INSTRUCTIONS:**\n1.  You MUST wrap the entire JSON object in a markdown code block (```json\\n...\\n```).\n2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.\n3.  The JSON object inside the code block MUST be valid and conform to the schema.\n\n**JSON SCHEMA TO FOLLOW:**\n```json\n{{schema}}\n```\n\n**EXAMPLE OF A PERFECT RESPONSE:**\n```json\n{{example_response}}\n```\n",
+      "promptXml": "You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid XML structure that strictly adheres to the provided example.\n\n**CRITICAL INSTRUCTIONS:**\n1.  You MUST wrap the entire XML object in a markdown code block (```xml\\n...\\n```).\n2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.\n3.  The XML object inside the code block MUST be valid.\n\n**XML SCHEMA DESCRIPTION TO FOLLOW:**\n```xml\n{{schema}}\n```\n\n**EXAMPLE OF A PERFECT RESPONSE:**\n```xml\n<root>\n{{example_response}}\n</root>\n```\n",
+      "promptToon": "You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid TOON structure that strictly adheres to the provided schema and example.\n\nRules:\n- Return exactly one ```toon code block and nothing else.\n- Use TOON syntax only, not JSON or XML.\n- Match the field names, nesting, and required fields from the schema.\n- Keep every array count accurate: each `[N]` must match the number of items or rows.\n- When the example shows a tabular array, reuse that header shape and keep rows tab-separated.\n- Do not add wrapper keys unless the schema requires them.\n\nSchema:\n```toon\n{{schema}}\n```\n\nExample:\n```toon\n{{example_response}}\n```\n"
+    },
+    "systemPrompt": {
+      "mode": "saved",
+      "savedName": "zTracker-SceneTracker-1.0",
+      "content": "You are a Scene Tracker extraction assistant. Your only task is to analyze the roleplay conversation and produce an updated scene-tracker snapshot: current time, location, weather, topical context, and every present character's appearance and state of dress. Base every field on the latest message plus the previous tracker snapshot and recent context; make reasonable, consistent inferences when specific details are not stated outright. Do not narrate, continue the roleplay, or add commentary - output only the requested structured tracker data, in the format specified by later instructions."
+    },
+    "connection": {
+      "source": "saved",
+      "profileId": ""
+    },
+    "generation": {
+      "mode": "full",
+      "maxResponseToken": 16000,
+      "skipFirstXMessages": 0,
+      "includeLastXMessages": 0,
+      "skipCharacterCardInTrackerGeneration": false,
+      "conversationRoleMode": "preserve",
+      "worldInfoPolicyMode": "include_all",
+      "worldInfoAllowlistBookNames": [],
+      "worldInfoAllowlistEntryIds": [],
+      "includeModules": [
+        {
+          "target": "self",
+          "count": 1
+        }
+      ]
+    },
+    "injection": {
+      "includeLastXMessages": 1,
+      "embedRole": "user",
+      "embedAsCharacter": false,
+      "snapshotHeader": "Tracker:",
+      "transformPreset": "default",
+      "transformPresets": {
+        "default": {
+          "name": "Default (JSON)",
+          "input": "pretty_json",
+          "pattern": "",
+          "flags": "g",
+          "replacement": "",
+          "codeFenceLang": "json",
+          "wrapInCodeFence": true
+        },
+        "minimal": {
+          "name": "Minimal (top-level properties)",
+          "input": "top_level_lines",
+          "pattern": "^[\\t ]*\"([^\"]+)\"[\\t ]*:[\\t ]*(.*?)(?:,)?[\\t ]*$",
+          "flags": "gm",
+          "replacement": "$1: $2",
+          "codeFenceLang": "text",
+          "wrapInCodeFence": false
+        },
+        "toon": {
+          "name": "TOON (compact)",
+          "input": "toon",
+          "pattern": "",
+          "flags": "g",
+          "replacement": "",
+          "codeFenceLang": "toon",
+          "wrapInCodeFence": true
+        }
+      }
+    }
+  }
+}

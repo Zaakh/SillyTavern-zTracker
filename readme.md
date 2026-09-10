@@ -31,7 +31,7 @@ zTracker follows the SillyTavern chat type of whichever connection it is current
 
 In **Extensions -> zTracker**, use **Modules** when you want more than one tracker in the same chat, such as a scene tracker plus an agenda tracker. Each Module has its own schema presets, prompt templates, system prompt source, connection settings, generation behavior, injection settings, and auto-generation toggle.
 
-The original single tracker is upgraded into the **Default** Module the first time this version runs. That settings format upgrade is one-way. Existing saved tracker data, current-chat schema choices, and character auto-mode exclusions are preserved under the Default Module. A brand-new install instead starts with this same built-in Module named **Scene Tracker**.
+The original single tracker is upgraded into the **Default** Module the first time this version runs. That settings format upgrade is one-way. Existing saved tracker data, current-chat schema choices, and character auto-mode exclusions are preserved under the Default Module. A brand-new install instead automatically seeds all three [pre-made Modules](#pre-made-modules) below - **Scene Tracker** enabled, **Plot Log** and **Plot Steer** disabled until you opt in.
 
 You can add, clone, reorder, delete, export, and import Modules from the settings panel. Export downloads a `.json` file with the Module's full configuration (schema presets, prompts, system prompt, connection, generation, and injection settings); Import reads such a file back through a file picker. Deleting a Module also removes that Module's saved tracker data from the current chat history.
 
@@ -45,14 +45,17 @@ A Module can only chain in another Module that is listed earlier in the **Genera
 
 ### Pre-made Modules
 
-`templates/modules/` in this repository (and the same folder inside a built copy of the extension, under `dist/templates/modules/`) ships ready-to-import Module pairs. Import them the same way as any exported Module (Modules -> **Import**, then pick the file).
+A fresh install automatically creates all three Modules below: **Scene Tracker** enabled, **Plot Log** and **Plot Steer** disabled until you enable them in Settings. If you deleted one, or you're upgrading from an older install that never had them, `templates/modules/` in this repository (and the same folder inside a built copy of the extension, under `dist/templates/modules/`) also ships them as ready-to-import files - import the same way as any exported Module (Modules -> **Import**, then pick the file); a manually imported Plot Log/Plot Steer is enabled by default, unlike the seeded one.
 
+- **Scene Tracker** (`scene-tracker.json`) is the built-in scene tracker: time, location, weather, topics, and each present character's appearance and state of dress.
 - **Plot Log** (`plot-log.json`) tracks ongoing story plot state - current arc, open threads, recent events, and stakes - and renders normally like any other tracker. It is never embedded into live generation.
 - **Plot Steer** (`plot-steer.json`) reads Plot Log's stored history and suggests the single next story beat (plus a pacing hint: escalate, resolve, hold, or twist). Unlike Plot Log, its suggestion **is injected** into the next generation request, not just displayed - only the single most recent suggestion is ever embedded, and its tracker display is a one-line summary rather than a full table.
 
-**Import Plot Log before Plot Steer.** Plot Steer's history of Plot Log is a chained include entry, which only works when its target Module was imported earlier and is ordered earlier in **Generation Order**. Importing Plot Steer first leaves that entry dormant (shown with a warning icon in Settings) until you also import Plot Log and confirm the order.
+Each of these Modules ships its own tailored system prompt, installed as a dedicated saved SillyTavern system-prompt preset the moment the Module is created (fresh install or manual Import) - see **System Prompt Source** in that Module's settings. If that preset is ever deleted from SillyTavern, Settings keeps showing the usual missing-preset warning and adds a one-click **Recreate from shipped prompt** action next to it, so restoring it doesn't require re-importing the whole Module.
 
-**Plot Steer auto-generates by default**, right after each of your messages and before the character's reply, using whichever SillyTavern connection is currently active in the chat. This means one extra LLM call every turn once imported - disable its Auto Mode in Settings if you'd rather trigger it manually.
+**If you import Plot Log and Plot Steer manually, import Plot Log first.** Plot Steer's history of Plot Log is a chained include entry, which only works when its target Module was imported earlier and is ordered earlier in **Generation Order**. Importing Plot Steer first leaves that entry dormant (shown with a warning icon in Settings) until you also import Plot Log and confirm the order. The automatic seeding on a fresh install always creates them in the correct order.
+
+**Plot Steer auto-generates by default once enabled**, right after each of your messages and before the character's reply, using whichever SillyTavern connection is currently active in the chat. This means one extra LLM call every turn once enabled - leave it disabled, or turn off its Auto Mode in Settings, if you'd rather trigger it manually.
 
 ## Installation
 

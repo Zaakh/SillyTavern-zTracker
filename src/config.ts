@@ -93,6 +93,8 @@ export interface TrackerModulePromptSettings {
 export interface TrackerModuleSystemPromptSettings {
   mode: TrackerSystemPromptMode;
   savedName: string;
+  /** Optional tailored system-prompt text owned by this Module, auto-installed as a saved preset at creation time. Empty for Modules with no persisted content (hand-created or migrated from legacy settings). */
+  content: string;
 }
 
 export interface TrackerModuleConnectionSettings {
@@ -227,28 +229,8 @@ export interface TrackerModuleSettings extends ExtensionSettings {
 
 export const DEFAULT_EMBED_SNAPSHOT_HEADER = 'Tracker:';
 
-export const DEFAULT_PROMPT = `You are a Scene Tracker Assistant, tasked with providing clear, consistent, and structured updates to a scene tracker for a roleplay. Use the latest message, previous tracker details, and context from recent messages to accurately update the tracker. Your response must ensuring that each field is filled and complete. If specific information is not provided, make reasonable assumptions based on prior descriptions, logical inferences, or default character details.
-
-### Key Instructions:
-1. **Default Assumptions for Missing Information**:
-   - **Character Details**: If no new details are provided for a character, assume reasonable defaults (e.g., hairstyle, posture, or attire based on previous entries or context).
-   - **Outfit**: Describe the complete outfit for each character, using specific details for color, fabric, and style (e.g., “fitted black leather jacket with silver studs on the collar”). **Underwear must always be included in the outfit description.** If underwear is intentionally missing, specify this clearly in the description (e.g., "No bra", "No panties"). If the character is undressed, list the entire outfit.
-   - **StateOfDress**: Describe how put-together or disheveled the character appears, including any removed clothing. If the character is undressed, indicate where discarded items are placed.
-2. **Incremental Time Progression**:
-   - Adjust time in small increments, ideally only a few seconds per update, to reflect realistic scene progression. Avoid large jumps unless a significant time skip (e.g., sleep, travel) is explicitly stated.
-   - Format the time as "HH:MM:SS; MM/DD/YYYY (Day Name)".
-3. **Context-Appropriate Times**:
-   - Ensure that the time aligns with the setting. For example, if the scene takes place in a public venue (e.g., a mall), choose an appropriate time within standard operating hours.
-4. **Location Format**: Avoid unintended reuse of specific locations from previous examples or responses. Provide specific, relevant, and detailed locations based on the context, using the format:
-   - **Example**: “Food court, second floor near east wing entrance, Madison Square Mall, Los Angeles, CA”
-5. **Topics Format**: Ensure topics are one- or two-word keywords relevant to the scene to help trigger contextual information. Avoid long phrases.
-6. **Avoid Redundancies**: Use only details provided or logically inferred from context. Do not introduce speculative or unnecessary information.
-7. **Focus and Pause**: Treat each scene update as a standalone, complete entry. Respond with the full tracker every time, even if there are only minor updates.
-
-### Important Reminders:
-1. **Recent Messages and Current Tracker**: Before updating, always consider the recent messages to ensure all changes are accurately represented.
-
-Your primary objective is to ensure clarity, consistency, providing complete details even when specifics are not explicitly stated.`;
+/** Small, schema-agnostic starting prompt used by the generic placeholder Module builder ("Add Module" and the legacy-upgrade base) - deliberately distinct from any shipped starter template's own content, which lives entirely under templates/modules/*.json. */
+export const PLACEHOLDER_PROMPT = `You are a tracker assistant. Update this tracker's fields based on the latest message and any previous tracker snapshot, keeping entries short and specific. Edit this prompt and the schema below to describe your own tracker's task.`;
 
 export const ZTRACKER_SYSTEM_PROMPT_PRESET_VERSION = '1.3.1';
 export const ZTRACKER_SYSTEM_PROMPT_PRESET_NAME = `zTracker-${ZTRACKER_SYSTEM_PROMPT_PRESET_VERSION}`;
@@ -264,7 +246,7 @@ Rules:
 - Follow all detailed instructions provided later in this conversation.
 - If a later message specifies an output format, wrapper, or schema rendering, follow those instructions exactly.`;
 
-export const DEFAULT_PROMPT_JSON = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid JSON object that strictly adheres to the provided JSON schema.
+export const PLACEHOLDER_PROMPT_JSON = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid JSON object that strictly adheres to the provided JSON schema.
 
 **CRITICAL INSTRUCTIONS:**
 1.  You MUST wrap the entire JSON object in a markdown code block (\`\`\`json\\n...\\n\`\`\`).
@@ -282,7 +264,7 @@ export const DEFAULT_PROMPT_JSON = `You are a highly specialized AI assistant. Y
 \`\`\`
 `;
 
-export const DEFAULT_PROMPT_XML = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid XML structure that strictly adheres to the provided example.
+export const PLACEHOLDER_PROMPT_XML = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid XML structure that strictly adheres to the provided example.
 
 **CRITICAL INSTRUCTIONS:**
 1.  You MUST wrap the entire XML object in a markdown code block (\`\`\`xml\\n...\\n\`\`\`).
@@ -321,7 +303,7 @@ export const PREVIOUS_DEFAULT_PROMPT_TOON = `You are a highly specialized AI ass
 \`\`\`
 `;
 
-export const DEFAULT_PROMPT_TOON = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid TOON structure that strictly adheres to the provided schema and example.
+export const PLACEHOLDER_PROMPT_TOON = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid TOON structure that strictly adheres to the provided schema and example.
 
 Rules:
 - Return exactly one \`\`\`toon code block and nothing else.
@@ -432,15 +414,15 @@ export function migrateLegacyPromptTemplates(settings: Record<string, any>): boo
   if (
     promptXml === LEGACY_PROMPT_XML.trim() ||
     promptXml === PREVIOUS_DEFAULT_PROMPT_XML.trim() ||
-    normalizePreviousXmlPromptTemplate(promptXml) === DEFAULT_PROMPT_XML.trim()
+    normalizePreviousXmlPromptTemplate(promptXml) === PLACEHOLDER_PROMPT_XML.trim()
   ) {
-    settings.promptXml = DEFAULT_PROMPT_XML;
+    settings.promptXml = PLACEHOLDER_PROMPT_XML;
     changed = true;
   }
 
   const promptToon = (settings.promptToon ?? '').trim();
   if (promptToon === LEGACY_PROMPT_TOON.trim() || promptToon === PREVIOUS_DEFAULT_PROMPT_TOON.trim()) {
-    settings.promptToon = DEFAULT_PROMPT_TOON;
+    settings.promptToon = PLACEHOLDER_PROMPT_TOON;
     changed = true;
   }
 
@@ -682,12 +664,32 @@ export const DEFAULT_SCHEMA_HTML = `<div class="ztracker_default_mes_template">
 const VERSION = '0.1.0';
 const FORMAT_VERSION = 'F_2.0';
 
-function createDefaultSchemaPresets(): Record<string, Schema> {
+/** Minimal, genuinely working placeholder schema for the generic Module builder - one free-text field, distinct from any shipped starter template. */
+export const PLACEHOLDER_SCHEMA_VALUE: object = {
+  $schema: 'http://json-schema.org/draft-07/schema#',
+  title: 'CustomTracker',
+  description: 'Starting point for a new tracker - edit this schema to describe what you want to track',
+  type: 'object',
+  properties: {
+    notes: {
+      type: 'string',
+      description: 'Free-text notes for this tracker',
+    },
+  },
+  required: ['notes'],
+};
+
+export const PLACEHOLDER_SCHEMA_HTML = `<div class="ztracker_default_mes_template">
+    <strong>Notes:</strong> {{data.notes}}
+</div>
+<hr>`;
+
+function createPlaceholderSchemaPresets(): Record<string, Schema> {
   return {
     default: {
       name: 'Default',
-      value: DEFAULT_SCHEMA_VALUE,
-      html: DEFAULT_SCHEMA_HTML,
+      value: PLACEHOLDER_SCHEMA_VALUE,
+      html: PLACEHOLDER_SCHEMA_HTML,
     },
   };
 }
@@ -728,10 +730,16 @@ function cloneSettingsValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+/**
+ * Builds a small, genuinely working generic placeholder Module (one free-text schema field, short
+ * generic prompt) - used by "Add Module" and as the legacy-upgrade overlay base. Deliberately
+ * distinct from any shipped starter template's own content, which lives entirely under
+ * templates/modules/*.json and is never constructed here.
+ */
 export function createDefaultTrackerModule(options: Partial<Pick<TrackerModule, 'id' | 'name' | 'order'>> = {}): TrackerModule {
   return {
     id: options.id ?? DEFAULT_MODULE_ID,
-    name: options.name ?? 'Scene Tracker',
+    name: options.name ?? 'New Tracker',
     enabled: true,
     order: options.order ?? 0,
     auto: {
@@ -740,18 +748,19 @@ export function createDefaultTrackerModule(options: Partial<Pick<TrackerModule, 
     },
     schema: {
       preset: 'default',
-      presets: createDefaultSchemaPresets(),
+      presets: createPlaceholderSchemaPresets(),
     },
     prompts: {
-      prompt: DEFAULT_PROMPT,
+      prompt: PLACEHOLDER_PROMPT,
       promptEngineeringMode: PromptEngineeringMode.NATIVE,
-      promptJson: DEFAULT_PROMPT_JSON,
-      promptXml: DEFAULT_PROMPT_XML,
-      promptToon: DEFAULT_PROMPT_TOON,
+      promptJson: PLACEHOLDER_PROMPT_JSON,
+      promptXml: PLACEHOLDER_PROMPT_XML,
+      promptToon: PLACEHOLDER_PROMPT_TOON,
     },
     systemPrompt: {
       mode: 'profile',
       savedName: '',
+      content: '',
     },
     connection: {
       source: 'saved',
@@ -1053,11 +1062,32 @@ export function migrateTrackerModuleIncludeLists(settings: ExtensionSettings): b
   return changed;
 }
 
-const defaultTrackerModule = createDefaultTrackerModule();
+/**
+ * Backfills `systemPrompt.content` for a Module persisted before that field existed (an
+ * already-migrated Default Module, or a Plot Log/Plot Steer imported from an older template
+ * file). Runs after `migrateLegacySettingsToModules` (it requires `settings.modules` to already
+ * exist) and is idempotent: a Module that already stores a string `content` (including an empty
+ * string) is left untouched.
+ */
+export function migrateTrackerModuleSystemPromptContent(settings: ExtensionSettings): boolean {
+  let changed = false;
+  for (const module of settings.modules ?? []) {
+    if (!module.systemPrompt || typeof (module.systemPrompt as { content?: unknown }).content === 'string') {
+      continue;
+    }
+    module.systemPrompt.content = '';
+    changed = true;
+  }
+  return changed;
+}
 
+// No synchronous default Module: a fresh install's only Module content comes from seeding the
+// shipped starter templates (see main()'s fresh-install branch in src/index.tsx). If every
+// template fails to seed, getTrackerModule()/getOrderedTrackerModules() already recover a
+// transient default Module at read time - see those functions' fallback.
 export const defaultSettings: ExtensionSettings = {
   version: VERSION,
   formatVersion: FORMAT_VERSION,
-  modules: [defaultTrackerModule],
+  modules: [],
   debugLogging: false,
 };

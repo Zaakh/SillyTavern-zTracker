@@ -4,9 +4,9 @@
  */
 
 import {
-  DEFAULT_PROMPT_JSON,
-  DEFAULT_PROMPT_TOON,
-  DEFAULT_PROMPT_XML,
+  PLACEHOLDER_PROMPT_JSON,
+  PLACEHOLDER_PROMPT_TOON,
+  PLACEHOLDER_PROMPT_XML,
   DEFAULT_SCHEMA_HTML,
   PromptEngineeringMode,
   TrackerWorldInfoPolicyMode,
@@ -253,9 +253,9 @@ export function makeLiveLikeSettings(mode: PromptEngineeringMode) {
       },
     },
     promptEngineeringMode: mode,
-    promptJson: DEFAULT_PROMPT_JSON,
-    promptXml: DEFAULT_PROMPT_XML,
-    promptToon: DEFAULT_PROMPT_TOON,
+    promptJson: PLACEHOLDER_PROMPT_JSON,
+    promptXml: PLACEHOLDER_PROMPT_XML,
+    promptToon: PLACEHOLDER_PROMPT_TOON,
     debugLogging: false,
     trackerWorldInfoPolicyMode: TrackerWorldInfoPolicyMode.INCLUDE_ALL,
     trackerWorldInfoAllowlistBookNames: ['The Bar'],

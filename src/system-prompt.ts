@@ -1,4 +1,4 @@
-import type { TrackerModuleSettings } from './config.js';
+import type { TrackerModule, TrackerModuleSettings } from './config.js';
 import { ZTRACKER_SYSTEM_PROMPT_PRESET_NAME, ZTRACKER_SYSTEM_PROMPT_TEXT } from './config.js';
 
 type SystemPromptPreset = {
@@ -89,19 +89,64 @@ export function shouldWarnAboutSharedSystemPromptSelection(
   return trackerPromptName.toLowerCase() === globalPromptName.toLowerCase();
 }
 
+/**
+ * Creates a named system-prompt preset from `content` if one doesn't already exist. Used both by
+ * the shared zTracker preset (installation-wide) and by per-Module presets (see
+ * `ensureModuleSystemPromptPresetInstalled`). Never overwrites an existing preset of the same
+ * name - callers that need "recreate even if it once existed" call this only when they know it's
+ * safe to do so (creation time, or an explicit user-initiated recreate action).
+ */
+export async function ensureSystemPromptPresetInstalled(
+  name: string,
+  content: string,
+  context: SillyTavernContextLike = SillyTavern.getContext(),
+): Promise<boolean> {
+  const trimmedName = name.trim();
+  if (!trimmedName) return false;
+
+  const manager = getSystemPromptPresetManager(context);
+  if (!manager?.savePreset) return false;
+  if (manager.getCompletionPresetByName(trimmedName)) return false;
+
+  await manager.savePreset(trimmedName, { name: trimmedName, content });
+  return true;
+}
+
 export async function ensureZTrackerSystemPromptPresetInstalled(
   context: SillyTavernContextLike = SillyTavern.getContext(),
 ): Promise<boolean> {
-  const manager = getSystemPromptPresetManager(context);
-  if (!manager?.savePreset) return false;
-  if (manager.getCompletionPresetByName(ZTRACKER_SYSTEM_PROMPT_PRESET_NAME)) return false;
+  return ensureSystemPromptPresetInstalled(ZTRACKER_SYSTEM_PROMPT_PRESET_NAME, ZTRACKER_SYSTEM_PROMPT_TEXT, context);
+}
 
-  await manager.savePreset(ZTRACKER_SYSTEM_PROMPT_PRESET_NAME, {
-    name: ZTRACKER_SYSTEM_PROMPT_PRESET_NAME,
-    content: ZTRACKER_SYSTEM_PROMPT_TEXT,
-  });
+/**
+ * Installs a Module's own referenced system-prompt preset from its persisted `content`, if that
+ * Module has content and the preset doesn't already exist. Intended for creation-time calls only
+ * (fresh-install seeding, or immediately after a manual Import) - see
+ * `checkModuleSystemPromptPresetExists` for the later, non-creating check used elsewhere.
+ */
+export async function ensureModuleSystemPromptPresetInstalled(
+  module: Pick<TrackerModule, 'systemPrompt'>,
+  context: SillyTavernContextLike = SillyTavern.getContext(),
+): Promise<boolean> {
+  const content = module.systemPrompt.content?.trim();
+  if (!content) return false;
 
-  return true;
+  return ensureSystemPromptPresetInstalled(module.systemPrompt.savedName, content, context);
+}
+
+/**
+ * Reports whether a Module with persisted `content` has a missing referenced preset, without
+ * creating it - used by the Settings warning/"recreate" UI so a later missing-preset check never
+ * silently recreates (and potentially clobbers a user's SillyTavern-side customization).
+ */
+export function checkModuleSystemPromptPresetExists(
+  module: Pick<TrackerModule, 'systemPrompt'>,
+  context: SillyTavernContextLike = SillyTavern.getContext(),
+): boolean {
+  const content = module.systemPrompt.content?.trim();
+  if (!content) return true;
+
+  return hasSystemPromptPreset(module.systemPrompt.savedName, context);
 }
 
 export function resolveTrackerSystemPromptName(

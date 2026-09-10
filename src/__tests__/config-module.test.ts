@@ -4,8 +4,8 @@
 
 import {
   DEFAULT_MODULE_ID,
-  DEFAULT_SCHEMA_HTML,
-  DEFAULT_SCHEMA_VALUE,
+  PLACEHOLDER_SCHEMA_HTML,
+  PLACEHOLDER_SCHEMA_VALUE,
   defaultSettings,
   applySettingsToTrackerModule,
   createDefaultTrackerModule,
@@ -15,6 +15,7 @@ import {
   migrateLegacyChatMetadataToModules,
   migrateTrackerModuleAutoSettings,
   migrateTrackerModuleIncludeLists,
+  migrateTrackerModuleSystemPromptContent,
   normalizeTrackerModuleIncludeList,
   pruneTrackerModuleIncludeReferences,
   readModuleChatSchemaPresetKey,
@@ -22,21 +23,30 @@ import {
 } from '../config.js';
 
 describe('tracker module defaults', () => {
-  test('default settings include the stable default module', () => {
-    expect(defaultSettings.modules).toHaveLength(1);
-    expect(defaultSettings.modules[0].id).toBe(DEFAULT_MODULE_ID);
-    expect(defaultSettings.modules[0].order).toBe(0);
+  test('fresh install has no synchronous default module - the only source of Module content is fresh-install seeding', () => {
+    // A fresh install's built-in Module comes from seeding templates/modules/scene-tracker.json
+    // (see src/index.tsx's fresh-install branch and premade-module-templates.test.ts), not from
+    // this constant.
+    expect(defaultSettings.modules).toEqual([]);
   });
 
-  test('fresh-install default module is named descriptively, not "Default"', () => {
-    expect(defaultSettings.modules[0].name).toBe('Scene Tracker');
-    expect(createDefaultTrackerModule().name).toBe('Scene Tracker');
+  test('the generic placeholder Module builder is distinct from any shipped starter template', () => {
+    const module = createDefaultTrackerModule();
+
+    expect(module.name).toBe('New Tracker');
+    expect(module.id).toBe(DEFAULT_MODULE_ID);
+    expect(module.systemPrompt.content).toBe('');
   });
 
-  test('recovering a missing module collection also uses the descriptive name', () => {
+  test('recovering a missing module collection also uses the descriptive name and the legacy id, not the new scene-tracker id', () => {
     const settingsWithNoModules: any = { ...structuredClone(defaultSettings), modules: [] };
 
-    expect(getTrackerModule(settingsWithNoModules).name).toBe('Scene Tracker');
+    const recovered = getTrackerModule(settingsWithNoModules);
+    expect(recovered.name).toBe('Scene Tracker');
+    // This is the transient read-time recovery fallback (corrupted-settings recovery on an
+    // already-migrated install, or every fresh-install seed template failing) - it must keep using
+    // the legacy id so an already-migrated install's existing per-message data stays reachable.
+    expect(recovered.id).toBe(DEFAULT_MODULE_ID);
   });
 
   test('new modules default to enabled with auto mode off', () => {
@@ -54,8 +64,8 @@ describe('tracker module defaults', () => {
     const module = createDefaultTrackerModule();
 
     expect(module.schema.preset).toBe('default');
-    expect(module.schema.presets.default.value).toBe(DEFAULT_SCHEMA_VALUE);
-    expect(module.schema.presets.default.html).toBe(DEFAULT_SCHEMA_HTML);
+    expect(module.schema.presets.default.value).toBe(PLACEHOLDER_SCHEMA_VALUE);
+    expect(module.schema.presets.default.html).toBe(PLACEHOLDER_SCHEMA_HTML);
     expect(module.generation.mode).toBe('full');
     expect(module.generation.conversationRoleMode).toBe('preserve');
     expect(module.injection.transformPreset).toBe('default');
@@ -127,7 +137,7 @@ describe('tracker module defaults', () => {
     );
     expect(legacySettings.modules[0].auto.enabled).toBe(true);
     expect(legacySettings.modules[0].connection).toEqual({ source: 'active', profileId: 'profile-1' });
-    expect(legacySettings.modules[0].systemPrompt).toEqual({ mode: 'saved', savedName: 'System A' });
+    expect(legacySettings.modules[0].systemPrompt).toEqual({ mode: 'saved', savedName: 'System A', content: '' });
     expect(legacySettings.modules[0].generation).toEqual(
       expect.objectContaining({
         mode: 'sequential-parts',
@@ -159,8 +169,13 @@ describe('tracker module defaults', () => {
     expect(legacySettings.modules[0].generation.includeModules).toEqual([{ target: 'self', count: 5 }]);
   });
 
-  test('settings migration is idempotent after the format bump', () => {
-    const settings: any = structuredClone(defaultSettings);
+  test('settings migration is idempotent once real modules already exist on the current format', () => {
+    // Fresh installs have zero modules by design (see defaultSettings), so this uses a settings
+    // object shaped like an already-migrated (or already-seeded) install instead.
+    const settings: any = {
+      ...structuredClone(defaultSettings),
+      modules: [createDefaultTrackerModule({ id: 'scene-tracker', name: 'Scene Tracker', order: 0 })],
+    };
 
     expect(migrateLegacySettingsToModules(settings)).toBe(false);
     expect(settings.modules).toHaveLength(1);
@@ -258,6 +273,35 @@ describe('migrateTrackerModuleAutoSettings', () => {
 
     expect(migrateTrackerModuleAutoSettings(settings)).toBe(false);
     expect(settings.modules[0].auto).toEqual({ enabled: true, direction: 'inputs' });
+  });
+});
+
+describe('migrateTrackerModuleSystemPromptContent', () => {
+  test('backfills a missing content field to an empty string', () => {
+    const module = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    delete (module.systemPrompt as any).content;
+    const settings: any = { ...structuredClone(defaultSettings), modules: [module] };
+
+    expect(migrateTrackerModuleSystemPromptContent(settings)).toBe(true);
+    expect(settings.modules[0].systemPrompt.content).toBe('');
+  });
+
+  test('is idempotent and never overwrites an existing content string, including an empty one', () => {
+    const module = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    module.systemPrompt.content = 'shipped prompt text';
+    const settings: any = { ...structuredClone(defaultSettings), modules: [module] };
+
+    expect(migrateTrackerModuleSystemPromptContent(settings)).toBe(false);
+    expect(settings.modules[0].systemPrompt.content).toBe('shipped prompt text');
+  });
+
+  test('defends against a missing systemPrompt object entirely', () => {
+    const module = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    delete (module as any).systemPrompt;
+    const settings: any = { ...structuredClone(defaultSettings), modules: [module] };
+
+    expect(() => migrateTrackerModuleSystemPromptContent(settings)).not.toThrow();
+    expect(migrateTrackerModuleSystemPromptContent(settings)).toBe(false);
   });
 });
 

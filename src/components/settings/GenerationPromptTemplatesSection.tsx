@@ -1,10 +1,10 @@
 import { FC } from 'react';
 import { STButton, STTextarea } from 'sillytavern-utils-lib/components/react';
 import {
-  DEFAULT_PROMPT,
-  DEFAULT_PROMPT_JSON,
-  DEFAULT_PROMPT_TOON,
-  DEFAULT_PROMPT_XML,
+  PLACEHOLDER_PROMPT,
+  PLACEHOLDER_PROMPT_JSON,
+  PLACEHOLDER_PROMPT_TOON,
+  PLACEHOLDER_PROMPT_XML,
   PromptEngineeringMode,
 } from '../../config.js';
 import { SettingsSectionProps } from './settings-shared.js';
@@ -14,25 +14,25 @@ const promptTemplateConfigs = [
     key: 'prompt',
     label: 'Prompt',
     title: 'Main prompt template used during tracker generation.',
-    defaultValue: DEFAULT_PROMPT,
+    defaultValue: PLACEHOLDER_PROMPT,
   },
   {
     key: 'promptJson',
     label: 'Prompt (JSON)',
     title: 'Prompt-engineering template used when Prompt Engineering is set to JSON.',
-    defaultValue: DEFAULT_PROMPT_JSON,
+    defaultValue: PLACEHOLDER_PROMPT_JSON,
   },
   {
     key: 'promptXml',
     label: 'Prompt (XML)',
     title: 'Prompt-engineering template used when Prompt Engineering is set to XML.',
-    defaultValue: DEFAULT_PROMPT_XML,
+    defaultValue: PLACEHOLDER_PROMPT_XML,
   },
   {
     key: 'promptToon',
     label: 'Prompt (TOON)',
     title: 'Prompt-engineering template used when Prompt Engineering is set to TOON.',
-    defaultValue: DEFAULT_PROMPT_TOON,
+    defaultValue: PLACEHOLDER_PROMPT_TOON,
   },
 ] as const;
 
