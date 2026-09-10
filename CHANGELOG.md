@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-09-10
+
 ### Added
 
 - Fresh installs now automatically seed all three starter Modules on first load: **Scene Tracker** (enabled) plus **Plot Log** and **Plot Steer** (disabled, opt-in). Each ships with its own tailored system prompt, installed as a versioned SillyTavern system-prompt preset the moment the Module is created (fresh install or manual Import). If a Module's shipped preset is later deleted from SillyTavern, a "Recreate from shipped prompt" action next to the existing missing-preset warning restores it with one click.
