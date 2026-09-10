@@ -4,18 +4,10 @@ import { settingsManager, ZTrackerSettings } from './components/Settings.js';
 import Handlebars from 'handlebars';
 import { Generator } from 'sillytavern-utils-lib';
 import { st_echo } from 'sillytavern-utils-lib/config';
-import {
-  migrateCorruptedSchemaPresetRequiredMetadata,
-  migrateInvalidNumericSettings,
-  migrateLegacyAutoMode,
-  migrateLegacyPromptTemplates,
-  migrateLegacySettingsToModules,
-  migrateTrackerModuleAutoSettings,
-  migrateTrackerModuleIncludeLists,
-} from './config.js';
 import { createTrackerActions } from './ui/tracker-actions.js';
 import { initializeGlobalUI } from './ui/ui-init.js';
 import { ensureZTrackerSystemPromptPresetInstalled } from './system-prompt.js';
+import { initializeStartupSettings } from './startup.js';
 import {
   renderTracker,
 } from './tracker.js';
@@ -63,25 +55,10 @@ function renderReactSettings() {
   );
 }
 
-async function main() {
-  const settings = settingsManager.getSettings();
-  // Order matters: migrateTrackerModuleAutoSettings and migrateTrackerModuleIncludeLists read/write
-  // settings.modules, so they must run after migrateLegacySettingsToModules has populated that
-  // collection (array evaluation order below is what enforces this - do not reorder or run these
-  // independently).
-  const didMigrateLegacySettings = [
-    migrateLegacyAutoMode(settings),
-    migrateLegacyPromptTemplates(settings),
-    migrateCorruptedSchemaPresetRequiredMetadata(settings),
-    migrateInvalidNumericSettings(settings),
-    migrateLegacySettingsToModules(settings),
-    migrateTrackerModuleAutoSettings(settings),
-    migrateTrackerModuleIncludeLists(settings),
-  ].some(Boolean);
-
-  if (didMigrateLegacySettings) {
-    settingsManager.saveSettings();
-  }
+async function main(isFreshInstall: boolean) {
+  // Branch selection (fresh-install seeding vs. legacy-settings migration) lives in
+  // src/startup.ts so it can be unit-tested; this entrypoint is never imported in tests.
+  await initializeStartupSettings({ isFreshInstall, settingsManager, importMetaUrl: import.meta.url });
 
   try {
     await ensureZTrackerSystemPromptPresetInstalled();
@@ -109,7 +86,7 @@ async function main() {
 
 settingsManager
   .initializeSettings()
-  .then(main)
+  .then((result) => main(result.oldSettings === null))
   .catch((error) => {
     console.error(error);
     st_echo('error', 'zTracker data migration failed. Check console for details.');

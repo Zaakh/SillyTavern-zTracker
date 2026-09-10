@@ -11,6 +11,9 @@ export const SystemPromptSettingsSection: FC<{
   refreshSystemPromptState: () => void;
   showMissingSavedSystemPromptWarning: boolean;
   showSharedSystemPromptWarning: boolean;
+  showRecreateSystemPromptAction: boolean;
+  recreateModuleSystemPromptPreset: () => void | Promise<void>;
+  isRecreatingSystemPrompt: boolean;
   currentGlobalSystemPromptName?: string;
 }> = ({
   settings,
@@ -19,6 +22,9 @@ export const SystemPromptSettingsSection: FC<{
   refreshSystemPromptState,
   showMissingSavedSystemPromptWarning,
   showSharedSystemPromptWarning,
+  showRecreateSystemPromptAction,
+  recreateModuleSystemPromptPreset,
+  isRecreatingSystemPrompt,
   currentGlobalSystemPromptName,
 }) => {
   return (
@@ -92,6 +98,20 @@ export const SystemPromptSettingsSection: FC<{
           {showMissingSavedSystemPromptWarning && (
             <small style={{ color: 'var(--warning-color, #f0ad4e)' }}>
               Warning: the selected saved system prompt no longer exists. Refresh the list and choose another prompt before generating trackers.
+              {showRecreateSystemPromptAction && (
+                <>
+                  {' '}
+                  <button
+                    type="button"
+                    className="menu_button"
+                    data-testid="recreate-system-prompt-button"
+                    disabled={isRecreatingSystemPrompt}
+                    onClick={() => void recreateModuleSystemPromptPreset()}
+                  >
+                    {isRecreatingSystemPrompt ? 'Recreating…' : 'Recreate from shipped prompt'}
+                  </button>
+                </>
+              )}
             </small>
           )}
           {showSharedSystemPromptWarning && (

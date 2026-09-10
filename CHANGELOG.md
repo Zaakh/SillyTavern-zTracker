@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [2.4.0] - 2026-09-10
+
+### Added
+
+- Fresh installs now automatically seed all three starter Modules on first load: **Scene Tracker** (enabled) plus **Plot Log** and **Plot Steer** (disabled, opt-in). Each ships with its own tailored system prompt, installed as a versioned SillyTavern system-prompt preset the moment the Module is created (fresh install or manual Import). If a Module's shipped preset is later deleted from SillyTavern, a "Recreate from shipped prompt" action next to the existing missing-preset warning restores it with one click.
+
+### Changed
+
+- **BREAKING (fresh installs only)**: the built-in Scene Tracker Module's id is now `scene-tracker` instead of the legacy `default` id. Existing installations that already migrated from the legacy single-tracker format are unaffected and keep their current Module id and data.
+
+### Fixed
+
+- Settings: editing a Module field no longer silently does nothing in the rare case where every starter template failed to seed (e.g. a broken install); the missing Module is now recreated automatically so edits persist.
+- A warning is now shown if zTracker can't automatically set up its starter trackers on a fresh install (partially or fully), instead of only logging to the browser console.
+
 ## [2.3.2] - 2026-09-09
 
 ### Changed
