@@ -9,6 +9,7 @@ import {
   defaultSettings,
   applySettingsToTrackerModule,
   createDefaultTrackerModule,
+  createTrackerModuleFromLegacySettings,
   getSettingsForTrackerModule,
   getTrackerModule,
   migrateLegacySettingsToModules,
@@ -58,6 +59,14 @@ describe('tracker module defaults', () => {
     expect(module.enabled).toBe(true);
     expect(module.auto.enabled).toBe(false);
     expect(module.auto.direction).toBe('both');
+  });
+
+  test('new modules default to the active connection instead of an empty saved profile', () => {
+    // resolveTrackerConnection() rejects `saved` with an empty profileId outright, so both
+    // "Add Module" and the legacy-upgrade base must not default to that combination.
+    const module = createDefaultTrackerModule();
+
+    expect(module.connection).toEqual({ source: 'active', profileId: '' });
   });
 
   test('module owns schema, prompt, generation, and injection defaults', () => {
@@ -167,6 +176,19 @@ describe('tracker module defaults', () => {
     );
     // The mandatory self entry is seeded once from the legacy self-history value (5) during this same upgrade.
     expect(legacySettings.modules[0].generation.includeModules).toEqual([{ target: 'self', count: 5 }]);
+  });
+
+  test('a legacy Module with an explicit persisted connectionSource keeps it after the connection default change', () => {
+    // createTrackerModuleFromLegacySettings() falls back to createDefaultTrackerModule()'s
+    // connection default only when the legacy settings never persisted connectionSource. A legacy
+    // user who explicitly had `saved` must not be silently upgraded to `active`.
+    const savedModule = createTrackerModuleFromLegacySettings({ connectionSource: 'saved', profileId: 'legacy-profile' });
+    expect(savedModule.connection).toEqual({ source: 'saved', profileId: 'legacy-profile' });
+  });
+
+  test('a legacy Module with no persisted connectionSource upgrades to the new active-connection default', () => {
+    const upgradedModule = createTrackerModuleFromLegacySettings({});
+    expect(upgradedModule.connection).toEqual({ source: 'active', profileId: '' });
   });
 
   test('settings migration is idempotent once real modules already exist on the current format', () => {

@@ -128,3 +128,82 @@ describe('SystemPromptSettingsSection recreate-preset action', () => {
     expect(recreateButton?.textContent).toBe('Recreating…');
   });
 });
+
+/** Updates one controlled select through the native DOM setter so React sees the change. */
+function setSelectValue(element: HTMLSelectElement, value: string): void {
+  const descriptor = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  descriptor?.set?.call(element, value);
+  element.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+describe('System Prompt Source mode switch', () => {
+  let root: Root | undefined;
+  let container: HTMLDivElement;
+
+  beforeEach(() => {
+    (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => {
+      root?.unmount();
+    });
+    root = undefined;
+    container.remove();
+  });
+
+  function renderWithSettings(settings: { trackerSystemPromptMode: string; trackerSystemPromptSavedName: string }) {
+    act(() => {
+      root!.render(
+        React.createElement(SystemPromptSettingsSection, {
+          settings,
+          updateAndRefresh: (updater: (current: typeof settings) => void) =>
+            act(() => {
+              updater(settings);
+              renderWithSettings(settings);
+            }),
+          systemPromptItems: [],
+          refreshSystemPromptState: jest.fn(),
+          showMissingSavedSystemPromptWarning: false,
+          showSharedSystemPromptWarning: false,
+          showRecreateSystemPromptAction: false,
+          recreateModuleSystemPromptPreset: jest.fn(),
+          isRecreatingSystemPrompt: false,
+        } as any),
+      );
+    });
+  }
+
+  function findModeSelect(): HTMLSelectElement {
+    const select = container.querySelector('select');
+    if (!(select instanceof HTMLSelectElement)) throw new Error('mode select not found');
+    return select;
+  }
+
+  test('switching to saved mode with no prior selection leaves the saved name empty', () => {
+    const settings = { trackerSystemPromptMode: 'profile', trackerSystemPromptSavedName: '' };
+    renderWithSettings(settings);
+
+    act(() => {
+      setSelectValue(findModeSelect(), 'saved');
+    });
+
+    expect(settings.trackerSystemPromptMode).toBe('saved');
+    expect(settings.trackerSystemPromptSavedName).toBe('');
+  });
+
+  test('switching to saved mode preserves an existing saved name', () => {
+    const settings = { trackerSystemPromptMode: 'profile', trackerSystemPromptSavedName: 'zTracker-Custom-1.0' };
+    renderWithSettings(settings);
+
+    act(() => {
+      setSelectValue(findModeSelect(), 'saved');
+    });
+
+    expect(settings.trackerSystemPromptMode).toBe('saved');
+    expect(settings.trackerSystemPromptSavedName).toBe('zTracker-Custom-1.0');
+  });
+});

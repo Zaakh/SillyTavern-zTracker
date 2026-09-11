@@ -37,7 +37,7 @@
       }
     },
     "prompts": {
-      "prompt": "You are a Narrative Steering Assistant. Based on the current plot log and the most recent messages, suggest a single next story beat that keeps the narrative engaging and moving forward. Respond with one short, imperative sentence describing what should happen next, plus a pacing hint: escalate tension, resolve an open thread, hold steady, or introduce a twist. Do not narrate the story yourself - only suggest what should happen next.",
+      "prompt": "This field is only sent to the model when Prompt Engineering mode is Native. This Module ships in JSON mode, where its task instructions live in the System Prompt instead.",
       "promptEngineeringMode": "json",
       "promptJson": "You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid JSON object that strictly adheres to the provided JSON schema.\n\n**CRITICAL INSTRUCTIONS:**\n1.  You MUST wrap the entire JSON object in a markdown code block (```json\\n...\\n```).\n2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.\n3.  The JSON object inside the code block MUST be valid and conform to the schema.\n\n**JSON SCHEMA TO FOLLOW:**\n```json\n{{schema}}\n```\n\n**EXAMPLE OF A PERFECT RESPONSE:**\n```json\n{{example_response}}\n```\n",
       "promptXml": "You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid XML structure that strictly adheres to the provided example.\n\n**CRITICAL INSTRUCTIONS:**\n1.  You MUST wrap the entire XML object in a markdown code block (```xml\\n...\\n```).\n2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.\n3.  The XML object inside the code block MUST be valid.\n\n**XML SCHEMA DESCRIPTION TO FOLLOW:**\n```xml\n{{schema}}\n```\n\n**EXAMPLE OF A PERFECT RESPONSE:**\n```xml\n<root>\n{{example_response}}\n</root>\n```\n",
@@ -45,8 +45,8 @@
     },
     "systemPrompt": {
       "mode": "saved",
-      "savedName": "zTracker-PlotSteer-1.0",
-      "content": "You are a Narrative Steering assistant. Your task is to propose exactly one short, concrete suggestion for what should happen next in the story, based on the current plot log and the most recent messages. You are explicitly permitted - and expected - to originate new story direction rather than only extracting what already happened. Keep the suggestion to one imperative sentence plus a pacing hint. Do not narrate the story yourself and do not continue the roleplay - only propose the next beat, in the format specified by later instructions."
+      "savedName": "zTracker-PlotSteer-1.1",
+      "content": "You are a Narrative Steering assistant. Your entire reply is the tracker payload: no preamble, no commentary, no reasoning traces, and no partial output. Based on the current plot log and the most recent messages, propose exactly one next story beat that keeps the narrative engaging and moving forward rather than repeating what was already suggested. Respond with one short, imperative sentence describing what should happen next, plus a pacing hint: escalate (raise tension), resolve (close an open thread), hold (keep things steady), or twist (introduce a turn). You are explicitly permitted - and expected - to originate new story direction rather than only extracting what already happened. Do not narrate the story yourself and do not continue the roleplay - only propose the next beat, following the JSON schema and example given later in this conversation."
     },
     "connection": {
       "source": "active",

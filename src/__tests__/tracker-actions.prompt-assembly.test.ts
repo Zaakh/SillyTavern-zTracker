@@ -23,6 +23,7 @@ import {
   TEST_IMPORT_META_URL,
 } from '../test-utils/tracker-actions-test-helpers.js';
 import { wrappedConversationRoleSpeakerLossFixture } from '../test-fixtures/tracker-prompt-fixtures.js';
+import { createDefaultTrackerModule, defaultSettings } from '../config.js';
 
 const trackerPartsModule = await import('../tracker-parts.js');
 
@@ -963,6 +964,52 @@ describe('createTrackerActions prompt assembly', () => {
     expect((buildPromptMock as jest.Mock).mock.calls[0][1]).toHaveProperty('presetName', 'Active Preset');
     expect(generateRequest).toHaveBeenCalled();
     expect(generateRequest.mock.calls[0][0].profileId).toBe('active-profile');
+    expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
+  });
+
+  test('resolves a freshly created Module\'s connection against the active SillyTavern connection without extra setup', async () => {
+    // createDefaultTrackerModule() is the builder behind both "Add Module" and the legacy-upgrade
+    // base; its connection default must not be `saved` with an empty profileId, which
+    // resolveTrackerConnection() rejects outright.
+    const context = makeContext({
+      extensionSettings: {
+        connectionManager: {
+          selectedProfile: { id: 'active-profile', api: 'openai', preset: 'Live Active Preset' },
+        },
+      },
+      getPresetManager: () => ({ getSelectedPresetName: () => 'Active Preset' }),
+      mainApi: 'openai',
+    });
+    installSillyTavernContext(context);
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    const generateRequest = makeGenerateRequest();
+    const freshModule = createDefaultTrackerModule({ id: 'fresh', name: 'Fresh Module', order: 0 });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile({ id: 'saved-profile', api: 'openai' })],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => ({ ...structuredClone(defaultSettings), modules: [freshModule] }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0, { moduleId: 'fresh' });
+
+    expect(stEchoMock).not.toHaveBeenCalledWith('error', expect.stringContaining('select a connection profile'));
+    expect(generateRequest).toHaveBeenCalled();
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 

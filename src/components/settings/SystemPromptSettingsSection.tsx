@@ -1,6 +1,6 @@
 import { FC } from 'react';
 import { STButton, PresetItem } from 'sillytavern-utils-lib/components/react';
-import { TrackerModuleSettings, ZTRACKER_SYSTEM_PROMPT_PRESET_NAME } from '../../config.js';
+import { TrackerModuleSettings } from '../../config.js';
 import type { SettingsUpdateAndRefresh } from './settings-shared.js';
 
 // Contains the tracker-only system prompt selector and the warnings tied to that configuration.
@@ -38,11 +38,7 @@ export const SystemPromptSettingsSection: FC<{
         value={settings.trackerSystemPromptMode}
         onChange={(e) =>
           updateAndRefresh((s) => {
-            const mode = e.target.value as TrackerModuleSettings['trackerSystemPromptMode'];
-            s.trackerSystemPromptMode = mode;
-            if (mode === 'saved' && !s.trackerSystemPromptSavedName) {
-              s.trackerSystemPromptSavedName = ZTRACKER_SYSTEM_PROMPT_PRESET_NAME;
-            }
+            s.trackerSystemPromptMode = e.target.value as TrackerModuleSettings['trackerSystemPromptMode'];
           })
         }
       >
@@ -83,7 +79,7 @@ export const SystemPromptSettingsSection: FC<{
                     s.trackerSystemPromptSavedName = e.target.value;
                   })
                 }
-                placeholder={ZTRACKER_SYSTEM_PROMPT_PRESET_NAME}
+                placeholder="e.g. zTracker-SceneTracker-1.1"
               />
             )}
             <STButton
@@ -93,7 +89,7 @@ export const SystemPromptSettingsSection: FC<{
             />
           </div>
           <small>
-            Edit prompts in SillyTavern&apos;s System Prompt manager. The shipped &quot;{ZTRACKER_SYSTEM_PROMPT_PRESET_NAME}&quot; preset is optimized for tracker generation. Older zTracker prompt presets are left in place so you can remove them manually if they are no longer needed. Click refresh after changing prompts elsewhere in SillyTavern.
+            Each Module auto-installs its own saved system prompt from its <code>systemPrompt</code> content the first time it is created or imported - pick that Module&apos;s preset here, or use &quot;Recreate from shipped prompt&quot; below if it&apos;s missing. Older zTracker prompt presets are left in place so you can remove them manually if they are no longer needed. Click refresh after changing prompts elsewhere in SillyTavern.
           </small>
           {showMissingSavedSystemPromptWarning && (
             <small style={{ color: 'var(--warning-color, #f0ad4e)' }}>

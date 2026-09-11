@@ -10,12 +10,14 @@ import {
   DEFAULT_SCHEMA_HTML,
   PromptEngineeringMode,
   TrackerWorldInfoPolicyMode,
-  ZTRACKER_SYSTEM_PROMPT_PRESET_NAME,
-  ZTRACKER_SYSTEM_PROMPT_TEXT,
 } from '../src/config.js';
 
 /** Reuses the live `Bar` profile id so local captures match the observed runtime request. */
 export const LIVE_BAR_PROFILE_ID = 'a16e3fcd-6739-4843-92f8-528bb85f92b2';
+
+/** Local stand-in for the Module's own saved system-prompt preset, replacing the deleted installation-wide constant. */
+const LIVE_BAR_SAVED_SYSTEM_PROMPT_NAME = 'zTracker-SceneTracker-1.1';
+const LIVE_BAR_SAVED_SYSTEM_PROMPT_TEXT = 'You are a structured data extraction assistant. Analyze the conversation and produce a tracker update conforming to the provided schema.';
 
 /** Mirrors the schema shown in the live zTracker settings panel for the `Bar` chat. */
 export const LIVE_BAR_SCHEMA_VALUE = {
@@ -181,13 +183,13 @@ export function installLiveLikeSillyTavernContext() {
       if (apiId === 'sysprompt') {
         return {
           getCompletionPresetByName: (name?: string) =>
-            name === ZTRACKER_SYSTEM_PROMPT_PRESET_NAME
+            name === LIVE_BAR_SAVED_SYSTEM_PROMPT_NAME
               ? {
-                  name: ZTRACKER_SYSTEM_PROMPT_PRESET_NAME,
-                  content: ZTRACKER_SYSTEM_PROMPT_TEXT,
+                  name: LIVE_BAR_SAVED_SYSTEM_PROMPT_NAME,
+                  content: LIVE_BAR_SAVED_SYSTEM_PROMPT_TEXT,
                 }
               : undefined,
-          getPresetList: () => ({ presets: [], preset_names: [ZTRACKER_SYSTEM_PROMPT_PRESET_NAME] }),
+          getPresetList: () => ({ presets: [], preset_names: [LIVE_BAR_SAVED_SYSTEM_PROMPT_NAME] }),
         };
       }
       return null;
@@ -202,9 +204,13 @@ export function installLiveLikeSillyTavernContext() {
 /** Returns settings aligned with the live `Bar` capture for the requested prompt-engineering mode. */
 export function makeLiveLikeSettings(mode: PromptEngineeringMode) {
   return {
+    // Explicit: this fixture has no `modules` array, so getTrackerModule()'s settings-recovery
+    // fallback (createDefaultTrackerModule()'s connection default) would otherwise apply, and
+    // this fixture's mocked SillyTavern context has no active connection to resolve against.
+    connectionSource: 'saved',
     profileId: LIVE_BAR_PROFILE_ID,
     trackerSystemPromptMode: 'saved',
-    trackerSystemPromptSavedName: ZTRACKER_SYSTEM_PROMPT_PRESET_NAME,
+    trackerSystemPromptSavedName: LIVE_BAR_SAVED_SYSTEM_PROMPT_NAME,
     maxResponseToken: 16000,
     autoMode: {},
     sequentialPartGeneration: false,
