@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-09-11
+
 ### Changed
 
 - **BREAKING (installation-wide default only)**: zTracker no longer installs a shared `zTracker-<version>` system-prompt preset on startup. Every shipped starter Module already carries and auto-installs its own tailored system prompt; existing installs keep whatever `zTracker-1.3.x` preset already exists in SillyTavern's storage, and any Module still referencing it by name keeps working unchanged.
