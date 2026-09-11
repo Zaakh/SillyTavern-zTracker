@@ -232,20 +232,6 @@ export const DEFAULT_EMBED_SNAPSHOT_HEADER = 'Tracker:';
 /** Small, schema-agnostic starting prompt used by the generic placeholder Module builder ("Add Module" and the legacy-upgrade base) - deliberately distinct from any shipped starter template's own content, which lives entirely under templates/modules/*.json. */
 export const PLACEHOLDER_PROMPT = `You are a tracker assistant. Update this tracker's fields based on the latest message and any previous tracker snapshot, keeping entries short and specific. Edit this prompt and the schema below to describe your own tracker's task.`;
 
-export const ZTRACKER_SYSTEM_PROMPT_PRESET_VERSION = '1.3.1';
-export const ZTRACKER_SYSTEM_PROMPT_PRESET_NAME = `zTracker-${ZTRACKER_SYSTEM_PROMPT_PRESET_VERSION}`;
-
-export const ZTRACKER_SYSTEM_PROMPT_TEXT = `You are a structured data extraction assistant. Your task is to analyze conversations and produce a structured tracker update that conforms to a provided schema and requested output format.
-
-Rules:
-- Output ONLY valid structured data matching the provided schema. No narration, no markdown unless instructed.
-- Fill every field. Use conversation context to infer values not explicitly stated.
-- Prefer short, specific phrases over full sentences.
-- Maintain consistency with any previous tracker snapshot in the conversation.
-- Do NOT continue the conversation or roleplay. Only produce the requested data.
-- Follow all detailed instructions provided later in this conversation.
-- If a later message specifies an output format, wrapper, or schema rendering, follow those instructions exactly.`;
-
 export const PLACEHOLDER_PROMPT_JSON = `You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid JSON object that strictly adheres to the provided JSON schema.
 
 **CRITICAL INSTRUCTIONS:**
@@ -763,7 +749,7 @@ export function createDefaultTrackerModule(options: Partial<Pick<TrackerModule, 
       content: '',
     },
     connection: {
-      source: 'saved',
+      source: 'active',
       profileId: '',
     },
     generation: {

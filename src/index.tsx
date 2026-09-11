@@ -6,7 +6,6 @@ import { Generator } from 'sillytavern-utils-lib';
 import { st_echo } from 'sillytavern-utils-lib/config';
 import { createTrackerActions } from './ui/tracker-actions.js';
 import { initializeGlobalUI } from './ui/ui-init.js';
-import { ensureZTrackerSystemPromptPresetInstalled } from './system-prompt.js';
 import { initializeStartupSettings } from './startup.js';
 import {
   renderTracker,
@@ -59,12 +58,6 @@ async function main(isFreshInstall: boolean) {
   // Branch selection (fresh-install seeding vs. legacy-settings migration) lives in
   // src/startup.ts so it can be unit-tested; this entrypoint is never imported in tests.
   await initializeStartupSettings({ isFreshInstall, settingsManager, importMetaUrl: import.meta.url });
-
-  try {
-    await ensureZTrackerSystemPromptPresetInstalled();
-  } catch (error) {
-    console.warn('zTracker: failed to ensure the recommended system prompt preset exists.', error);
-  }
 
   const actions = createTrackerActions({
     globalContext,

@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-09-11
+
+### Changed
+
+- **BREAKING (installation-wide default only)**: zTracker no longer installs a shared `zTracker-<version>` system-prompt preset on startup. Every shipped starter Module already carries and auto-installs its own tailored system prompt; existing installs keep whatever `zTracker-1.3.x` preset already exists in SillyTavern's storage, and any Module still referencing it by name keeps working unchanged.
+- Settings: the **Prompt** field (and its restore-to-default button) is now disabled whenever the selected Module's Prompt Engineering mode is JSON, XML, or TOON, with a note explaining that those modes use the matching **Prompt (JSON/XML/TOON)** template instead. It was previously always editable even though it was silently ignored outside Native mode.
+- Settings: switching a Module's System Prompt Source to "From specific saved system prompt" with nothing chosen no longer pre-fills a shared preset name; the selection stays empty until you pick one.
+- The three shipped Module templates (Scene Tracker, Plot Log, Plot Steer) have rewritten, model-neutral system prompts.
+
+### Fixed
+
+- A newly added Module (via "Add Module") or a freshly imported/seeded shipped template no longer fails its first tracker generation with "Please select a connection profile..."; it now defaults to using SillyTavern's active connection.
+
 ## [2.4.0] - 2026-09-10
 
 ### Added

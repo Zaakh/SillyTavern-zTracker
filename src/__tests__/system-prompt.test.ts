@@ -3,8 +3,6 @@ import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import {
   checkModuleSystemPromptPresetExists,
   ensureModuleSystemPromptPresetInstalled,
-  ensureSystemPromptPresetInstalled,
-  ensureZTrackerSystemPromptPresetInstalled,
   getCurrentGlobalSystemPromptName,
   getSystemPromptPresetContent,
   hasSystemPromptPreset,
@@ -16,8 +14,6 @@ import {
 import {
   LEGACY_PROMPT_TOON,
   LEGACY_PROMPT_XML,
-  ZTRACKER_SYSTEM_PROMPT_PRESET_NAME,
-  ZTRACKER_SYSTEM_PROMPT_TEXT,
   PLACEHOLDER_PROMPT_TOON,
   PREVIOUS_DEFAULT_PROMPT_TOON,
   PLACEHOLDER_PROMPT_XML,
@@ -69,42 +65,6 @@ describe('system prompt helpers', () => {
     });
 
     expect(names).toEqual(['Default', 'zTracker']);
-  });
-
-  test('installs shipped zTracker system prompt when missing', async () => {
-    const savePreset = jest.fn(async () => undefined);
-
-    const installed = await ensureZTrackerSystemPromptPresetInstalled({
-      getPresetManager: () => ({
-        getCompletionPresetByName: () => undefined,
-        getPresetList: () => ({ presets: [], preset_names: [] }),
-        savePreset,
-      }),
-    });
-
-    expect(installed).toBe(true);
-    expect(savePreset).toHaveBeenCalledWith(ZTRACKER_SYSTEM_PROMPT_PRESET_NAME, {
-      name: ZTRACKER_SYSTEM_PROMPT_PRESET_NAME,
-      content: ZTRACKER_SYSTEM_PROMPT_TEXT,
-    });
-  });
-
-  test('does not overwrite existing shipped zTracker system prompt', async () => {
-    const savePreset = jest.fn(async () => undefined);
-
-    const installed = await ensureZTrackerSystemPromptPresetInstalled({
-      getPresetManager: () => ({
-        getCompletionPresetByName: () => ({
-          name: ZTRACKER_SYSTEM_PROMPT_PRESET_NAME,
-          content: 'customized',
-        }),
-        getPresetList: () => ({ presets: [], preset_names: [] }),
-        savePreset,
-      }),
-    });
-
-    expect(installed).toBe(false);
-    expect(savePreset).not.toHaveBeenCalled();
   });
 
   test('checks whether a saved preset exists', () => {
@@ -338,31 +298,37 @@ describe('system prompt helpers', () => {
 });
 
 describe('per-Module system-prompt preset installation (creation-time self-heal only)', () => {
-  test('ensureSystemPromptPresetInstalled creates a named preset when missing', async () => {
+  test('ensureModuleSystemPromptPresetInstalled creates a named preset when missing', async () => {
     const savePreset = jest.fn(async () => undefined);
 
-    const installed = await ensureSystemPromptPresetInstalled('zTracker-Custom-1.0', 'custom text', {
-      getPresetManager: () => ({
-        getCompletionPresetByName: () => undefined,
-        getPresetList: () => ({ presets: [], preset_names: [] }),
-        savePreset,
-      }),
-    });
+    const installed = await ensureModuleSystemPromptPresetInstalled(
+      { systemPrompt: { mode: 'saved', savedName: 'zTracker-Custom-1.0', content: 'custom text' } },
+      {
+        getPresetManager: () => ({
+          getCompletionPresetByName: () => undefined,
+          getPresetList: () => ({ presets: [], preset_names: [] }),
+          savePreset,
+        }),
+      },
+    );
 
     expect(installed).toBe(true);
     expect(savePreset).toHaveBeenCalledWith('zTracker-Custom-1.0', { name: 'zTracker-Custom-1.0', content: 'custom text' });
   });
 
-  test('ensureSystemPromptPresetInstalled leaves an existing preset untouched', async () => {
+  test('ensureModuleSystemPromptPresetInstalled leaves an existing preset untouched', async () => {
     const savePreset = jest.fn(async () => undefined);
 
-    const installed = await ensureSystemPromptPresetInstalled('zTracker-Custom-1.0', 'custom text', {
-      getPresetManager: () => ({
-        getCompletionPresetByName: () => ({ name: 'zTracker-Custom-1.0', content: 'user-customized' }),
-        getPresetList: () => ({ presets: [], preset_names: [] }),
-        savePreset,
-      }),
-    });
+    const installed = await ensureModuleSystemPromptPresetInstalled(
+      { systemPrompt: { mode: 'saved', savedName: 'zTracker-Custom-1.0', content: 'custom text' } },
+      {
+        getPresetManager: () => ({
+          getCompletionPresetByName: () => ({ name: 'zTracker-Custom-1.0', content: 'user-customized' }),
+          getPresetList: () => ({ presets: [], preset_names: [] }),
+          savePreset,
+        }),
+      },
+    );
 
     expect(installed).toBe(false);
     expect(savePreset).not.toHaveBeenCalled();
@@ -437,5 +403,22 @@ describe('per-Module system-prompt preset installation (creation-time self-heal 
     );
 
     expect(exists).toBe(true);
+  });
+
+  test('checkModuleSystemPromptPresetExists reports true (nothing to recreate) for a content-less Module even when the named preset is genuinely missing', () => {
+    // This is the hand-created/legacy-migrated Module case Settings.tsx relies on:
+    // showMissingSavedSystemPromptWarning (driven by hasSystemPromptPreset) must still fire so
+    // the user isn't left silently pointed at a missing preset, while showRecreateSystemPromptAction
+    // (driven by this function) stays false, since there is no shipped content to recreate from.
+    const context = {
+      getPresetManager: () => ({
+        getCompletionPresetByName: () => undefined,
+        getPresetList: () => ({ presets: [], preset_names: [] }),
+      }),
+    };
+    const contentLessModule = { systemPrompt: { mode: 'saved' as const, savedName: 'zTracker-Custom-1.0', content: '' } };
+
+    expect(hasSystemPromptPreset('zTracker-Custom-1.0', context)).toBe(false);
+    expect(checkModuleSystemPromptPresetExists(contentLessModule, context)).toBe(true);
   });
 });

@@ -80,8 +80,19 @@ const buttonMock = jest.fn(
 );
 
 const textareaMock = jest.fn(
-  ({ value, onChange, rows, placeholder }: { value?: string; onChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void; rows?: number; placeholder?: string }) =>
-    React.createElement('textarea', { value: value ?? '', rows, placeholder, onChange }),
+  ({
+    value,
+    onChange,
+    rows,
+    placeholder,
+    disabled,
+  }: {
+    value?: string;
+    onChange?: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
+    rows?: number;
+    placeholder?: string;
+    disabled?: boolean;
+  }) => React.createElement('textarea', { value: value ?? '', rows, placeholder, disabled, onChange }),
 );
 
 const reconcilePresetItemsMock = jest.fn(
@@ -151,7 +162,8 @@ const { EmbedSnapshotTransformSection } = await import('../components/settings/E
 const { DiagnosticsSection } = await import('../components/settings/DiagnosticsSection.js');
 const { GenerationOrderSection } = await import('../components/settings/GenerationOrderSection.js');
 const { IncludeModulesSection } = await import('../components/settings/IncludeModulesSection.js');
-const { TrackerWorldInfoPolicyMode, createDefaultTrackerModule } = await import('../config.js');
+const { GenerationPromptTemplatesSection } = await import('../components/settings/GenerationPromptTemplatesSection.js');
+const { TrackerWorldInfoPolicyMode, PromptEngineeringMode, createDefaultTrackerModule } = await import('../config.js');
 
 /** Renders one React element into the shared jsdom root container. */
 function renderElement(element: React.ReactElement) {
@@ -307,6 +319,44 @@ describe('settings sections', () => {
     });
 
     expect(settings.trackerWorldInfoPolicyMode).toBe(TrackerWorldInfoPolicyMode.ALLOWLIST);
+  });
+
+  test('disables the Prompt field outside Native mode and re-enables it back in Native mode', () => {
+    const settings = {
+      promptEngineeringMode: PromptEngineeringMode.NATIVE,
+      prompt: 'native prompt',
+      promptJson: 'json prompt',
+      promptXml: 'xml prompt',
+      promptToon: 'toon prompt',
+    } as any;
+    const updateAndRefresh = (updater: (current: any) => void) => updater(settings);
+
+    ({ root } = renderElement(React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh })));
+
+    const getPromptTextarea = () => document.querySelectorAll('textarea')[0] as HTMLTextAreaElement;
+    const getRestoreButton = () => document.querySelector('button[title="Restore Prompt to default"]') as HTMLButtonElement | null;
+
+    expect(getPromptTextarea().disabled).toBe(false);
+    expect(getRestoreButton()?.disabled).toBe(false);
+    expect(document.body.textContent).not.toContain('use the matching');
+
+    act(() => {
+      settings.promptEngineeringMode = PromptEngineeringMode.JSON;
+      root?.render(React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh }));
+    });
+
+    expect(getPromptTextarea().disabled).toBe(true);
+    expect(getRestoreButton()?.disabled).toBe(true);
+    expect(document.body.textContent).toContain('use the matching');
+
+    act(() => {
+      settings.promptEngineeringMode = PromptEngineeringMode.NATIVE;
+      root?.render(React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh }));
+    });
+
+    expect(getPromptTextarea().disabled).toBe(false);
+    expect(getRestoreButton()?.disabled).toBe(false);
+    expect(document.body.textContent).not.toContain('use the matching');
   });
 
   test('refreshes, filters, adds, removes, and manually edits world-info allowlists', async () => {

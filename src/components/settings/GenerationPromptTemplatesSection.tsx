@@ -61,31 +61,44 @@ export const GenerationPromptTemplatesSection: FC<SettingsSectionProps> = ({ set
         </select>
       </div>
 
-      {promptTemplateConfigs.map((template) => (
-        <div key={template.key} className="setting-row">
-          <div className="title_restorable">
-            <span title={template.title}>{template.label}</span>
-            <STButton
-              className="fa-solid fa-undo"
-              title={`Restore ${template.label} to default`}
-              onClick={() =>
+      {promptTemplateConfigs.map((template) => {
+        // The native `Prompt` field is only ever sent to the model in Native mode; JSON/XML/TOON
+        // modes use their own matching template instead, so editing `Prompt` outside Native mode
+        // would silently do nothing.
+        const isNativeOnlyPrompt = template.key === 'prompt';
+        const disabled = isNativeOnlyPrompt && settings.promptEngineeringMode !== PromptEngineeringMode.NATIVE;
+
+        return (
+          <div key={template.key} className="setting-row">
+            <div className="title_restorable">
+              <span title={template.title}>{template.label}</span>
+              <STButton
+                className="fa-solid fa-undo"
+                title={`Restore ${template.label} to default`}
+                disabled={disabled}
+                onClick={() =>
+                  updateAndRefresh((s) => {
+                    s[template.key] = template.defaultValue;
+                  })
+                }
+              />
+            </div>
+            <STTextarea
+              value={settings[template.key]}
+              disabled={disabled}
+              onChange={(e) =>
                 updateAndRefresh((s) => {
-                  s[template.key] = template.defaultValue;
+                  s[template.key] = e.target.value;
                 })
               }
+              rows={4}
             />
+            {disabled && (
+              <small>JSON/XML/TOON modes use the matching &quot;Prompt (JSON/XML/TOON)&quot; template instead of this field.</small>
+            )}
           </div>
-          <STTextarea
-            value={settings[template.key]}
-            onChange={(e) =>
-              updateAndRefresh((s) => {
-                s[template.key] = e.target.value;
-              })
-            }
-            rows={4}
-          />
-        </div>
-      ))}
+        );
+      })}
     </>
   );
 };

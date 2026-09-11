@@ -1,5 +1,4 @@
 import type { TrackerModule, TrackerModuleSettings } from './config.js';
-import { ZTRACKER_SYSTEM_PROMPT_PRESET_NAME, ZTRACKER_SYSTEM_PROMPT_TEXT } from './config.js';
 
 type SystemPromptPreset = {
   name: string;
@@ -90,39 +89,13 @@ export function shouldWarnAboutSharedSystemPromptSelection(
 }
 
 /**
- * Creates a named system-prompt preset from `content` if one doesn't already exist. Used both by
- * the shared zTracker preset (installation-wide) and by per-Module presets (see
- * `ensureModuleSystemPromptPresetInstalled`). Never overwrites an existing preset of the same
- * name - callers that need "recreate even if it once existed" call this only when they know it's
- * safe to do so (creation time, or an explicit user-initiated recreate action).
- */
-export async function ensureSystemPromptPresetInstalled(
-  name: string,
-  content: string,
-  context: SillyTavernContextLike = SillyTavern.getContext(),
-): Promise<boolean> {
-  const trimmedName = name.trim();
-  if (!trimmedName) return false;
-
-  const manager = getSystemPromptPresetManager(context);
-  if (!manager?.savePreset) return false;
-  if (manager.getCompletionPresetByName(trimmedName)) return false;
-
-  await manager.savePreset(trimmedName, { name: trimmedName, content });
-  return true;
-}
-
-export async function ensureZTrackerSystemPromptPresetInstalled(
-  context: SillyTavernContextLike = SillyTavern.getContext(),
-): Promise<boolean> {
-  return ensureSystemPromptPresetInstalled(ZTRACKER_SYSTEM_PROMPT_PRESET_NAME, ZTRACKER_SYSTEM_PROMPT_TEXT, context);
-}
-
-/**
  * Installs a Module's own referenced system-prompt preset from its persisted `content`, if that
  * Module has content and the preset doesn't already exist. Intended for creation-time calls only
  * (fresh-install seeding, or immediately after a manual Import) - see
- * `checkModuleSystemPromptPresetExists` for the later, non-creating check used elsewhere.
+ * `checkModuleSystemPromptPresetExists` for the later, non-creating check used elsewhere. Never
+ * overwrites an existing preset of the same name; callers that need "recreate even if it once
+ * existed" only call this when they know it's safe to do so (creation time, or an explicit
+ * user-initiated recreate action).
  */
 export async function ensureModuleSystemPromptPresetInstalled(
   module: Pick<TrackerModule, 'systemPrompt'>,
@@ -131,7 +104,15 @@ export async function ensureModuleSystemPromptPresetInstalled(
   const content = module.systemPrompt.content?.trim();
   if (!content) return false;
 
-  return ensureSystemPromptPresetInstalled(module.systemPrompt.savedName, content, context);
+  const trimmedName = module.systemPrompt.savedName.trim();
+  if (!trimmedName) return false;
+
+  const manager = getSystemPromptPresetManager(context);
+  if (!manager?.savePreset) return false;
+  if (manager.getCompletionPresetByName(trimmedName)) return false;
+
+  await manager.savePreset(trimmedName, { name: trimmedName, content });
+  return true;
 }
 
 /**

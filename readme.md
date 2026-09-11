@@ -90,7 +90,7 @@ zTracker can now choose the system prompt used during tracker generation:
 - **From selected connection profile**: use the prompt selectors stored on the chosen zTracker connection profile. For Chat Completion profiles, zTracker uses the profile preset. For Text Completion profiles, zTracker uses the profile's instruct, context, and system-prompt slots.
 - **From saved ST prompt**: pick a saved SillyTavern system prompt specifically for tracker extraction.
 
-On startup, zTracker installs a recommended versioned system prompt preset such as **zTracker-1.3.1** if it does not already exist. You can select it in **Extensions → zTracker → System Prompt Source**, and edit it later in SillyTavern's own **System Prompt** manager. Older zTracker prompt presets are not deleted automatically.
+Each Module installs its own system-prompt preset automatically, named after that Module and derived from its own prompt content, the first time the Module is created (fresh install, "Add Module", or manual Import). Select that Module's preset in **Extensions → zTracker → System Prompt Source**, and edit it later in SillyTavern's own **System Prompt** manager. If a Module's preset ever goes missing, use the "Recreate from shipped prompt" action next to the warning to restore it. Older zTracker prompt presets are not deleted automatically.
 
 This is especially useful for smaller models: you can keep your roleplay-oriented system prompt for normal chat, while using a lean extraction-oriented prompt for tracker generation.
 

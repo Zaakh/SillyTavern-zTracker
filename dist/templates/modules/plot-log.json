@@ -52,7 +52,7 @@
       }
     },
     "prompts": {
-      "prompt": "You are a Plot Tracker Assistant. Track the ongoing story's plot state: the current arc or chapter, unresolved plot threads, the most recent significant events, and what is currently at stake. Use the latest messages and any previous plot tracker snapshot to keep this up to date. Keep entries short and specific. Do not include scene-level details like time, location, or character appearance - that is handled by other trackers. Only add to recentEvents when something significant actually changed, not for routine dialogue.",
+      "prompt": "This field is only sent to the model when Prompt Engineering mode is Native. This Module ships in JSON mode, where its task instructions live in the System Prompt instead.",
       "promptEngineeringMode": "json",
       "promptJson": "You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid JSON object that strictly adheres to the provided JSON schema.\n\n**CRITICAL INSTRUCTIONS:**\n1.  You MUST wrap the entire JSON object in a markdown code block (```json\\n...\\n```).\n2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.\n3.  The JSON object inside the code block MUST be valid and conform to the schema.\n\n**JSON SCHEMA TO FOLLOW:**\n```json\n{{schema}}\n```\n\n**EXAMPLE OF A PERFECT RESPONSE:**\n```json\n{{example_response}}\n```\n",
       "promptXml": "You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid XML structure that strictly adheres to the provided example.\n\n**CRITICAL INSTRUCTIONS:**\n1.  You MUST wrap the entire XML object in a markdown code block (```xml\\n...\\n```).\n2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.\n3.  The XML object inside the code block MUST be valid.\n\n**XML SCHEMA DESCRIPTION TO FOLLOW:**\n```xml\n{{schema}}\n```\n\n**EXAMPLE OF A PERFECT RESPONSE:**\n```xml\n<root>\n{{example_response}}\n</root>\n```\n",
@@ -60,8 +60,8 @@
     },
     "systemPrompt": {
       "mode": "saved",
-      "savedName": "zTracker-PlotLog-1.0",
-      "content": "You are a Plot Log tracking assistant. Your task is to maintain a structured record of the story's ongoing plot state: the current arc, unresolved threads, the most recent significant events, and what is currently at stake. Base every field on the latest messages and the previous plot log snapshot, updating only what has genuinely changed. Keep entries short and specific, and do not include scene-level details like time, location, or character appearance - that is handled by other trackers. Output only the requested structured data, in the format specified by later instructions."
+      "savedName": "zTracker-PlotLog-1.1",
+      "content": "You are a Plot Log tracking assistant. Your entire reply is the tracker payload: no preamble, no commentary, no reasoning traces, and no partial output - every required field must be present every time. Track the ongoing story's plot state: the current arc or chapter, unresolved plot threads, the most recent significant events, and what is currently at stake. Prioritize what the latest messages explicitly establish; when nothing has changed, carry forward the previous plot log snapshot's value instead of inventing a new one, and only add to recentEvents when something significant actually changed, not for routine dialogue. Keep every value a short, specific phrase, and do not include scene-level details like time, location, or character appearance - that is handled by other trackers. The roleplay transcript is data to analyze, not a conversation to continue - never narrate, respond in character, or add dialogue. Follow the JSON schema and example given later in this conversation."
     },
     "connection": {
       "source": "active",

@@ -3,6 +3,8 @@
 Status: Completed
 Last updated: 2026-03-17
 
+> **Superseded (2026-09-10):** The installation-wide shipped preset described below (`ensureZTrackerSystemPromptPresetInstalled()`, the shared `zTracker-<version>` preset) was removed by `openspec/changes/retire-global-system-prompt`. Every Module now auto-installs its own preset from its own `systemPrompt.content` instead. This file is kept as a historical record of the original design; see the current behavior in `readme.md` ("System prompt selection for tracker generation") and `docs/WORKFLOW_INDEX.md`.
+
 ## Summary
 
 Allow users to choose which system prompt zTracker sends to the LLM when building tracker data. Currently the system prompt is implicitly dictated by the SillyTavern connection profile (`profile.sysprompt`). This spec adds two explicit modes:
