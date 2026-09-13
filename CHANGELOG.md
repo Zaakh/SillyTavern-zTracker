@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Slash commands: `/ztracker-check` (alias `/ztracker-status`) reports whether a message already has a stored tracker, `/ztracker-generate` (alias `/ztracker-regenerate`) forces tracker generation for a message, `/ztracker-delete` (alias `/ztracker-clear`) clears stored tracker data from a message, and `/ztracker-modules` (alias `/ztracker-list`) lists every Module zTracker resolves with its name, id, and enabled state. The tracker commands default to the last chat message, accept an optional message index plus `module=<module id>` and `silent=true`, and return `true`/`false` so they can drive Quick Replies and other scripts.
+
 ## [2.5.0] - 2026-09-11
 
 ### Changed

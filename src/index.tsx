@@ -6,6 +6,7 @@ import { Generator } from 'sillytavern-utils-lib';
 import { st_echo } from 'sillytavern-utils-lib/config';
 import { createTrackerActions } from './ui/tracker-actions.js';
 import { initializeGlobalUI } from './ui/ui-init.js';
+import { initializeSlashCommands } from './ui/slash-commands.js';
 import { initializeStartupSettings } from './startup.js';
 import {
   renderTracker,
@@ -75,6 +76,7 @@ async function main(isFreshInstall: boolean) {
     actions,
     renderTrackerWithDeps,
   });
+  initializeSlashCommands({ globalContext, settingsManager, actions });
 }
 
 settingsManager

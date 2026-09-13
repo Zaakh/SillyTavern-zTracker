@@ -1296,26 +1296,35 @@ export function createTrackerActions(options: {
     }
   }
 
-  async function deleteTracker(messageId: number, moduleId = DEFAULT_MODULE_ID) {
+  async function deleteTracker(
+    messageId: number,
+    moduleId = DEFAULT_MODULE_ID,
+    options: { skipConfirmation?: boolean; skipSuccessToast?: boolean } = {},
+  ): Promise<boolean> {
     const message = globalContext.chat[messageId];
     const trackerRecord = getTrackerModuleRecord(message, moduleId);
-    if (!trackerRecord) return;
+    if (!trackerRecord) return false;
 
-    const confirm = await globalContext.Popup.show.confirm(
-      'Delete Tracker',
-      'Are you sure you want to delete the tracker data for this message? This cannot be undone.',
-    );
+    const confirm = options.skipConfirmation
+      ? true
+      : await globalContext.Popup.show.confirm(
+          'Delete Tracker',
+          'Are you sure you want to delete the tracker data for this message? This cannot be undone.',
+        );
 
-    if (confirm) {
-      const extensionData = message.extra?.[EXTENSION_KEY] as Record<string, any> | undefined;
-      delete extensionData?.[TRACKER_MODULE_RECORDS_KEY]?.[moduleId];
-      if (extensionData && moduleId === DEFAULT_MODULE_ID) {
-        clearDefaultModuleMirror(extensionData);
-      }
-      await globalContext.saveChat();
-      renderTrackerWithDeps(messageId, moduleId);
+    if (!confirm) return false;
+
+    const extensionData = message.extra?.[EXTENSION_KEY] as Record<string, any> | undefined;
+    delete extensionData?.[TRACKER_MODULE_RECORDS_KEY]?.[moduleId];
+    if (extensionData && moduleId === DEFAULT_MODULE_ID) {
+      clearDefaultModuleMirror(extensionData);
+    }
+    await globalContext.saveChat();
+    renderTrackerWithDeps(messageId, moduleId);
+    if (!options.skipSuccessToast) {
       st_echo('success', 'Tracker data deleted.');
     }
+    return true;
   }
 
   async function editTracker(messageId: number, moduleId = DEFAULT_MODULE_ID) {
