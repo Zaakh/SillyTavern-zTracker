@@ -168,6 +168,51 @@ You can customize (or remove) the embedded snapshot header via **Embed snapshot 
 - **TOON (compact)**: embeds tracker snapshots as tab-delimited TOON for lower-token structured context while preserving arrays and nested objects.
 
 
+## Slash commands
+
+zTracker registers four slash commands so you can inspect Modules, check, force, or clear trackers from the chat input, a Quick Reply, or any other slash-command script.
+
+| Command | What it does | Returns |
+| --- | --- | --- |
+| `/ztracker-check` (alias `/ztracker-status`) | Reports whether a message already has a stored tracker. | `true` when at least one targeted Module has tracker data on that message. |
+| `/ztracker-generate` (alias `/ztracker-regenerate`) | Forces tracker generation (or regeneration) for a message, ignoring automatic triggers. | `true` when generation succeeded and tracker data is stored for every targeted Module. |
+| `/ztracker-delete` (alias `/ztracker-clear`) | Deletes stored tracker data from a message. | `true` when no targeted Module has a tracker left on that message. |
+| `/ztracker-modules` (alias `/ztracker-list`) | Lists every Module zTracker resolves, in Module order, including disabled ones, with its name, id, and enabled state. | Comma-separated Module ids, or Module names with `names=true`. |
+
+The three per-message commands accept:
+
+- An optional message index, for example `/ztracker-check 12`. Without it, the last message in the chat is used.
+- `module=<module id>` to target one Module instead of every enabled Module. Autocomplete lists each configured Module, including disabled ones.
+- `silent=true` to suppress the command's toasts and the message-local progress badge, which keeps the commands quiet inside Quick Replies and scripts. The command still returns its result.
+
+All four commands return the string `true` or `false` (or the Module list for `/ztracker-modules`), so they can drive `/if`, `/run`, Quick Replies, and other scripts. `/ztracker-modules` takes no message index; it accepts only `names=true` and `silent=true`.
+
+SillyTavern's slash-command syntax applies here: named arguments use `name=value` (no dashes) and must come **before** the message index. If you mistype them, zTracker's error toast explains the correct form.
+
+Examples:
+
+```stscript
+/ztracker-check
+/ztracker-check 12
+/ztracker-check module=scene-tracker
+/ztracker-generate
+/ztracker-generate module=agenda 12
+/ztracker-generate silent=true
+/ztracker-delete
+/ztracker-delete 12
+/ztracker-delete module=scene-tracker
+/ztracker-modules
+/ztracker-modules names=true
+```
+
+Notes:
+
+- `/ztracker-generate` skips zTracker's automatic triggers (trigger direction and per-character auto-mode exclusions), so it works even for Modules whose Auto Mode is off.
+- Like the per-message tracker button, it still honors each Module's **Skip First X Messages** setting. When a message is inside that window, the command returns `false` and the toast explains which setting to change.
+- `/ztracker-check` never calls a model; it only reads already-stored tracker data.
+- `/ztracker-delete` without `module=<id>` clears **every** Module that has a tracker on that message, including disabled Modules, so it can clean up data left behind after a Module was turned off. It is the one destructive command: unlike the tracker's own Delete button it does not show a confirmation popup, because the typed command is already the confirmation. Nothing else in the message is touched.
+- `/ztracker-modules` lists exactly what the other commands resolve, so the ids it prints can be used directly as `module=<id>`. That also means it shows disabled Modules, and reports the Module zTracker falls back to when a chat has no Modules configured at all.
+
 ## Versioning
 
 Developer and maintainer notes (local dev, testing, versioning) are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
