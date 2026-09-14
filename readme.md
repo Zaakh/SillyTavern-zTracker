@@ -137,6 +137,8 @@ Optional (advanced): you can annotate your JSON schema preset to help zTracker k
 
 When editing a schema preset's JSON or HTML in **Extensions → zTracker**, changes stay local until you click a Save icon. Saving either editor now persists the current JSON and HTML preset pair together. The save controls stay disabled while the paired draft is unchanged or invalid, and invalid drafts show an inline error instead of overwriting the saved preset.
 
+Don't want to hand-write the HTML template? Click **Generate HTML from schema** (next to Restore Default) to derive one automatically from the current Schema JSON draft. It always overwrites the Schema HTML draft (click Save to apply) and is disabled while the Schema JSON draft is invalid.
+
 In **Extensions → zTracker**, **Default Schema Preset** controls which preset definition you are editing and which preset new chats start from. Existing chats keep their own **Current Chat Schema Preset**, which you can change from the settings UI or **Extensions → Modify zTracker schema**.
 
 Changing the current chat schema preset is still a lazy switch, not a chat-wide migration. Future full tracker generations in that chat use the current chat schema preset, while existing trackers on older messages keep their saved message schema until you run a full tracker regeneration on that specific message. Parts-menu regeneration continues to use the saved message schema and tells you when a full tracker regeneration is required to move that message onto the current chat schema.

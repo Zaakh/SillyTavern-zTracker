@@ -39,6 +39,7 @@ import {
   resolvePresetSelection,
 } from './settings/preset-state.js';
 import { createImportedTrackerModule, parseImportedTrackerModule } from './settings/module-import.js';
+import { generateHtmlFromSchema } from './settings/generate-schema-html.js';
 import {
   formatSchemaHtml,
   formatSchemaText,
@@ -513,6 +514,19 @@ export const ZTrackerSettings: FC<{
     setSchemaHtmlText(newHtml);
   };
 
+  // Only reachable while the Schema JSON draft parses successfully, matching the Save button's disabled-when-invalid
+  // pattern. Reuses schemaDraftState's already-computed validity instead of re-parsing schemaText here.
+  const canGenerateSchemaHtml = schemaDraftState.isValid;
+
+  // Mechanically derives an HTML draft from the current Schema JSON draft. Always overwrites the
+  // HTML draft (no confirm popup, no persistence until a separate explicit Save), same as typing by hand.
+  const generateSchemaHtmlFromSchema = () => {
+    if (!canGenerateSchemaHtml) {
+      return;
+    }
+    setSchemaHtmlText(generateHtmlFromSchema(JSON.parse(schemaText)));
+  };
+
   // Restore the current schema preset to its default values
   const restoreSchemaToDefault = async () => {
     const confirm = await SillyTavern.getContext().Popup.show.confirm(
@@ -839,6 +853,8 @@ export const ZTrackerSettings: FC<{
                 saveSchemaValue={saveSchemaPresetPair}
                 saveSchemaHtmlValue={saveSchemaPresetPair}
                 restoreSchemaToDefault={restoreSchemaToDefault}
+                canGenerateSchemaHtml={canGenerateSchemaHtml}
+                generateSchemaHtmlFromSchema={generateSchemaHtmlFromSchema}
                 systemPromptItems={systemPromptItems}
                 refreshSystemPromptState={refreshSystemPromptState}
                 showMissingSavedSystemPromptWarning={showMissingSavedSystemPromptWarning}
