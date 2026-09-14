@@ -103,6 +103,8 @@ describe('SchemaPresetSection', () => {
           saveSchemaValue: jest.fn(),
           saveSchemaHtmlValue: jest.fn(),
           restoreSchemaToDefault: jest.fn(async () => undefined),
+          canGenerateSchemaHtml: true,
+          generateSchemaHtmlFromSchema: jest.fn(),
           ...overrides,
         }),
       );
@@ -144,5 +146,27 @@ describe('SchemaPresetSection', () => {
 
     expect(renameButton).toHaveProperty('disabled', true);
     expect(deleteButton).toHaveProperty('disabled', true);
+  });
+
+  test('invokes the generate handler when the Schema JSON draft is valid', () => {
+    const generateSchemaHtmlFromSchema = jest.fn();
+    const container = renderSection({ canGenerateSchemaHtml: true, generateSchemaHtmlFromSchema });
+
+    const generateButton = container.querySelector(
+      'button[title="Generate HTML from the current Schema JSON (always overwrites the Schema HTML draft; click Save to apply)"]',
+    );
+    expect(generateButton).toHaveProperty('disabled', false);
+
+    (generateButton as HTMLButtonElement).click();
+    expect(generateSchemaHtmlFromSchema).toHaveBeenCalledTimes(1);
+  });
+
+  test('disables the generate action while the Schema JSON draft is invalid', () => {
+    const container = renderSection({ canGenerateSchemaHtml: false });
+
+    const generateButton = container.querySelector(
+      'button[title="Generate HTML from the current Schema JSON (always overwrites the Schema HTML draft; click Save to apply)"]',
+    );
+    expect(generateButton).toHaveProperty('disabled', true);
   });
 });

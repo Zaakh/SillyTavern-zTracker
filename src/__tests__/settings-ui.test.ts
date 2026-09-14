@@ -369,6 +369,8 @@ jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', (
     handleCurrentChatSchemaPresetChange,
     handleSchemaPresetsListChange,
     updateAndRefresh,
+    canGenerateSchemaHtml,
+    generateSchemaHtmlFromSchema,
   }: {
     settings: { schemaPreset: string; connectionSource?: string };
     updateAndRefresh: (updater: (settings: any) => void) => void;
@@ -392,6 +394,8 @@ jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', (
     handleSchemaPresetRename: (currentKey: string, newValue: string) => void;
     handleCurrentChatSchemaPresetChange: (value?: string) => void;
     handleSchemaPresetsListChange: (newItems: Array<{ value: string; label: string }>) => void;
+    canGenerateSchemaHtml: boolean;
+    generateSchemaHtmlFromSchema: () => void;
   }) =>
     React.createElement(
       'div',
@@ -477,6 +481,25 @@ jest.unstable_mockModule('../components/settings/TrackerGenerationSection.js', (
         'set schema json location',
       ),
       React.createElement('button', { type: 'button', disabled: !schemaTextCanSave, 'data-testid': 'save-schema-json', onClick: () => saveSchemaValue() }, 'save schema json'),
+      React.createElement(
+        'button',
+        {
+          type: 'button',
+          'data-testid': 'set-schema-json-invalid',
+          onClick: () => handleSchemaValueChange('{invalid'),
+        },
+        'set schema json invalid',
+      ),
+      React.createElement(
+        'button',
+        {
+          type: 'button',
+          disabled: !canGenerateSchemaHtml,
+          'data-testid': 'generate-schema-html',
+          onClick: () => generateSchemaHtmlFromSchema(),
+        },
+        'generate schema html',
+      ),
       React.createElement('textarea', {
         'data-testid': 'schema-html-textarea',
         value: schemaHtmlText,
@@ -735,6 +758,57 @@ describe('zTracker settings connection source UI', () => {
     expect(mockSettings.schemaPresets.default.value).toEqual({ type: 'object', properties: { scene: { type: 'string' } }, required: ['scene'] });
     expect(mockSettings.schemaPresets.default.html).toBe('<div>default</div>');
     expect(saveSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test('generates an HTML draft from the current Schema JSON draft when it is valid', async () => {
+    const container = renderSettings();
+    const setSchemaJsonButton = container.querySelector('[data-testid="set-schema-json-location"]');
+    const generateButton = container.querySelector('[data-testid="generate-schema-html"]');
+
+    if (!(setSchemaJsonButton instanceof HTMLButtonElement)) {
+      throw new Error('Set schema JSON button not found');
+    }
+    if (!(generateButton instanceof HTMLButtonElement)) {
+      throw new Error('Generate schema HTML button not found');
+    }
+
+    await act(async () => {
+      setSchemaJsonButton.click();
+      await Promise.resolve();
+    });
+
+    expect(generateButton.disabled).toBe(false);
+
+    await act(async () => {
+      generateButton.click();
+      await Promise.resolve();
+    });
+
+    const schemaHtmlTextarea = container.querySelector('[data-testid="schema-html-textarea"]');
+    if (!(schemaHtmlTextarea instanceof HTMLTextAreaElement)) {
+      throw new Error('Schema HTML textarea not found');
+    }
+    expect(schemaHtmlTextarea.value).toContain('{{data.location}}');
+  });
+
+  test('disables the generate action while the Schema JSON draft is invalid', async () => {
+    const container = renderSettings();
+    const setInvalidSchemaJsonButton = container.querySelector('[data-testid="set-schema-json-invalid"]');
+    const generateButton = container.querySelector('[data-testid="generate-schema-html"]');
+
+    if (!(setInvalidSchemaJsonButton instanceof HTMLButtonElement)) {
+      throw new Error('Set invalid schema JSON button not found');
+    }
+    if (!(generateButton instanceof HTMLButtonElement)) {
+      throw new Error('Generate schema HTML button not found');
+    }
+
+    await act(async () => {
+      setInvalidSchemaJsonButton.click();
+      await Promise.resolve();
+    });
+
+    expect(generateButton.disabled).toBe(true);
   });
 
   test('changing the current chat schema preset updates chat metadata without changing the global default', async () => {

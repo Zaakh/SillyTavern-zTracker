@@ -35,6 +35,8 @@ export const SchemaPresetSection: FC<{
   saveSchemaValue: () => void;
   saveSchemaHtmlValue: () => void;
   restoreSchemaToDefault: () => Promise<void>;
+  canGenerateSchemaHtml: boolean;
+  generateSchemaHtmlFromSchema: () => void;
 }> = ({
   schemaPresetKey,
   schemaPresetItems,
@@ -65,6 +67,8 @@ export const SchemaPresetSection: FC<{
   saveSchemaValue,
   saveSchemaHtmlValue,
   restoreSchemaToDefault,
+  canGenerateSchemaHtml,
+  generateSchemaHtmlFromSchema,
 }) => {
   const activeSchemaPresetItem = useMemo(
     () => schemaPresetItems.find((item) => item.value === schemaPresetKey),
@@ -204,6 +208,12 @@ export const SchemaPresetSection: FC<{
 
       <div className="title_restorable">
         <span title="The JSON schema and HTML template used for tracker generation and rendering.">Schema</span>
+        <STButton
+          className="fa-solid fa-wand-magic-sparkles"
+          title="Generate HTML from the current Schema JSON (always overwrites the Schema HTML draft; click Save to apply)"
+          onClick={generateSchemaHtmlFromSchema}
+          disabled={!canGenerateSchemaHtml}
+        />
         <STButton className="fa-solid fa-undo" title="Restore default schema JSON and HTML" onClick={restoreSchemaToDefault} />
       </div>
 

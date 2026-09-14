@@ -42,6 +42,8 @@ export const TrackerGenerationSection: FC<{
   saveSchemaValue: () => void;
   saveSchemaHtmlValue: () => void;
   restoreSchemaToDefault: () => Promise<void>;
+  canGenerateSchemaHtml: boolean;
+  generateSchemaHtmlFromSchema: () => void;
   systemPromptItems: PresetItem[];
   refreshSystemPromptState: () => void;
   showMissingSavedSystemPromptWarning: boolean;
@@ -83,6 +85,8 @@ export const TrackerGenerationSection: FC<{
   saveSchemaValue,
   saveSchemaHtmlValue,
   restoreSchemaToDefault,
+  canGenerateSchemaHtml,
+  generateSchemaHtmlFromSchema,
   systemPromptItems,
   refreshSystemPromptState,
   showMissingSavedSystemPromptWarning,
@@ -129,6 +133,8 @@ export const TrackerGenerationSection: FC<{
         saveSchemaValue={saveSchemaValue}
         saveSchemaHtmlValue={saveSchemaHtmlValue}
         restoreSchemaToDefault={restoreSchemaToDefault}
+        canGenerateSchemaHtml={canGenerateSchemaHtml}
+        generateSchemaHtmlFromSchema={generateSchemaHtmlFromSchema}
       />
 
       <SystemPromptSettingsSection
