@@ -394,9 +394,11 @@ const EMBEDDED_TRACKER_SNAPSHOT_MARKER = Symbol('embeddedTrackerSnapshot');
 type IncludeZTrackerMessagesOptions = {
   moduleId?: string;
   /**
-   * Text-completion instruct templates only allow cleanly alternating dialogue turns.
-   * Inline tracker snapshots into user messages when a standalone injected turn would
-   * break SillyTavern's prompt framing.
+   * Applies only to `embedRole === 'assistant'`: a Text Completion prompt has to end on a
+   * resolvable assistant reply cue, so an ambiguous terminal assistant snapshot gets inlined
+   * into the tracked user turn (or raw-fallback anchored) instead of staying standalone. Has
+   * no effect on `'user'` or `'system'` embed roles - those always inject as a standalone
+   * message regardless of this flag.
    */
   preserveTextCompletionTurnAlternation?: boolean;
   /**
@@ -411,16 +413,13 @@ type IncludeZTrackerMessagesOptions = {
   assistantReplyLabel?: string;
 };
 
+// Returns the configured embed role unchanged - no Text Completion downgrade. 'system' and
+// 'user' always inject standalone; only 'assistant' gets special-cased downstream in
+// includeZTrackerMessages via preserveTextCompletionTurnAlternation.
 function resolveEmbeddedTrackerRole(
   settings: TrackerModuleSettings,
-  options: IncludeZTrackerMessagesOptions,
 ): TrackerModuleSettings['embedZTrackerRole'] {
-  const configuredRole = settings.embedZTrackerRole ?? 'user';
-  if (!options.preserveTextCompletionTurnAlternation || configuredRole !== 'system') {
-    return configuredRole;
-  }
-
-  return 'user';
+  return settings.embedZTrackerRole ?? 'user';
 }
 
 function isUserConversationTurn(message: { role?: string; is_user?: boolean }): boolean {
@@ -533,7 +532,7 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
 
     return message;
   });
-  const embedRole = resolveEmbeddedTrackerRole(settings, options);
+  const embedRole = resolveEmbeddedTrackerRole(settings);
   const configuredAssistantReplyLabel =
     typeof options.assistantReplyLabel === 'string' && options.assistantReplyLabel.trim().length > 0
       ? options.assistantReplyLabel.trim()
