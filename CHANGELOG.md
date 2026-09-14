@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-09-14
+
 ### Added
 
 - Settings: a "Generate HTML from schema" button next to the Schema editor's Restore Default button mechanically derives a Handlebars HTML template from the current Schema JSON draft, so authors no longer have to hand-write the companion template from scratch.
