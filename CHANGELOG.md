@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.5.1] - 2026-09-14
+
 ### Fixed
 
 - A Module's **Embed zTracker snapshots as** role of "system" is now honored on Text Completion connections instead of being silently treated as "user" and bundled into the tracked message's own text. It now always appears as its own standalone system-role message, matching the configured setting on both Chat Completion and Text Completion.
