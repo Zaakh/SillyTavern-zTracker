@@ -502,4 +502,144 @@ describe('createTrackerActions prompt engineering', () => {
     expect(templateMessage?.content).toBe('JSON TEMPLATE\n{"type":"object"}\n{"time":"string"}');
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
+
+  test('carries the grammar/schema enforcement override through full JSON generation when enabled', async () => {
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    (schemaToExample as jest.Mock).mockReturnValue('{"time":"string"}');
+    (schemaToPromptSchema as jest.Mock).mockReturnValue('{"type":"object"}');
+    (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
+    const generateRequest = makeGenerateRequest({ content: '```json\n{"time":"10:00:00"}\n```' });
+
+    const settings = makeSettings({
+      promptEngineeringMode: PromptEngineeringMode.JSON,
+      promptJson: 'JSON TEMPLATE\n{{schema}}\n{{example_response}}',
+      grammarEnforcementEnabled: true,
+    });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: { connectionManager: { profiles: [makeProfile()] } },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: { getSettings: () => settings } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0);
+
+    expect(generateRequest.mock.calls[0][0].overridePayload).toEqual({
+      json_schema: settings.schemaPresets.default.value,
+    });
+  });
+
+  test('carries the grammar/schema enforcement override through sequential-parts JSON generation when enabled', async () => {
+    // generateTrackerSequential structuredClone()s the base messages per part; jsdom doesn't expose it.
+    const originalStructuredClone = globalThis.structuredClone;
+    globalThis.structuredClone = originalStructuredClone ?? ((value: unknown) => JSON.parse(JSON.stringify(value)));
+
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    (schemaToExample as jest.Mock).mockReturnValue('{"time":"string"}');
+    (schemaToPromptSchema as jest.Mock).mockReturnValue('{"type":"object"}');
+    (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
+    const generateRequest = makeGenerateRequest({ content: '```json\n{"time":"10:00:00"}\n```' });
+
+    const partSchema = { type: 'object', properties: { time: { type: 'string' } } };
+    (trackerPartsModule.buildTopLevelPartSchema as jest.Mock).mockReturnValue(partSchema);
+    (trackerPartsModule.mergeTrackerPart as jest.Mock).mockImplementation(
+      (tracker: any, partKey: string, partObject: any) => ({ ...tracker, [partKey]: partObject[partKey] }),
+    );
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: { connectionManager: { profiles: [makeProfile()] } },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () =>
+          makeSettings({
+            sequentialPartGeneration: true,
+            promptEngineeringMode: PromptEngineeringMode.JSON,
+            promptJson: 'JSON TEMPLATE\n{{schema}}\n{{example_response}}',
+            grammarEnforcementEnabled: true,
+          }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    try {
+      await actions.generateTracker(0);
+      expect(generateRequest.mock.calls[0][0].overridePayload).toEqual({ json_schema: partSchema });
+    } finally {
+      globalThis.structuredClone = originalStructuredClone;
+    }
+  });
+
+  test('carries the grammar/schema enforcement override through targeted part regeneration when enabled', async () => {
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+
+    buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
+    (schemaToExample as jest.Mock).mockReturnValue('{"time":"string"}');
+    (schemaToPromptSchema as jest.Mock).mockReturnValue('{"type":"object"}');
+    (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
+    const generateRequest = makeGenerateRequest({ content: '```json\n{"time":"10:00:00"}\n```' });
+
+    const partSchema = { type: 'object', properties: { time: { type: 'string' } } };
+    (trackerPartsModule.buildTopLevelPartSchema as jest.Mock).mockReturnValue(partSchema);
+    (trackerPartsModule.redactTrackerPartValue as jest.Mock).mockImplementation((tracker: unknown) => tracker);
+    (trackerPartsModule.mergeTrackerPart as jest.Mock).mockImplementation(
+      (tracker: any, partKey: string, partObject: any) => ({ ...tracker, [partKey]: partObject[partKey] }),
+    );
+
+    document.body.innerHTML = [
+      '<div id="extensionsMenu"></div>',
+      '<div class="mes" mesid="0">',
+      '<div class="ztracker-part-regenerate-button" data-ztracker-part="time"></div>',
+      '<div class="mes_text"></div>',
+      '</div>',
+    ].join('');
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [
+          {
+            original_avatar: 'avatar.png',
+            extra: { zTracker: { schemaValue: { time: '09:00:00' }, schemaHtml: '<div></div>' } },
+          },
+        ],
+        saveChat: async () => undefined,
+        extensionSettings: { connectionManager: { profiles: [makeProfile()] } },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () =>
+          makeSettings({
+            promptEngineeringMode: PromptEngineeringMode.JSON,
+            promptJson: 'JSON TEMPLATE\n{{schema}}\n{{example_response}}',
+            grammarEnforcementEnabled: true,
+          }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTrackerPart(0, 'time');
+
+    expect(generateRequest.mock.calls[0][0].overridePayload).toEqual({ json_schema: partSchema });
+  });
 });

@@ -88,6 +88,8 @@ export interface TrackerModulePromptSettings {
   promptJson: string;
   promptXml: string;
   promptToon: string;
+  /** JSON-mode-only, opt-in: adds this Module's raw JSON Schema as a `json_schema` request override, for backends (llama.cpp, TabbyAPI, Chat Completion) that constrain generation via grammar/schema sampling. No effect on Native/XML/TOON modes or on backends that ignore the override. */
+  grammarEnforcementEnabled: boolean;
 }
 
 export interface TrackerModuleSystemPromptSettings {
@@ -207,6 +209,8 @@ export interface TrackerModuleSettings extends ExtensionSettings {
   promptJson: string;
   promptXml: string;
   promptToon: string;
+  /** Mirrors `TrackerModulePromptSettings.grammarEnforcementEnabled`. */
+  grammarEnforcementEnabled: boolean;
 
   /**
    * Controls what World Info is included in tracker-only generations.
@@ -742,6 +746,7 @@ export function createDefaultTrackerModule(options: Partial<Pick<TrackerModule, 
       promptJson: PLACEHOLDER_PROMPT_JSON,
       promptXml: PLACEHOLDER_PROMPT_XML,
       promptToon: PLACEHOLDER_PROMPT_TOON,
+      grammarEnforcementEnabled: false,
     },
     systemPrompt: {
       mode: 'profile',
@@ -815,6 +820,7 @@ export function createTrackerModuleFromLegacySettings(
   module.prompts.promptJson = settings.promptJson ?? module.prompts.promptJson;
   module.prompts.promptXml = settings.promptXml ?? module.prompts.promptXml;
   module.prompts.promptToon = settings.promptToon ?? module.prompts.promptToon;
+  module.prompts.grammarEnforcementEnabled = settings.grammarEnforcementEnabled ?? module.prompts.grammarEnforcementEnabled;
   module.injection.includeLastXMessages =
     settings.includeLastXZTrackerMessages ?? module.injection.includeLastXMessages;
   module.injection.embedRole = settings.embedZTrackerRole ?? module.injection.embedRole;
@@ -875,6 +881,7 @@ export function getSettingsForTrackerModule(settings: ExtensionSettings, moduleI
     promptJson: module.prompts.promptJson,
     promptXml: module.prompts.promptXml,
     promptToon: module.prompts.promptToon,
+    grammarEnforcementEnabled: module.prompts.grammarEnforcementEnabled,
     trackerWorldInfoPolicyMode: module.generation.worldInfoPolicyMode,
     trackerWorldInfoAllowlistBookNames: module.generation.worldInfoAllowlistBookNames,
     trackerWorldInfoAllowlistEntryIds: module.generation.worldInfoAllowlistEntryIds,
@@ -909,6 +916,7 @@ export function applySettingsToTrackerModule(module: TrackerModule, settings: Tr
   module.prompts.promptJson = settings.promptJson;
   module.prompts.promptXml = settings.promptXml;
   module.prompts.promptToon = settings.promptToon;
+  module.prompts.grammarEnforcementEnabled = settings.grammarEnforcementEnabled;
   module.generation.skipFirstXMessages = settings.skipFirstXMessages;
   module.generation.includeLastXMessages = settings.includeLastXMessages;
   module.generation.includeModules = cloneSettingsValue(settings.includeModules);

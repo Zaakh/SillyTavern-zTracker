@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-09-14
+
+### Added
+
+- Settings: a new per-Module, JSON-mode-only "Enforce schema via grammar sampling" checkbox adds the Module's JSON Schema as an additional structured-output constraint on generation requests, for backends that support it (llama.cpp, TabbyAPI, Chat Completion). A "Test" button next to it fires one throwaway request against the Module's current connection and reports whether that connection actually honors the constraint.
+
 ## [2.5.1] - 2026-09-14
 
 ### Fixed

@@ -81,6 +81,24 @@ describe('tracker module defaults', () => {
     expect(module.injection.transformPresets.default.name).toBe('Default (JSON)');
   });
 
+  test('new modules default grammar/schema enforcement to disabled', () => {
+    const module = createDefaultTrackerModule();
+
+    expect(module.prompts.grammarEnforcementEnabled).toBe(false);
+  });
+
+  test('grammarEnforcementEnabled round-trips through flatten/mutate/re-apply', () => {
+    const module = createDefaultTrackerModule();
+
+    const flattened = getSettingsForTrackerModule({ ...defaultSettings, modules: [module] }, module.id);
+    expect(flattened.grammarEnforcementEnabled).toBe(false);
+
+    flattened.grammarEnforcementEnabled = true;
+    applySettingsToTrackerModule(module, flattened);
+
+    expect(module.prompts.grammarEnforcementEnabled).toBe(true);
+  });
+
   test('new modules default to a self-only generation include list', () => {
     const module = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
 
