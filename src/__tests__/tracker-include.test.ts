@@ -277,7 +277,7 @@ describe('includeZTrackerMessages', () => {
     expect(result[1]).not.toHaveProperty('name');
   });
 
-  it('rewrites system snapshot injections to user turns for text-completion-safe prompt assembly', () => {
+  it('keeps system snapshot injections as system messages for text-completion-safe prompt assembly', () => {
     const messages = [
       buildMessageWithTracker({ id: 1 }),
       { content: 'current', role: 'assistant' },
@@ -290,13 +290,13 @@ describe('includeZTrackerMessages', () => {
     ) as any[];
 
     expect(result).toHaveLength(3);
-    expect(result[1].role).toBe('user');
+    expect(result[1].role).toBe('system');
+    expect(result[1].is_system).toBe(true);
+    expect(result[1].is_user).toBe(false);
     expect(result[1].name).toBe('Scene details');
-    expect(result[1].is_user).toBe(true);
-    expect(result[1].is_system).toBe(false);
   });
 
-  it('inlines text-completion-safe tracker snapshots into user turns to avoid nested instruct blocks', () => {
+  it('keeps text-completion-safe system tracker snapshots as standalone messages instead of inlining', () => {
     const messages = [
       {
         content: '"A drink, please."',
@@ -319,14 +319,17 @@ describe('includeZTrackerMessages', () => {
       { preserveTextCompletionTurnAlternation: true },
     ) as any[];
 
-    expect(result).toHaveLength(1);
+    expect(result).toHaveLength(2);
     expect(result[0].role).toBe('user');
-    expect(result[0].content).toContain('"A drink, please."\n\nScene details:\n');
-    expect(result[0].content).toContain('18:30:00; 09/15/2023 (Friday)');
-    expect(result[0].content).toContain('Customer entered the bar and ordered a drink.');
+    expect(result[0].content).toBe('"A drink, please."');
+    expect(result[1].role).toBe('system');
+    expect(result[1].name).toBe('Scene details');
+    expect(result[1].content).not.toContain('Scene details:');
+    expect(result[1].content).toContain('18:30:00; 09/15/2023 (Friday)');
+    expect(result[1].content).toContain('Customer entered the bar and ordered a drink.');
   });
 
-  it('inlines text-completion-safe tracker snapshots into live is_user chat turns', () => {
+  it('keeps text-completion-safe system tracker snapshots as standalone messages for live is_user chat turns', () => {
     const messages = [
       {
         content: '"A drink, please."',
@@ -349,14 +352,17 @@ describe('includeZTrackerMessages', () => {
       { preserveTextCompletionTurnAlternation: true },
     ) as any[];
 
-    expect(result).toHaveLength(1);
+    expect(result).toHaveLength(2);
     expect(result[0].is_user).toBe(true);
-    expect(result[0].content).toContain('"A drink, please."\n\nScene details:\n');
-    expect(result[0].content).toContain('18:30:00; 09/15/2023 (Friday)');
-    expect(result[0].content).toContain('Customer entered the bar and ordered a drink.');
+    expect(result[0].content).toBe('"A drink, please."');
+    expect(result[1].role).toBe('system');
+    expect(result[1].name).toBe('Scene details');
+    expect(result[1].content).not.toContain('Scene details:');
+    expect(result[1].content).toContain('18:30:00; 09/15/2023 (Friday)');
+    expect(result[1].content).toContain('Customer entered the bar and ordered a drink.');
   });
 
-  it('preserves mes-only live user content when inlining text-completion-safe tracker snapshots', () => {
+  it('keeps text-completion-safe system tracker snapshots as standalone messages for mes-only live user turns', () => {
     const messages = [
       {
         is_user: true,
@@ -379,10 +385,12 @@ describe('includeZTrackerMessages', () => {
       { preserveTextCompletionTurnAlternation: true },
     ) as any[];
 
-    expect(result).toHaveLength(1);
-    expect(result[0].is_user).toBe(true);
-    expect(result[0].content).toContain('"A drink, please."\n\nScene details:\n');
-    expect(result[0].mes).toContain('"A drink, please."\n\nScene details:\n');
+    expect(result).toHaveLength(2);
+    expect(result[0].mes).toBe('"A drink, please."');
+    expect(result[1].role).toBe('system');
+    expect(result[1].name).toBe('Scene details');
+    expect(result[1].content).toContain('18:30:00; 09/15/2023 (Friday)');
+    expect(result[1].mes).toContain('18:30:00; 09/15/2023 (Friday)');
   });
 
   it('keeps terminal assistant virtual-character snapshots after trailing assistant prefill in text-completion-safe mode', () => {

@@ -16,9 +16,13 @@ import {
   makeGenerateRequest,
   makeProfile,
   makeSettings,
+  parseResponse,
+  PromptEngineeringMode,
   renderTrackerWithDepsMock,
   resetTrackerActionTestState,
   sanitizeMessagesForGenerationMock,
+  schemaToExample,
+  schemaToPromptSchema,
   stEchoMock,
   TEST_IMPORT_META_URL,
 } from '../test-utils/tracker-actions-test-helpers.js';
@@ -2538,5 +2542,80 @@ describe('createTrackerActions prompt assembly', () => {
         includeNames: false,
       }),
     );
+  });
+
+  // Regression guard for the chained-module include-list "never terminal" safety claim (see
+  // design.md / tracker-module-chaining.test.ts): that claim depends on the tracker-generation
+  // instruction message always being appended after everything else, even when buildPrompt (and
+  // any chained/self include-list additions) produce no preceding messages at all. These two
+  // tests exercise that append unconditionally for both prompt-assembly paths (Native mode's
+  // static instruction message, and prompt-engineered mode's compiled template message).
+  test('still appends the tracker generation instruction as the only message when the prompt window is empty (Native mode)', async () => {
+    installSillyTavernContext(makeContext());
+    buildPromptMock.mockResolvedValue({ result: [] });
+    const generateRequest = makeGenerateRequest();
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile()],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({ trackerSystemPromptMode: 'profile', prompt: 'Generate tracker JSON' }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0);
+
+    const sentMessages = generateRequest.mock.calls[0][0].prompt;
+    expect(sentMessages).toEqual([{ role: 'system', content: 'Generate tracker JSON' }]);
+  });
+
+  test('still appends the prompt-engineered instruction as the only message when the prompt window is empty (JSON mode)', async () => {
+    installSillyTavernContext(makeContext());
+    buildPromptMock.mockResolvedValue({ result: [] });
+    (schemaToExample as jest.Mock).mockReturnValue('{"time":"string"}');
+    (schemaToPromptSchema as jest.Mock).mockReturnValue('type: object');
+    (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
+    const generateRequest = makeGenerateRequest({ content: '```json\n{"time":"10:00:00"}\n```' });
+
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        saveChat: async () => undefined,
+        extensionSettings: {
+          connectionManager: {
+            profiles: [makeProfile()],
+          },
+        },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: {
+        getSettings: () => makeSettings({
+          trackerSystemPromptMode: 'profile',
+          promptEngineeringMode: PromptEngineeringMode.JSON,
+          promptJson: 'JSON TEMPLATE\n{{example_response}}',
+        }),
+      } as any,
+      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.generateTracker(0);
+
+    const sentMessages = generateRequest.mock.calls[0][0].prompt;
+    expect(sentMessages).toEqual([{ role: 'system', content: 'JSON TEMPLATE\n{"time":"string"}' }]);
   });
 });

@@ -325,4 +325,34 @@ describe('applyTrackerModuleIncludeList', () => {
     const currentTurn = normalized.find((message) => message.content === 'current');
     expect(currentTurn?.role).toBe('assistant');
   });
+
+  test('a chained assistant-role snapshot is never the last message in the returned array', () => {
+    // Regression guard: unlike src/tracker.ts's generate_interceptor path, this include-list path
+    // has no Text-Completion terminal-position safety handling for its embedZTrackerRole reads -
+    // chained entries are always prepended ahead of the self/window messages
+    // (`[...prepended, ...withSelf]`), so a chained snapshot can never land in the terminal slot
+    // that would make an unhandled assistant-role message unsafe. This test locks that structural
+    // guarantee in so a future reordering can't silently reintroduce the risk.
+    const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    scene.injection.embedRole = 'assistant';
+    scene.injection.snapshotHeader = 'Scene Tracker:';
+    const agenda = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
+    agenda.generation.includeModules = [
+      { target: 'self', count: 0 },
+      { target: 'scene', count: 1 },
+    ];
+    const rawSettings = buildSettings([scene, agenda]);
+    const agendaSettings = getSettingsForTrackerModule(rawSettings, 'agenda');
+
+    const chat = [buildMessageWithModuleTrackers({ scene: { place: 'Bridge' } })];
+    const messages = [{ content: 'current', role: 'user' }];
+
+    const result = applyTrackerModuleIncludeList(messages as any, agenda, agendaSettings, { chat: chat as any, messageId: 0 }) as any[];
+
+    const chainedIndex = result.findIndex(
+      (message) => message.role === 'assistant' && typeof message.content === 'string' && message.content.includes('Scene Tracker:'),
+    );
+    expect(chainedIndex).toBeGreaterThanOrEqual(0);
+    expect(chainedIndex).toBeLessThan(result.length - 1);
+  });
 });

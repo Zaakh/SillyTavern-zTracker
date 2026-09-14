@@ -1,6 +1,6 @@
 # Tracker Injection Behavior
 
-Maintenance: Last reviewed 2026-04-27. Update when injection logic, shaping rules, or related settings change.
+Maintenance: Last reviewed 2026-09-14. Update when injection logic, shaping rules, or related settings change.
 
 This document describes the current runtime contract for zTracker snapshot injection into normal chat generations. It covers the `generate_interceptor` path only; tracker-generation requests use a different prompt-assembly flow.
 
@@ -22,17 +22,19 @@ The injected chat shape is primarily controlled by these settings and runtime hi
 2. Enabled Modules are evaluated independently in deterministic Module order. A Module with `Include Last X zTracker Messages = 0` does not inject snapshots, but other enabled Modules still can.
 3. `embedZTrackerRole` controls the injected role only for normal generations. It does not affect tracker generation.
 4. `embedZTrackerAsCharacter` is best-effort, not absolute. When zTracker can keep the snapshot as a normal standalone message, it derives a speaker name from `embedZTrackerSnapshotHeader` and removes that header from the injected content. When zTracker must emit raw assistant text to preserve a valid reply cue in text-completion chats, the header stays in content and no `name` field is used.
-5. Assistant-role text-completion injection has three distinct terminal behaviors:
+5. `embedZTrackerRole: 'system'` always injects as a standalone `system`-role message and is never inlined into the tracked source message or downgraded to another role - the text-completion alternation-safety fallback (rules 6-7 below) only special-cases `'assistant'`. This holds on both Chat Completion and Text Completion connections.
+6. Assistant-role text-completion injection has three distinct terminal behaviors:
    - standalone raw assistant text when a single-speaker reply cue is safe;
    - inline fallback into the final user turn when the terminal assistant cue would be ambiguous;
    - anchored standalone assistant insertion after the tracked source turn for mid-chat or multi-character flows.
-6. zTracker prefers a host-confirmed solo reply label over history inference when SillyTavern already exposes the active assistant speaker for the current chat.
+7. zTracker prefers a host-confirmed solo reply label over history inference when SillyTavern already exposes the active assistant speaker for the current chat.
 
 ## Behavior matrix
 
 | Context | Resulting injected shape | Virtual-character effect |
 | --- | --- | --- |
 | Non-text-completion chats, or non-assistant embed roles | Standalone injected message after the tracked source message | If enabled, zTracker sets `name` from the snapshot header and removes the header from `content` |
+| Any backend, `embedZTrackerRole: 'system'` | Standalone `system` message after the tracked source message - unaffected by text-completion alternation safety | If enabled, zTracker uses the derived `name` and omits the header from `content` |
 | Text completion, assistant role, tracked message is mid-chat | Standalone assistant message after the tracked source message | If enabled, zTracker uses the derived `name` and omits the header from `content` |
 | Text completion, assistant role, terminal tracked user in a confirmed single-speaker solo chat | Raw assistant text block at the end of the prompt with `ignoreInstruct: true` and a synthesized real-assistant reply cue | zTracker prefers the host-confirmed solo reply label when available and otherwise falls back to prior assistant history; the tracker label stays in `content` and zTracker does not set `name` in this raw fallback |
 | Text completion, assistant role, trailing empty assistant prefill already present | The prefill stays in place and zTracker appends a raw assistant text block after it | The tracker label stays in `content`; zTracker does not set `name` in this raw fallback |
@@ -62,6 +64,11 @@ That shape is intentional:
 - If you are debugging a single-speaker text-completion chat and see the tracker label inside content instead of as a separate speaker turn, check whether zTracker is in the raw assistant fallback described above.
 - If you are debugging a group chat, expect zTracker to stay conservative and inline ambiguous terminal assistant snapshots into the user turn until the host confirms a safe single-speaker path.
 - If you are debugging a solo chat, check the host-owned speaker label first. zTracker now prefers SillyTavern's active solo speaker when it is available and only falls back to assistant-history inference when the host does not expose one.
+- If your instruct template genuinely mishandles a standalone `system` turn and you were relying on the pre-fix behavior (a `'system'`-configured Module silently inlining its snapshot into the tracked user message on Text Completion), that inlining no longer happens. Reconfigure the Module's `embedZTrackerRole` to `'user'` or `'assistant'` if your template needs the snapshot folded into an existing turn instead of a standalone `system` message.
+
+## Chained-module include-list path (tracker-generation prompts, not this document's scope)
+
+`src/tracker-module-chaining.ts`'s `buildStandaloneSnapshotMessage()` also reads `embedZTrackerRole`, but for a different consumer: a Module's own generation include-list (chained-module tracker-generation context), not the `generate_interceptor` embedding this document covers. That path has no terminal-position safety logic of its own, and needs none: chained snapshots are always prepended ahead of the self/window messages (`applyTrackerModuleIncludeList`'s `[...prepended, ...withSelf]`), and the tracker-generation caller always appends a trailing instruction message after everything, so a chained snapshot can never be the last message in the assembled prompt. This is locked in by a regression test in `src/__tests__/tracker-module-chaining.test.ts` rather than by explicit code.
 
 ## References
 

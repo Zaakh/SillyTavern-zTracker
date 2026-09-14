@@ -11,6 +11,16 @@
  *   by design, so they scan the full chat directly instead of the windowed `messages`. Their
  *   source turn may not even be present in `messages`, so they are prepended as standalone
  *   context messages ahead of the window rather than interleaved.
+ *
+ * A chained snapshot's `embedZTrackerRole` (read by `buildStandaloneSnapshotMessage` below) is
+ * never given Text Completion terminal-position safety handling like `src/tracker.ts`'s
+ * `generate_interceptor` path has for `'assistant'`. It doesn't need any: `applyTrackerModuleIncludeList`
+ * always places chained entries ahead of the self/window messages (`[...prepended, ...withSelf]`),
+ * and every caller (`requestStructuredTrackerContent` / `requestPromptEngineeredResponse` in
+ * `src/ui/tracker-actions.ts` and `src/ui/prompt-engineering.ts`) unconditionally appends one more
+ * trailing instruction message after that. A chained snapshot can therefore never be the last
+ * message in the assembled tracker-generation prompt - locked in by a regression test in
+ * `src/__tests__/tracker-module-chaining.test.ts` and `src/__tests__/tracker-actions.prompt-assembly.test.ts`.
  */
 import type { Message } from 'sillytavern-utils-lib';
 import type { ChatMessage } from 'sillytavern-utils-lib/types';
