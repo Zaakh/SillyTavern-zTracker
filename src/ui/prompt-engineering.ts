@@ -122,7 +122,11 @@ export function createPromptEngineeringHelpers() {
 
     requestMessages.push({ role: 'system', content: `${finalPrompt}${suffix}` });
 
-    const response = await makeRequest(requestMessages);
+    // Opt-in, JSON-mode-only: adds the raw JSON Schema as a `json_schema` request override so
+    // backends that support grammar/schema sampling (llama.cpp, TabbyAPI, Chat Completion) can
+    // constrain generation for real, on top of the prompt-engineered instructions above.
+    const overridePayload = format === 'json' && settings.grammarEnforcementEnabled ? { json_schema: schema } : undefined;
+    const response = await makeRequest(requestMessages, overridePayload);
     if (!response?.content) {
       throw new Error('No response content received.');
     }

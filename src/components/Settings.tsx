@@ -192,7 +192,12 @@ function getCurrentChatSchemaPresetState(settings: TrackerModuleSettings, module
   };
 }
 
-export const ZTrackerSettings: FC = () => {
+export const ZTrackerSettings: FC<{
+  /** Fires one throwaway structured-output request against a Module's resolved connection and
+   * reports whether the response conformed to a trivial test schema - lets a user confirm their
+   * backend actually honors the "Enforce schema via grammar sampling" setting before relying on it. */
+  testGrammarSchemaEnforcement: (moduleId: string) => Promise<{ supported: boolean; message: string }>;
+}> = ({ testGrammarSchemaEnforcement }) => {
   const forceUpdate = useForceUpdate();
   const settings = settingsManager.getSettings();
   const orderedModules = getOrderedTrackerModules(settings, { includeDisabled: true });
@@ -805,6 +810,7 @@ export const ZTrackerSettings: FC = () => {
                 settings={moduleSettings}
                 selectedModule={selectedModule}
                 updateAndRefresh={updateSelectedModuleAndRefresh}
+                testGrammarSchemaEnforcement={testGrammarSchemaEnforcement}
                 schemaPresetItems={schemaPresetItems}
                 currentChatSchemaPresetKey={currentChatSchemaPresetState.selection?.key}
                 currentChatSchemaPresetLabel={currentChatSchemaPresetState.selection?.label}

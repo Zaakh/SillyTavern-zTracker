@@ -50,6 +50,7 @@ export const TrackerGenerationSection: FC<{
   recreateModuleSystemPromptPreset: () => void | Promise<void>;
   isRecreatingSystemPrompt: boolean;
   currentGlobalSystemPromptName?: string;
+  testGrammarSchemaEnforcement: (moduleId: string) => Promise<{ supported: boolean; message: string }>;
 }> = ({
   settings,
   selectedModule,
@@ -90,6 +91,7 @@ export const TrackerGenerationSection: FC<{
   recreateModuleSystemPromptPreset,
   isRecreatingSystemPrompt,
   currentGlobalSystemPromptName,
+  testGrammarSchemaEnforcement,
 }) => {
   return (
     <>
@@ -142,7 +144,12 @@ export const TrackerGenerationSection: FC<{
         currentGlobalSystemPromptName={currentGlobalSystemPromptName}
       />
 
-      <GenerationPromptTemplatesSection settings={settings} updateAndRefresh={updateAndRefresh} />
+      <GenerationPromptTemplatesSection
+        settings={settings}
+        updateAndRefresh={updateAndRefresh}
+        moduleId={selectedModule.id}
+        testGrammarSchemaEnforcement={testGrammarSchemaEnforcement}
+      />
 
       <WorldInfoPolicySection settings={settings} updateAndRefresh={updateAndRefresh} />
     </>

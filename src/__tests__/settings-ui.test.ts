@@ -572,7 +572,9 @@ describe('zTracker settings connection source UI', () => {
 
     root = createRoot(container);
     act(() => {
-      root?.render(React.createElement(ZTrackerSettings));
+      // No suite in this file exercises JSON prompt-engineering mode, so a no-op stub is enough
+      // to satisfy the required prop without needing real grammar-test behavior here.
+      root?.render(React.createElement(ZTrackerSettings, { testGrammarSchemaEnforcement: jest.fn() }));
     });
     return container;
   }

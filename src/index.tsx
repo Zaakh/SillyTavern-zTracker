@@ -4,7 +4,7 @@ import { settingsManager, ZTrackerSettings } from './components/Settings.js';
 import Handlebars from 'handlebars';
 import { Generator } from 'sillytavern-utils-lib';
 import { st_echo } from 'sillytavern-utils-lib/config';
-import { createTrackerActions } from './ui/tracker-actions.js';
+import { createTrackerActions, type TrackerActions } from './ui/tracker-actions.js';
 import { initializeGlobalUI } from './ui/ui-init.js';
 import { initializeStartupSettings } from './startup.js';
 import {
@@ -32,7 +32,7 @@ if (!Handlebars.helpers['join']) {
 
 // --- Main Application Entry ---
 
-function renderReactSettings() {
+function renderReactSettings(testGrammarSchemaEnforcement: TrackerActions['testGrammarSchemaEnforcement']) {
   const settingsContainer = document.getElementById('extensions_settings');
   if (!settingsContainer) {
     console.error('zTracker: Extension settings container not found.');
@@ -49,7 +49,7 @@ function renderReactSettings() {
   const root = createRoot(reactRootEl);
   root.render(
     <React.StrictMode>
-      <ZTrackerSettings />
+      <ZTrackerSettings testGrammarSchemaEnforcement={testGrammarSchemaEnforcement} />
     </React.StrictMode>,
   );
 }
@@ -68,7 +68,7 @@ async function main(isFreshInstall: boolean) {
     importMetaUrl: import.meta.url,
   });
 
-  renderReactSettings();
+  renderReactSettings(actions.testGrammarSchemaEnforcement);
   initializeGlobalUI({
     globalContext,
     settingsManager,

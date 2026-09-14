@@ -75,6 +75,10 @@ Your API/model might not support structured output. Change `Prompt Engineering` 
 
 In **Extensions → zTracker**, enable **Debug logging** and use the **Diagnostics** panel (stethoscope button) to print template URL checks to the console. This helps confirm whether SillyTavern can access the extension’s HTML templates.
 
+## Grammar/schema enforcement (JSON mode only)
+
+When a Module's `Prompt Engineering` mode is set to `JSON`, an **Enforce schema via grammar sampling** checkbox appears. Enabling it adds the Module's JSON Schema as an extra structured-output constraint on every generation request, on top of the usual JSON prompt template. This only has an effect on backends SillyTavern forwards it to today (llama.cpp server, TabbyAPI, and Chat Completion) - other backends silently ignore it. Use the **Test** button next to the checkbox to confirm your current connection actually honors it before relying on it.
+
 ## Connection source for tracker generation
 
 zTracker can now choose where tracker-generation connection settings come from:

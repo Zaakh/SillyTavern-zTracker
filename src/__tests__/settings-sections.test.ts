@@ -194,13 +194,6 @@ function setSelectValue(element: HTMLSelectElement, value: string): void {
   element.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-/** Updates one controlled checkbox through the native DOM setter so React sees the change. */
-function setCheckboxValue(element: HTMLInputElement, checked: boolean): void {
-  const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked');
-  descriptor?.set?.call(element, checked);
-  element.dispatchEvent(new Event('change', { bubbles: true }));
-}
-
 describe('settings sections', () => {
   let root: Root | undefined;
 
@@ -328,10 +321,14 @@ describe('settings sections', () => {
       promptJson: 'json prompt',
       promptXml: 'xml prompt',
       promptToon: 'toon prompt',
+      grammarEnforcementEnabled: false,
     } as any;
     const updateAndRefresh = (updater: (current: any) => void) => updater(settings);
+    const testGrammarSchemaEnforcement = jest.fn(async () => ({ supported: true, message: 'ok' }));
 
-    ({ root } = renderElement(React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh })));
+    ({ root } = renderElement(
+      React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh, moduleId: 'default', testGrammarSchemaEnforcement }),
+    ));
 
     const getPromptTextarea = () => document.querySelectorAll('textarea')[0] as HTMLTextAreaElement;
     const getRestoreButton = () => document.querySelector('button[title="Restore Prompt to default"]') as HTMLButtonElement | null;
@@ -342,7 +339,9 @@ describe('settings sections', () => {
 
     act(() => {
       settings.promptEngineeringMode = PromptEngineeringMode.JSON;
-      root?.render(React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh }));
+      root?.render(
+        React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh, moduleId: 'default', testGrammarSchemaEnforcement }),
+      );
     });
 
     expect(getPromptTextarea().disabled).toBe(true);
@@ -351,12 +350,184 @@ describe('settings sections', () => {
 
     act(() => {
       settings.promptEngineeringMode = PromptEngineeringMode.NATIVE;
-      root?.render(React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh }));
+      root?.render(
+        React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh, moduleId: 'default', testGrammarSchemaEnforcement }),
+      );
     });
 
     expect(getPromptTextarea().disabled).toBe(false);
     expect(getRestoreButton()?.disabled).toBe(false);
     expect(document.body.textContent).not.toContain('use the matching');
+  });
+
+  test('hides the grammar/schema enforcement setting outside JSON mode and shows it in JSON mode', () => {
+    const settings = {
+      promptEngineeringMode: PromptEngineeringMode.NATIVE,
+      prompt: 'native prompt',
+      promptJson: 'json prompt',
+      promptXml: 'xml prompt',
+      promptToon: 'toon prompt',
+      grammarEnforcementEnabled: false,
+    } as any;
+    const updateAndRefresh = (updater: (current: any) => void) => updater(settings);
+    const testGrammarSchemaEnforcement = jest.fn(async () => ({ supported: true, message: 'ok' }));
+
+    ({ root } = renderElement(
+      React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh, moduleId: 'default', testGrammarSchemaEnforcement }),
+    ));
+
+    expect(document.body.textContent).not.toContain('Enforce schema via grammar sampling');
+
+    act(() => {
+      settings.promptEngineeringMode = PromptEngineeringMode.JSON;
+      root?.render(
+        React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh, moduleId: 'default', testGrammarSchemaEnforcement }),
+      );
+    });
+
+    expect(document.body.textContent).toContain('Enforce schema via grammar sampling');
+
+    act(() => {
+      settings.promptEngineeringMode = PromptEngineeringMode.XML;
+      root?.render(
+        React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh, moduleId: 'default', testGrammarSchemaEnforcement }),
+      );
+    });
+
+    expect(document.body.textContent).not.toContain('Enforce schema via grammar sampling');
+  });
+
+  test('toggles the grammar/schema enforcement checkbox and persists the change onto settings', () => {
+    const settings = {
+      promptEngineeringMode: PromptEngineeringMode.JSON,
+      prompt: 'native prompt',
+      promptJson: 'json prompt',
+      promptXml: 'xml prompt',
+      promptToon: 'toon prompt',
+      grammarEnforcementEnabled: false,
+    } as any;
+    const updateAndRefresh = (updater: (current: any) => void) => updater(settings);
+    const testGrammarSchemaEnforcement = jest.fn(async () => ({ supported: true, message: 'ok' }));
+
+    ({ root } = renderElement(
+      React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh, moduleId: 'default', testGrammarSchemaEnforcement }),
+    ));
+
+    const checkbox = document.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+    if (!(checkbox instanceof HTMLInputElement)) {
+      throw new Error('Grammar enforcement checkbox not found');
+    }
+
+    act(() => {
+      checkbox.click();
+    });
+
+    expect(settings.grammarEnforcementEnabled).toBe(true);
+  });
+
+  test('runs the Test action and renders a pass result, then a fail result on the next run', async () => {
+    const settings = {
+      promptEngineeringMode: PromptEngineeringMode.JSON,
+      prompt: 'native prompt',
+      promptJson: 'json prompt',
+      promptXml: 'xml prompt',
+      promptToon: 'toon prompt',
+      grammarEnforcementEnabled: true,
+    } as any;
+    const updateAndRefresh = (updater: (current: any) => void) => updater(settings);
+    const testGrammarSchemaEnforcement = jest
+      .fn()
+      .mockResolvedValueOnce({ supported: true, message: 'Schema enforcement is supported.' })
+      .mockResolvedValueOnce({ supported: false, message: 'Not confirmed for this connection.' });
+
+    ({ root } = renderElement(
+      React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh, moduleId: 'my-module', testGrammarSchemaEnforcement }),
+    ));
+
+    const testButton = document.querySelector('button.menu_button') as HTMLButtonElement | null;
+    if (!(testButton instanceof HTMLButtonElement)) {
+      throw new Error('Test button not found');
+    }
+
+    await act(async () => {
+      testButton.click();
+      await Promise.resolve();
+    });
+
+    expect(testGrammarSchemaEnforcement).toHaveBeenCalledWith('my-module');
+    expect(document.body.textContent).toContain('Schema enforcement is supported.');
+
+    await act(async () => {
+      testButton.click();
+      await Promise.resolve();
+    });
+
+    expect(document.body.textContent).toContain('Not confirmed for this connection.');
+  });
+
+  test('discards a stale Test result that resolves after the selected Module has changed', async () => {
+    // Regression test for a module-switch race: an in-flight Test request for the previously
+    // selected Module must not overwrite the newly selected Module's (reset) result once it
+    // resolves, since it describes a connection the user is no longer looking at.
+    const settingsA = {
+      promptEngineeringMode: PromptEngineeringMode.JSON,
+      prompt: 'native prompt',
+      promptJson: 'json prompt',
+      promptXml: 'xml prompt',
+      promptToon: 'toon prompt',
+      grammarEnforcementEnabled: true,
+    } as any;
+    const settingsB = { ...settingsA };
+    const updateAndRefreshA = (updater: (current: any) => void) => updater(settingsA);
+    const updateAndRefreshB = (updater: (current: any) => void) => updater(settingsB);
+
+    let resolveTestForModuleA: (value: { supported: boolean; message: string }) => void = () => undefined;
+    const testGrammarSchemaEnforcement = jest.fn(
+      () => new Promise<{ supported: boolean; message: string }>((resolve) => {
+        resolveTestForModuleA = resolve;
+      }),
+    );
+
+    ({ root } = renderElement(
+      React.createElement(GenerationPromptTemplatesSection, {
+        settings: settingsA,
+        updateAndRefresh: updateAndRefreshA,
+        moduleId: 'module-a',
+        testGrammarSchemaEnforcement,
+      }),
+    ));
+
+    const testButton = document.querySelector('button.menu_button') as HTMLButtonElement | null;
+    if (!(testButton instanceof HTMLButtonElement)) {
+      throw new Error('Test button not found');
+    }
+
+    act(() => {
+      testButton.click();
+    });
+
+    expect(testGrammarSchemaEnforcement).toHaveBeenCalledWith('module-a');
+
+    // Switch the selected Module while module-a's request is still pending.
+    act(() => {
+      root?.render(
+        React.createElement(GenerationPromptTemplatesSection, {
+          settings: settingsB,
+          updateAndRefresh: updateAndRefreshB,
+          moduleId: 'module-b',
+          testGrammarSchemaEnforcement,
+        }),
+      );
+    });
+
+    // The stale request for module-a resolves only now, after the switch.
+    await act(async () => {
+      resolveTestForModuleA({ supported: true, message: 'Schema enforcement is supported for module-a.' });
+      await Promise.resolve();
+    });
+
+    expect(document.body.textContent).not.toContain('module-a');
+    expect(document.body.textContent).not.toContain('Schema enforcement is supported');
   });
 
   test('refreshes, filters, adds, removes, and manually edits world-info allowlists', async () => {

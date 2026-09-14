@@ -21,6 +21,7 @@ import { POPUP_RESULT, POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
 import { shouldIgnoreWorldInfoDuringTrackerBuild } from '../world-info-policy.js';
 import { buildAllowlistedWorldInfoText } from '../world-info-allowlist.js';
 import { loadWorldInfoBookByName } from '../sillytavern-world-info.js';
+import { parseResponse } from '../parser.js';
 import {
   hasSystemPromptPreset,
   getSystemPromptPresetContent,
@@ -1122,6 +1123,78 @@ export function createTrackerActions(options: {
     };
   }
 
+  // Trivial one-field schema used only to probe whether a connection's backend actually honors a
+  // `json_schema` structured-output override - independent of any real tracker schema.
+  const GRAMMAR_TEST_SCHEMA = { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] };
+  // A small dedicated budget keeps the probe cheap/fast; the real Module's maxResponseToken is
+  // irrelevant to this one-boolean-field check and could be large on metered/paid backends.
+  const GRAMMAR_TEST_MAX_TOKENS = 64;
+  let nextGrammarTestMessageId = -1;
+
+  /**
+   * Fires one throwaway structured-output request against a Module's currently resolved
+   * connection, with no chat message required, and reports whether the response actually
+   * conformed to a trivial test schema. This is the only way a user learns whether their backend
+   * honors the opt-in grammar/schema enforcement setting - no result is persisted.
+   */
+  async function testGrammarSchemaEnforcement(moduleId: string): Promise<{ supported: boolean; message: string }> {
+    const settings = { ...getSettingsForTrackerModule(settingsManager.getSettings(), moduleId), maxResponseToken: GRAMMAR_TEST_MAX_TOKENS };
+    const context = SillyTavern.getContext();
+
+    let resolvedConnection: ResolvedTrackerConnection;
+    try {
+      resolvedConnection = resolveTrackerConnection(settings, context);
+    } catch (error) {
+      return { supported: false, message: error instanceof Error ? error.message : 'Could not resolve a connection to test.' };
+    }
+
+    // A unique negative id keeps this synthetic probe from colliding with real chat message
+    // indices (always >= 0) in the pendingRequests/pendingRequestsByRun bookkeeping maps.
+    const syntheticMessageId = nextGrammarTestMessageId;
+    nextGrammarTestMessageId -= 1;
+
+    const makeRequest = makeRequestFactory(syntheticMessageId, settings, {
+      resolvedConnection,
+      moduleId,
+      moduleName: getModuleDebugName(moduleId),
+    });
+
+    try {
+      const response = await makeRequest(
+        [{ role: 'system', content: 'Respond with only a single JSON object of the exact shape {"ok": true}. No other text.' }],
+        { json_schema: GRAMMAR_TEST_SCHEMA },
+      );
+
+      const rawContent = response?.content;
+      if (typeof rawContent !== 'string' || !rawContent.trim()) {
+        return { supported: false, message: 'The connection returned no content for the test request.' };
+      }
+
+      // Reuses the same fence-stripping/repair pipeline real JSON-mode generation relies on, so a
+      // backend that wraps schema-constrained output in a markdown fence isn't misreported as failing.
+      let parsed: unknown;
+      try {
+        parsed = parseResponse(rawContent, 'json', { schema: GRAMMAR_TEST_SCHEMA });
+      } catch {
+        return {
+          supported: false,
+          message: 'The response was not valid JSON, so schema enforcement is not confirmed for this connection.',
+        };
+      }
+
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || typeof (parsed as { ok?: unknown }).ok !== 'boolean') {
+        return {
+          supported: false,
+          message: 'The response did not match the trivial test schema, so schema enforcement is not confirmed for this connection.',
+        };
+      }
+
+      return { supported: true, message: 'The current connection returned schema-conforming output. Schema enforcement is supported.' };
+    } catch (error) {
+      return { supported: false, message: error instanceof Error ? error.message : 'The test request failed.' };
+    }
+  }
+
   async function prepareTrackerGeneration(messageId: number, options?: { schemaPresetKey?: string; moduleId?: string }) {
     const message = globalContext.chat[messageId];
     if (!message) {
@@ -1868,6 +1941,7 @@ export function createTrackerActions(options: {
     generateTrackerArrayItemFieldByIdentity,
     modifyChatMetadata,
     renderExtensionTemplates,
+    testGrammarSchemaEnforcement,
     /** Lets outgoing auto mode tag zTracker-owned request starts without affecting manual generation flows. */
     setBeforeRequestStartHook(callback?: () => void) {
       beforeRequestStartHook = callback;
