@@ -37,17 +37,22 @@ export function coerceParsedArraysBySchema(data: any, schema?: any): any {
   }
 
   for (const key in schema.properties) {
-    if (schema.properties[key].type === 'array' && data[key] && !Array.isArray(data[key])) {
+    const propertySchema = schema.properties[key];
+    if (propertySchema.type === 'array' && data[key] && !Array.isArray(data[key])) {
       data[key] = [data[key]];
     }
-    if (schema.properties[key].type === 'object') {
-      coerceParsedArraysBySchema(data[key], schema.properties[key]);
+    if (propertySchema.type === 'object') {
+      coerceParsedArraysBySchema(data[key], propertySchema);
     }
-    if (schema.properties[key].type === 'array' && schema.properties[key].items.type === 'object') {
+    // A missing or tuple-form (Array) `items` gives no per-item shape to recurse into - skip this
+    // property's object recursion instead of dereferencing `items.type`, which previously threw a
+    // TypeError disguised as "Model response is not valid XML/TOON." (see schema-dialect-lint).
+    const itemsSchema = propertySchema.type === 'array' && !Array.isArray(propertySchema.items) ? propertySchema.items : undefined;
+    if (itemsSchema?.type === 'object') {
       if (Array.isArray(data[key])) {
-        data[key].forEach((item: any) => coerceParsedArraysBySchema(item, schema.properties[key].items));
+        data[key].forEach((item: any) => coerceParsedArraysBySchema(item, itemsSchema));
       } else {
-        coerceParsedArraysBySchema(data[key], schema.properties[key].items);
+        coerceParsedArraysBySchema(data[key], itemsSchema);
       }
     }
   }

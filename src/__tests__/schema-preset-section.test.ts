@@ -94,6 +94,7 @@ describe('SchemaPresetSection', () => {
           schemaTextHasError: false,
           schemaTextHasUnsavedChanges: true,
           schemaTextCanSave: true,
+          schemaDialectFindings: [],
           schemaHtmlText: '<div>{{data.scene}}</div>',
           schemaHtmlTextHasError: false,
           schemaHtmlTextHasUnsavedChanges: true,
@@ -112,20 +113,37 @@ describe('SchemaPresetSection', () => {
     return container;
   }
 
-  test('shows preset pair validation errors and disables both save buttons', () => {
+  test('shows independent pair validation errors and disables both save buttons', () => {
     const container = renderSection({
       schemaTextCanSave: false,
       schemaHtmlTextCanSave: false,
-      schemaPresetPairError: 'Schema JSON and HTML must stay coupled for both full and minimal tracker data.',
+      schemaJsonPairError: 'Schema JSON and HTML must stay coupled for both full and minimal tracker data.',
+      schemaHtmlPairError: 'Schema JSON and HTML must stay coupled for both full and minimal tracker data.',
     });
 
     expect(container.textContent).toContain('Schema JSON and HTML must stay coupled for both full and minimal tracker data.');
 
-    const saveButtons = container.querySelectorAll('button[title="Save the current schema preset pair (JSON and HTML)"]');
-    const [saveJsonButton, saveHtmlButton] = Array.from(saveButtons);
+    const saveJsonButton = container.querySelector('button[title^="Save the current Schema JSON"]');
+    const saveHtmlButton = container.querySelector('button[title^="Save the current Schema HTML"]');
 
     expect(saveJsonButton).toHaveProperty('disabled', true);
     expect(saveHtmlButton).toHaveProperty('disabled', true);
+  });
+
+  test('groups dialect findings by severity, labeling errors as the reason Schema JSON cannot be saved', () => {
+    const container = renderSection({
+      schemaTextCanSave: false,
+      schemaDialectFindings: [
+        { severity: 'error', path: 'tags', message: 'is an array with no item definition.' },
+        { severity: 'warning', path: 'value', message: 'uses "$ref".' },
+        { severity: 'info', path: '(root)', message: 'has no description.' },
+      ],
+    });
+
+    expect(container.textContent).toContain('Cannot save Schema JSON:');
+    expect(container.textContent).toContain('tags');
+    expect(container.textContent).toContain('Warnings:');
+    expect(container.textContent).toContain('Notes:');
   });
 
   test('shows an explicit global preset selector next to the schema editors', () => {

@@ -1,8 +1,15 @@
 import { FC, useMemo } from 'react';
 import { st_echo } from 'sillytavern-utils-lib/config';
 import { STButton, STSelect, STTextarea, PresetItem } from 'sillytavern-utils-lib/components/react';
+import type { SchemaDialectFinding } from './schema-editor-state.js';
 
 const READ_ONLY_SCHEMA_PRESET_VALUES = ['default'];
+
+const SEVERITY_LABELS: Record<SchemaDialectFinding['severity'], string> = {
+  error: 'Cannot save Schema JSON:',
+  warning: 'Warnings:',
+  info: 'Notes:',
+};
 
 // Keeps schema preset selection and schema/template editing together because they change the same tracker shape.
 export const SchemaPresetSection: FC<{
@@ -24,12 +31,15 @@ export const SchemaPresetSection: FC<{
   schemaTextError?: string;
   schemaTextHasUnsavedChanges: boolean;
   schemaTextCanSave: boolean;
+  /** Dialect findings for the current Schema JSON draft (openspec: add-schema-dialect-lint), grouped by severity below. */
+  schemaDialectFindings: SchemaDialectFinding[];
   schemaHtmlText: string;
   schemaHtmlTextHasError: boolean;
   schemaHtmlTextError?: string;
   schemaHtmlTextHasUnsavedChanges: boolean;
   schemaHtmlTextCanSave: boolean;
-  schemaPresetPairError?: string;
+  schemaJsonPairError?: string;
+  schemaHtmlPairError?: string;
   handleSchemaValueChange: (newSchemaText: string) => void;
   handleSchemaHtmlChange: (newHtml: string) => void;
   saveSchemaValue: () => void;
@@ -56,12 +66,14 @@ export const SchemaPresetSection: FC<{
   schemaTextError,
   schemaTextHasUnsavedChanges,
   schemaTextCanSave,
+  schemaDialectFindings,
   schemaHtmlText,
   schemaHtmlTextHasError,
   schemaHtmlTextError,
   schemaHtmlTextHasUnsavedChanges,
   schemaHtmlTextCanSave,
-  schemaPresetPairError,
+  schemaJsonPairError,
+  schemaHtmlPairError,
   handleSchemaValueChange,
   handleSchemaHtmlChange,
   saveSchemaValue,
@@ -74,6 +86,13 @@ export const SchemaPresetSection: FC<{
     () => schemaPresetItems.find((item) => item.value === schemaPresetKey),
     [schemaPresetItems, schemaPresetKey],
   );
+  const dialectFindingsBySeverity = useMemo(() => {
+    const grouped: Record<SchemaDialectFinding['severity'], SchemaDialectFinding[]> = { error: [], warning: [], info: [] };
+    for (const finding of schemaDialectFindings) {
+      grouped[finding.severity].push(finding);
+    }
+    return grouped;
+  }, [schemaDialectFindings]);
   const isReadOnlySchemaPreset = READ_ONLY_SCHEMA_PRESET_VALUES.includes(schemaPresetKey);
   const currentChatSchemaPresetTitle = currentChatSchemaPresetHasStoredValue && !currentChatSchemaPresetHasValidStoredValue
     ? `This chat still references unavailable schema preset "${currentChatSchemaPresetStoredKey}". zTracker is currently showing the fallback preset "${currentChatSchemaPresetLabel ?? currentChatSchemaPresetKey}" until you choose or generate with a valid chat schema.`
@@ -221,7 +240,7 @@ export const SchemaPresetSection: FC<{
         <span title="The JSON schema used for tracker generation.">Schema JSON</span>
         <STButton
           className="fa-solid fa-floppy-disk"
-          title="Save the current schema preset pair (JSON and HTML)"
+          title="Save the current Schema JSON (blocked while it has schema errors, or does not render against the saved Schema HTML)"
           onClick={saveSchemaValue}
           disabled={!schemaTextCanSave}
         />
@@ -237,14 +256,31 @@ export const SchemaPresetSection: FC<{
       {schemaTextHasError ? (
         <div className="notes ztracker-schema-error">{schemaTextError ?? 'Invalid JSON.'}</div>
       ) : schemaTextHasUnsavedChanges ? (
-        <div className="notes ztracker-schema-status">Valid JSON. Save to apply the current schema preset pair.</div>
+        <div className="notes ztracker-schema-status">Valid JSON. Save to apply the current Schema JSON.</div>
       ) : null}
+      {schemaJsonPairError ? (
+        <div className="notes ztracker-schema-error">{schemaJsonPairError}</div>
+      ) : null}
+      {(['error', 'warning', 'info'] as const).map((severity) => (
+        dialectFindingsBySeverity[severity].length > 0 ? (
+          <div key={severity} className={severity === 'error' ? 'notes ztracker-schema-error' : 'notes ztracker-schema-status'}>
+            <strong>{SEVERITY_LABELS[severity]}</strong>
+            <ul>
+              {dialectFindingsBySeverity[severity].map((finding, index) => (
+                <li key={`${severity}-${index}`}>
+                  <code>{finding.path}</code>: {finding.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null
+      ))}
 
       <div className="title_restorable">
         <span title="The Handlebars HTML template used to render tracker content.">Schema HTML</span>
         <STButton
           className="fa-solid fa-floppy-disk"
-          title="Save the current schema preset pair (JSON and HTML)"
+          title="Save the current Schema HTML (blocked while it does not render against the saved Schema JSON)"
           onClick={saveSchemaHtmlValue}
           disabled={!schemaHtmlTextCanSave}
         />
@@ -261,11 +297,10 @@ export const SchemaPresetSection: FC<{
       {schemaHtmlTextHasError ? (
         <div className="notes ztracker-schema-error">{schemaHtmlTextError ?? 'Invalid Handlebars template.'}</div>
       ) : schemaHtmlTextHasUnsavedChanges ? (
-        <div className="notes ztracker-schema-status">Valid template. Save to apply the current schema preset pair.</div>
+        <div className="notes ztracker-schema-status">Valid template. Save to apply the current Schema HTML.</div>
       ) : null}
-
-      {schemaPresetPairError ? (
-        <div className="notes ztracker-schema-error">{schemaPresetPairError}</div>
+      {schemaHtmlPairError ? (
+        <div className="notes ztracker-schema-error">{schemaHtmlPairError}</div>
       ) : null}
     </div>
   );

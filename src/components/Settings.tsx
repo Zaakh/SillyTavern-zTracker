@@ -43,13 +43,12 @@ import { generateHtmlFromSchema } from './settings/generate-schema-html.js';
 import {
   formatSchemaHtml,
   formatSchemaText,
+  getSchemaDialectFindings,
   getSchemaDraftState,
   getSchemaHtmlDraftState,
   shouldSyncSchemaHtmlFromSettings,
   shouldSyncSchemaTextFromSettings,
-  validateSchemaDraft,
   validateSchemaPresetDraftPair,
-  validateSchemaHtmlDraft,
 } from './settings/schema-editor-state.js';
 import { GenerationOrderSection } from './settings/GenerationOrderSection.js';
 import { SettingsSectionDrawer } from './settings/SettingsSectionDrawer.js';
@@ -298,18 +297,35 @@ export const ZTrackerSettings: FC<{
   const schemaDraftState = getSchemaDraftState({ currentText: schemaText, persistedText: activeSchemaText });
   const activeSchemaHtml = formatSchemaHtml(moduleSettings.schemaPresets[moduleSettings.schemaPreset]);
   const schemaHtmlDraftState = getSchemaHtmlDraftState({ currentText: schemaHtmlText, persistedText: activeSchemaHtml });
-  const schemaPresetPairValidation = useMemo(
-    () => (schemaDraftState.isValid && schemaHtmlDraftState.isValid
-      ? validateSchemaPresetDraftPair({ schemaText, schemaHtmlText })
-      : { isValid: true }),
-    [schemaDraftState.isValid, schemaHtmlDraftState.isValid, schemaText, schemaHtmlText],
+
+  // Dialect findings for the current Schema JSON draft (openspec: add-schema-dialect-lint). Error-level
+  // findings gate the Schema JSON save action below; warnings/info are shown but never block either save.
+  const schemaDialectFindings = useMemo(
+    () => getSchemaDialectFindings({
+      schemaText,
+      promptEngineeringMode: moduleSettings.promptEngineeringMode,
+      grammarEnforcementEnabled: moduleSettings.grammarEnforcementEnabled,
+    }),
+    [schemaText, moduleSettings.promptEngineeringMode, moduleSettings.grammarEnforcementEnabled],
   );
-  const schemaPresetPairError = schemaPresetPairValidation.isValid ? undefined : schemaPresetPairValidation.errorMessage;
-  const schemaPresetPairCanSave =
-    (schemaDraftState.isDirty || schemaHtmlDraftState.isDirty) &&
-    schemaDraftState.isValid &&
-    schemaHtmlDraftState.isValid &&
-    schemaPresetPairValidation.isValid;
+  const schemaDialectErrorCount = schemaDialectFindings.filter((finding) => finding.severity === 'error').length;
+
+  // Saving Schema JSON and saving Schema HTML are gated independently (D11): each is validated against
+  // the *other* draft's currently persisted value, not its unsaved sibling draft, so persisting one
+  // artifact never silently adopts the other's unsaved edit.
+  const schemaJsonPairValidation = useMemo(
+    () => (schemaDraftState.isValid ? validateSchemaPresetDraftPair({ schemaText, schemaHtmlText: activeSchemaHtml }) : { isValid: true }),
+    [schemaDraftState.isValid, schemaText, activeSchemaHtml],
+  );
+  const schemaHtmlPairValidation = useMemo(
+    () => (schemaHtmlDraftState.isValid ? validateSchemaPresetDraftPair({ schemaText: activeSchemaText, schemaHtmlText }) : { isValid: true }),
+    [schemaHtmlDraftState.isValid, activeSchemaText, schemaHtmlText],
+  );
+  const schemaJsonPairError = schemaJsonPairValidation.isValid ? undefined : schemaJsonPairValidation.errorMessage;
+  const schemaHtmlPairError = schemaHtmlPairValidation.isValid ? undefined : schemaHtmlPairValidation.errorMessage;
+  const schemaJsonCanSave =
+    schemaDraftState.isDirty && schemaDraftState.isValid && schemaDialectErrorCount === 0 && schemaJsonPairValidation.isValid;
+  const schemaHtmlCanSave = schemaHtmlDraftState.isDirty && schemaHtmlDraftState.isValid && schemaHtmlPairValidation.isValid;
 
   useEffect(() => {
     const activeSelectionChanged =
@@ -479,16 +495,38 @@ export const ZTrackerSettings: FC<{
     setSchemaText(newSchemaText);
   };
 
-  // Persists the active preset as one coupled JSON-and-HTML pair so preset switching cannot drift them apart.
-  const saveSchemaPresetPair = () => {
-    const jsonValidation = validateSchemaDraft(schemaText);
-    const htmlValidation = validateSchemaHtmlDraft(schemaHtmlText);
-    if (!jsonValidation.isValid || !htmlValidation.isValid || !schemaPresetPairValidation.isValid) {
+  // Persists only the Schema JSON draft's value for the active preset, independent of the HTML draft
+  // (D11) - saving JSON never adopts an unsaved HTML edit, and an unrelated JSON dialect error never
+  // blocks the separate saveSchemaHtmlValue action below.
+  const saveSchemaJsonValue = () => {
+    if (!schemaJsonCanSave) {
       return;
     }
 
     const parsedJson = JSON.parse(schemaText);
     let nextSchemaText = schemaText;
+    updateSelectedModuleAndRefresh((currentSettings) => {
+      const preset = currentSettings.schemaPresets[currentSettings.schemaPreset];
+      if (!preset) {
+        return;
+      }
+
+      const nextPreset = { ...preset, value: parsedJson };
+      currentSettings.schemaPresets = {
+        ...currentSettings.schemaPresets,
+        [currentSettings.schemaPreset]: nextPreset,
+      };
+      nextSchemaText = formatSchemaText(nextPreset);
+    });
+    setSchemaText(nextSchemaText);
+  };
+
+  // Persists only the Schema HTML draft's value for the active preset, independent of the JSON draft (D11).
+  const saveSchemaHtmlValue = () => {
+    if (!schemaHtmlCanSave) {
+      return;
+    }
+
     let nextSchemaHtmlValue = schemaHtmlText;
     updateSelectedModuleAndRefresh((currentSettings) => {
       const preset = currentSettings.schemaPresets[currentSettings.schemaPreset];
@@ -496,15 +534,13 @@ export const ZTrackerSettings: FC<{
         return;
       }
 
-      const nextPreset = { ...preset, value: parsedJson, html: schemaHtmlText };
+      const nextPreset = { ...preset, html: schemaHtmlText };
       currentSettings.schemaPresets = {
         ...currentSettings.schemaPresets,
         [currentSettings.schemaPreset]: nextPreset,
       };
-      nextSchemaText = formatSchemaText(nextPreset);
       nextSchemaHtmlValue = formatSchemaHtml(nextPreset);
     });
-    setSchemaText(nextSchemaText);
     setSchemaHtmlText(nextSchemaHtmlValue);
   };
 
@@ -841,17 +877,19 @@ export const ZTrackerSettings: FC<{
                 schemaTextHasError={!schemaDraftState.isValid}
                 schemaTextError={schemaDraftState.errorMessage}
                 schemaTextHasUnsavedChanges={schemaDraftState.isDirty}
-                schemaTextCanSave={schemaPresetPairCanSave}
+                schemaTextCanSave={schemaJsonCanSave}
+                schemaDialectFindings={schemaDialectFindings}
                 schemaHtmlText={schemaHtmlText}
                 schemaHtmlTextHasError={!schemaHtmlDraftState.isValid}
                 schemaHtmlTextError={schemaHtmlDraftState.errorMessage}
                 schemaHtmlTextHasUnsavedChanges={schemaHtmlDraftState.isDirty}
-                schemaHtmlTextCanSave={schemaPresetPairCanSave}
-                schemaPresetPairError={schemaPresetPairError}
+                schemaHtmlTextCanSave={schemaHtmlCanSave}
+                schemaJsonPairError={schemaJsonPairError}
+                schemaHtmlPairError={schemaHtmlPairError}
                 handleSchemaValueChange={handleSchemaValueChange}
                 handleSchemaHtmlChange={handleSchemaHtmlChange}
-                saveSchemaValue={saveSchemaPresetPair}
-                saveSchemaHtmlValue={saveSchemaPresetPair}
+                saveSchemaValue={saveSchemaJsonValue}
+                saveSchemaHtmlValue={saveSchemaHtmlValue}
                 restoreSchemaToDefault={restoreSchemaToDefault}
                 canGenerateSchemaHtml={canGenerateSchemaHtml}
                 generateSchemaHtmlFromSchema={generateSchemaHtmlFromSchema}
@@ -876,6 +914,7 @@ export const ZTrackerSettings: FC<{
             </div>
 
             <DiagnosticsSection
+              settings={settings}
               debugLogging={!!settings.debugLogging}
               setDebugLogging={(value) =>
                 updateAndRefresh((s) => {

@@ -11,6 +11,29 @@ type PromptSchemaNormalizationOptions = {
   includeZTrackerMetadata?: boolean;
 };
 
+/**
+ * The exact set of JSON Schema keywords `normalizeSchemaForPrompt()` ever forwards to the model
+ * (subject to the mode-dependent `PromptSchemaNormalizationOptions` above). Anything else on a
+ * schema node is silently dropped before the tracker-generation request is composed. Exported so
+ * `src/schema-dialect-lint.ts` can report drops against this exact set instead of a second,
+ * independently-maintained list that could drift from what this module actually honors.
+ */
+export const PROMPT_SCHEMA_KEYWORD_ALLOWLIST = [
+  'title',
+  '$schema',
+  'type',
+  'format',
+  'description',
+  'required',
+  'enum',
+  'const',
+  'default',
+  'items',
+  'properties',
+  'x-ztracker-dependsOn',
+  'x-ztracker-idKey',
+] as const;
+
 function hasNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -77,7 +100,7 @@ function normalizeSchemaForPrompt(schema: any, options: PromptSchemaNormalizatio
 
   const normalized: Record<string, any> = {};
   if (includeDocumentMetadata) {
-    for (const key of ['title', '$schema']) {
+    for (const key of PROMPT_SCHEMA_KEYWORD_ALLOWLIST.filter((k) => k === 'title' || k === '$schema')) {
       if (schema[key] !== undefined) {
         normalized[key] = schema[key];
       }
@@ -123,7 +146,7 @@ function normalizeSchemaForPrompt(schema: any, options: PromptSchemaNormalizatio
   }
 
   if (includeZTrackerMetadata) {
-    for (const key of ['x-ztracker-dependsOn', 'x-ztracker-idKey']) {
+    for (const key of PROMPT_SCHEMA_KEYWORD_ALLOWLIST.filter((k) => k.startsWith('x-ztracker-'))) {
       if (schema[key] !== undefined) {
         normalized[key] = schema[key];
       }

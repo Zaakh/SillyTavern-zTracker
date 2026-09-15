@@ -739,6 +739,7 @@ describe('settings sections', () => {
 
     ({ root } = renderElement(
       React.createElement(DiagnosticsSection, {
+        settings: { modules: [], debugLogging: false } as any,
         debugLogging: false,
         setDebugLogging,
         diagnosticsText: '',
@@ -776,6 +777,52 @@ describe('settings sections', () => {
     expect(setDiagnosticsText).toHaveBeenCalledWith(expect.stringContaining('template: dist/templates/buttons'));
     expect(setDiagnosticsText).toHaveBeenCalledWith(expect.stringContaining('lastTrackerRequest:'));
     expect(consoleDebugSpy).toHaveBeenCalledWith(expect.stringContaining('prompt ok'));
+  });
+
+  test('sweeps schema dialect findings across every module and preset without modifying settings (openspec: add-schema-dialect-lint)', async () => {
+    const setDebugLogging = jest.fn();
+    const setDiagnosticsText = jest.fn();
+    jest.spyOn(console, 'debug').mockImplementation(() => undefined);
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200 }).mockResolvedValueOnce({ ok: true, status: 200 });
+
+    const moduleWithMultiplePresets = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    moduleWithMultiplePresets.schema.presets = {
+      default: moduleWithMultiplePresets.schema.presets.default,
+      custom: {
+        name: 'Custom',
+        // Array with no item definition - triggers the error-level dialect rule.
+        value: { type: 'object', description: 'x', properties: { tags: { type: 'array' } }, required: ['tags'] },
+        html: '<div></div>',
+      },
+    };
+    const cleanModule = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
+
+    const settings = { modules: [moduleWithMultiplePresets, cleanModule], debugLogging: false } as any;
+    const settingsSnapshot = JSON.parse(JSON.stringify(settings));
+
+    ({ root } = renderElement(
+      React.createElement(DiagnosticsSection, { settings, debugLogging: false, setDebugLogging, diagnosticsText: '', setDiagnosticsText }),
+    ));
+
+    const runButton = document.querySelector('button[title="Run diagnostics"]');
+    if (!(runButton instanceof HTMLButtonElement)) {
+      throw new Error('Diagnostics run button not found');
+    }
+
+    await act(async () => {
+      runButton.click();
+      await Promise.resolve();
+    });
+
+    const report = (setDiagnosticsText as jest.Mock).mock.calls.at(-1)?.[0] as string;
+    expect(report).toContain('Schema dialect findings:');
+    expect(report).toContain('module: Scene (scene), preset: Custom (custom)');
+    expect(report).toContain('[error]');
+    expect(report).toContain('tags');
+    // The clean module/preset combination contributes no lines of its own (only presets that
+    // actually carry findings are attributed) and settings are left untouched by the sweep.
+    expect(report).not.toContain('module: Agenda');
+    expect(settings).toEqual(settingsSnapshot);
   });
 
   test('lists the self entry with an editable count and no delete control', () => {

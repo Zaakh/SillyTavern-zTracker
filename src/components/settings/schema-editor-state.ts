@@ -1,6 +1,9 @@
-import type { Schema } from '../../config.js';
+import type { PromptEngineeringMode, Schema } from '../../config.js';
 import Handlebars from 'handlebars';
+import { lintSchemaDialect, SchemaDialectFinding } from '../../schema-dialect-lint.js';
 import { schemaToExample } from '../../schema-to-example.js';
+
+export type { SchemaDialectFinding } from '../../schema-dialect-lint.js';
 
 export interface DraftValidationState {
   isValid: boolean;
@@ -53,6 +56,22 @@ export function validateSchemaDraft(schemaText: string): DraftValidationState {
       errorMessage: getErrorMessage(error, 'Invalid JSON.'),
     };
   }
+}
+
+// Surfaces dialect findings for the current Schema JSON draft (openspec: add-schema-dialect-lint).
+// Returns no findings while the draft does not parse - the existing JSON parse error already
+// takes precedence in the UI, and lintSchemaDialect() requires a parsed object to evaluate.
+export function getSchemaDialectFindings(options: {
+  schemaText: string;
+  promptEngineeringMode: PromptEngineeringMode;
+  grammarEnforcementEnabled: boolean;
+}): SchemaDialectFinding[] {
+  const validation = validateSchemaDraft(options.schemaText);
+  if (!validation.isValid) {
+    return [];
+  }
+
+  return lintSchemaDialect(JSON.parse(options.schemaText), options.promptEngineeringMode, options.grammarEnforcementEnabled);
 }
 
 // Exposes whether the current JSON draft is valid and still differs from the persisted preset.

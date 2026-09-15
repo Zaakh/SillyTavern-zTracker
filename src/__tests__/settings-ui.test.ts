@@ -332,6 +332,7 @@ jest.unstable_mockModule('../components/settings/preset-state.js', () => ({
 jest.unstable_mockModule('../components/settings/schema-editor-state.js', () => ({
   formatSchemaHtml: jest.fn((schema?: { html?: string }) => schema?.html ?? ''),
   formatSchemaText: jest.fn((schema?: { value?: unknown }) => (schema ? JSON.stringify(schema.value, null, 2) : '')),
+  getSchemaDialectFindings: jest.fn(() => []),
   getSchemaDraftState: getSchemaDraftStateMock,
   getSchemaHtmlDraftState: getSchemaHtmlDraftStateMock,
   shouldSyncSchemaHtmlFromSettings: jest.fn(shouldSyncSchemaDraftFromSettings),
@@ -617,7 +618,10 @@ describe('zTracker settings connection source UI', () => {
     };
   }
 
-  async function expectCoupledPresetPersistsAfterSave(saveButtonTestId: 'save-schema-json' | 'save-schema-html') {
+  // Saving Schema JSON and saving Schema HTML are gated and persisted independently (D11,
+  // openspec: add-schema-dialect-lint) - each save action persists only its own draft and leaves
+  // the other draft's persisted value untouched, even when both drafts were edited beforehand.
+  async function expectIndependentSavePersistsOnlyItsOwnDraft(saveButtonTestId: 'save-schema-json' | 'save-schema-html') {
     const container = renderSettings();
     const defaultPresetSelect = container.querySelector('[data-testid="preset-select-Default Schema Preset"]');
     const setSchemaJsonButton = container.querySelector('[data-testid="set-schema-json-location"]');
@@ -670,8 +674,16 @@ describe('zTracker settings connection source UI', () => {
       throw new Error('Schema HTML textarea not found after preset switching');
     }
 
-    expect(rerenderedSchemaJsonTextarea.value).toContain('location');
-    expect(rerenderedSchemaHtmlTextarea.value).toBe('<div>updated default</div>');
+    if (saveButtonTestId === 'save-schema-json') {
+      expect(rerenderedSchemaJsonTextarea.value).toContain('location');
+      // The module's persisted preset HTML is untouched by a JSON-only save - it reverts to
+      // whatever was actually persisted on the module (seedSchemaPresetSwitchSettings only seeds
+      // the vestigial top-level `mockSettings.schemaPresets`, not the module's own presets).
+      expect(rerenderedSchemaHtmlTextarea.value).toBe('<div></div>');
+    } else {
+      expect(rerenderedSchemaJsonTextarea.value).not.toContain('location');
+      expect(rerenderedSchemaHtmlTextarea.value).toBe('<div>updated default</div>');
+    }
   }
 
   test('hides the saved profile picker in active connection mode', () => {
@@ -705,19 +717,19 @@ describe('zTracker settings connection source UI', () => {
     expect(container.textContent).toContain('Current Chat Schema Preset');
   });
 
-  test('saving one schema editor keeps the preset JSON and HTML coupled when switching presets', async () => {
+  test('saving Schema JSON persists only the JSON draft, leaving the persisted HTML unchanged', async () => {
     seedSchemaPresetSwitchSettings();
 
-    await expectCoupledPresetPersistsAfterSave('save-schema-json');
+    await expectIndependentSavePersistsOnlyItsOwnDraft('save-schema-json');
   });
 
-  test('saving through the HTML action also persists the paired JSON draft', async () => {
+  test('saving Schema HTML persists only the HTML draft, leaving the persisted JSON unchanged', async () => {
     seedSchemaPresetSwitchSettings();
 
-    await expectCoupledPresetPersistsAfterSave('save-schema-html');
+    await expectIndependentSavePersistsOnlyItsOwnDraft('save-schema-html');
   });
 
-  test('disables both save actions and blocks persistence when either coupled draft is invalid', async () => {
+  test('an invalid Schema HTML draft blocks only its own save action, not the independent Schema JSON save', async () => {
     mockSettings.schemaPresets = {
       default: {
         name: 'Default',
@@ -753,11 +765,23 @@ describe('zTracker settings connection source UI', () => {
       throw new Error('Save schema HTML button not found');
     }
 
-    expect(saveSchemaJsonButton.disabled).toBe(true);
+    // Schema JSON pairs against the currently PERSISTED Schema HTML (still valid), not the invalid
+    // draft, so it stays available; only the Schema HTML save action - gated on its own draft's
+    // validity - is blocked.
+    expect(saveSchemaJsonButton.disabled).toBe(false);
     expect(saveSchemaHtmlButton.disabled).toBe(true);
-    expect(mockSettings.schemaPresets.default.value).toEqual({ type: 'object', properties: { scene: { type: 'string' } }, required: ['scene'] });
-    expect(mockSettings.schemaPresets.default.html).toBe('<div>default</div>');
-    expect(saveSettingsMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      saveSchemaJsonButton.click();
+      await Promise.resolve();
+    });
+
+    // Asserts against the module's own persisted presets object (not the vestigial top-level
+    // `mockSettings.schemaPresets` this test seeded from) - saving reassigns a new presets object
+    // onto the module, decoupling it from whatever object `mockSettings.schemaPresets` still points to.
+    expect(mockSettings.modules[0].schema.presets.default.value).toEqual({ type: 'object', properties: { location: { type: 'string' } }, required: ['location'] });
+    expect(mockSettings.modules[0].schema.presets.default.html).toBe('<div>default</div>');
+    expect(saveSettingsMock).toHaveBeenCalled();
   });
 
   test('generates an HTML draft from the current Schema JSON draft when it is valid', async () => {

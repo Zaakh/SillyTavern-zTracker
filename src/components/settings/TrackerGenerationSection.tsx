@@ -1,6 +1,7 @@
 import { FC } from 'react';
 import { PresetItem } from 'sillytavern-utils-lib/components/react';
 import { TrackerModule, TrackerModuleSettings } from '../../config.js';
+import type { SchemaDialectFinding } from './schema-editor-state.js';
 import { GenerationBehaviorSection } from './GenerationBehaviorSection.js';
 import { GenerationPromptTemplatesSection } from './GenerationPromptTemplatesSection.js';
 import { IncludeModulesSection } from './IncludeModulesSection.js';
@@ -31,12 +32,14 @@ export const TrackerGenerationSection: FC<{
   schemaTextError?: string;
   schemaTextHasUnsavedChanges: boolean;
   schemaTextCanSave: boolean;
+  schemaDialectFindings: SchemaDialectFinding[];
   schemaHtmlText: string;
   schemaHtmlTextHasError: boolean;
   schemaHtmlTextError?: string;
   schemaHtmlTextHasUnsavedChanges: boolean;
   schemaHtmlTextCanSave: boolean;
-  schemaPresetPairError?: string;
+  schemaJsonPairError?: string;
+  schemaHtmlPairError?: string;
   handleSchemaValueChange: (newSchemaText: string) => void;
   handleSchemaHtmlChange: (newHtml: string) => void;
   saveSchemaValue: () => void;
@@ -74,12 +77,14 @@ export const TrackerGenerationSection: FC<{
   schemaTextError,
   schemaTextHasUnsavedChanges,
   schemaTextCanSave,
+  schemaDialectFindings,
   schemaHtmlText,
   schemaHtmlTextHasError,
   schemaHtmlTextError,
   schemaHtmlTextHasUnsavedChanges,
   schemaHtmlTextCanSave,
-  schemaPresetPairError,
+  schemaJsonPairError,
+  schemaHtmlPairError,
   handleSchemaValueChange,
   handleSchemaHtmlChange,
   saveSchemaValue,
@@ -122,12 +127,14 @@ export const TrackerGenerationSection: FC<{
         schemaTextError={schemaTextError}
         schemaTextHasUnsavedChanges={schemaTextHasUnsavedChanges}
         schemaTextCanSave={schemaTextCanSave}
+        schemaDialectFindings={schemaDialectFindings}
         schemaHtmlText={schemaHtmlText}
         schemaHtmlTextHasError={schemaHtmlTextHasError}
         schemaHtmlTextError={schemaHtmlTextError}
         schemaHtmlTextHasUnsavedChanges={schemaHtmlTextHasUnsavedChanges}
         schemaHtmlTextCanSave={schemaHtmlTextCanSave}
-        schemaPresetPairError={schemaPresetPairError}
+        schemaJsonPairError={schemaJsonPairError}
+        schemaHtmlPairError={schemaHtmlPairError}
         handleSchemaValueChange={handleSchemaValueChange}
         handleSchemaHtmlChange={handleSchemaHtmlChange}
         saveSchemaValue={saveSchemaValue}

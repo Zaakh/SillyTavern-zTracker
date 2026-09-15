@@ -115,6 +115,57 @@ export function resolveTopLevelPartsOrder(schema: any): string[] {
   return out;
 }
 
+export interface TopLevelDependsOnIssues {
+  unknownReferences: Array<{ key: string; unknownTargets: string[] }>;
+  cycleFields: string[];
+}
+
+/**
+ * Detects the two part-ordering problems `resolveTopLevelPartsOrder()` above silently falls back
+ * from without naming: an `x-ztracker-dependsOn` entry referencing a top-level key the schema does
+ * not define, and a cycle among top-level keys' declared dependencies. Reuses the same
+ * `normalizeDependsOn`/known-key-filtering semantics as `resolveTopLevelPartsOrder()` so the two
+ * stay consistent, but adds cycle-membership detection that sequential generation itself does not
+ * need (it only needs a safe fallback, not to name which keys are involved) - used by the schema
+ * dialect lint to report these as author-facing findings.
+ */
+export function findTopLevelDependsOnIssues(schema: any): TopLevelDependsOnIssues {
+  const baseOrder = getTopLevelSchemaKeys(schema);
+  const nodes = new Set(baseOrder);
+  const props = schema?.properties;
+
+  const unknownReferences: Array<{ key: string; unknownTargets: string[] }> = [];
+  const depsByNode = new Map<string, Set<string>>();
+  for (const key of baseOrder) {
+    const rawDeps = normalizeDependsOn((props as any)?.[key]?.['x-ztracker-dependsOn']);
+    const unknownTargets = rawDeps.filter((dep) => !nodes.has(dep));
+    if (unknownTargets.length > 0) {
+      unknownReferences.push({ key, unknownTargets });
+    }
+    depsByNode.set(key, new Set(rawDeps.filter((dep) => nodes.has(dep))));
+  }
+
+  // Standard DFS cycle detection (visiting/done coloring), collecting every node on a discovered cycle.
+  const state = new Map<string, 'visiting' | 'done'>();
+  const cycleFields = new Set<string>();
+  const visit = (key: string, stack: string[]): void => {
+    if (state.get(key) === 'done') return;
+    if (state.get(key) === 'visiting') {
+      const cycleStart = stack.indexOf(key);
+      for (const node of stack.slice(cycleStart)) cycleFields.add(node);
+      return;
+    }
+    state.set(key, 'visiting');
+    for (const dep of depsByNode.get(key) ?? []) {
+      visit(dep, [...stack, key]);
+    }
+    state.set(key, 'done');
+  };
+  for (const key of baseOrder) visit(key, []);
+
+  return { unknownReferences, cycleFields: [...cycleFields] };
+}
+
 /** Filters array-item field names down to user-meaningful tracker fields. */
 export function sanitizeArrayItemFieldKeys(
   fieldKeys: unknown[],

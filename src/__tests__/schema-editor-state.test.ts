@@ -2,9 +2,11 @@
  * @jest-environment node
  */
 
+import { PromptEngineeringMode } from '../config.js';
 import {
   formatSchemaHtml,
   formatSchemaText,
+  getSchemaDialectFindings,
   getSchemaDraftState,
   getSchemaHtmlDraftState,
   shouldSyncSchemaHtmlFromSettings,
@@ -269,6 +271,35 @@ describe('schema-editor-state helpers', () => {
 
     test.each(representativeInputs)('matches shouldSyncSchemaHtmlFromSettings for %j', (options) => {
       expect(shouldSyncSchemaDraftFromSettings(options)).toBe(shouldSyncSchemaHtmlFromSettings(options));
+    });
+  });
+
+  describe('getSchemaDialectFindings (openspec: add-schema-dialect-lint)', () => {
+    test('reports dialect findings for the current draft', () => {
+      const findings = getSchemaDialectFindings({
+        schemaText: '{"type":"object","properties":{"tags":{"type":"array"}}}',
+        promptEngineeringMode: PromptEngineeringMode.JSON,
+        grammarEnforcementEnabled: false,
+      });
+      expect(findings).toContainEqual(expect.objectContaining({ severity: 'error', path: 'tags' }));
+    });
+
+    test('reports no findings for a conforming draft', () => {
+      const findings = getSchemaDialectFindings({
+        schemaText: '{"type":"object","description":"x","properties":{"tags":{"type":"string","description":"x"}}}',
+        promptEngineeringMode: PromptEngineeringMode.JSON,
+        grammarEnforcementEnabled: false,
+      });
+      expect(findings).toEqual([]);
+    });
+
+    test('reports no findings while the draft does not parse', () => {
+      const findings = getSchemaDialectFindings({
+        schemaText: '{"scene":',
+        promptEngineeringMode: PromptEngineeringMode.JSON,
+        grammarEnforcementEnabled: false,
+      });
+      expect(findings).toEqual([]);
     });
   });
 });

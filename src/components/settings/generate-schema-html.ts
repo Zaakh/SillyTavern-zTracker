@@ -8,6 +8,8 @@
  * unsupported-construct placeholders, bracket path syntax for non-identifier keys).
  */
 
+import { hasCompositionKeywords, isUnsupportedSchema } from '../../schema-dialect-lint.js';
+
 type JsonSchemaNode = {
   type?: string | string[];
   title?: string;
@@ -72,31 +74,6 @@ function getFieldLabel(key: string, schema: JsonSchemaNode): string {
 
 function getRequiredKeys(schema: JsonSchemaNode): Set<string> {
   return new Set(Array.isArray(schema.required) ? schema.required.filter((key): key is string => typeof key === 'string') : []);
-}
-
-/** Detects composition/reference keywords this generator cannot mechanically flatten: `oneOf`/`anyOf`/`allOf`, `patternProperties`, `$ref`/`$defs`. */
-function hasCompositionKeywords(schema: JsonSchemaNode): boolean {
-  if (schema.oneOf !== undefined || schema.anyOf !== undefined || schema.allOf !== undefined) {
-    return true;
-  }
-  return schema.patternProperties !== undefined || schema.$ref !== undefined || schema.$defs !== undefined;
-}
-
-/** Detects schema shapes this generator cannot mechanically flatten: composition keywords (see `hasCompositionKeywords`), or no usable `type`/`properties`/`items`/`enum`/`const`. */
-function isUnsupportedSchema(schema: unknown): boolean {
-  if (!isSchemaObject(schema)) {
-    return true;
-  }
-  if (hasCompositionKeywords(schema)) {
-    return true;
-  }
-  const hasUsableShape =
-    schema.type !== undefined ||
-    schema.properties !== undefined ||
-    schema.items !== undefined ||
-    schema.enum !== undefined ||
-    schema.const !== undefined;
-  return !hasUsableShape;
 }
 
 function isObjectSchema(schema: JsonSchemaNode): boolean {

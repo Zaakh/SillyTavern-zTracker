@@ -1,15 +1,43 @@
 import { FC, useCallback } from 'react';
 import { STButton } from 'sillytavern-utils-lib/components/react';
 import { getThirdPartyExtensionBasePath } from '../../extension-install.js';
-import { extensionName } from '../../config.js';
+import { ExtensionSettings, extensionName, getOrderedTrackerModules } from '../../config.js';
+import { lintSchemaDialect } from '../../schema-dialect-lint.js';
 import { formatTrackerRequestDebugSnapshot, getLastTrackerRequestDebugSnapshot } from '../../ui/debug.js';
 
+/** Builds the advisory schema-dialect-findings section of the Diagnostics report (openspec: add-schema-dialect-lint). Reaches every Module and schema preset - including ones introduced by import, migration, or chat-scoped selection, all of which bypass the Schema editor's own save gate - without altering or removing anything. */
+function formatDialectDiagnosticsReport(settings: ExtensionSettings): string[] {
+  const lines: string[] = ['', 'Schema dialect findings:'];
+  let foundAny = false;
+
+  for (const module of getOrderedTrackerModules(settings, { includeDisabled: true })) {
+    for (const [presetKey, preset] of Object.entries(module.schema.presets)) {
+      const findings = lintSchemaDialect(preset.value, module.prompts.promptEngineeringMode, module.prompts.grammarEnforcementEnabled);
+      if (findings.length === 0) {
+        continue;
+      }
+      foundAny = true;
+      lines.push(`module: ${module.name} (${module.id}), preset: ${preset.name} (${presetKey})`);
+      for (const finding of findings) {
+        lines.push(`  [${finding.severity}] ${finding.path}: ${finding.message}`);
+      }
+    }
+  }
+
+  if (!foundAny) {
+    lines.push('No dialect findings were found.');
+  }
+
+  return lines;
+}
+
 export const DiagnosticsSection: FC<{
+  settings: ExtensionSettings;
   debugLogging: boolean;
   setDebugLogging: (value: boolean) => void;
   diagnosticsText: string;
   setDiagnosticsText: (value: string) => void;
-}> = ({ debugLogging, setDebugLogging, diagnosticsText, setDiagnosticsText }) => {
+}> = ({ settings, debugLogging, setDebugLogging, diagnosticsText, setDiagnosticsText }) => {
   const runDiagnostics = useCallback(async () => {
     const basePath = getThirdPartyExtensionBasePath({
       importMetaUrl: import.meta.url,
@@ -46,12 +74,13 @@ export const DiagnosticsSection: FC<{
     }
 
     lines.push(...formatTrackerRequestDebugSnapshot(getLastTrackerRequestDebugSnapshot()));
+    lines.push(...formatDialectDiagnosticsReport(settings));
 
     const text = lines.join('\n');
     setDiagnosticsText(text);
     // eslint-disable-next-line no-console
     console.debug(text);
-  }, [debugLogging, setDiagnosticsText]);
+  }, [debugLogging, setDiagnosticsText, settings]);
 
   return (
     <>
