@@ -285,6 +285,10 @@
   opacity: 0.8;
   margin-top: -2px;
 }
+.ztracker-settings .ztracker-schema-warning {
+  color: var(--warning-color, #ff9800);
+  margin-top: -2px;
+}
 .ztracker-settings .ztracker-preset-select-row {
   display: flex;
   align-items: center;

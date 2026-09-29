@@ -510,6 +510,7 @@ export const DEFAULT_SCHEMA_VALUE: object = {
     },
     topics: {
       type: 'object',
+      description: 'Topic, tone, and theme of the current interaction',
       properties: {
         primaryTopic: {
           type: 'string',

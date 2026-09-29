@@ -44,6 +44,11 @@ describe('parseResponse tolerates arrays with no item definition', () => {
     expect(() => parseResponse(xml, 'xml', { schema })).not.toThrow();
   });
 
+  it('does not throw for a null property schema', () => {
+    const schema = { properties: { broken: null, name: { type: 'string' } } };
+    expect(parseResponse('<root><name>Alice</name></root>', 'xml', { schema })).toEqual({ name: 'Alice' });
+  });
+
   it('still normalizes arrays whose items ARE fully defined (regression guard)', () => {
     const schema = {
       properties: {

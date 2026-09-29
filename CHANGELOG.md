@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- Settings: Schema JSON and Schema HTML are now saved independently. Saving Schema JSON is blocked while it has an error-level finding (an array with no `items`, or an object with no `properties`); saving Schema HTML is never blocked by a JSON problem.
+- Settings: Schema JSON and Schema HTML are now saved independently. Saving Schema JSON is blocked while it has an error-level finding (an array with no `items`, or an object with no `properties`); saving Schema HTML is never blocked by a JSON problem. When both are edited and work together (e.g. a field rename), either Save button saves both.
 
 ### Fixed
 

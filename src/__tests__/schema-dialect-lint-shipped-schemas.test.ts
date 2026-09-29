@@ -43,10 +43,15 @@ describe('shipped schemas are dialect-clean (openspec: add-schema-dialect-lint)'
     expect(shippedSchemas.length).toBeGreaterThanOrEqual(5);
   });
 
-  test.each(shippedSchemas)('$label produces no error or warning findings in any mode/enforcement combination', ({ schema }) => {
+  // Stricter than the spec's "no errors or warnings": shipped schemas must also be fully described,
+  // so a fresh install's editor and Diagnostics report are clean. The only tolerated finding is the
+  // TOON-mode note that descriptions are discarded, which any well-described schema triggers.
+  test.each(shippedSchemas)('$label produces no findings (besides the TOON description note) in any mode/enforcement combination', ({ schema }) => {
     for (const mode of MODES) {
       for (const grammarEnforcementEnabled of [false, true]) {
-        const findings = lintSchemaDialect(schema, mode, grammarEnforcementEnabled).filter((finding) => finding.severity !== 'info');
+        const findings = lintSchemaDialect(schema, mode, grammarEnforcementEnabled).filter(
+          (finding) => !(mode === PromptEngineeringMode.TOON && finding.severity === 'info' && /discards field descriptions/.test(finding.message)),
+        );
         expect(findings).toEqual([]);
       }
     }

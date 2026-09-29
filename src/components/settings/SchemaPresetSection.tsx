@@ -11,6 +11,12 @@ const SEVERITY_LABELS: Record<SchemaDialectFinding['severity'], string> = {
   info: 'Notes:',
 };
 
+const SEVERITY_CLASS_NAMES: Record<SchemaDialectFinding['severity'], string> = {
+  error: 'ztracker-schema-error',
+  warning: 'ztracker-schema-warning',
+  info: 'ztracker-schema-status',
+};
+
 // Keeps schema preset selection and schema/template editing together because they change the same tracker shape.
 export const SchemaPresetSection: FC<{
   schemaPresetKey: string;
@@ -263,7 +269,7 @@ export const SchemaPresetSection: FC<{
       ) : null}
       {(['error', 'warning', 'info'] as const).map((severity) => (
         dialectFindingsBySeverity[severity].length > 0 ? (
-          <div key={severity} className={severity === 'error' ? 'notes ztracker-schema-error' : 'notes ztracker-schema-status'}>
+          <div key={severity} className={`notes ${SEVERITY_CLASS_NAMES[severity]}`}>
             <strong>{SEVERITY_LABELS[severity]}</strong>
             <ul>
               {dialectFindingsBySeverity[severity].map((finding, index) => (
