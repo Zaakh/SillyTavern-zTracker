@@ -135,7 +135,14 @@ Optional (advanced): you can annotate your JSON schema preset to help zTracker k
 - `x-ztracker-dependsOn`: top-level part ordering hints for sequential generation.
 - `x-ztracker-idKey`: which string field to use as the array-item identity for per-item regeneration (defaults to `name`).
 
-When editing a schema preset's JSON or HTML in **Extensions → zTracker**, changes stay local until you click a Save icon. Saving either editor now persists the current JSON and HTML preset pair together. The save controls stay disabled while the paired draft is unchanged or invalid, and invalid drafts show an inline error instead of overwriting the saved preset.
+When editing a schema preset's JSON or HTML in **Extensions → zTracker**, changes stay local until you click that editor's Save icon. Schema JSON and Schema HTML save independently: each one must still render against the other's *saved* version, and invalid drafts show an inline error instead of overwriting the saved preset.
+
+zTracker honors only a subset of JSON Schema: `type`, `properties`, `items`, `required`, `enum`, `const`, `default`, `format`, `description`, `title`, and the `x-ztracker-*` annotations. The editor lists findings for the current Schema JSON draft:
+- **Errors** block saving Schema JSON: an array with no `items`, or an object with no `properties`.
+- **Warnings** flag things silently dropped before the model sees them (`$ref`/`$defs`, `oneOf`/`anyOf`/`allOf`, `patternProperties`, validation keywords like `minLength`/`pattern`, `additionalProperties` while grammar enforcement is off), arrays of objects with neither `x-ztracker-idKey` nor a `name` field, and invalid `x-ztracker-dependsOn` references or cycles.
+- **Notes** list fields with no `description`. Descriptions are what actually tell the model what to write (TOON mode drops them).
+
+**Diagnostics** reports the same findings for every Module and preset.
 
 Don't want to hand-write the HTML template? Click **Generate HTML from schema** (next to Restore Default) to derive one automatically from the current Schema JSON draft. It always overwrites the Schema HTML draft (click Save to apply) and is disabled while the Schema JSON draft is invalid.
 

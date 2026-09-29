@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Settings: the Schema editor now checks the Schema JSON draft against the JSON Schema subset zTracker actually honors, and lists errors, warnings, and notes naming the affected field and how to fix it (e.g. `$ref`/`$defs` that never reach the model, validation keywords like `minLength` that are not enforced, arrays of objects with no item identity, missing field descriptions).
+- Diagnostics now lists these schema findings for every Module and schema preset, including imported or migrated ones.
+
+### Changed
+
+- Settings: Schema JSON and Schema HTML are now saved independently. Saving Schema JSON is blocked while it has an error-level finding (an array with no `items`, or an object with no `properties`); saving Schema HTML is never blocked by a JSON problem.
+
+### Fixed
+
+- XML and TOON tracker generation no longer fails on every attempt with "Model response is not valid XML/TOON." when the schema declares an array without `items`.
+
 ## [2.7.0] - 2026-09-14
 
 ### Added
