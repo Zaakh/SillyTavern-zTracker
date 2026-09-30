@@ -26,23 +26,35 @@ export interface SchemaDialectFinding {
   message: string;
 }
 
-/** Validation keywords a beginner might reasonably add, believing them enforced, that consumer 1 (prompt composition) drops before the model ever sees them. `additionalProperties` is deliberately excluded here - see `checkAdditionalProperties`, D12. */
-const DROPPED_VALIDATION_KEYWORD_CANDIDATES = [
-  'minimum',
-  'maximum',
-  'exclusiveMinimum',
-  'exclusiveMaximum',
-  'multipleOf',
-  'pattern',
-  'minLength',
-  'maxLength',
-  'minItems',
-  'maxItems',
-  'uniqueItems',
-  'contains',
+/**
+ * Keys outside `PROMPT_SCHEMA_KEYWORD_ALLOWLIST` that the generic dropped-keyword rule must NOT
+ * report: composition/reference keys (own warning, `pushCompositionWarnings`),
+ * `additionalProperties` (own conditional rule, D12), `example` (honored by example generation),
+ * and pure annotations with no instruction value.
+ */
+export const DROPPED_KEYWORD_RULE_EXEMPTIONS = [
+  '$ref',
+  '$defs',
+  'definitions',
+  'oneOf',
+  'anyOf',
+  'allOf',
+  'patternProperties',
+  'additionalProperties',
+  'example',
+  '$id',
+  '$comment',
 ] as const;
 
+/** Consequence clause shared by every "dropped before the model" finding. Native mode sends the raw schema as a structured-output constraint, so the drop only applies to the prompt-engineering modes; severity stays mode-independent (D2). */
+const PROMPT_MODES_CLAUSE = 'in JSON/XML/TOON prompt modes';
+
 const ROOT_PATH = '(root)';
+
+/** Renders a path for use inside a finding message. */
+function describePath(path: string): string {
+  return path === ROOT_PATH ? 'The schema root' : `"${path}"`;
+}
 
 function isPlainObject(value: unknown): value is Record<string, any> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -119,29 +131,29 @@ function trackDescription(node: Record<string, any>, path: string, ctx: LintCont
   }
 }
 
-/** Reports composition/reference keywords that are legal JSON Schema but that consumer 1 silently drops (D4). Nodes carrying these are not further classified as object/array/leaf - matches `isUnsupportedSchema()`'s all-or-nothing treatment. */
+/** Reports composition/reference keywords that are legal JSON Schema but that consumer 1 silently drops (D4). Linting continues into the node's own `properties`/`items` afterwards, so a composition keyword never hides an error elsewhere in the same node. */
 function pushCompositionWarnings(node: Record<string, any>, path: string, ctx: LintContext): void {
-  if (node.$ref !== undefined || node.$defs !== undefined) {
-    pushWarning(ctx, path, `"${path}" uses "$ref"/"$defs": the referenced definition never reaches the model and must be inlined into the field directly.`);
+  const target = describePath(path);
+  if (node.$ref !== undefined || node.$defs !== undefined || node.definitions !== undefined) {
+    pushWarning(ctx, path, `${target} uses "$ref"/"$defs"/"definitions": referenced definitions are not conveyed ${PROMPT_MODES_CLAUSE}; inline the definition into the field directly.`);
   }
   if (node.oneOf !== undefined || node.anyOf !== undefined || node.allOf !== undefined) {
-    pushWarning(ctx, path, `"${path}" uses "oneOf"/"anyOf"/"allOf": alternative or combined subschemas are not conveyed to the model.`);
+    pushWarning(ctx, path, `${target} uses "oneOf"/"anyOf"/"allOf": alternative or combined subschemas are not conveyed ${PROMPT_MODES_CLAUSE}.`);
   }
   if (node.patternProperties !== undefined) {
-    pushWarning(ctx, path, `"${path}" uses "patternProperties": pattern-based property definitions are not conveyed to the model.`);
+    pushWarning(ctx, path, `${target} uses "patternProperties": pattern-based property definitions are not conveyed ${PROMPT_MODES_CLAUSE}.`);
   }
 }
 
-/** Reports validation keywords the allowlist (`PROMPT_SCHEMA_KEYWORD_ALLOWLIST`) drops, deriving the reported set from that same constant rather than a second hardcoded "what gets dropped" list (design.md Risks: "the lint's dialect drifts from the allowlist it mirrors"). */
-function checkDroppedValidationKeywords(node: Record<string, any>, path: string, ctx: LintContext): void {
-  const present = DROPPED_VALIDATION_KEYWORD_CANDIDATES.filter(
-    (keyword) => node[keyword] !== undefined && !(PROMPT_SCHEMA_KEYWORD_ALLOWLIST as readonly string[]).includes(keyword),
-  );
-  if (present.length > 0) {
+/** Reports every key `normalizeSchemaForPrompt()` drops, derived directly from `PROMPT_SCHEMA_KEYWORD_ALLOWLIST` (minus `DROPPED_KEYWORD_RULE_EXEMPTIONS`), so the lint cannot drift from what prompt composition actually honors. */
+function checkDroppedKeywords(node: Record<string, any>, path: string, ctx: LintContext): void {
+  const honored = new Set<string>([...PROMPT_SCHEMA_KEYWORD_ALLOWLIST, ...DROPPED_KEYWORD_RULE_EXEMPTIONS]);
+  const dropped = Object.keys(node).filter((key) => !honored.has(key));
+  if (dropped.length > 0) {
     pushWarning(
       ctx,
       path,
-      `"${path}" declares validation keyword(s) (${present.join(', ')}) that are not conveyed to the model and are not enforced.`,
+      `${describePath(path)} declares keyword(s) (${dropped.join(', ')}) that are not conveyed ${PROMPT_MODES_CLAUSE}, so the model is not told about them and they are not enforced.`,
     );
   }
 }
@@ -152,7 +164,7 @@ function checkAdditionalProperties(node: Record<string, any>, path: string, ctx:
     pushWarning(
       ctx,
       path,
-      `"${path}" declares "additionalProperties: false", which is not conveyed to the model while grammar/schema enforcement is off, so it is not enforced.`,
+      `${describePath(path)} declares "additionalProperties: false", which is not conveyed ${PROMPT_MODES_CLAUSE} while grammar/schema enforcement is off, so it is not enforced there.`,
     );
   }
 }
@@ -166,9 +178,13 @@ function checkArrayItemIdentity(itemsSchema: Record<string, any>, arrayPath: str
     pushWarning(
       ctx,
       arrayPath,
-      `Array "${arrayPath}" has no way to identify its items (no "x-ztracker-idKey" annotation and no "name" property), so per-item regeneration and cleanup cannot target items in it.`,
+      `Array ${describePath(arrayPath)} has no way to identify its items (no "x-ztracker-idKey" annotation and no "name" property), so per-item regeneration and cleanup cannot target items in it.`,
     );
   }
+}
+
+function pushNoPropertiesError(ctx: LintContext, path: string): void {
+  pushError(ctx, path, `${describePath(path)} is an object with no properties, so it conveys nothing to the model about what to produce and nothing to the renderer about what to display.`);
 }
 
 function lintObjectNode(node: Record<string, any>, path: string, ctx: LintContext): void {
@@ -176,7 +192,7 @@ function lintObjectNode(node: Record<string, any>, path: string, ctx: LintContex
   const properties = isPlainObject(node.properties) ? node.properties : undefined;
   const propertyKeys = properties ? Object.keys(properties) : [];
   if (propertyKeys.length === 0) {
-    pushError(ctx, path, `"${path}" is an object with no properties, so it conveys nothing to the model about what to produce and nothing to the renderer about what to display.`);
+    pushNoPropertiesError(ctx, path);
     return;
   }
   for (const key of propertyKeys) {
@@ -191,37 +207,37 @@ function lintObjectNode(node: Record<string, any>, path: string, ctx: LintContex
 
 function lintArrayNode(node: Record<string, any>, path: string, ctx: LintContext): void {
   if (node.items === undefined) {
-    pushError(ctx, path, `"${path}" is an array with no item definition, so nothing describes its contents to the model, and XML/TOON reply parsing cannot normalize it.`);
+    pushError(ctx, path, `${describePath(path)} is an array with no item definition, so nothing describes its contents to the model, and XML/TOON reply parsing cannot normalize it.`);
     return;
   }
   if (Array.isArray(node.items)) {
-    pushWarning(ctx, path, `"${path}" uses a tuple-style "items" definition (an ordered list of differing schemas); zTracker only understands a single item schema for an array.`);
+    pushWarning(ctx, path, `${describePath(path)} uses a tuple-style "items" definition (an ordered list of differing schemas); zTracker only understands a single item schema for an array.`);
     return;
   }
 
   const itemsSchema = node.items;
-  if (isPlainObject(itemsSchema) && isObjectSchema(itemsSchema) && !hasCompositionKeywords(itemsSchema)) {
+  if (isPlainObject(itemsSchema) && isObjectSchema(itemsSchema)) {
     checkArrayItemIdentity(itemsSchema, path, ctx);
   }
   lintNode(itemsSchema, appendArrayItemPath(path), ctx);
 }
 
-function lintNode(node: unknown, path: string, ctx: LintContext, forceObject = false): void {
+function lintNode(node: unknown, path: string, ctx: LintContext, isRoot = false): void {
   if (!isPlainObject(node)) {
-    if (forceObject) {
-      pushError(ctx, path, `"${path}" is an object with no properties, so it conveys nothing to the model about what to produce and nothing to the renderer about what to display.`);
+    if (isRoot) {
+      pushNoPropertiesError(ctx, path);
     }
     return;
   }
 
-  if (hasCompositionKeywords(node)) {
-    pushCompositionWarnings(node, path, ctx);
+  pushCompositionWarnings(node, path, ctx);
+  checkDroppedKeywords(node, path, ctx);
+
+  if (isRoot && node.type !== undefined && !typeIncludes(node.type, 'object')) {
+    pushError(ctx, path, `The schema root must be an object (it declares type ${JSON.stringify(node.type)}), because a tracker is always a set of named fields.`);
     return;
   }
-
-  checkDroppedValidationKeywords(node, path, ctx);
-
-  if (forceObject || isObjectSchema(node)) {
+  if (isRoot || isObjectSchema(node)) {
     lintObjectNode(node, path, ctx);
     return;
   }
@@ -245,7 +261,7 @@ function checkDependsOnFindings(schema: Record<string, any>, ctx: LintContext): 
   if (cycleFields.length > 0) {
     pushWarning(
       ctx,
-      cycleFields.join(', '),
+      ROOT_PATH,
       `"x-ztracker-dependsOn" forms a cycle among top-level fields (${cycleFields.join(', ')}). Sequential generation cannot honor this and falls back to schema property order.`,
     );
   }
@@ -291,7 +307,7 @@ export function lintSchemaDialect(
     hasAnyDescription: false,
   };
 
-  lintNode(repairedSchema, ROOT_PATH, ctx, /* forceObject */ true);
+  lintNode(repairedSchema, ROOT_PATH, ctx, /* isRoot */ true);
   finalizeDescriptionFindings(ctx);
   if (isPlainObject(repairedSchema)) {
     checkDependsOnFindings(repairedSchema, ctx);

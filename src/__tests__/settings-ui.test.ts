@@ -616,12 +616,12 @@ describe('zTracker settings connection source UI', () => {
         html: '<div>alternate</div>',
       },
     };
+    syncDefaultModuleSchemaFromFlatSettings();
   }
 
-  // Saving Schema JSON and saving Schema HTML are gated and persisted independently (D11,
-  // openspec: add-schema-dialect-lint) - each save action persists only its own draft and leaves
-  // the other draft's persisted value untouched, even when both drafts were edited beforehand.
-  async function expectIndependentSavePersistsOnlyItsOwnDraft(saveButtonTestId: 'save-schema-json' | 'save-schema-html') {
+  // Saves after editing one or both drafts, round-trips through a preset switch, and returns what the
+  // module actually persisted (D11 + combined pair save, openspec: add-schema-dialect-lint).
+  async function saveAndReloadSchemaDrafts(edit: 'json' | 'html' | 'both', saveButtonTestId: 'save-schema-json' | 'save-schema-html') {
     const container = renderSettings();
     const defaultPresetSelect = container.querySelector('[data-testid="preset-select-Default Schema Preset"]');
     const setSchemaJsonButton = container.querySelector('[data-testid="set-schema-json-location"]');
@@ -642,8 +642,8 @@ describe('zTracker settings connection source UI', () => {
     }
 
     await act(async () => {
-      setSchemaJsonButton.click();
-      setSchemaHtmlButton.click();
+      if (edit !== 'html') setSchemaJsonButton.click();
+      if (edit !== 'json') setSchemaHtmlButton.click();
       await Promise.resolve();
     });
 
@@ -674,16 +674,7 @@ describe('zTracker settings connection source UI', () => {
       throw new Error('Schema HTML textarea not found after preset switching');
     }
 
-    if (saveButtonTestId === 'save-schema-json') {
-      expect(rerenderedSchemaJsonTextarea.value).toContain('location');
-      // The module's persisted preset HTML is untouched by a JSON-only save - it reverts to
-      // whatever was actually persisted on the module (seedSchemaPresetSwitchSettings only seeds
-      // the vestigial top-level `mockSettings.schemaPresets`, not the module's own presets).
-      expect(rerenderedSchemaHtmlTextarea.value).toBe('<div></div>');
-    } else {
-      expect(rerenderedSchemaJsonTextarea.value).not.toContain('location');
-      expect(rerenderedSchemaHtmlTextarea.value).toBe('<div>updated default</div>');
-    }
+    return { json: rerenderedSchemaJsonTextarea.value, html: rerenderedSchemaHtmlTextarea.value };
   }
 
   test('hides the saved profile picker in active connection mode', () => {
@@ -720,14 +711,29 @@ describe('zTracker settings connection source UI', () => {
   test('saving Schema JSON persists only the JSON draft, leaving the persisted HTML unchanged', async () => {
     seedSchemaPresetSwitchSettings();
 
-    await expectIndependentSavePersistsOnlyItsOwnDraft('save-schema-json');
+    const persisted = await saveAndReloadSchemaDrafts('json', 'save-schema-json');
+    expect(persisted.json).toContain('location');
+    expect(persisted.html).toBe('<div>default</div>');
   });
 
   test('saving Schema HTML persists only the HTML draft, leaving the persisted JSON unchanged', async () => {
     seedSchemaPresetSwitchSettings();
 
-    await expectIndependentSavePersistsOnlyItsOwnDraft('save-schema-html');
+    const persisted = await saveAndReloadSchemaDrafts('html', 'save-schema-html');
+    expect(persisted.json).toContain('scene');
+    expect(persisted.html).toBe('<div>updated default</div>');
   });
+
+  test.each(['save-schema-json', 'save-schema-html'] as const)(
+    'when both drafts are edited and valid together, %s persists both (e.g. a field rename)',
+    async (saveButtonTestId) => {
+      seedSchemaPresetSwitchSettings();
+
+      const persisted = await saveAndReloadSchemaDrafts('both', saveButtonTestId);
+      expect(persisted.json).toContain('location');
+      expect(persisted.html).toBe('<div>updated default</div>');
+    },
+  );
 
   test('an invalid Schema HTML draft blocks only its own save action, not the independent Schema JSON save', async () => {
     mockSettings.schemaPresets = {

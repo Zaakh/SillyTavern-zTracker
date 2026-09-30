@@ -117,6 +117,17 @@ describe('lintSchemaDialect', () => {
       expect(findings).toContainEqual(expect.objectContaining({ severity: 'error', path: '(root)' }));
     });
 
+    it('still reports errors inside a schema whose root uses $defs (composition never hides nested findings)', () => {
+      const findings = lint({ type: 'object', $defs: { x: { type: 'string' } }, properties: { tags: { type: 'array' } } });
+      expect(findings).toContainEqual(expect.objectContaining({ severity: 'warning', path: '(root)' }));
+      expect(findings).toContainEqual(expect.objectContaining({ severity: 'error', path: 'tags' }));
+    });
+
+    it('reports a non-object schema root as an error', () => {
+      const findings = lint({ type: 'array', items: { type: 'string' } });
+      expect(findings).toContainEqual(expect.objectContaining({ severity: 'error', path: '(root)', message: expect.stringContaining('must be an object') }));
+    });
+
     it('does not report an error for a fully defined array', () => {
       const findings = lint({
         type: 'object',
@@ -165,21 +176,30 @@ describe('lintSchemaDialect', () => {
       expect(warning?.message).toContain('minItems');
     });
 
-    it('fails if PROMPT_SCHEMA_KEYWORD_ALLOWLIST gains one of the known dropped validation keywords without this test being updated', () => {
-      const knownDroppedKeywords = [
-        'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf',
-        'pattern', 'minLength', 'maxLength', 'minItems', 'maxItems', 'uniqueItems', 'contains',
-      ];
-      // Tripwire: if any of these ever moves into the allowlist (becomes honored), this assertion
-      // fails first, forcing a deliberate review of this test and the lint's rule set together.
-      expect(knownDroppedKeywords.some((keyword) => (PROMPT_SCHEMA_KEYWORD_ALLOWLIST as readonly string[]).includes(keyword))).toBe(false);
+    it('reports keywords missing from any hardcoded list (e.g. not, examples, minProperties)', () => {
+      const findings = lint({
+        type: 'object',
+        description: 'x',
+        properties: { value: { type: 'string', description: 'x', not: { const: 'y' }, examples: ['q'], minProperties: 1 } },
+      });
+      const warning = findings.find((f) => f.severity === 'warning' && f.path === 'value');
+      expect(warning?.message).toContain('not, examples, minProperties');
+    });
 
-      const schema: any = { type: 'object', properties: { value: { type: 'string', description: 'x' } } };
-      for (const keyword of knownDroppedKeywords) {
-        schema.properties.value[keyword] = keyword === 'uniqueItems' ? true : 1;
+    it('never reports a keyword that PROMPT_SCHEMA_KEYWORD_ALLOWLIST honors', () => {
+      // Derivation check (design.md "dialect drifts"): any keyword added to the allowlist is
+      // automatically treated as honored by the lint, with no second list to update.
+      const node: Record<string, unknown> = { type: 'string', description: 'x' };
+      for (const keyword of PROMPT_SCHEMA_KEYWORD_ALLOWLIST) {
+        if (!(keyword in node) && keyword !== 'properties' && keyword !== 'items') node[keyword] = keyword === 'required' ? [] : 'v';
       }
-      const warning = lint(schema).find((f) => f.severity === 'warning' && f.path === 'value');
-      expect(warning?.message).toContain(knownDroppedKeywords.join(', '));
+      const findings = lint({ type: 'object', description: 'x', properties: { value: node } });
+      expect(findings.filter((f) => f.path === 'value' && f.message.includes('keyword(s)'))).toEqual([]);
+    });
+
+    it('treats draft-07 "definitions" like "$defs"', () => {
+      const findings = lint({ type: 'object', description: 'x', definitions: { d: { type: 'string' } }, properties: { a: { type: 'string', description: 'x' } } });
+      expect(findings).toContainEqual(expect.objectContaining({ severity: 'warning', path: '(root)', message: expect.stringMatching(/inline/i) }));
     });
   });
 
@@ -249,8 +269,9 @@ describe('lintSchemaDialect', () => {
           b: { type: 'string', description: 'x', 'x-ztracker-dependsOn': ['a'] },
         },
       });
-      const cycleWarning = findings.find((f) => f.severity === 'warning' && f.path.includes('a') && f.path.includes('b'));
-      expect(cycleWarning).toBeDefined();
+      const cycleWarning = findings.find((f) => f.severity === 'warning' && /cycle/.test(f.message));
+      expect(cycleWarning?.path).toBe('(root)');
+      expect(cycleWarning?.message).toContain('a, b');
     });
   });
 

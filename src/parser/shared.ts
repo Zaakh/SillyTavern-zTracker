@@ -38,6 +38,9 @@ export function coerceParsedArraysBySchema(data: any, schema?: any): any {
 
   for (const key in schema.properties) {
     const propertySchema = schema.properties[key];
+    if (!propertySchema || typeof propertySchema !== 'object') {
+      continue;
+    }
     if (propertySchema.type === 'array' && data[key] && !Array.isArray(data[key])) {
       data[key] = [data[key]];
     }

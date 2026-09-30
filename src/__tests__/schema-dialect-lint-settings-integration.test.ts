@@ -98,7 +98,7 @@ const ERRORING_SCHEMA_HTML = '<div>{{data.name}}</div>';
 
 let mockSettings: any;
 
-function createMockSettings() {
+function createMockSettings(schemaValue: object = ERRORING_SCHEMA_VALUE, schemaHtml: string = ERRORING_SCHEMA_HTML) {
   return {
     modules: [
       {
@@ -110,7 +110,7 @@ function createMockSettings() {
         schema: {
           preset: 'default',
           presets: {
-            default: { name: 'Default', value: ERRORING_SCHEMA_VALUE, html: ERRORING_SCHEMA_HTML },
+            default: { name: 'Default', value: schemaValue, html: schemaHtml },
           },
         },
         prompts: {
@@ -194,9 +194,8 @@ describe('Schema dialect lint wired into the real Settings UI (openspec: add-sch
   }
 
   function getSchemaControls(container: HTMLElement) {
-    const textareas = Array.from(container.querySelectorAll('textarea'));
-    const schemaJsonTextarea = textareas[0];
-    const schemaHtmlTextarea = textareas[1];
+    // SchemaPresetSection renders exactly two `.ztracker-schema-textarea`s: JSON first, then HTML.
+    const [schemaJsonTextarea, schemaHtmlTextarea] = Array.from(container.querySelectorAll('textarea.ztracker-schema-textarea'));
     const saveSchemaJsonButton = Array.from(container.querySelectorAll('button')).find((button) => button.title.startsWith('Save the current Schema JSON'));
     const saveSchemaHtmlButton = Array.from(container.querySelectorAll('button')).find((button) => button.title.startsWith('Save the current Schema HTML'));
     const restoreDefaultButton = Array.from(container.querySelectorAll('button')).find((button) => button.title === 'Restore default schema JSON and HTML');
@@ -209,6 +208,32 @@ describe('Schema dialect lint wired into the real Settings UI (openspec: add-sch
     }
     return { schemaJsonTextarea, schemaHtmlTextarea, saveSchemaJsonButton, saveSchemaHtmlButton, restoreDefaultButton };
   }
+
+  test('renaming a field in both editors can be saved in one step, even though neither side renders against the other\'s saved version', async () => {
+    const cleanSchema = { type: 'object', description: 'x', properties: { mood: { type: 'string', description: 'x' } }, required: ['mood'] };
+    mockSettings = createMockSettings(cleanSchema, '<div>{{data.mood}}</div>');
+    const container = renderSettings();
+    let controls = getSchemaControls(container);
+
+    await act(async () => {
+      setTextareaValue(controls.schemaJsonTextarea, JSON.stringify({ ...cleanSchema, properties: { feeling: { type: 'string', description: 'x' } }, required: ['feeling'] }, null, 2));
+      setTextareaValue(controls.schemaHtmlTextarea, '<div>{{data.feeling}}</div>');
+      await Promise.resolve();
+    });
+
+    controls = getSchemaControls(container);
+    expect(controls.saveSchemaJsonButton.disabled).toBe(false);
+    expect(controls.saveSchemaHtmlButton.disabled).toBe(false);
+
+    await act(async () => {
+      controls.saveSchemaHtmlButton.click();
+      await Promise.resolve();
+    });
+
+    const preset = mockSettings.modules[0].schema.presets.default;
+    expect(preset.html).toBe('<div>{{data.feeling}}</div>');
+    expect(Object.keys(preset.value.properties)).toEqual(['feeling']);
+  });
 
   test('a pre-existing dialect error blocks Schema JSON save but not an unrelated Schema HTML save, and Restore Default clears it', async () => {
     const container = renderSettings();
