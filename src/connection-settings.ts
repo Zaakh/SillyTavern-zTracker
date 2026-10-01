@@ -130,7 +130,7 @@ export function resolveEffectiveConnectionSettings(input: {
   }
   if (!reasoningTemplate) {
     if (usesProfile) fallbackFields.push('reasoning-template');
-    reasoningTemplate = toReasoningTemplate(power.reasoning);
+    reasoningTemplate = toReasoningTemplate(power.reasoning, asName((power.reasoning as { name?: unknown } | undefined)?.name));
   }
 
   return {
@@ -223,7 +223,8 @@ export function isUnclosedReasoningReply(reply: unknown): boolean {
 
 /**
  * Turns a raw model reply into parser input: puts the sent prefill back (only when the backend did
- * not already include it, returned no separate reasoning, and no schema constrained the output),
+ * not already include it, did not split out the reasoning an opening prefill started, and no schema
+ * constrained the output),
  * then strips a leading reasoning block. A reply that opens a reasoning block without closing it is
  * returned without the opening prefix and flagged, so the parser decides whether it is still usable.
  */
@@ -234,8 +235,9 @@ export function finishTrackerReply(
   let text = reply.content;
   const { prefill, reasoningTemplate } = options;
 
-  const hasSeparateReasoning = typeof reply.reasoning === 'string' && reply.reasoning.trim().length > 0;
-  if (prefill && !options.jsonSchemaSent && !hasSeparateReasoning && !text.trimStart().startsWith(prefill.trim())) {
+  // Only an opening reasoning prefill is moot when the backend split reasoning out; a plain prefill like `{` is still the start of the content.
+  const reasoningSplitOut = typeof reply.reasoning === 'string' && reply.reasoning.trim().length > 0 && leavesReasoningOpen(prefill, reasoningTemplate);
+  if (prefill && !options.jsonSchemaSent && !reasoningSplitOut && !text.trimStart().startsWith(prefill.trim())) {
     text = prefill + text;
   }
 

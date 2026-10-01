@@ -6,13 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Changed
-
-- **BREAKING (Modules on a saved connection profile only):** a saved profile is now the single source of the preset, instruct template, instruct mode on/off, context template, custom stop strings, Start Reply With and reasoning template used for that Module's tracker requests, instead of the live SillyTavern templates. A field the profile does not record falls back to the live value for that field only. To keep the old behavior, switch the Module's Connection Source to the live connection.
-- **System Prompt Source -> From connection profile presets** now selects only the profile's saved system prompt. It no longer affects the instruct, context or sampler preset.
-- Text Completion Modules on the live connection now also send SillyTavern's live sampler preset, and honor the live instruct on/off switch and custom stop strings.
-- Settings: Schema JSON and Schema HTML are now saved independently. Saving Schema JSON is blocked while it has an error-level finding (an array with no `items`, or an object with no `properties`); saving Schema HTML is never blocked by a JSON problem. When both are edited and work together (e.g. a field rename), either Save button saves both.
-
 ### Added
 
 - **Start Reply With** is now applied to tracker requests as a reply prefill (after the reply cue on Text Completion, as a last assistant message on Chat Completion).
@@ -20,6 +13,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Diagnostics now shows the effective preset, instruct/context, Start Reply With, reasoning template, whether settings came from the profile or live values, and which fields fell back.
 - Settings: the Schema editor now checks the Schema JSON draft against the JSON Schema subset zTracker actually honors, and lists errors, warnings, and notes naming the affected field and how to fix it (e.g. `$ref`/`$defs` that never reach the model, validation keywords like `minLength` that are not enforced, arrays of objects with no item identity, missing field descriptions).
 - Diagnostics now lists these schema findings for every Module and schema preset, including imported or migrated ones.
+
+### Changed
+
+- **BREAKING (Modules on a saved connection profile only):** a saved profile is now the single source of the preset, instruct template, instruct mode on/off, context template, custom stop strings, Start Reply With and reasoning template used for that Module's tracker requests, instead of the live SillyTavern templates. A field the profile does not record falls back to the live value for that field only. To keep the old behavior, switch the Module's Connection Source to the live connection.
+- **System Prompt Source -> From connection profile presets** now selects only the profile's saved system prompt. It no longer affects the instruct, context or sampler preset.
+- **BREAKING (Modules on the live connection):** tracker requests now also follow SillyTavern's live **Start Reply With** (sent as a reply prefill, which breaks XML/TOON modes if set to something like `{`), strip reasoning from the reply, and, on Text Completion, send the live sampler preset and honor the live instruct on/off switch and custom stop strings. If a live Start Reply With does not suit tracker generation, pin the Module to a saved profile that records an empty one.
+- A saved profile's stop strings, instruct template and its user-alignment message are now always used as recorded; the live stop strings no longer leak into the request through the sampler preset.
+- Settings: Schema JSON and Schema HTML are now saved independently. Saving Schema JSON is blocked while it has an error-level finding (an array with no `items`, or an object with no `properties`); saving Schema HTML is never blocked by a JSON problem. When both are edited and work together (e.g. a field rename), either Save button saves both.
 
 ### Fixed
 

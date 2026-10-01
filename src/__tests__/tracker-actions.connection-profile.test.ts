@@ -38,7 +38,7 @@ describe('createTrackerActions connection profile settings', () => {
   const originalStructuredClone = globalThis.structuredClone;
 
   const instructPresets: Record<string, Record<string, unknown>> = {
-    'Gemma-4  (no reasoning)': { name: 'Gemma-4  (no reasoning)', input_sequence: '<no-reasoning-input>' },
+    'Gemma-4  (no reasoning)': { name: 'Gemma-4  (no reasoning)', input_sequence: '<no-reasoning-input>', user_alignment_message: 'PROFILE ALIGN' },
     'Gemma-4 Reasoning': { name: 'Gemma-4 Reasoning', input_sequence: '<reasoning-input>' },
   };
   const contextPresets: Record<string, Record<string, unknown>> = {
@@ -206,7 +206,67 @@ describe('createTrackerActions connection profile settings', () => {
       expect(formatterCalls.storyStrings).toHaveLength(0);
       const sentRequest = (sendRequest.mock.calls[0] as unknown as [Record<string, unknown>])[0];
       expect(sentRequest.prompt).toBe(`Existing system prompt\n\nTobias: Prior chat message\n\nGenerate tracker JSON\n\n${closedEmptyBlock}`);
-      expect(sentRequest).not.toHaveProperty('stop');
+      // Sent explicitly (empty) so the sampler-preset merge cannot fill in the host's live-derived stop list.
+      expect(sentRequest).toMatchObject({ stop: [], stopping_strings: [] });
+    });
+
+    test('sends an empty stop list when the profile records none, instead of leaving it to the host defaults', async () => {
+      const { actions, createRequestData } = setupTextCompletion({
+        profile: { ...GEMMA_NON_REASONING_PROFILE, 'instruct-state': 'false', 'stop-strings': '[]' },
+        powerUserSettings: makeGemmaLivePowerUserSettings({ custom_stopping_strings: '["LIVE-STOP"]' }),
+      });
+
+      await actions.generateTracker(0);
+
+      const requestData = (createRequestData.mock.calls[0] as unknown as [Record<string, unknown>])[0];
+      expect(requestData).toMatchObject({ stop: [], stopping_strings: [] });
+    });
+
+    test('inserts the alignment message of the profile instruct template, not the live one', async () => {
+      buildPromptMock.mockResolvedValue({
+        result: [
+          { role: 'system', content: 'Existing system prompt' },
+          { role: 'assistant', content: 'Opening line', name: 'Narrator' },
+        ],
+      } as any);
+      const livePower = makeGemmaLivePowerUserSettings();
+      (livePower.instruct as Record<string, unknown>).user_alignment_message = 'LIVE ALIGN';
+      const { actions, constructPrompt } = setupTextCompletion({ powerUserSettings: livePower });
+
+      await actions.generateTracker(0);
+
+      const [promptMessages] = constructPrompt.mock.calls[0] as unknown as [Array<{ role: string; content: string }>];
+      const contents = promptMessages.map((message) => message.content).join('|');
+      expect(contents).toContain('PROFILE ALIGN');
+      expect(contents).not.toContain('LIVE ALIGN');
+    });
+
+    test('lists a profile instruct template that no longer exists as a fallback field in Diagnostics', async () => {
+      const { actions } = setupTextCompletion({ profile: { ...GEMMA_NON_REASONING_PROFILE, instruct: 'Deleted Template' } });
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      await actions.generateTracker(0);
+
+      warn.mockRestore();
+      expect(captureTrackerRequestDebugSnapshot).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        settingsSource: 'profile',
+        fallbackFields: ['instruct'],
+      }));
+    });
+
+    test('rejects the request instead of leaving it pending when finishing the reply throws', async () => {
+      const { actions, context } = setupTextCompletion({ sendResponse: '{"time":"10:00:00"}' });
+      context.parseReasoningFromString = () => {
+        throw new Error('host parser exploded');
+      };
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      const result = await actions.generateTracker(0);
+
+      consoleError.mockRestore();
+      expect(result).toBe(false);
+      expect(stEchoMock).toHaveBeenCalledWith('error', expect.stringContaining('host parser exploded'));
+      expect(applyTrackerUpdateAndRenderMock).not.toHaveBeenCalled();
     });
 
     test('adds the effective custom stop strings to the instruct stop sequences', async () => {

@@ -149,6 +149,16 @@ describe('resolveEffectiveConnectionSettings', () => {
     expect(effective.fallbackFields).toEqual(['reasoning-template']);
   });
 
+  test('keeps the name of the live reasoning template for Diagnostics', () => {
+    const effective = resolveEffectiveConnectionSettings({
+      connectionSource: 'active',
+      isTextCompletion: true,
+      host: makeHost({ powerUserSettings: makeGemmaLivePowerUserSettings({ reasoning: { name: 'Live Think', prefix: '<think>', suffix: '</think>' } }) }),
+    });
+
+    expect(effective.reasoningTemplate?.name).toBe('Live Think');
+  });
+
   test('macro-substitutes live stop strings only when the macro setting is on', () => {
     const stopSettings = { custom_stopping_strings: '["{{user}}:"]' };
     const withMacro = resolveEffectiveConnectionSettings({
@@ -293,6 +303,12 @@ describe('finishTrackerReply', () => {
     const result = finishTrackerReply({ content: '{"time":"10"}', reasoning: 'thinking' }, { ...base, prefill: template.prefix });
 
     expect(result).toEqual({ content: '{"time":"10"}', unclosedReasoning: false });
+  });
+
+  test('still restores a plain prefill when the backend returned reasoning separately', () => {
+    const result = finishTrackerReply({ content: '"time":"10"}', reasoning: 'thinking' }, { ...base, prefill: '{' });
+
+    expect(result.content).toBe('{"time":"10"}');
   });
 
   test('strips a closed empty reasoning block supplied by the prefill', () => {

@@ -864,6 +864,7 @@ export function createTrackerActions(options: {
     selectedApiType: string | undefined;
     requestMessages: Message[];
     effective: EffectiveConnectionSettings;
+    formatting: Pick<ReturnType<typeof lookupFormattingObjects>, 'instruct' | 'context'>;
     overridePayload?: Record<string, any>;
     maxTokens: number;
   }): Promise<ExtractedData | undefined> {
@@ -907,7 +908,7 @@ export function createTrackerActions(options: {
     localPendingRequestAborters.set(requestId, abortController);
 
     try {
-      const formatting = lookupFormattingObjects(effective, context);
+      const { formatting } = options;
       const wrappedPrompt = await buildStoryStringWrappedTextCompletionPrompt({
         requestMessages: options.requestMessages,
         instructEnabled: effective.instructEnabled,
@@ -923,6 +924,8 @@ export function createTrackerActions(options: {
       ) {
         beforeRequestStartHook?.();
 
+        // Always sent, even when empty: the sampler-preset merge below would otherwise fill in the
+        // host's live-derived stop list (live custom strings, single-line mode, names-as-stop).
         const stoppingStrings = [...new Set([...wrappedPrompt.stoppingStrings, ...effective.stopStrings])];
         let requestData = textCompletionService.createRequestData.call(textCompletionService, {
           stream: false,
@@ -932,12 +935,8 @@ export function createTrackerActions(options: {
           api_type: options.selectedApiType ?? options.profile?.api,
           api_server: getProfileApiServer(options.profile, options.connectionSource),
           ...(secretId ? { secret_id: secretId } : {}),
-          ...(stoppingStrings.length > 0
-            ? {
-                stop: stoppingStrings,
-                stopping_strings: stoppingStrings,
-              }
-            : {}),
+          stop: stoppingStrings,
+          stopping_strings: stoppingStrings,
           ...(options.overridePayload ?? {}),
         });
 
@@ -987,7 +986,8 @@ export function createTrackerActions(options: {
           api_type: options.selectedApiType ?? options.profile?.api,
           api_server: getProfileApiServer(options.profile, options.connectionSource),
           ...(secretId ? { secret_id: secretId } : {}),
-          ...(effective.stopStrings.length > 0 ? { stopping_strings: effective.stopStrings } : {}),
+          stop: effective.stopStrings,
+          stopping_strings: effective.stopStrings,
           ...(options.overridePayload ?? {}),
         },
         requestOptions,
@@ -1096,12 +1096,6 @@ export function createTrackerActions(options: {
           name1?: string;
           mainApi?: string;
           parseReasoningFromString?: Parameters<typeof finishTrackerReply>[1]['parseReasoning'];
-          powerUserSettings?: {
-            preset?: string;
-            instruct?: {
-              user_alignment_message?: string;
-            };
-          };
         };
         const resolvedConnection = options.resolvedConnection ?? resolveTrackerConnection(settings, context);
         const runKey = makeTrackerRunKey(messageId, options.moduleId);
@@ -1109,6 +1103,9 @@ export function createTrackerActions(options: {
         const selectedApiMap = resolvedConnection.apiMap;
         const selectedApi = selectedApiMap?.selected;
         const effective = resolveEffectiveSettings(resolvedConnection, context);
+        // Resolved here (not at send time) so a missing profile template shows up in Diagnostics.
+        const formatting = selectedApi === 'textgenerationwebui' ? lookupFormattingObjects(effective, context) : undefined;
+        const fallbackFields = [...new Set([...effective.fallbackFields, ...(formatting?.fallbackFields ?? [])])];
         const jsonSchemaSent = Boolean(overideParams?.json_schema);
         const startReplyWith = typeof context.substituteParams === 'function' && effective.startReplyWith
           ? context.substituteParams(effective.startReplyWith)
@@ -1122,6 +1119,7 @@ export function createTrackerActions(options: {
           debugLog(settingsManager, 'start reply with omitted', { startReplyWith });
         }
         // Puts the sent prefill back and strips reasoning; a no-op for probe requests and non-text replies.
+        // Callers chain it before `resolve` so a throw rejects the request instead of leaving it pending.
         const finishReply = (data: ExtractedData | undefined): ExtractedData | undefined => {
           if (options.rawReply || !data || typeof data.content !== 'string') return data;
           const finished = finishTrackerReply(data as { content: string; reasoning?: unknown }, {
@@ -1135,12 +1133,11 @@ export function createTrackerActions(options: {
           if (finished.unclosedReasoning) markUnclosedReasoningReply(result);
           return result;
         };
+        // The alignment message belongs to the effective instruct template, not necessarily the live one.
+        const alignmentMessage = formatting?.instruct?.user_alignment_message;
         const sanitizedPrompt = sanitizeMessagesForGeneration(requestMessages, {
           inlineNamesIntoContent: selectedApi === 'textgenerationwebui',
-          userAlignmentMessage:
-            selectedApi === 'textgenerationwebui'
-              ? context?.powerUserSettings?.instruct?.user_alignment_message
-              : undefined,
+          userAlignmentMessage: typeof alignmentMessage === 'string' ? alignmentMessage : undefined,
           userName: selectedApi === 'textgenerationwebui' ? context?.name1 : undefined,
         });
         captureTrackerRequestDebugSnapshot(settingsManager, {
@@ -1156,9 +1153,9 @@ export function createTrackerActions(options: {
           presetName: effective.presetName,
           instructName: effective.instructName,
           contextName: effective.contextName,
-          syspromptName: typeof profile?.sysprompt === 'string' ? profile.sysprompt : undefined,
+          syspromptName: selectedApi === 'textgenerationwebui' ? resolveTrackerSystemPromptName(settings, context as any, profile) : undefined,
           settingsSource: effective.source,
-          fallbackFields: effective.fallbackFields,
+          fallbackFields,
           instructEnabled: selectedApi === 'textgenerationwebui' ? effective.instructEnabled : undefined,
           startReplyWith: prefilled.prefill,
           startReplyWithOmitted: prefilled.omitted,
@@ -1180,9 +1177,10 @@ export function createTrackerActions(options: {
               selectedApiType: selectedApiMap?.type,
               requestMessages: sanitizedPrompt,
               effective,
+              formatting: formatting ?? {},
               overridePayload: overideParams ?? {},
               maxTokens: settings.maxResponseToken,
-            }).then((data) => resolve(finishReply(data)), reject);
+            }).then(finishReply).then(resolve, reject);
             return;
           }
 
@@ -1211,7 +1209,11 @@ export function createTrackerActions(options: {
                 pendingRequests.delete(messageId);
                 if (error) return reject(error);
                 if (!data) return reject(new DOMException('Request aborted by user', 'AbortError'));
-                resolve(finishReply(data as ExtractedData | undefined));
+                try {
+                  resolve(finishReply(data as ExtractedData | undefined));
+                } catch (finishError) {
+                  reject(finishError);
+                }
               },
             },
           );
