@@ -3,6 +3,9 @@ import { STButton, PresetItem } from 'sillytavern-utils-lib/components/react';
 import { TrackerModuleSettings } from '../../config.js';
 import type { SettingsUpdateAndRefresh } from './settings-shared.js';
 
+const SYSTEM_PROMPT_SOURCE_TITLE =
+  "Choose which system prompt zTracker uses: SillyTavern's currently active one, the one recorded in this Module's saved connection profile, or a specific saved SillyTavern system prompt. This only selects the system prompt - instruct, context and sampler presets follow the Module's connection.";
+
 // Contains the tracker-only system prompt selector and the warnings tied to that configuration.
 export const SystemPromptSettingsSection: FC<{
   settings: TrackerModuleSettings;
@@ -29,12 +32,10 @@ export const SystemPromptSettingsSection: FC<{
 }) => {
   return (
     <div className="setting-row">
-      <label title="Choose whether zTracker uses SillyTavern's currently active system prompt or a specific saved SillyTavern system prompt.">
-        System Prompt Source
-      </label>
+      <label title={SYSTEM_PROMPT_SOURCE_TITLE}>System Prompt Source</label>
       <select
         className="text_pole"
-        title="Choose whether zTracker uses SillyTavern's currently active system prompt or a specific saved SillyTavern system prompt."
+        title={SYSTEM_PROMPT_SOURCE_TITLE}
         value={settings.trackerSystemPromptMode}
         onChange={(e) =>
           updateAndRefresh((s) => {
@@ -43,7 +44,9 @@ export const SystemPromptSettingsSection: FC<{
         }
       >
         <option value="profile">From active SillyTavern presets</option>
-        <option value="selected">From connection profile presets</option>
+        <option value="selected" title="Uses only the system prompt recorded in this Module's saved connection profile. Instruct, context and sampler presets always follow the Module's connection, not this setting.">
+          From connection profile presets
+        </option>
         <option value="saved">From specific saved system prompt</option>
       </select>
 

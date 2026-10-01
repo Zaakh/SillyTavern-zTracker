@@ -133,15 +133,17 @@ export function checkModuleSystemPromptPresetExists(
 export function resolveTrackerSystemPromptName(
   settings: Pick<TrackerModuleSettings, 'trackerSystemPromptMode' | 'trackerSystemPromptSavedName'>,
   context: SillyTavernContextLike = SillyTavern.getContext(),
-  profile?: { sysprompt?: string; preset?: string; api?: string },
+  profile?: { sysprompt?: string },
 ): string | undefined {
   if (settings.trackerSystemPromptMode === 'saved') {
     const savedName = settings.trackerSystemPromptSavedName.trim();
     return savedName || undefined;
   }
 
+  // "From connection profile presets" selects only the profile's own system prompt; instruct,
+  // context and sampler presets are resolved separately from the connection settings.
   if (settings.trackerSystemPromptMode === 'selected' && profile) {
-    const profileName = (profile.api === 'textgenerationwebui' ? profile.sysprompt : profile.preset)?.trim();
+    const profileName = profile.sysprompt?.trim();
     if (profileName) {
       return profileName;
     }

@@ -168,7 +168,8 @@ describe('createTrackerActions prompt assembly', () => {
       }),
     );
     const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
-    expect(buildPromptOptions).toHaveProperty('presetName', 'Active Preset');
+    // The saved profile records a preset, so it wins over the live 'Active Preset'.
+    expect(buildPromptOptions).toHaveProperty('presetName', 'Profile Preset');
     expect(buildPromptOptions).not.toHaveProperty('syspromptName');
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
 
@@ -1424,10 +1425,10 @@ describe('createTrackerActions prompt assembly', () => {
   });
 
   test.each([
-    { api: 'openai', expectedSyspromptName: undefined, expectedContextName: undefined, expectedPresetName: 'Active Preset' },
-    { api: 'textgenerationwebui', expectedSyspromptName: 'Neutral - Chat', expectedContextName: 'Active Context', expectedPresetName: undefined },
+    { api: 'openai', expectedSyspromptName: undefined, expectedContextName: undefined, expectedPresetName: 'Profile Preset' },
+    { api: 'textgenerationwebui', expectedSyspromptName: 'Neutral - Chat', expectedContextName: 'Active Context', expectedPresetName: 'Profile Preset' },
   ])(
-    'uses the active runtime preset for chat APIs in profile mode and keeps text-completion prompt selectors active',
+    'uses the profile preset and falls back to the live prompt selectors the profile does not record',
     async ({ api, expectedSyspromptName, expectedContextName, expectedPresetName }) => {
       installSillyTavernContext(makeContext({
         powerUserSettings: {
@@ -1489,9 +1490,9 @@ describe('createTrackerActions prompt assembly', () => {
 
   test.each([
     { api: 'openai', expectedPresetName: 'Selected Profile Prompt' },
-    { api: 'textgenerationwebui', expectedPresetName: undefined },
+    { api: 'textgenerationwebui', expectedPresetName: 'Selected Profile Prompt' },
   ])(
-    'uses the selected connection profile preset for $api profiles only when supported',
+    'uses the selected connection profile preset for $api profiles',
     async ({ api, expectedPresetName }) => {
       installSillyTavernContext(makeContext());
 
@@ -1663,10 +1664,10 @@ describe('createTrackerActions prompt assembly', () => {
       api: 'textgenerationwebui',
       expectedSelectedApi: 'textgenerationwebui',
       powerUserSettings: { instruct: { preset: 'Active Instruct' } },
-      expectedInstructName: 'Active Instruct',
+      expectedInstructName: 'instruct-1',
     },
   ])(
-    'uses the active SillyTavern instruct preset for $api profiles',
+    'uses the saved profile instruct preset for $api profiles even when a different one is active',
     async ({ api, expectedSelectedApi, powerUserSettings, expectedInstructName }) => {
       installSillyTavernContext(makeContext({ powerUserSettings }));
 
@@ -1793,7 +1794,7 @@ describe('createTrackerActions prompt assembly', () => {
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 
-  test('passes the active instruct preset to textgenerationwebui request transport without mutating the shared profile', async () => {
+  test('passes the profile instruct and sampler preset to textgenerationwebui request transport without mutating the shared profile', async () => {
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
     const profile = makeProfile({ api: 'textgenerationwebui', instruct: 'Profile Instruct' });
     let instructOptionDuringRequest: string | undefined;
@@ -1839,19 +1840,19 @@ describe('createTrackerActions prompt assembly', () => {
     await actions.generateTracker(0);
 
     const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
-    expect(buildPromptOptions).toHaveProperty('instructName', 'Active Instruct');
+    expect(buildPromptOptions).toHaveProperty('instructName', 'Profile Instruct');
     expect(textCompletionProcessRequest).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), true, expect.any(AbortSignal));
     expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).toMatchObject({
-      instructName: 'Active Instruct',
+      instructName: 'Profile Instruct',
+      presetName: 'preset-1',
     });
-    expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).not.toHaveProperty('presetName');
-    expect(instructOptionDuringRequest).toBe('Active Instruct');
+    expect(instructOptionDuringRequest).toBe('Profile Instruct');
     expect(profileInstructDuringRequest).toBe('Profile Instruct');
     expect(profile.instruct).toBe('Profile Instruct');
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 
-  test('passes the active context preset to textgenerationwebui prompt assembly', async () => {
+  test('passes the profile context preset to textgenerationwebui prompt assembly', async () => {
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
     installSillyTavernContext(
       makeContext({
@@ -1888,11 +1889,11 @@ describe('createTrackerActions prompt assembly', () => {
     await actions.generateTracker(0);
 
     const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
-    expect(buildPromptOptions).toHaveProperty('contextName', 'Active Context');
+    expect(buildPromptOptions).toHaveProperty('contextName', 'Profile Context');
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 
-  test('passes the active instruct preset to field-level textgenerationwebui regeneration requests', async () => {
+  test('passes the profile instruct preset to field-level textgenerationwebui regeneration requests', async () => {
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
     const profile = makeProfile({ api: 'textgenerationwebui', instruct: 'Profile Instruct' });
     let instructOptionDuringRequest: string | undefined;
@@ -1954,9 +1955,9 @@ describe('createTrackerActions prompt assembly', () => {
 
     expect(textCompletionProcessRequest).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), true, expect.any(AbortSignal));
     expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).toMatchObject({
-      instructName: 'Active Instruct',
+      instructName: 'Profile Instruct',
     });
-    expect(instructOptionDuringRequest).toBe('Active Instruct');
+    expect(instructOptionDuringRequest).toBe('Profile Instruct');
     expect(profile.instruct).toBe('Profile Instruct');
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
@@ -2130,7 +2131,7 @@ describe('createTrackerActions prompt assembly', () => {
     );
   });
 
-  test('clears stale profile instruct transport state by omitting the request-local instruct preset when none is active', async () => {
+  test('keeps the profile instruct preset on the request transport even when no live instruct preset is active', async () => {
     const textCompletionProcessRequest = jest.fn(async () => ({ content: { time: '10:00:00' } }));
     installSillyTavernContext(makeContext({ textCompletionProcessRequest }));
 
@@ -2162,13 +2163,12 @@ describe('createTrackerActions prompt assembly', () => {
     await actions.generateTracker(0);
 
     const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
-    expect(buildPromptOptions).not.toHaveProperty('instructName');
+    expect(buildPromptOptions).toHaveProperty('instructName', 'Profile Instruct');
     expect(textCompletionProcessRequest).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), true, expect.any(AbortSignal));
-    expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).not.toHaveProperty('instructName');
     expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).toMatchObject({
+      instructName: 'Profile Instruct',
       instructSettings: {},
     });
-    expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).not.toHaveProperty('presetName');
     expect(profile.instruct).toBe('Profile Instruct');
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });

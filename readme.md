@@ -87,11 +87,17 @@ zTracker can now choose where tracker-generation connection settings come from:
 
 This is useful when you want tracker generation to automatically follow your current SillyTavern connection during experimentation, while still keeping the option to pin zTracker to a dedicated extraction profile when needed. If you rely on live unsaved host changes, do a quick smoke test after SillyTavern upgrades.
 
+**What a saved profile controls.** A Module on a saved profile uses that profile for the API, server, model, secret, sampler (settings) preset, instruct and context templates, instruct on/off, custom stop strings, **Start Reply With**, and reasoning template. Anything the profile did not record falls back to the live SillyTavern value for that one setting. The live connection uses the live values throughout. (Known limitation: on Chat Completion, the live connection still sends through SillyTavern's currently selected saved profile.) Diagnostics shows which source was used and which settings fell back. A saved sampler preset is converted by SillyTavern for the backend type currently selected in SillyTavern, so keep the profile's API and the live API type aligned when the profile pins a different backend.
+
+**Start Reply With** is sent as the start of the model's reply (after the reply cue on Text Completion, as a last assistant message on Chat Completion) and put back in front of the reply before parsing. A prefill such as `{` therefore suits JSON mode but breaks XML/TOON mode. When a structured-output schema is sent, a prefill that would open a reasoning block and leave it open is left out.
+
+**Reasoning** blocks (the effective reasoning template's prefix and suffix) are stripped from tracker replies before parsing and are never stored. A reply cut off inside a reasoning block fails with an "unclosed reasoning block" error; raise the Module's max response tokens or use a non-reasoning profile.
+
 ## System prompt selection for tracker generation
 
 zTracker can now choose the system prompt used during tracker generation:
 - **From active SillyTavern presets**: use the currently active host prompt settings.
-- **From selected connection profile**: use the prompt selectors stored on the chosen zTracker connection profile. For Chat Completion profiles, zTracker uses the profile preset. For Text Completion profiles, zTracker uses the profile's instruct, context, and system-prompt slots.
+- **From selected connection profile**: use the system prompt stored on the Module's saved connection profile. This only selects the system prompt; instruct, context and sampler presets follow the Module's connection either way (see above).
 - **From saved ST prompt**: pick a saved SillyTavern system prompt specifically for tracker extraction.
 
 Each Module installs its own system-prompt preset automatically, named after that Module and derived from its own prompt content, the first time the Module is created (fresh install, "Add Module", or manual Import). Select that Module's preset in **Extensions → zTracker → System Prompt Source**, and edit it later in SillyTavern's own **System Prompt** manager. If a Module's preset ever goes missing, use the "Recreate from shipped prompt" action next to the warning to restore it. Older zTracker prompt presets are not deleted automatically.

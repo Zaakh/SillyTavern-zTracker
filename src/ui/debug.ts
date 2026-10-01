@@ -25,6 +25,14 @@ export type TrackerRequestDebugSnapshot = {
   instructName?: string;
   contextName?: string;
   syspromptName?: string;
+  /** Where the effective settings came from and which profile fields fell back to live values. */
+  settingsSource?: 'profile' | 'live';
+  fallbackFields?: string[];
+  instructEnabled?: boolean;
+  /** Start Reply With exactly as sent; `omitted` marks a prefill dropped because it would leave reasoning open. */
+  startReplyWith?: string;
+  startReplyWithOmitted?: boolean;
+  reasoningTemplateName?: string;
   promptEngineeringMode: string;
   maxTokens: number;
   embedSnapshotHeader: string;
@@ -121,6 +129,12 @@ export function captureTrackerRequestDebugSnapshot(
     instructName?: string;
     contextName?: string;
     syspromptName?: string;
+    settingsSource?: 'profile' | 'live';
+    fallbackFields?: string[];
+    instructEnabled?: boolean;
+    startReplyWith?: string;
+    startReplyWithOmitted?: boolean;
+    reasoningTemplateName?: string;
     promptEngineeringMode: string;
     maxTokens: number;
     embedSnapshotHeader?: string;
@@ -144,6 +158,12 @@ export function captureTrackerRequestDebugSnapshot(
     connectionSource: snapshot.connectionSource,
     profileId: snapshot.profileId,
     ...pickConnectionDebugFields(snapshot),
+    ...(snapshot.settingsSource ? { settingsSource: snapshot.settingsSource } : {}),
+    ...(snapshot.fallbackFields ? { fallbackFields: snapshot.fallbackFields } : {}),
+    ...(snapshot.instructEnabled !== undefined ? { instructEnabled: snapshot.instructEnabled } : {}),
+    ...(snapshot.startReplyWith !== undefined ? { startReplyWith: snapshot.startReplyWith } : {}),
+    ...(snapshot.startReplyWithOmitted ? { startReplyWithOmitted: true } : {}),
+    ...(snapshot.reasoningTemplateName ? { reasoningTemplateName: snapshot.reasoningTemplateName } : {}),
     promptEngineeringMode: snapshot.promptEngineeringMode,
     maxTokens: snapshot.maxTokens,
     embedSnapshotHeader: snapshot.embedSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER,
@@ -172,6 +192,15 @@ export function formatTrackerRequestDebugSnapshot(snapshot?: TrackerRequestDebug
     `connectionSource: ${snapshot.connectionSource}`,
     `profileId: ${snapshot.profileId}`,
     ...formatConnectionDebugFields(snapshot),
+    ...(snapshot.settingsSource ? [`settingsSource: ${snapshot.settingsSource}`] : []),
+    ...(snapshot.fallbackFields ? [`fallbackFields: ${snapshot.fallbackFields.length > 0 ? snapshot.fallbackFields.join(', ') : 'none'}`] : []),
+    ...(snapshot.instructEnabled !== undefined ? [`instructEnabled: ${snapshot.instructEnabled}`] : []),
+    ...(snapshot.startReplyWithOmitted
+      ? ['startReplyWith: omitted (would leave a reasoning block open under a structured-output schema)']
+      : snapshot.startReplyWith !== undefined
+        ? [`startReplyWith: ${snapshot.startReplyWith ? JSON.stringify(snapshot.startReplyWith) : 'none'}`]
+        : []),
+    ...(snapshot.reasoningTemplateName ? [`reasoningTemplate: ${snapshot.reasoningTemplateName}`] : []),
     `promptEngineeringMode: ${snapshot.promptEngineeringMode}`,
     `maxTokens: ${snapshot.maxTokens}`,
     `embedSnapshotHeader: ${snapshot.embedSnapshotHeader}`,

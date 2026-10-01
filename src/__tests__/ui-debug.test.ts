@@ -146,4 +146,65 @@ describe('tracker request debug snapshots', () => {
     expect(lines.join('\n')).toContain('Bar: hello');
     expect(lines.join('\n')).toContain('embedSnapshotHeader is the active zTracker-injected snapshot label');
   });
+
+  const effectiveSettingsSnapshot = {
+    messageId: 1,
+    connectionSource: 'saved' as const,
+    profileId: 'profile-1',
+    api: 'textgenerationwebui',
+    presetName: 'Non Reasoning Sampler',
+    instructName: 'Gemma-4  (no reasoning)',
+    contextName: 'Gemma-4  (no reasoning)',
+    instructEnabled: true,
+    reasoningTemplateName: 'Gemma 4',
+    promptEngineeringMode: 'json',
+    maxTokens: 512,
+    overridePayload: {},
+    requestMessages: [],
+    sanitizedPrompt: [],
+  };
+
+  test('records the effective profile settings with no fallback fields for a fully recorded profile', () => {
+    jest.spyOn(console, 'debug').mockImplementation(() => undefined);
+
+    captureTrackerRequestDebugSnapshot(settingsManager, {
+      ...effectiveSettingsSnapshot,
+      settingsSource: 'profile',
+      fallbackFields: [],
+      startReplyWith: '<|channel>thought\n<channel|>',
+    });
+
+    const snapshot = getLastTrackerRequestDebugSnapshot();
+    expect(snapshot).toMatchObject({
+      settingsSource: 'profile',
+      fallbackFields: [],
+      instructName: 'Gemma-4  (no reasoning)',
+      startReplyWith: '<|channel>thought\n<channel|>',
+      reasoningTemplateName: 'Gemma 4',
+    });
+    const text = formatTrackerRequestDebugSnapshot(snapshot).join('\n');
+    expect(text).toContain('settingsSource: profile');
+    expect(text).toContain('fallbackFields: none');
+    expect(text).toContain('startReplyWith: "<|channel>thought\\n<channel|>"');
+    expect(text).toContain('reasoningTemplate: Gemma 4');
+    expect(text).toContain('instructEnabled: true');
+  });
+
+  test('lists a profile field that fell back to the live settings and marks an omitted prefill', () => {
+    jest.spyOn(console, 'debug').mockImplementation(() => undefined);
+
+    captureTrackerRequestDebugSnapshot(settingsManager, {
+      ...effectiveSettingsSnapshot,
+      instructName: 'Live Instruct',
+      settingsSource: 'profile',
+      fallbackFields: ['instruct'],
+      startReplyWith: '',
+      startReplyWithOmitted: true,
+    });
+
+    const text = formatTrackerRequestDebugSnapshot(getLastTrackerRequestDebugSnapshot()).join('\n');
+    expect(text).toContain('instructName: Live Instruct');
+    expect(text).toContain('fallbackFields: instruct');
+    expect(text).toContain('startReplyWith: omitted');
+  });
 });
