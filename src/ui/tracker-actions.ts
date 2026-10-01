@@ -23,6 +23,17 @@ import { buildAllowlistedWorldInfoText } from '../world-info-allowlist.js';
 import { loadWorldInfoBookByName } from '../sillytavern-world-info.js';
 import { parseResponse } from '../parser.js';
 import {
+  applyPrefill,
+  finishTrackerReply,
+  isUnclosedReasoningReply,
+  lookupFormattingObjects,
+  markUnclosedReasoningReply,
+  resolveEffectiveConnectionSettings,
+  UNCLOSED_REASONING_ERROR,
+  type ConnectionSettingsHost,
+  type EffectiveConnectionSettings,
+} from '../connection-settings.js';
+import {
   hasSystemPromptPreset,
   getSystemPromptPresetContent,
   insertSystemPromptMessage,
@@ -269,14 +280,17 @@ function trimTextCompletionResponse(
   };
 }
 
+/**
+ * Builds the wrapped Text Completion prompt from the effective instruct/context objects. With instruct
+ * mode off the messages are joined as plain text (matching the host's no-instruct behaviour).
+ * Returns undefined when the wrapped path cannot be used, so the caller can fall back to the host's
+ * own request processing.
+ */
 async function buildStoryStringWrappedTextCompletionPrompt(options: {
   requestMessages: Message[];
-  context: {
-    powerUserSettings?: {
-      instruct?: Record<string, unknown>;
-      context?: Record<string, unknown>;
-    };
-  };
+  instructEnabled: boolean;
+  instructSettings?: Record<string, unknown>;
+  contextSettings?: Record<string, unknown>;
   textCompletionService: {
     constructPrompt?: (
       prompt: Message[],
@@ -286,8 +300,16 @@ async function buildStoryStringWrappedTextCompletionPrompt(options: {
   };
   formatterLoader?: () => Promise<TextCompletionStoryStringFormatter | undefined>;
 }): Promise<{ prompt: string; stoppingStrings: string[]; instructSettings: Record<string, unknown> } | undefined> {
-  const activeInstructSettings = options.context.powerUserSettings?.instruct;
-  const activeContextSettings = options.context.powerUserSettings?.context;
+  if (!options.instructEnabled) {
+    return {
+      prompt: options.requestMessages.map((message) => message.content).join('\n\n'),
+      stoppingStrings: [],
+      instructSettings: {},
+    };
+  }
+
+  const activeInstructSettings = options.instructSettings;
+  const activeContextSettings = options.contextSettings;
   if (!activeInstructSettings || !activeContextSettings || typeof options.textCompletionService.constructPrompt !== 'function') {
     return undefined;
   }
@@ -537,18 +559,12 @@ export function createTrackerActions(options: {
       : Array.isArray(connectionManager?.profiles)
         ? connectionManager.profiles.find((profile: any) => normalizeRuntimeString(profile?.id) === selectedProfileId)
         : undefined;
-    const activePresetName = normalizeRuntimeString(context?.getPresetManager?.()?.getSelectedPresetName?.());
-    const activeInstructName = normalizeRuntimeString(context?.powerUserSettings?.instruct?.preset);
-    const activeContextName = normalizeRuntimeString(context?.powerUserSettings?.context?.preset);
     const activeSystemPromptName = normalizeRuntimeString(context?.powerUserSettings?.sysprompt?.name);
     const activeApi = resolveActiveRuntimeApi(context, selectedProfile);
 
     return {
       ...(selectedProfile && typeof selectedProfile === 'object' ? selectedProfile : {}),
       ...(activeApi ? { resolvedApi: activeApi } : {}),
-      ...(activePresetName ? { preset: activePresetName } : {}),
-      ...(activeInstructName ? { instruct: activeInstructName } : {}),
-      ...(activeContextName ? { context: activeContextName } : {}),
       ...(activeSystemPromptName ? { sysprompt: activeSystemPromptName } : {}),
     };
   }
@@ -685,7 +701,6 @@ export function createTrackerActions(options: {
       currentTracker,
       ...getSchemaRenderMetadata(prepared.chatJsonValue),
       makeRequest: makeRequestFactory(messageId, prepared.settings, {
-        instructName: prepared.transportInstructName,
         resolvedConnection: prepared.resolvedConnection,
         moduleId,
         moduleName: getModuleDebugName(moduleId),
@@ -699,6 +714,14 @@ export function createTrackerActions(options: {
       const result = await options.makeRequest(options.messages, {
         json_schema: { name: options.schemaName, strict: true, value: options.schema },
       });
+      if (isUnclosedReasoningReply(result) && typeof result?.content === 'string') {
+        // A reply that opened a reasoning block and never closed it is only usable if the rest parses.
+        try {
+          return parseResponse(result.content, 'json', { schema: options.schema });
+        } catch {
+          throw new Error(UNCLOSED_REASONING_ERROR);
+        }
+      }
       return result?.content;
     }
 
@@ -826,7 +849,8 @@ export function createTrackerActions(options: {
   }
 
   /**
-   * Sends text-completion tracker requests with a request-local instruct preset.
+   * Sends text-completion tracker requests formatted with the effective instruct/context templates,
+   * sampler preset, stop strings and secret of the Module's connection.
    * This currently depends on SillyTavern's internal TextCompletionService because
    * the public request service does not expose an instruct-name override yet.
    * Keep this path isolated so it can move back to the stable request service once
@@ -839,11 +863,11 @@ export function createTrackerActions(options: {
     connectionSource: 'active' | 'saved';
     selectedApiType: string | undefined;
     requestMessages: Message[];
-    instructName?: string;
+    effective: EffectiveConnectionSettings;
     overridePayload?: Record<string, any>;
     maxTokens: number;
   }): Promise<ExtractedData | undefined> {
-    const context = SillyTavern.getContext() as {
+    const context = SillyTavern.getContext() as ConnectionSettingsHost & {
       TextCompletionService?: {
         constructPrompt?: (
           prompt: Message[],
@@ -851,6 +875,11 @@ export function createTrackerActions(options: {
           instructSettings?: Record<string, unknown>,
         ) => string;
         createRequestData?: (requestData: Record<string, any>) => Record<string, any>;
+        presetToGeneratePayload?: (
+          preset: Record<string, unknown>,
+          overridePreset?: Record<string, unknown>,
+          overridePayload?: Record<string, any>,
+        ) => Record<string, any>;
         processRequest?: (
           requestData: Record<string, any>,
           requestOptions: { presetName?: string; instructName?: string; instructSettings?: Record<string, any> },
@@ -863,11 +892,9 @@ export function createTrackerActions(options: {
           signal?: AbortSignal,
         ) => Promise<ExtractedData | undefined>;
       };
-      powerUserSettings?: {
-        instruct?: Record<string, unknown>;
-        context?: Record<string, unknown>;
-      };
     };
+    const { effective } = options;
+    const secretId = options.connectionSource === 'saved' ? options.profile?.['secret-id'] : undefined;
     const textCompletionService = context?.TextCompletionService;
     if (typeof textCompletionService?.processRequest !== 'function') {
       throw new Error('SillyTavern text-completion request API is unavailable.');
@@ -880,9 +907,12 @@ export function createTrackerActions(options: {
     localPendingRequestAborters.set(requestId, abortController);
 
     try {
+      const formatting = lookupFormattingObjects(effective, context);
       const wrappedPrompt = await buildStoryStringWrappedTextCompletionPrompt({
         requestMessages: options.requestMessages,
-        context,
+        instructEnabled: effective.instructEnabled,
+        instructSettings: formatting.instruct,
+        contextSettings: formatting.context,
         textCompletionService,
         formatterLoader: textCompletionStoryStringFormatterLoader,
       });
@@ -893,21 +923,38 @@ export function createTrackerActions(options: {
       ) {
         beforeRequestStartHook?.();
 
-        const requestData = textCompletionService.createRequestData.call(textCompletionService, {
+        const stoppingStrings = [...new Set([...wrappedPrompt.stoppingStrings, ...effective.stopStrings])];
+        let requestData = textCompletionService.createRequestData.call(textCompletionService, {
           stream: false,
           prompt: wrappedPrompt.prompt,
           max_tokens: options.maxTokens,
           model: options.profile?.model,
           api_type: options.selectedApiType ?? options.profile?.api,
           api_server: getProfileApiServer(options.profile, options.connectionSource),
-          ...(wrappedPrompt.stoppingStrings.length > 0
+          ...(secretId ? { secret_id: secretId } : {}),
+          ...(stoppingStrings.length > 0
             ? {
-                stop: wrappedPrompt.stoppingStrings,
-                stopping_strings: wrappedPrompt.stoppingStrings,
+                stop: stoppingStrings,
+                stopping_strings: stoppingStrings,
               }
             : {}),
           ...(options.overridePayload ?? {}),
         });
+
+        // The same mechanism the host's processRequest uses to merge a sampler preset into a payload.
+        if (effective.presetName && typeof textCompletionService.presetToGeneratePayload === 'function') {
+          const samplerPreset = context.getPresetManager?.('textgenerationwebui')?.getCompletionPresetByName?.(effective.presetName);
+          if (samplerPreset && typeof samplerPreset === 'object') {
+            requestData = textCompletionService.presetToGeneratePayload.call(
+              textCompletionService,
+              samplerPreset as Record<string, unknown>,
+              {},
+              requestData,
+            );
+          } else {
+            console.warn(`zTracker: sampler preset "${effective.presetName}" was not found; continuing with default sampler settings.`);
+          }
+        }
 
         const response = await textCompletionService.sendRequest.call(
           textCompletionService,
@@ -926,7 +973,8 @@ export function createTrackerActions(options: {
       beforeRequestStartHook?.();
       const requestOptions = {
         instructSettings: {},
-        ...(options.instructName ? { instructName: options.instructName } : {}),
+        ...(effective.presetName ? { presetName: effective.presetName } : {}),
+        ...(effective.instructEnabled && effective.instructName ? { instructName: effective.instructName } : {}),
       };
 
       return await textCompletionService.processRequest.call(
@@ -938,6 +986,8 @@ export function createTrackerActions(options: {
           model: options.profile?.model,
           api_type: options.selectedApiType ?? options.profile?.api,
           api_server: getProfileApiServer(options.profile, options.connectionSource),
+          ...(secretId ? { secret_id: secretId } : {}),
+          ...(effective.stopStrings.length > 0 ? { stopping_strings: effective.stopStrings } : {}),
           ...(options.overridePayload ?? {}),
         },
         requestOptions,
@@ -1019,17 +1069,33 @@ export function createTrackerActions(options: {
     persistResolvedTrackerUpdate,
   });
 
+  /** Resolves the saved-profile-or-live effective connection/formatting settings for one connection. */
+  function resolveEffectiveSettings(resolvedConnection: ResolvedTrackerConnection, context: unknown) {
+    return resolveEffectiveConnectionSettings({
+      connectionSource: resolvedConnection.source,
+      profile: resolvedConnection.profile,
+      isTextCompletion: resolvedConnection.apiMap?.selected === 'textgenerationwebui',
+      host: context as ConnectionSettingsHost,
+    });
+  }
+
+  /**
+   * Builds the request function for one tracker run. Unless `rawReply` is set it also applies the
+   * effective Start Reply With as an assistant prefill and finishes every reply (prefill restore,
+   * reasoning stripping) before the parsers see it.
+   */
   function makeRequestFactory(
     messageId: number,
     settings: TrackerModuleSettings,
-    options: { instructName?: string; resolvedConnection?: ResolvedTrackerConnection; moduleId?: string; moduleName?: string } = {},
+    options: { resolvedConnection?: ResolvedTrackerConnection; moduleId?: string; moduleName?: string; rawReply?: boolean } = {},
   ) {
-    return (requestMessages: Message[], overideParams?: any): Promise<ExtractedData | undefined> => {
+    return (rawRequestMessages: Message[], overideParams?: any): Promise<ExtractedData | undefined> => {
       return new Promise((resolve, reject) => {
         const abortController = new AbortController();
-        const context = SillyTavern.getContext() as {
+        const context = SillyTavern.getContext() as ConnectionSettingsHost & {
           name1?: string;
           mainApi?: string;
+          parseReasoningFromString?: Parameters<typeof finishTrackerReply>[1]['parseReasoning'];
           powerUserSettings?: {
             preset?: string;
             instruct?: {
@@ -1042,6 +1108,33 @@ export function createTrackerActions(options: {
         const profile = resolvedConnection.profile;
         const selectedApiMap = resolvedConnection.apiMap;
         const selectedApi = selectedApiMap?.selected;
+        const effective = resolveEffectiveSettings(resolvedConnection, context);
+        const jsonSchemaSent = Boolean(overideParams?.json_schema);
+        const startReplyWith = typeof context.substituteParams === 'function' && effective.startReplyWith
+          ? context.substituteParams(effective.startReplyWith)
+          : effective.startReplyWith;
+        const prefilled = options.rawReply
+          ? { messages: rawRequestMessages, prefill: '', omitted: false }
+          : applyPrefill(rawRequestMessages, { prefill: startReplyWith, jsonSchemaSent, reasoningTemplate: effective.reasoningTemplate });
+        const requestMessages = prefilled.messages;
+        if (prefilled.omitted) {
+          console.warn('zTracker: Start Reply With was omitted because it leaves a reasoning block open and a structured-output schema is sent.');
+          debugLog(settingsManager, 'start reply with omitted', { startReplyWith });
+        }
+        // Puts the sent prefill back and strips reasoning; a no-op for probe requests and non-text replies.
+        const finishReply = (data: ExtractedData | undefined): ExtractedData | undefined => {
+          if (options.rawReply || !data || typeof data.content !== 'string') return data;
+          const finished = finishTrackerReply(data as { content: string; reasoning?: unknown }, {
+            prefill: prefilled.prefill,
+            jsonSchemaSent,
+            reasoningTemplate: effective.reasoningTemplate,
+            parseReasoning: context.parseReasoningFromString,
+          });
+          if (finished.content === data.content && !finished.unclosedReasoning) return data;
+          const result = { ...data, content: finished.content };
+          if (finished.unclosedReasoning) markUnclosedReasoningReply(result);
+          return result;
+        };
         const sanitizedPrompt = sanitizeMessagesForGeneration(requestMessages, {
           inlineNamesIntoContent: selectedApi === 'textgenerationwebui',
           userAlignmentMessage:
@@ -1060,10 +1153,16 @@ export function createTrackerActions(options: {
           apiType: selectedApiMap?.type,
           model: typeof profile?.model === 'string' ? profile.model : undefined,
           apiServer: getProfileApiServer(profile, resolvedConnection.source),
-          presetName: typeof profile?.preset === 'string' ? profile.preset : undefined,
-          instructName: options.instructName,
-          contextName: typeof profile?.context === 'string' ? profile.context : undefined,
+          presetName: effective.presetName,
+          instructName: effective.instructName,
+          contextName: effective.contextName,
           syspromptName: typeof profile?.sysprompt === 'string' ? profile.sysprompt : undefined,
+          settingsSource: effective.source,
+          fallbackFields: effective.fallbackFields,
+          instructEnabled: selectedApi === 'textgenerationwebui' ? effective.instructEnabled : undefined,
+          startReplyWith: prefilled.prefill,
+          startReplyWithOmitted: prefilled.omitted,
+          reasoningTemplateName: effective.reasoningTemplate?.name,
           promptEngineeringMode: settings.promptEngineeringMode,
           maxTokens: settings.maxResponseToken,
           embedSnapshotHeader: settings.embedZTrackerSnapshotHeader,
@@ -1080,10 +1179,10 @@ export function createTrackerActions(options: {
               connectionSource: resolvedConnection.source,
               selectedApiType: selectedApiMap?.type,
               requestMessages: sanitizedPrompt,
-              instructName: options.instructName,
+              effective,
               overridePayload: overideParams ?? {},
               maxTokens: settings.maxResponseToken,
-            }).then(resolve, reject);
+            }).then((data) => resolve(finishReply(data)), reject);
             return;
           }
 
@@ -1112,7 +1211,7 @@ export function createTrackerActions(options: {
                 pendingRequests.delete(messageId);
                 if (error) return reject(error);
                 if (!data) return reject(new DOMException('Request aborted by user', 'AbortError'));
-                resolve(data as ExtractedData | undefined);
+                resolve(finishReply(data as ExtractedData | undefined));
               },
             },
           );
@@ -1153,10 +1252,12 @@ export function createTrackerActions(options: {
     const syntheticMessageId = nextGrammarTestMessageId;
     nextGrammarTestMessageId -= 1;
 
+    // rawReply keeps the probe a plain schema check: no Start Reply With prefill, no reasoning handling.
     const makeRequest = makeRequestFactory(syntheticMessageId, settings, {
       resolvedConnection,
       moduleId,
       moduleName: getModuleDebugName(moduleId),
+      rawReply: true,
     });
 
     try {
@@ -1246,17 +1347,11 @@ export function createTrackerActions(options: {
       }
     }
 
-    const trackerInstructName = settings.trackerSystemPromptMode === 'selected' ? profile.instruct : undefined;
-    const trackerContextName = settings.trackerSystemPromptMode === 'selected' ? profile.context : undefined;
-    const trackerPresetName = settings.trackerSystemPromptMode === 'selected' ? profile.preset : undefined;
-
     const promptPresetSelections = getPromptPresetSelections(apiMap.selected, {
       context,
+      effective: resolveEffectiveSettings(resolvedConnection, context),
       trackerSystemPromptMode: settings.trackerSystemPromptMode,
       trackerSystemPromptName: syspromptName,
-      trackerInstructName,
-      trackerContextName,
-      trackerPresetName,
     });
     const includePromptNames = apiMap.selected !== 'textgenerationwebui';
 
@@ -1352,7 +1447,6 @@ export function createTrackerActions(options: {
       chatJsonValue,
       chatHtmlValue,
       messages,
-      transportInstructName: promptPresetSelections.instructName,
     };
   }
 
@@ -1493,7 +1587,6 @@ export function createTrackerActions(options: {
           chatJsonValue,
           chatHtmlValue,
           messages,
-          transportInstructName,
         } = await prepareTrackerGeneration(id, { moduleId });
         if (token.cancelled) {
           return false;
@@ -1502,7 +1595,6 @@ export function createTrackerActions(options: {
 
         const { partsOrder, partsMeta } = getSchemaRenderMetadata(chatJsonValue);
         const makeRequest = makeRequestFactory(id, settings, {
-          instructName: transportInstructName,
           resolvedConnection,
           moduleId,
           moduleName: getModuleDebugName(moduleId),
@@ -1575,7 +1667,6 @@ export function createTrackerActions(options: {
           chatJsonValue,
           chatHtmlValue,
           messages,
-          transportInstructName,
         } = await prepareTrackerGeneration(id, { moduleId });
         if (token.cancelled) {
           return false;
@@ -1588,7 +1679,6 @@ export function createTrackerActions(options: {
         }
 
         const makeRequest = makeRequestFactory(id, settings, {
-          instructName: transportInstructName,
           resolvedConnection,
           moduleId,
           moduleName: getModuleDebugName(moduleId),

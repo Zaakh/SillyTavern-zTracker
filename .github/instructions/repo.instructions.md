@@ -92,7 +92,7 @@ These instructions apply to all files in this repository.
 - Prefer `SillyTavern.getContext()` APIs over importing SillyTavern internals.
 - Be careful with prompt interception (`generate_interceptor`): clone inputs if mutations must be ephemeral.
 - Preserve speaker attribution during tracker generation sanitization. SillyTavern prompt assembly may keep instruct/text-completion speaker names on `message.source.name` instead of flattening them into `message.content`, and dropping that field can reduce the final prompt to anonymous `[INST]...[/INST]` turns.
-- Tracker-generation and injection requests MUST use the configs currently active in SillyTavern (e.g. the active instruct template), as the saved settings in the selected connection profile may differ from the active settings. 
+- Tracker-generation requests take their connection/formatting settings (preset, instruct, context, instruct on/off, stop strings, Start Reply With, reasoning template) from the Module's saved connection profile, falling back to the live SillyTavern value per field the profile does not record. Modules on the live connection use the live values. The system prompt is selected only by the Module's System Prompt Source. The logic lives in `src/connection-settings.ts`. Normal-chat injection (`generate_interceptor`) is unaffected and always runs against the live chat. 
 
 ## GitHub Copilot skill
 - For SillyTavern extension development work, load `.github/skills/sillytavern-extension-development/SKILL.md`.

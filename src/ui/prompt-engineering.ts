@@ -3,6 +3,7 @@ import type { Message } from 'sillytavern-utils-lib';
 import type { ExtractedData } from 'sillytavern-utils-lib/types';
 import type { TrackerModuleSettings } from '../config.js';
 import { PromptEngineeringMode } from '../config.js';
+import { isUnclosedReasoningReply, UNCLOSED_REASONING_ERROR } from '../connection-settings.js';
 import { parseResponse } from '../parser.js';
 import { schemaToExample, schemaToPromptSchema } from '../schema-to-example.js';
 
@@ -145,7 +146,8 @@ export function createPromptEngineeringHelpers() {
         rawContent: response.content as string,
         error,
       });
-      throw error;
+      // A reply cut off inside a reasoning block fails to parse for an unrelated-looking reason; name the real cause.
+      throw isUnclosedReasoningReply(response) ? new Error(UNCLOSED_REASONING_ERROR) : error;
     }
   }
 

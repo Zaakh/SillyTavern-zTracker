@@ -136,6 +136,18 @@ describe('system prompt helpers', () => {
     ).toBe('Active Prompt');
   });
 
+  test('selected mode reads only the profile system prompt, never the profile preset', () => {
+    const context = {
+      getPresetManager: () => ({ getPresetList: () => ({ presets: [], preset_names: [] }) }),
+      powerUserSettings: { sysprompt: { name: 'Active Prompt' } },
+    };
+    const settings = { trackerSystemPromptMode: 'selected' as const, trackerSystemPromptSavedName: 'zTracker' };
+
+    expect(resolveTrackerSystemPromptName(settings, context, { sysprompt: 'Profile Prompt' })).toBe('Profile Prompt');
+    // A profile without a recorded system prompt falls back to the active one, even if it has a preset.
+    expect(resolveTrackerSystemPromptName(settings, context, { sysprompt: '  ', preset: 'Profile Preset' } as any)).toBe('Active Prompt');
+  });
+
   test('resolves saved system prompt in saved mode', () => {
     expect(
       resolveTrackerSystemPromptName(

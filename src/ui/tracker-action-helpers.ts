@@ -1,5 +1,6 @@
 import type { Message } from 'sillytavern-utils-lib';
 import type { TrackerModuleSettings } from '../config.js';
+import type { EffectiveConnectionSettings } from '../connection-settings.js';
 import { getArrayItemIdentityKey } from '../tracker-parts.js';
 
 /** Calculates tracker-part metadata once so render and regeneration flows can reuse the same schema hints. */
@@ -82,37 +83,26 @@ export function appendCurrentTrackerSnapshot(messages: Message[], tracker: unkno
     // Snapshot injection is best-effort; skip non-serializable structures.
   }
 }
-type PromptPresetManagerLike = {
-  getCompletionPresetByName?: (name?: string) => unknown;
-  getPresetList?: () => unknown;
-  getSelectedPresetName?: () => unknown;
-};
-
 type PromptPresetSelectionContextLike = {
-  getPresetManager?: (apiId?: string) => PromptPresetManagerLike | null | undefined;
   powerUserSettings?: Record<string, unknown> & {
-    instruct?: {
-      preset?: unknown;
-    } | null;
-    context?: {
-      preset?: unknown;
-    } | null;
     sysprompt?: {
       name?: unknown;
     } | null;
   };
 };
 
-/** Resolves tracker prompt selectors from the active SillyTavern runtime instead of stored profile prompt slots. */
+/**
+ * Resolves the prompt selectors passed to buildPrompt. Preset, instruct and context names come from
+ * the effective connection settings (saved profile, else live); the system prompt is selected only by
+ * the Module's System Prompt Source and is independent of which connection is used.
+ */
 export function getPromptPresetSelections(
   selectedApi: string,
   options: {
     context?: PromptPresetSelectionContextLike;
+    effective?: Pick<EffectiveConnectionSettings, 'presetName' | 'instructName' | 'contextName'>;
     trackerSystemPromptMode?: TrackerModuleSettings['trackerSystemPromptMode'];
     trackerSystemPromptName?: string;
-    trackerInstructName?: string;
-    trackerContextName?: string;
-    trackerPresetName?: string;
   } = {},
 ) {
   const normalizePromptPresetName = (value: unknown): string | undefined => {
@@ -124,25 +114,9 @@ export function getPromptPresetSelections(
     return trimmedValue.length > 0 ? trimmedValue : undefined;
   };
 
-  const activePresetName = normalizePromptPresetName(options.context?.getPresetManager?.()?.getSelectedPresetName?.());
   const activeSystemPromptName = normalizePromptPresetName(options.context?.powerUserSettings?.sysprompt?.name);
-  const activeInstructName = normalizePromptPresetName(options.context?.powerUserSettings?.instruct?.preset);
-  const activeContextName = normalizePromptPresetName(options.context?.powerUserSettings?.context?.preset);
 
-  const presetName = selectedApi === 'textgenerationwebui'
-    ? undefined
-    : normalizePromptPresetName(options.trackerPresetName) ?? activePresetName;
-
-  const instructName = selectedApi === 'textgenerationwebui'
-    ? options.trackerSystemPromptMode === 'selected'
-      ? normalizePromptPresetName(options.trackerInstructName)
-      : activeInstructName
-    : undefined;
-  const contextName = selectedApi === 'textgenerationwebui'
-    ? options.trackerSystemPromptMode === 'selected'
-      ? normalizePromptPresetName(options.trackerContextName)
-      : activeContextName
-    : undefined;
+  const { presetName, instructName, contextName } = options.effective ?? {};
   const syspromptName = options.trackerSystemPromptMode === 'saved' || options.trackerSystemPromptMode === 'selected'
     ? selectedApi === 'textgenerationwebui'
       ? normalizePromptPresetName(options.trackerSystemPromptName)
