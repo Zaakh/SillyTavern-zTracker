@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-10-01
+
 ### Added
 
 - **Start Reply With** is now applied to tracker requests as a reply prefill (after the reply cue on Text Completion, as a last assistant message on Chat Completion).
