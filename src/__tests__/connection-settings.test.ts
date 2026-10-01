@@ -313,6 +313,17 @@ describe('finishTrackerReply', () => {
     expect(result.content).toBe('{"time":"10"}');
   });
 
+  test('strips the reasoning block from a live Gemma 4 reasoning-profile reply (captured 2026-10-01, reasoning shortened)', () => {
+    const capturedReply =
+      `${template.prefix}Thinking Process:\n\n1.  **Analyze the Request:** ...\n5.  **Construct the Final JSON:** wrap in \`\`\`json.${template.suffix}` +
+      '```json\n{\n  "arc": "The confrontation at the ancient ruins",\n  "stakes": "The kingdom\'s survival hinges on the prophecy."\n}\n```';
+
+    const result = finishTrackerReply({ content: capturedReply }, { ...base, prefill: '' });
+
+    expect(result.unclosedReasoning).toBe(false);
+    expect(result.content).toBe('```json\n{\n  "arc": "The confrontation at the ancient ruins",\n  "stakes": "The kingdom\'s survival hinges on the prophecy."\n}\n```');
+  });
+
   test('returns a reply without reasoning unchanged', () => {
     expect(finishTrackerReply({ content: '{"time":"10"}' }, { ...base, prefill: '' })).toEqual({ content: '{"time":"10"}', unclosedReasoning: false });
   });
