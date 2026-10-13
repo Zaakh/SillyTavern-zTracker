@@ -1,4 +1,4 @@
-import { FC } from 'react';
+import { FC, ReactNode } from 'react';
 import { PresetItem } from 'sillytavern-utils-lib/components/react';
 import { TrackerModule, TrackerModuleSettings } from '../../config.js';
 import type { SchemaDialectFinding } from './schema-editor-state.js';
@@ -47,6 +47,7 @@ export const TrackerGenerationSection: FC<{
   restoreSchemaToDefault: () => Promise<void>;
   canGenerateSchemaHtml: boolean;
   generateSchemaHtmlFromSchema: () => void;
+  schemaGenerationControls?: ReactNode;
   systemPromptItems: PresetItem[];
   refreshSystemPromptState: () => void;
   showMissingSavedSystemPromptWarning: boolean;
@@ -92,6 +93,7 @@ export const TrackerGenerationSection: FC<{
   restoreSchemaToDefault,
   canGenerateSchemaHtml,
   generateSchemaHtmlFromSchema,
+  schemaGenerationControls,
   systemPromptItems,
   refreshSystemPromptState,
   showMissingSavedSystemPromptWarning,
@@ -142,6 +144,7 @@ export const TrackerGenerationSection: FC<{
         restoreSchemaToDefault={restoreSchemaToDefault}
         canGenerateSchemaHtml={canGenerateSchemaHtml}
         generateSchemaHtmlFromSchema={generateSchemaHtmlFromSchema}
+        schemaGenerationControls={schemaGenerationControls}
       />
 
       <SystemPromptSettingsSection

@@ -152,6 +152,16 @@ zTracker honors only a subset of JSON Schema: `type`, `properties`, `items`, `re
 
 Don't want to hand-write the HTML template? Click **Generate HTML from schema** (next to Restore Default) to derive one automatically from the current Schema JSON draft. It always overwrites the Schema HTML draft (click Save to apply) and is disabled while the Schema JSON draft is invalid.
 
+### Generating a schema and prompts from a description
+
+Instead of writing everything by hand, describe the tracker in the **Design brief** box (saved with the Module) and use the three buttons next to it (hover each for what it produces, reads and replaces):
+
+- **Generate schema** (model): drafts the Schema JSON from your brief. The draft is checked by the dialect lint and sent back for repair up to twice if it has errors or warnings; the best attempt stays in the draft with its findings shown. Nothing is saved until you click Save.
+- **Generate HTML from schema** (no model): derives the HTML from the Schema JSON draft, as above. Run it after a schema was generated.
+- **Generate prompts** (model): writes a system prompt and a base prompt from your brief and the current Schema JSON draft and **applies them immediately**, saving a system prompt preset named `zTracker-<module id>-generated` (overwritten on each run). Your globally selected SillyTavern system prompt is not changed.
+
+Both model-backed buttons use the **global active SillyTavern connection** (shown next to the buttons), not the Module's own connection settings. Replies get at least 2048 tokens, so use a connection with a context window large enough for the examples sent along (a small local model with a 2048-token context cannot fit a repair round). Overwrites are announced inline; there is no confirmation dialog, and you can cancel a running generation.
+
 In **Extensions → zTracker**, **Default Schema Preset** controls which preset definition you are editing and which preset new chats start from. Existing chats keep their own **Current Chat Schema Preset**, which you can change from the settings UI or **Extensions → Modify zTracker schema**.
 
 Changing the current chat schema preset is still a lazy switch, not a chat-wide migration. Future full tracker generations in that chat use the current chat schema preset, while existing trackers on older messages keep their saved message schema until you run a full tracker regeneration on that specific message. Parts-menu regeneration continues to use the saved message schema and tells you when a full tracker regeneration is required to move that message onto the current chat schema.

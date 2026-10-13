@@ -28,6 +28,7 @@ import { readTextFileViaPicker } from '../file-picker.js';
 import {
   checkModuleSystemPromptPresetExists,
   ensureModuleSystemPromptPresetInstalled,
+  overwriteModuleSystemPromptPreset,
   getCurrentGlobalSystemPromptName,
   hasSystemPromptPreset,
   listSystemPromptPresetNames,
@@ -40,6 +41,9 @@ import {
 } from './settings/preset-state.js';
 import { createImportedTrackerModule, parseImportedTrackerModule } from './settings/module-import.js';
 import { generateHtmlFromSchema } from './settings/generate-schema-html.js';
+import { SchemaGenerationControls } from './settings/SchemaGenerationControls.js';
+import { useSchemaGeneration, type SchemaGenerationOptions } from './settings/useSchemaGeneration.js';
+import { getGeneratedPresetName } from '../schema-generation.js';
 import {
   formatSchemaHtml,
   formatSchemaText,
@@ -197,7 +201,10 @@ export const ZTrackerSettings: FC<{
    * reports whether the response conformed to a trivial test schema - lets a user confirm their
    * backend actually honors the "Enforce schema via grammar sampling" setting before relying on it. */
   testGrammarSchemaEnforcement: (moduleId: string) => Promise<{ supported: boolean; message: string }>;
-}> = ({ testGrammarSchemaEnforcement }) => {
+  /** One request through the global active connection, used by "Generate schema" / "Generate prompts". */
+  requestWithActiveConnection: SchemaGenerationOptions['requestWithActiveConnection'];
+  getActiveConnectionLabel: () => string;
+}> = ({ testGrammarSchemaEnforcement, requestWithActiveConnection, getActiveConnectionLabel }) => {
   const forceUpdate = useForceUpdate();
   const settings = settingsManager.getSettings();
   const orderedModules = getOrderedTrackerModules(settings, { includeDisabled: true });
@@ -568,6 +575,61 @@ export const ZTrackerSettings: FC<{
     setSchemaHtmlText(generateHtmlFromSchema(JSON.parse(schemaText)));
   };
 
+  // Persists generated prompts for the captured Module id (never "the selected Module"): content, base
+  // prompt and saved-preset mode in one change, after the preset itself saved. Throws before modifying anything.
+  const applyGeneratedPrompts = useCallback(
+    async (moduleId: string, generated: { systemPrompt: string; prompt: string }) => {
+      const target = settingsManager.getSettings().modules?.find((candidate) => candidate.id === moduleId);
+      if (!target) throw new Error('The Module was removed while prompts were being generated.');
+      const savedName = getGeneratedPresetName(moduleId);
+      const saved = await overwriteModuleSystemPromptPreset({
+        systemPrompt: { mode: 'saved', savedName, content: generated.systemPrompt },
+      });
+      if (!saved) throw new Error('Could not save the system prompt preset in SillyTavern.');
+      updateAndRefresh((currentSettings) => {
+        const module = currentSettings.modules.find((candidate) => candidate.id === moduleId);
+        if (!module) return;
+        module.systemPrompt = { ...module.systemPrompt, mode: 'saved', savedName, content: generated.systemPrompt };
+        module.prompts = { ...module.prompts, prompt: generated.prompt };
+      });
+      refreshSystemPromptState();
+    },
+    [updateAndRefresh, refreshSystemPromptState],
+  );
+
+  const schemaGeneration = useSchemaGeneration({
+    module: selectedModule,
+    schemaPresetKey: moduleSettings.schemaPreset,
+    schemaText,
+    schemaDraftIsValid: schemaDraftState.isValid,
+    promptEngineeringMode: moduleSettings.promptEngineeringMode,
+    grammarEnforcementEnabled: moduleSettings.grammarEnforcementEnabled,
+    setSchemaText: handleSchemaValueChange,
+    applyGeneratedPrompts,
+    requestWithActiveConnection,
+  });
+  const schemaGenerationControls = (
+    <SchemaGenerationControls
+      brief={schemaGeneration.brief}
+      onBriefChange={(brief) =>
+        updateAndRefresh((currentSettings) => {
+          resolveOrCreateModule(currentSettings, selectedModuleId).designBrief = brief;
+        })
+      }
+      activeConnectionLabel={getActiveConnectionLabel()}
+      canGenerateSchema={schemaGeneration.canGenerateSchema}
+      canGeneratePrompts={schemaGeneration.canGeneratePrompts}
+      isRunning={schemaGeneration.isRunning}
+      runningKind={schemaGeneration.runningKind}
+      replacesDraft={schemaGeneration.replacesDraft}
+      replacesPrompts={schemaGeneration.replacesPrompts}
+      status={schemaGeneration.status}
+      onGenerateSchema={schemaGeneration.generateSchema}
+      onGeneratePrompts={schemaGeneration.generatePrompts}
+      onCancel={schemaGeneration.cancel}
+    />
+  );
+
   // Restore the current schema preset to its default values
   const restoreSchemaToDefault = async () => {
     const confirm = await SillyTavern.getContext().Popup.show.confirm(
@@ -897,6 +959,7 @@ export const ZTrackerSettings: FC<{
                 restoreSchemaToDefault={restoreSchemaToDefault}
                 canGenerateSchemaHtml={canGenerateSchemaHtml}
                 generateSchemaHtmlFromSchema={generateSchemaHtmlFromSchema}
+                schemaGenerationControls={schemaGenerationControls}
                 systemPromptItems={systemPromptItems}
                 refreshSystemPromptState={refreshSystemPromptState}
                 showMissingSavedSystemPromptWarning={showMissingSavedSystemPromptWarning}

@@ -32,7 +32,7 @@ if (!Handlebars.helpers['join']) {
 
 // --- Main Application Entry ---
 
-function renderReactSettings(testGrammarSchemaEnforcement: TrackerActions['testGrammarSchemaEnforcement']) {
+function renderReactSettings(actions: Pick<TrackerActions, 'testGrammarSchemaEnforcement' | 'requestWithActiveConnection' | 'getActiveConnectionLabel'>) {
   const settingsContainer = document.getElementById('extensions_settings');
   if (!settingsContainer) {
     console.error('zTracker: Extension settings container not found.');
@@ -49,7 +49,11 @@ function renderReactSettings(testGrammarSchemaEnforcement: TrackerActions['testG
   const root = createRoot(reactRootEl);
   root.render(
     <React.StrictMode>
-      <ZTrackerSettings testGrammarSchemaEnforcement={testGrammarSchemaEnforcement} />
+      <ZTrackerSettings
+        testGrammarSchemaEnforcement={actions.testGrammarSchemaEnforcement}
+        requestWithActiveConnection={actions.requestWithActiveConnection}
+        getActiveConnectionLabel={actions.getActiveConnectionLabel}
+      />
     </React.StrictMode>,
   );
 }
@@ -68,7 +72,7 @@ async function main(isFreshInstall: boolean) {
     importMetaUrl: import.meta.url,
   });
 
-  renderReactSettings(actions.testGrammarSchemaEnforcement);
+  renderReactSettings(actions);
   initializeGlobalUI({
     globalContext,
     settingsManager,

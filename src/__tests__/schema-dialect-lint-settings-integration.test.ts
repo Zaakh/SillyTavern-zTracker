@@ -73,6 +73,7 @@ jest.unstable_mockModule('../system-prompt.js', () => ({
   listSystemPromptPresetNames: () => [],
   shouldWarnAboutSharedSystemPromptSelection: () => false,
   ensureModuleSystemPromptPresetInstalled: jest.fn(async () => false),
+  overwriteModuleSystemPromptPreset: jest.fn(async () => true),
   checkModuleSystemPromptPresetExists: () => true,
 }));
 
@@ -173,14 +174,14 @@ describe('Schema dialect lint wired into the real Settings UI (openspec: add-sch
     root = undefined;
   });
 
-  function renderSettings() {
+  function renderSettings(requestWithActiveConnection: (...args: any[]) => Promise<string> = jest.fn<() => Promise<string>>()) {
     const container = document.getElementById('root');
     if (!container) {
       throw new Error('Missing root container');
     }
     root = createRoot(container);
     act(() => {
-      root?.render(React.createElement(ZTrackerSettings, { testGrammarSchemaEnforcement: jest.fn(async () => ({ supported: true, message: '' })) }));
+      root?.render(React.createElement(ZTrackerSettings, { testGrammarSchemaEnforcement: jest.fn(async () => ({ supported: true, message: '' })), requestWithActiveConnection, getActiveConnectionLabel: () => 'the active connection' }));
     });
     return container;
   }
@@ -272,5 +273,28 @@ describe('Schema dialect lint wired into the real Settings UI (openspec: add-sch
 
     controls = getSchemaControls(container);
     expect(controls.saveSchemaJsonButton.disabled).toBe(false);
+  });
+
+  test('a generated draft with error findings still blocks the Schema JSON save (openspec: add-llm-schema-generation)', async () => {
+    const cleanSchema = { type: 'object', description: 'x', properties: { mood: { type: 'string', description: 'x' } }, required: ['mood'] };
+    mockSettings = createMockSettings(cleanSchema, '<div>{{data.mood}}</div>');
+    mockSettings.modules[0].designBrief = 'track the mood';
+    // Every reply has an error-level finding (array without items), so the loop exhausts its attempts.
+    const request = jest.fn<() => Promise<string>>(async () => JSON.stringify(ERRORING_SCHEMA_VALUE));
+    const container = renderSettings(request);
+
+    const generate = Array.from(container.querySelectorAll('button')).find((button) => button.title.startsWith('Generate schema'));
+    await act(async () => {
+      generate?.click();
+      for (let i = 0; i < 10; i += 1) await Promise.resolve();
+    });
+
+    expect(request).toHaveBeenCalledTimes(3);
+    const controls = getSchemaControls(container);
+    expect(JSON.parse(controls.schemaJsonTextarea.value).properties).toHaveProperty('tags');
+    expect(container.textContent).toContain('Cannot save Schema JSON:');
+    expect(controls.saveSchemaJsonButton.disabled).toBe(true);
+    // Nothing persisted by the generation itself.
+    expect(Object.keys(mockSettings.modules[0].schema.presets.default.value.properties)).toEqual(['mood']);
   });
 });

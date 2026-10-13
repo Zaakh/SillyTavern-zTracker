@@ -13,6 +13,10 @@ type SystemPromptPresetManager = {
   };
   getAllPresets?: () => string[];
   savePreset?: (name: string, settings: SystemPromptPreset, options?: { skipUpdate?: boolean }) => Promise<unknown>;
+  /** Host selection mechanism: option value for a preset name, select it, and read the selected name. */
+  findPreset?: (name: string) => unknown;
+  selectPreset?: (value: unknown) => void;
+  getSelectedPresetName?: () => string;
 };
 
 type SillyTavernContextLike = {
@@ -21,6 +25,7 @@ type SillyTavernContextLike = {
     prefer_character_prompt?: boolean;
     sysprompt?: {
       name?: string;
+      enabled?: boolean;
     } | null;
   };
 };
@@ -112,6 +117,42 @@ export async function ensureModuleSystemPromptPresetInstalled(
   if (manager.getCompletionPresetByName(trimmedName)) return false;
 
   await manager.savePreset(trimmedName, { name: trimmedName, content });
+  return true;
+}
+
+/**
+ * Saves a Module's system-prompt preset unconditionally (explicit user action only, e.g. "Generate
+ * prompts") and leaves the user's global system-prompt selection as it was. The host's savePreset
+ * selects the saved preset and force-enables system prompts (and with `skipUpdate` the preset stays
+ * missing from the in-memory list until reload), so the previous selection and enabled state are
+ * restored through the host's own select/checkbox afterwards (openspec: add-llm-schema-generation D10).
+ */
+export async function overwriteModuleSystemPromptPreset(
+  module: Pick<TrackerModule, 'systemPrompt'>,
+  context: SillyTavernContextLike = SillyTavern.getContext(),
+): Promise<boolean> {
+  const content = module.systemPrompt.content?.trim();
+  const name = module.systemPrompt.savedName.trim();
+  const manager = getSystemPromptPresetManager(context);
+  if (!content || !name || !manager?.savePreset) return false;
+
+  const previousName = getCurrentGlobalSystemPromptName(context);
+  const wasEnabled = context.powerUserSettings?.sysprompt?.enabled;
+
+  await manager.savePreset(name, { name, content });
+
+  if (previousName && previousName !== name && manager.findPreset && manager.selectPreset) {
+    manager.selectPreset(manager.findPreset(previousName));
+  }
+  const sysprompt = context.powerUserSettings?.sysprompt;
+  if (sysprompt && wasEnabled !== undefined && sysprompt.enabled !== wasEnabled) {
+    const checkbox = document.getElementById('sysprompt_enabled') as HTMLInputElement | null;
+    if (checkbox) {
+      checkbox.checked = wasEnabled;
+      checkbox.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    sysprompt.enabled = wasEnabled;
+  }
   return true;
 }
 

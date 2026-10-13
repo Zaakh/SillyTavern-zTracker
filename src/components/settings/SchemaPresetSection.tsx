@@ -1,4 +1,4 @@
-import { FC, useMemo } from 'react';
+import { FC, ReactNode, useMemo } from 'react';
 import { st_echo } from 'sillytavern-utils-lib/config';
 import { STButton, STSelect, STTextarea, PresetItem } from 'sillytavern-utils-lib/components/react';
 import type { SchemaDialectFinding } from './schema-editor-state.js';
@@ -53,6 +53,8 @@ export const SchemaPresetSection: FC<{
   restoreSchemaToDefault: () => Promise<void>;
   canGenerateSchemaHtml: boolean;
   generateSchemaHtmlFromSchema: () => void;
+  /** Design brief + LLM generation controls (openspec: add-llm-schema-generation), built by Settings. */
+  schemaGenerationControls?: ReactNode;
 }> = ({
   schemaPresetKey,
   schemaPresetItems,
@@ -87,6 +89,7 @@ export const SchemaPresetSection: FC<{
   restoreSchemaToDefault,
   canGenerateSchemaHtml,
   generateSchemaHtmlFromSchema,
+  schemaGenerationControls,
 }) => {
   const activeSchemaPresetItem = useMemo(
     () => schemaPresetItems.find((item) => item.value === schemaPresetKey),
@@ -231,11 +234,13 @@ export const SchemaPresetSection: FC<{
         </>
       ) : null}
 
+      {schemaGenerationControls}
+
       <div className="title_restorable">
         <span title="The JSON schema and HTML template used for tracker generation and rendering.">Schema</span>
         <STButton
           className="fa-solid fa-wand-magic-sparkles"
-          title="Generate HTML from the current Schema JSON (always overwrites the Schema HTML draft; click Save to apply)"
+          title="Generate HTML: mechanically derives the Schema HTML from the current Schema JSON draft (no model call). Replaces the Schema HTML draft; click Save to apply."
           onClick={generateSchemaHtmlFromSchema}
           disabled={!canGenerateSchemaHtml}
         />

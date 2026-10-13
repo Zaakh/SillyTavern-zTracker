@@ -316,6 +316,7 @@ jest.unstable_mockModule('../system-prompt.js', () => ({
   listSystemPromptPresetNames: listSystemPromptPresetNamesMock,
   shouldWarnAboutSharedSystemPromptSelection: () => false,
   ensureModuleSystemPromptPresetInstalled: ensureModuleSystemPromptPresetInstalledMock,
+  overwriteModuleSystemPromptPreset: jest.fn(async () => true),
   checkModuleSystemPromptPresetExists: checkModuleSystemPromptPresetExistsMock,
 }));
 
@@ -596,7 +597,7 @@ describe('zTracker settings connection source UI', () => {
     act(() => {
       // No suite in this file exercises JSON prompt-engineering mode, so a no-op stub is enough
       // to satisfy the required prop without needing real grammar-test behavior here.
-      root?.render(React.createElement(ZTrackerSettings, { testGrammarSchemaEnforcement: jest.fn() }));
+      root?.render(React.createElement(ZTrackerSettings, { testGrammarSchemaEnforcement: jest.fn(), requestWithActiveConnection: jest.fn(), getActiveConnectionLabel: () => "the active connection" }));
     });
     return container;
   }
