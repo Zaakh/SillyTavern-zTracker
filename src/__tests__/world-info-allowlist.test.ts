@@ -1,48 +1,77 @@
+import { jest } from '@jest/globals';
 import { buildAllowlistedWorldInfoText } from '../world-info-allowlist.js';
 
+const sources = (card: string[] = [], global: string[] = []) => ({
+  cardBooks: new Set(card),
+  globalBooks: new Set(global),
+  chatOpen: true,
+  cardLookupComplete: true,
+});
+
+const books: Record<string, any[]> = {
+  'The Bar': [
+    { uid: 10, key: ['bar'], content: 'Bar-content', comment: '', disable: false },
+    { uid: 11, key: ['bar'], content: 'Disabled', comment: '', disable: true },
+    { uid: 12, key: ['bar'], content: 'Bar-second', comment: '', disable: false },
+  ],
+  'Other': [{ uid: 1, key: ['o'], content: 'Other-content', comment: '', disable: false }],
+};
+const loadBookByName = jest.fn(async (name: string) => (books[name] ? { name, entries: books[name] } : null));
+
 describe('world info allowlist builder', () => {
-  test('includes allowlisted lorebook content fetched by name', async () => {
+  beforeEach(() => loadBookByName.mockClear());
+
+  test('an always row is loaded and injected; disabled entries and book headers are omitted', async () => {
     const text = await buildAllowlistedWorldInfoText({
-      allowlistBookNames: ['The Bar'],
-      allowlistEntryIds: [],
-      getActiveWorldInfos: async () => ({}),
-      loadBookByName: async (name) => {
-        if (name !== 'The Bar') return null;
-        return {
-          name: 'The Bar',
-          entries: [
-            { uid: 10, key: ['bar'], content: 'Bar-content', comment: '', disable: false },
-            { uid: 11, key: ['bar'], content: 'Disabled', comment: '', disable: true },
-          ],
-        };
-      },
+      rows: [{ book: 'The Bar', activeVia: [], entryIds: [] }],
+      sources: sources(),
+      loadBookByName,
     });
 
     expect(text).toContain('Bar-content');
     expect(text).not.toContain('Disabled');
-    expect(text).not.toContain('World Info (allowlisted)');
     expect(text).not.toContain('# The Bar');
   });
 
-  test('merges fetched books with active world infos without duplicate uids', async () => {
+  test('an unsatisfied scoped row is skipped without loading its book; a satisfied one is injected', async () => {
     const text = await buildAllowlistedWorldInfoText({
-      allowlistBookNames: ['Book A'],
-      allowlistEntryIds: [],
-      getActiveWorldInfos: async () => ({
-        'Book A': [{ uid: 1, key: ['a'], content: 'A1', comment: '', disable: false }],
-      }),
-      loadBookByName: async () => ({
-        name: 'Book A',
-        entries: [
-          { uid: 1, key: ['a'], content: 'A1-duplicate', comment: '', disable: false },
-          { uid: 2, key: ['a'], content: 'A2', comment: '', disable: false },
-        ],
-      }),
+      rows: [
+        { book: 'The Bar', activeVia: ['card'], entryIds: [] },
+        { book: 'Other', activeVia: ['global'], entryIds: [] },
+      ],
+      sources: sources([], ['other']),
+      loadBookByName,
     });
 
-    expect(text).toContain('A1');
-    expect(text).toContain('A2');
-    expect(text).not.toContain('A1-duplicate');
-    expect(text).not.toContain('# Book A');
+    expect(text).toBe('Other-content');
+    expect(loadBookByName).toHaveBeenCalledTimes(1);
+    expect(loadBookByName).toHaveBeenCalledWith('Other');
+  });
+
+  test('applies the per-row entry subset', async () => {
+    const text = await buildAllowlistedWorldInfoText({
+      rows: [{ book: 'The Bar', activeVia: ['card'], entryIds: [12] }],
+      sources: sources(['the bar']),
+      loadBookByName,
+    });
+
+    expect(text).toBe('Bar-second');
+  });
+
+  test('returns empty text when every row is skipped or the book cannot be loaded', async () => {
+    expect(
+      await buildAllowlistedWorldInfoText({
+        rows: [{ book: 'The Bar', activeVia: ['card'], entryIds: [] }],
+        sources: sources(),
+        loadBookByName,
+      }),
+    ).toBe('');
+    expect(
+      await buildAllowlistedWorldInfoText({
+        rows: [{ book: 'Missing', activeVia: [], entryIds: [] }],
+        sources: sources(),
+        loadBookByName,
+      }),
+    ).toBe('');
   });
 });

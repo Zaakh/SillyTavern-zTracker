@@ -2,6 +2,8 @@
 
 Status: **Completed**
 
+> Superseded for the allowlist data shape, per-book activation scope, and the UID list by `openspec/changes/add-world-info-scope` (capability `tracker-world-info-allowlist`).
+
 ## Summary
 Add a zTracker setting that controls whether **World Info (lorebooks)** are included when generating a tracker.
 
@@ -60,8 +62,7 @@ Then it filters that set by the allowlist.
 ## Implementation notes
 - New settings fields live in `ExtensionSettings`:
   - `trackerWorldInfoPolicyMode`: `include_all | exclude_all | allowlist`
-  - `trackerWorldInfoAllowlistBookNames`: `string[]`
-  - `trackerWorldInfoAllowlistEntryIds`: `number[]`
+  - `trackerWorldInfoAllowlist`: `{ book, activeVia, entryIds }[]` (see the superseding change)
 
 - Prompt building uses the `ignoreWorldInfo` flag in `sillytavern-utils-lib` `buildPrompt`.
 

@@ -20,6 +20,7 @@ import { characters, st_echo } from 'sillytavern-utils-lib/config';
 import { POPUP_RESULT, POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
 import { shouldIgnoreWorldInfoDuringTrackerBuild } from '../world-info-policy.js';
 import { buildAllowlistedWorldInfoText } from '../world-info-allowlist.js';
+import { createHostWorldInfoScopeDeps, resolveWorldInfoScopeSources } from '../world-info-scope.js';
 import { loadWorldInfoBookByName } from '../sillytavern-world-info.js';
 import { parseResponse } from '../parser.js';
 import {
@@ -1395,20 +1396,18 @@ export function createTrackerActions(options: {
     });
 
     if (trackerWorldInfoMode === TrackerWorldInfoPolicyMode.ALLOWLIST) {
-      const allowlistBookNames = settings.trackerWorldInfoAllowlistBookNames ?? [];
-      const allowlistEntryIds = settings.trackerWorldInfoAllowlistEntryIds ?? [];
-      if (allowlistBookNames.length > 0 || allowlistEntryIds.length > 0) {
+      const allowlistRows = settings.trackerWorldInfoAllowlist ?? [];
+      if (allowlistRows.length > 0) {
         try {
-          debugLog(settingsManager, 'allowlist injection starting', {
-            allowlistBookNames,
-            allowlistEntryIds,
-            characterId,
-          });
+          debugLog(settingsManager, 'allowlist injection starting', { allowlistRows });
+          const sources = await resolveWorldInfoScopeSources(
+            createHostWorldInfoScopeDeps(context, async () => Object.keys(await getWorldInfos(['global'], true))),
+            { card: allowlistRows.some((r) => r.activeVia.includes('card')), global: allowlistRows.some((r) => r.activeVia.includes('global')) },
+          );
           const worldInfoText = await buildAllowlistedWorldInfoText({
-            allowlistBookNames,
-            allowlistEntryIds,
+            rows: allowlistRows,
+            sources,
             debug: !!settings.debugLogging,
-            getActiveWorldInfos: () => getWorldInfos(['global', 'chat', 'character', 'persona'], true, characterId),
             loadBookByName: (name) => loadWorldInfoBookByName(name, { debug: !!settings.debugLogging }),
           });
           if (worldInfoText) {
@@ -1420,14 +1419,11 @@ export function createTrackerActions(options: {
               insertAt,
               systemCount: messages.filter((m: any) => m.role === 'system').length,
               injectedLength: worldInfoText.length,
-              allowlistBookNames,
+              allowlistBooks: allowlistRows.map((r) => r.book),
               preview: worldInfoText.slice(0, 200),
             });
           } else {
-            debugLog(settingsManager, 'allowlist produced empty worldInfoText', {
-              allowlistBookNames,
-              allowlistEntryIds,
-            });
+            debugLog(settingsManager, 'allowlist produced empty worldInfoText', { allowlistRows });
           }
         } catch (e) {
           console.warn('zTracker: failed to load allowlisted World Info; proceeding without it.', e);

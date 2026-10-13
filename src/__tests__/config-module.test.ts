@@ -17,6 +17,8 @@ import {
   migrateTrackerModuleAutoSettings,
   migrateTrackerModuleIncludeLists,
   migrateTrackerModuleSystemPromptContent,
+  migrateTrackerModuleWorldInfoAllowlists,
+  normalizeWorldInfoAllowlist,
   normalizeTrackerModuleIncludeList,
   pruneTrackerModuleIncludeReferences,
   readModuleChatSchemaPresetKey,
@@ -173,8 +175,7 @@ describe('tracker module defaults', () => {
         includeLastXMessages: 4,
         conversationRoleMode: 'all_assistant',
         worldInfoPolicyMode: 'allowlist',
-        worldInfoAllowlistBookNames: ['Book'],
-        worldInfoAllowlistEntryIds: [42],
+        worldInfoAllowlist: [{ book: 'Book', activeVia: [], entryIds: [] }],
       }),
     );
     expect(legacySettings.modules[0].schema).toEqual({
@@ -413,5 +414,66 @@ describe('pruneTrackerModuleIncludeReferences', () => {
       { target: 'self', count: 1 },
       { target: 'agenda', count: 1 },
     ]);
+  });
+});
+
+describe('normalizeWorldInfoAllowlist', () => {
+  test('converts legacy book names to always rows and ignores legacy entry UIDs', () => {
+    expect(
+      normalizeWorldInfoAllowlist({ worldInfoAllowlistBookNames: ['Lore A', 'Lore B'], worldInfoAllowlistEntryIds: [1] } as any),
+    ).toEqual([
+      { book: 'Lore A', activeVia: [], entryIds: [] },
+      { book: 'Lore B', activeVia: [], entryIds: [] },
+    ]);
+  });
+
+  test('sanitizes rows: blank/non-string/duplicate books, bad activeVia and entryIds', () => {
+    expect(
+      normalizeWorldInfoAllowlist({
+        worldInfoAllowlist: [
+          { book: ' Lore A ', activeVia: ['card', 'card', 'bogus', 'global'], entryIds: [3, 3, -1, 1.5, 'x', 0] },
+          { book: 'lore a', activeVia: ['global'], entryIds: [] },
+          { book: '   ' },
+          { book: 7 },
+          null,
+          'Plain',
+        ],
+      }),
+    ).toEqual([
+      { book: 'Lore A', activeVia: ['card', 'global'], entryIds: [3, 0] },
+      { book: 'Plain', activeVia: [], entryIds: [] },
+    ]);
+  });
+
+  test('tolerates missing or malformed input', () => {
+    expect(normalizeWorldInfoAllowlist(undefined)).toEqual([]);
+    expect(normalizeWorldInfoAllowlist({ worldInfoAllowlist: 'nope', worldInfoAllowlistBookNames: 5 })).toEqual([]);
+  });
+});
+
+describe('migrateTrackerModuleWorldInfoAllowlists', () => {
+  test('migrates legacy fields to rows, removes them, and is a no-op on the second run', () => {
+    const module = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
+    const generation = module.generation as any;
+    delete generation.worldInfoAllowlist;
+    generation.worldInfoAllowlistBookNames = ['Lore A', '', 7];
+    generation.worldInfoAllowlistEntryIds = [42];
+    const settings: any = { ...structuredClone(defaultSettings), modules: [module] };
+
+    expect(migrateTrackerModuleWorldInfoAllowlists(settings)).toBe(true);
+    expect(settings.modules[0].generation.worldInfoAllowlist).toEqual([{ book: 'Lore A', activeVia: [], entryIds: [] }]);
+    expect(settings.modules[0].generation).not.toHaveProperty('worldInfoAllowlistBookNames');
+    expect(settings.modules[0].generation).not.toHaveProperty('worldInfoAllowlistEntryIds');
+    expect(migrateTrackerModuleWorldInfoAllowlists(settings)).toBe(false);
+  });
+
+  test('repairs a Module with a missing or malformed allowlist and skips a Module without generation', () => {
+    const missing = createDefaultTrackerModule({ id: 'a', name: 'A', order: 0 });
+    (missing.generation as any).worldInfoAllowlist = 'oops';
+    const noGeneration: any = { id: 'b', name: 'B' };
+    const settings: any = { ...structuredClone(defaultSettings), modules: [missing, noGeneration] };
+
+    expect(migrateTrackerModuleWorldInfoAllowlists(settings)).toBe(true);
+    expect(settings.modules[0].generation.worldInfoAllowlist).toEqual([]);
   });
 });

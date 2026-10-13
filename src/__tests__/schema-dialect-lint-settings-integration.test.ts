@@ -131,8 +131,7 @@ function createMockSettings(schemaValue: object = ERRORING_SCHEMA_VALUE, schemaH
           skipCharacterCardInTrackerGeneration: false,
           conversationRoleMode: 'preserve',
           worldInfoPolicyMode: 'include_all',
-          worldInfoAllowlistBookNames: [],
-          worldInfoAllowlistEntryIds: [],
+          worldInfoAllowlist: [],
           includeModules: [{ target: 'self', count: 1 }],
         },
         injection: {

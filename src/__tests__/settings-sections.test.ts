@@ -295,8 +295,7 @@ describe('settings sections', () => {
   test('updates the world-info mode from the settings surface', () => {
     const settings = {
       trackerWorldInfoPolicyMode: TrackerWorldInfoPolicyMode.INCLUDE_ALL,
-      trackerWorldInfoAllowlistBookNames: [],
-      trackerWorldInfoAllowlistEntryIds: [],
+      trackerWorldInfoAllowlist: [],
     } as any;
     const updateAndRefresh = (updater: (current: any) => void) => updater(settings);
 
@@ -530,83 +529,122 @@ describe('settings sections', () => {
     expect(document.body.textContent).not.toContain('Schema enforcement is supported');
   });
 
-  test('refreshes, filters, adds, removes, and manually edits world-info allowlists', async () => {
-    const settings = {
-      trackerWorldInfoPolicyMode: TrackerWorldInfoPolicyMode.ALLOWLIST,
-      trackerWorldInfoAllowlistBookNames: ['Existing'],
-      trackerWorldInfoAllowlistEntryIds: [],
-    } as any;
-    const updateAndRefresh = (updater: (current: any) => void) => updater(settings);
+  function renderAllowlist(rows: any[]) {
+    const settings = { trackerWorldInfoPolicyMode: TrackerWorldInfoPolicyMode.ALLOWLIST, trackerWorldInfoAllowlist: rows } as any;
+    const rerender = () => {
+      act(() => root!.render(React.createElement(WorldInfoPolicySection, { settings, updateAndRefresh })));
+    };
+    const updateAndRefresh = (updater: (current: any) => void) => {
+      updater(settings);
+      rerender();
+    };
+    ({ root } = renderElement(React.createElement(WorldInfoPolicySection, { settings, updateAndRefresh })));
+    return settings;
+  }
+
+  const flush = () => act(async () => { await Promise.resolve(); await Promise.resolve(); });
+  const rowTexts = () => Array.from(document.querySelectorAll('[data-testid="world-info-row"]')).map((r) => r.textContent ?? '');
+
+  test('refreshes, filters, adds (as always rows, ignoring duplicates) and removes allowlisted books', async () => {
+    const settings = renderAllowlist([{ book: 'Existing', activeVia: [], entryIds: [] }]);
     getWorldInfosMock.mockResolvedValue({ 'Lore B': {}, 'Lore A': {} });
 
-    ({ root } = renderElement(React.createElement(WorldInfoPolicySection, { settings, updateAndRefresh })));
-
-    const refreshButton = document.querySelector('button[title="Refresh detected books"]');
-    if (!(refreshButton instanceof HTMLButtonElement)) {
-      throw new Error('Refresh book list button not found');
-    }
-
+    const refreshButton = document.querySelector('button[title="Refresh detected books"]') as HTMLButtonElement;
     await act(async () => {
       refreshButton.click();
       await Promise.resolve();
     });
-
     expect(getWorldInfosMock).toHaveBeenCalledWith(['global', 'chat', 'character', 'persona'], true);
 
-    const searchInput = document.querySelector('input[placeholder="Search detected books…"]');
-    const addSelect = document.querySelector('select[title="Select a detected lorebook to add to the allowlist."]');
-    if (!(searchInput instanceof HTMLInputElement) || !(addSelect instanceof HTMLSelectElement)) {
-      throw new Error('World info picker controls not found');
+    const searchInput = document.querySelector('input[placeholder="Search detected books…"]') as HTMLInputElement;
+    const addSelect = document.querySelector('select[title="Select a detected lorebook to add to the allowlist."]') as HTMLSelectElement;
+    act(() => setTextControlValue(searchInput, 'Lore B'));
+    act(() => setSelectValue(addSelect, 'Lore B'));
+
+    const addButton = document.querySelector('button[title="Add selected book"]') as HTMLButtonElement;
+    act(() => addButton.click());
+    expect(settings.trackerWorldInfoAllowlist).toEqual([
+      { book: 'Existing', activeVia: [], entryIds: [] },
+      { book: 'Lore B', activeVia: [], entryIds: [] },
+    ]);
+
+    act(() => addButton.click());
+    expect(settings.trackerWorldInfoAllowlist).toHaveLength(2);
+
+    act(() => (document.querySelector('button[title="Remove"]') as HTMLButtonElement).click());
+    expect(settings.trackerWorldInfoAllowlist).toEqual([{ book: 'Lore B', activeVia: [], entryIds: [] }]);
+    expect(document.querySelectorAll('textarea')).toHaveLength(0);
+  });
+
+  test('toggling scope checkboxes and the UID field persist onto the row', () => {
+    const settings = renderAllowlist([{ book: 'Lore A', activeVia: [], entryIds: [] }]);
+    const [card, global] = Array.from(document.querySelectorAll('[data-testid="world-info-row"] input[type="checkbox"]')) as HTMLInputElement[];
+
+    act(() => card.click());
+    expect(settings.trackerWorldInfoAllowlist[0].activeVia).toEqual(['card']);
+    act(() => global.click());
+    expect(settings.trackerWorldInfoAllowlist[0].activeVia).toEqual(['card', 'global']);
+    act(() => card.click());
+    expect(settings.trackerWorldInfoAllowlist[0].activeVia).toEqual(['global']);
+
+    const uidInput = document.querySelector('input[placeholder="Entry UIDs (empty = all)"]') as HTMLInputElement;
+    act(() => {
+      setTextControlValue(uidInput, '12 42, 12 -1 foo 7.9');
+      uidInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    });
+    expect(settings.trackerWorldInfoAllowlist[0].entryIds).toEqual([12, 42, 7]);
+  });
+
+  describe('scope status', () => {
+    const originalSillyTavern = (globalThis as any).SillyTavern;
+    afterEach(() => {
+      (globalThis as any).SillyTavern = originalSillyTavern;
+    });
+
+    function installChat(chatId: string | undefined) {
+      (globalThis as any).SillyTavern = {
+        getContext: () => ({
+          chatId,
+          chatMetadata: {},
+          characters: [{ avatar: 'a.png', data: { extensions: { world: 'Attached' } } }],
+          characterId: 0,
+          executeSlashCommandsWithOptions: jest.fn(async () => ({ pipe: '[]' })),
+        }),
+      };
     }
 
-    act(() => {
-      setTextControlValue(searchInput, 'Lore B');
+    test('warns for a skipped scoped row, never for an always row, and Recheck re-runs the check', async () => {
+      installChat('chat-1');
+      renderAllowlist([
+        { book: 'Attached', activeVia: ['card'], entryIds: [] },
+        { book: 'Detached', activeVia: ['card'], entryIds: [] },
+        { book: 'Always', activeVia: [], entryIds: [] },
+      ]);
+      await flush();
+
+      const [attached, detached, always] = rowTexts();
+      expect(attached).not.toContain('Skipped');
+      expect(detached).toContain('Skipped for the open chat');
+      expect(always).not.toContain('Skipped');
+      expect(always).not.toContain('cannot be checked');
+
+      installChat(undefined);
+      await act(async () => {
+        (document.querySelector('button[title="Recheck scope against the open chat"]') as HTMLButtonElement).click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(rowTexts()[1]).toContain('cannot be checked');
+      expect(rowTexts()[1]).not.toContain('Skipped');
     });
 
-    act(() => {
-      setSelectValue(addSelect, 'Lore B');
+    test('makes no host calls when no row has a scope', async () => {
+      const getContext = jest.fn();
+      (globalThis as any).SillyTavern = { getContext };
+      renderAllowlist([{ book: 'Always', activeVia: [], entryIds: [] }]);
+      await flush();
+      expect(getContext).not.toHaveBeenCalled();
     });
-
-    const addButton = document.querySelector('button[title="Add selected book"]');
-    if (!(addButton instanceof HTMLButtonElement)) {
-      throw new Error('Add book button not found');
-    }
-
-    act(() => {
-      addButton.click();
-    });
-
-    expect(settings.trackerWorldInfoAllowlistBookNames).toEqual(['Existing', 'Lore B']);
-
-    const removeButton = document.querySelector('button[title="Remove"]');
-    if (!(removeButton instanceof HTMLButtonElement)) {
-      throw new Error('Remove book button not found');
-    }
-
-    act(() => {
-      removeButton.click();
-    });
-
-    expect(settings.trackerWorldInfoAllowlistBookNames).toEqual(['Lore B']);
-
-    const textareas = Array.from(document.querySelectorAll('textarea')) as HTMLTextAreaElement[];
-    const booksTextarea = textareas[0];
-    const idsTextarea = textareas[1];
-    if (!(booksTextarea instanceof HTMLTextAreaElement) || !(idsTextarea instanceof HTMLTextAreaElement)) {
-      throw new Error('World info textareas not found');
-    }
-
-    act(() => {
-      setTextControlValue(booksTextarea, 'Lore B\nlore b\nOther');
-    });
-
-    expect(settings.trackerWorldInfoAllowlistBookNames).toEqual(['Lore B', 'Other']);
-
-    act(() => {
-      setTextControlValue(idsTextarea, '12 42, 12 -1 foo 7.9');
-    });
-
-    expect(settings.trackerWorldInfoAllowlistEntryIds).toEqual([12, 42, 7]);
   });
 
   test('updates transform preset selection, CRUD, and field edits from the settings surface', () => {

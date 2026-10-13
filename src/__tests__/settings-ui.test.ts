@@ -212,8 +212,7 @@ function createMockSettings() {
     promptEngineeringMode: 'native',
     debugLogging: false,
     trackerWorldInfoPolicyMode: 'include_all',
-    trackerWorldInfoAllowlistBookNames: [],
-    trackerWorldInfoAllowlistEntryIds: [],
+    trackerWorldInfoAllowlist: [],
   };
 }
 
@@ -258,8 +257,7 @@ function createMockModule(overrides: Record<string, any> = {}) {
       skipCharacterCardInTrackerGeneration: overrides.generation?.skipCharacterCardInTrackerGeneration ?? false,
       conversationRoleMode: overrides.generation?.conversationRoleMode ?? 'preserve',
       worldInfoPolicyMode: overrides.generation?.worldInfoPolicyMode ?? 'include_all',
-      worldInfoAllowlistBookNames: overrides.generation?.worldInfoAllowlistBookNames ?? [],
-      worldInfoAllowlistEntryIds: overrides.generation?.worldInfoAllowlistEntryIds ?? [],
+      worldInfoAllowlist: overrides.generation?.worldInfoAllowlist ?? [],
       includeModules: overrides.generation?.includeModules ?? [{ target: 'self', count: 1 }],
     },
     injection: {

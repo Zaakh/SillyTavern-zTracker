@@ -1,64 +1,32 @@
+/**
+ * Builds the World Info text injected into tracker generation in allowlist mode: only rows whose
+ * activation scope is satisfied by the open chat are loaded, each limited to its entry subset.
+ */
+import type { TrackerWorldInfoAllowlistRow } from './config.js';
 import type { WorldInfoEntry } from './world-info-policy.js';
 import { formatAllowlistedWorldInfo } from './world-info-policy.js';
-
-export type WorldInfosByBook = Record<string, WorldInfoEntry[]>;
-
-function mergeWorldInfos(base: WorldInfosByBook, extra: WorldInfosByBook): WorldInfosByBook {
-  const merged: WorldInfosByBook = { ...base };
-
-  for (const [bookName, entries] of Object.entries(extra)) {
-    const existing = merged[bookName] ?? [];
-    if (existing.length === 0) {
-      merged[bookName] = entries;
-      continue;
-    }
-
-    const seen = new Set(existing.map((e) => Math.trunc(e.uid)));
-    const combined = existing.slice();
-    for (const entry of entries) {
-      const id = Math.trunc(entry.uid);
-      if (seen.has(id)) continue;
-      seen.add(id);
-      combined.push(entry);
-    }
-    merged[bookName] = combined;
-  }
-
-  return merged;
-}
+import { isWorldInfoRowScopeSatisfied, type WorldInfoScopeSources } from './world-info-scope.js';
 
 export async function buildAllowlistedWorldInfoText(options: {
-  allowlistBookNames: string[];
-  allowlistEntryIds: number[];
-  getActiveWorldInfos: () => Promise<WorldInfosByBook>;
+  rows: TrackerWorldInfoAllowlistRow[];
+  sources: WorldInfoScopeSources;
   loadBookByName: (name: string) => Promise<{ name: string; entries: WorldInfoEntry[] } | null>;
   debug?: boolean;
 }): Promise<string> {
-  const allowlistBookNames = options.allowlistBookNames ?? [];
-  const allowlistEntryIds = options.allowlistEntryIds ?? [];
-
-  let worldInfos: WorldInfosByBook = {};
-  try {
-    worldInfos = (await options.getActiveWorldInfos()) ?? {};
-  } catch (err) {
-    if (options.debug) console.debug('zTracker: getActiveWorldInfos failed', err);
-  }
-
-  if (allowlistBookNames.length > 0) {
-    const fetched: WorldInfosByBook = {};
-    await Promise.all(
-      allowlistBookNames.map(async (bookName) => {
-        const result = await options.loadBookByName(bookName);
-        if (!result) return;
-        fetched[result.name] = result.entries;
-      }),
-    );
-    worldInfos = mergeWorldInfos(worldInfos, fetched);
-  }
-
-  return formatAllowlistedWorldInfo({
-    allowlistBookNames,
-    allowlistEntryIds,
-    worldInfos,
+  const satisfied = (options.rows ?? []).filter((row) => {
+    const ok = isWorldInfoRowScopeSatisfied(row, options.sources);
+    if (!ok && options.debug) {
+      console.debug('zTracker: allowlist row skipped (scope not satisfied)', { book: row.book, activeVia: row.activeVia });
+    }
+    return ok;
   });
+
+  const loaded = await Promise.all(
+    satisfied.map(async (row) => {
+      const result = await options.loadBookByName(row.book);
+      return result ? { name: result.name, entries: result.entries, entryIds: row.entryIds } : null;
+    }),
+  );
+
+  return formatAllowlistedWorldInfo(loaded.filter((book): book is NonNullable<typeof book> => book !== null));
 }

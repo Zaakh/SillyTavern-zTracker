@@ -15,6 +15,7 @@ import {
   migrateTrackerModuleAutoSettings,
   migrateTrackerModuleIncludeLists,
   migrateTrackerModuleSystemPromptContent,
+  migrateTrackerModuleWorldInfoAllowlists,
 } from './config.js';
 import { seedStarterTrackerModules } from './fresh-install-seeding.js';
 
@@ -57,6 +58,7 @@ export async function initializeStartupSettings(options: {
     migrateTrackerModuleAutoSettings(settings),
     migrateTrackerModuleIncludeLists(settings),
     migrateTrackerModuleSystemPromptContent(settings),
+    migrateTrackerModuleWorldInfoAllowlists(settings),
   ].some(Boolean);
 
   if (didMigrateLegacySettings) {

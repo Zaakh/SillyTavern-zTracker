@@ -16,102 +16,30 @@ describe('world info policy', () => {
     expect(normalizeWorldInfoName('  My Book  ')).toBe('my book');
   });
 
-  test('formatAllowlistedWorldInfo includes only allowlisted enabled entries', () => {
-    const text = formatAllowlistedWorldInfo({
-      allowlistBookNames: ['Book A'],
-      allowlistEntryIds: [],
-      worldInfos: {
-        'Book A': [
-          {
-            uid: 1,
-            key: ['foo'],
-            keysecondary: [],
-            content: 'A-content',
-            comment: '',
-            disable: false,
-          },
-          {
-            uid: 2,
-            key: ['bar'],
-            keysecondary: [],
-            content: 'disabled',
-            comment: '',
-            disable: true,
-          },
-        ],
-        'Book B': [
-          {
-            uid: 3,
-            key: ['baz'],
-            keysecondary: [],
-            content: 'B-content',
-            comment: '',
-            disable: false,
-          },
-        ],
-      },
-    });
 
-    expect(text).toContain('A-content');
-    expect(text).not.toContain('disabled');
-    expect(text).not.toContain('B-content');
-    expect(text).not.toContain('World Info (allowlisted)');
-    expect(text).not.toContain('# Book A');
-    expect(text).not.toContain('# Book B');
+  const entry = (uid: number, content: string, disable = false) => ({ uid, key: ['k'], content, comment: '', disable });
+
+  test('formatAllowlistedWorldInfo includes enabled entries only, as bare content sorted by book', () => {
+    const text = formatAllowlistedWorldInfo([
+      { name: 'Book B', entries: [entry(3, 'B-content')], entryIds: [] },
+      { name: 'Book A', entries: [entry(1, 'A-content'), entry(2, 'disabled', true)], entryIds: [] },
+    ]);
+
+    expect(text).toBe('A-content\n\nB-content');
   });
 
-  test('formatAllowlistedWorldInfo can allowlist by entry id across books', () => {
-    const text = formatAllowlistedWorldInfo({
-      allowlistBookNames: [],
-      allowlistEntryIds: [3],
-      worldInfos: {
-        'Book A': [
-          {
-            uid: 1,
-            key: ['foo'],
-            keysecondary: [],
-            content: 'A-content',
-            comment: '',
-            disable: false,
-          },
-        ],
-        'Book B': [
-          {
-            uid: 3,
-            key: ['baz'],
-            keysecondary: [],
-            content: 'B-content',
-            comment: '',
-            disable: false,
-          },
-        ],
-      },
-    });
+  test('formatAllowlistedWorldInfo limits a book to its entry subset', () => {
+    const text = formatAllowlistedWorldInfo([
+      { name: 'Book A', entries: [entry(12, 'twelve'), entry(13, 'thirteen'), entry(42, 'forty-two')], entryIds: [12, 42] },
+    ]);
 
-    expect(text).toContain('B-content');
-    expect(text).not.toContain('A-content');
-    expect(text).not.toContain('# Book B');
-    expect(text).not.toContain('# Book A');
+    expect(text).toContain('twelve');
+    expect(text).toContain('forty-two');
+    expect(text).not.toContain('thirteen');
   });
 
   test('formatAllowlistedWorldInfo returns empty string when nothing matches', () => {
-    const text = formatAllowlistedWorldInfo({
-      allowlistBookNames: ['Missing'],
-      allowlistEntryIds: [],
-      worldInfos: {
-        'Book A': [
-          {
-            uid: 1,
-            key: ['foo'],
-            keysecondary: [],
-            content: 'A-content',
-            comment: '',
-            disable: false,
-          },
-        ],
-      },
-    });
-
-    expect(text).toBe('');
+    expect(formatAllowlistedWorldInfo([])).toBe('');
+    expect(formatAllowlistedWorldInfo([{ name: 'A', entries: [entry(1, 'x', true), entry(2, '  ')], entryIds: [] }])).toBe('');
   });
 });
