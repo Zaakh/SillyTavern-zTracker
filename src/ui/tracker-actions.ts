@@ -1299,6 +1299,74 @@ export function createTrackerActions(options: {
     }
   }
 
+  // Common chat defaults (e.g. 350) cannot hold a generated schema, and a truncated reply looks like invalid JSON.
+  const GENERATION_MIN_RESPONSE_TOKENS = 2048;
+  let nextGenerationMessageId = -1000;
+
+  /** Reply budget for Module-authoring requests: the active connection's live response length, raised to the floor. */
+  function getGenerationMaxTokens(context: { substituteParams?: (text: string) => string }): number {
+    const live = Number.parseInt(context.substituteParams?.('{{maxResponse}}') ?? '', 10);
+    return Number.isFinite(live) ? Math.max(live, GENERATION_MIN_RESPONSE_TOKENS) : GENERATION_MIN_RESPONSE_TOKENS;
+  }
+
+  /** "API · model" of the global active connection when known, for the Schema editor's notice. */
+  function getActiveConnectionLabel(): string {
+    const context = SillyTavern.getContext() as any;
+    const model = context.substituteParams?.('{{model}}');
+    const parts = [context.mainApi, model && model !== '{{model}}' ? model : undefined].filter(Boolean);
+    return parts.length ? parts.join(' · ') : 'the active connection';
+  }
+
+  /**
+   * One message-less request through the global active SillyTavern connection (independent of any
+   * Module's own connection), used by LLM schema/prompt generation. Reasoning is stripped here because
+   * `rawReply` skips it; no Start Reply With prefill is applied. `signal` cancels the in-flight request.
+   */
+  async function requestWithActiveConnection(
+    messages: Array<{ role: string; content: string }>,
+    overridePayload?: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    const context = SillyTavern.getContext() as any;
+    const settings = {
+      ...getSettingsForTrackerModule(settingsManager.getSettings(), DEFAULT_MODULE_ID),
+      connectionSource: 'active' as const,
+      maxResponseToken: getGenerationMaxTokens(context),
+    };
+    if (signal?.aborted) throw new DOMException('Generation cancelled', 'AbortError');
+
+    // Throws when there is no usable active connection, before anything is sent.
+    const resolvedConnection = resolveTrackerConnection(settings, context);
+    const messageId = nextGenerationMessageId;
+    nextGenerationMessageId -= 1;
+    const makeRequest = makeRequestFactory(messageId, settings, {
+      resolvedConnection,
+      moduleName: 'Schema generation',
+      rawReply: true,
+    });
+
+    const onAbort = () => {
+      const requestId = pendingRequests.get(messageId);
+      if (requestId) cancelRequestId(requestId);
+    };
+    signal?.addEventListener('abort', onAbort);
+    try {
+      const response = await makeRequest(messages as Message[], overridePayload);
+      if (signal?.aborted) throw new DOMException('Generation cancelled', 'AbortError');
+      if (typeof response?.content !== 'string' || !response.content.trim()) {
+        throw new Error('The active connection returned no content.');
+      }
+      return finishTrackerReply(response as { content: string; reasoning?: unknown }, {
+        prefill: '',
+        jsonSchemaSent: false,
+        reasoningTemplate: context.powerUserSettings?.reasoning,
+        parseReasoning: context.parseReasoningFromString,
+      }).content;
+    } finally {
+      signal?.removeEventListener('abort', onAbort);
+    }
+  }
+
   async function prepareTrackerGeneration(messageId: number, options?: { schemaPresetKey?: string; moduleId?: string }) {
     const message = globalContext.chat[messageId];
     if (!message) {
@@ -2030,6 +2098,8 @@ export function createTrackerActions(options: {
     modifyChatMetadata,
     renderExtensionTemplates,
     testGrammarSchemaEnforcement,
+    requestWithActiveConnection,
+    getActiveConnectionLabel,
     /** Lets outgoing auto mode tag zTracker-owned request starts without affecting manual generation flows. */
     setBeforeRequestStartHook(callback?: () => void) {
       beforeRequestStartHook = callback;

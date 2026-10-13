@@ -163,6 +163,8 @@ export interface TrackerModule {
   connection: TrackerModuleConnectionSettings;
   generation: TrackerModuleGenerationSettings;
   injection: TrackerModuleInjectionSettings;
+  /** Natural-language description of the tracker, input to LLM schema/prompt generation. Absent == empty; never read by tracker generation. */
+  designBrief?: string;
 }
 
 export interface ExtensionSettings {

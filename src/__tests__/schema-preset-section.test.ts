@@ -171,7 +171,7 @@ describe('SchemaPresetSection', () => {
     const container = renderSection({ canGenerateSchemaHtml: true, generateSchemaHtmlFromSchema });
 
     const generateButton = container.querySelector(
-      'button[title="Generate HTML from the current Schema JSON (always overwrites the Schema HTML draft; click Save to apply)"]',
+      'button[title="Generate HTML: mechanically derives the Schema HTML from the current Schema JSON draft (no model call). Replaces the Schema HTML draft; click Save to apply."]',
     );
     expect(generateButton).toHaveProperty('disabled', false);
 
@@ -183,7 +183,7 @@ describe('SchemaPresetSection', () => {
     const container = renderSection({ canGenerateSchemaHtml: false });
 
     const generateButton = container.querySelector(
-      'button[title="Generate HTML from the current Schema JSON (always overwrites the Schema HTML draft; click Save to apply)"]',
+      'button[title="Generate HTML: mechanically derives the Schema HTML from the current Schema JSON draft (no model call). Replaces the Schema HTML draft; click Save to apply."]',
     );
     expect(generateButton).toHaveProperty('disabled', true);
   });

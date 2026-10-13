@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.10.0] - 2026-10-13
+
+### Added
+
+- **Design brief** per Module plus two model-backed buttons in the Schema editor. **Generate schema** asks the *global active connection* for a Schema JSON draft (checked by the schema dialect lint and repaired from its findings, at most 2 repair rounds); **Generate prompts** writes a tailored system prompt and base prompt and applies them immediately (saved preset `zTracker-<moduleId>-generated`; your selected global system prompt is left as it was). Both are cancellable, bound to the Module/preset they started on, and announce overwrites inline without a dialog. **Generate HTML** is unchanged. All three buttons have explanatory tooltips.
+
 ## [2.9.0] - 2026-10-13
 
 ### Added
