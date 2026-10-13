@@ -10,6 +10,8 @@ export const buildPromptMock = jest.fn<() => Promise<{ result: Array<{ role: str
 export const applyTrackerUpdateAndRenderMock = jest.fn();
 export const renderTrackerWithDepsMock = jest.fn();
 export const stEchoMock = jest.fn();
+export const getWorldInfosMock = jest.fn<(...args: unknown[]) => Promise<Record<string, unknown[]>>>(async () => ({}));
+export const loadWorldInfoBookByNameMock = jest.fn<(name: string) => Promise<{ name: string; entries: unknown[] } | null>>();
 export const includeZTrackerMessagesMock = jest.fn((messages: Array<unknown>) => [...messages]);
 const embeddedTrackerSnapshotMarker = Symbol('embeddedTrackerSnapshot');
 
@@ -100,7 +102,7 @@ export const normalizeTrackerGenerationConversationRolesMock = jest.fn(normalize
 jest.unstable_mockModule('sillytavern-utils-lib', () => ({
   buildPrompt: buildPromptMock,
   Generator: class GeneratorMock {},
-  getWorldInfos: jest.fn(),
+  getWorldInfos: getWorldInfosMock,
   Message: class MessageMock {},
 }));
 
@@ -124,16 +126,8 @@ jest.unstable_mockModule('../schema-to-example.js', () => ({
   schemaToPromptSchema: jest.fn(),
 }));
 
-jest.unstable_mockModule('../world-info-policy.js', () => ({
-  shouldIgnoreWorldInfoDuringTrackerBuild: jest.fn(() => false),
-}));
-
-jest.unstable_mockModule('../world-info-allowlist.js', () => ({
-  buildAllowlistedWorldInfoText: jest.fn(),
-}));
-
 jest.unstable_mockModule('../sillytavern-world-info.js', () => ({
-  loadWorldInfoBookByName: jest.fn(),
+  loadWorldInfoBookByName: loadWorldInfoBookByNameMock,
 }));
 
 jest.unstable_mockModule('../tracker.js', () => ({
@@ -328,8 +322,7 @@ export function makeSettings(overrides: Record<string, unknown> = {}) {
     embedZTrackerAsCharacter: false,
     sequentialPartGeneration: false,
     trackerWorldInfoPolicyMode: TrackerWorldInfoPolicyMode.INCLUDE_ALL,
-    trackerWorldInfoAllowlistBookNames: [],
-    trackerWorldInfoAllowlistEntryIds: [],
+    trackerWorldInfoAllowlist: [],
     schemaPreset: 'default',
     schemaPresets: {
       default: {
@@ -451,6 +444,9 @@ export function resetTrackerActionTestState(): void {
   sanitizeMessagesForGenerationMock.mockReset();
   sanitizeMessagesForGenerationMock.mockImplementation(sanitizeMessagesForGenerationMockImpl);
   stEchoMock.mockReset();
+  getWorldInfosMock.mockReset();
+  getWorldInfosMock.mockImplementation(async () => ({}));
+  loadWorldInfoBookByNameMock.mockReset();
   document.body.innerHTML = '';
   installExtensionsMenuDom();
 }

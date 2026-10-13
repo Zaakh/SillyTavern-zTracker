@@ -264,7 +264,6 @@ export function makeLiveLikeSettings(mode: PromptEngineeringMode) {
     promptToon: PLACEHOLDER_PROMPT_TOON,
     debugLogging: false,
     trackerWorldInfoPolicyMode: TrackerWorldInfoPolicyMode.INCLUDE_ALL,
-    trackerWorldInfoAllowlistBookNames: ['The Bar'],
-    trackerWorldInfoAllowlistEntryIds: [12, 42],
+    trackerWorldInfoAllowlist: [{ book: 'The Bar', activeVia: [], entryIds: [12, 42] }],
   } as any;
 }

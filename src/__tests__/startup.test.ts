@@ -42,8 +42,6 @@ function makeLegacySettings() {
     embedZTrackerSnapshotTransformPresets: {},
     promptEngineeringMode: 'native',
     trackerWorldInfoPolicyMode: 'include_all',
-    trackerWorldInfoAllowlistBookNames: [],
-    trackerWorldInfoAllowlistEntryIds: [],
   } as any;
 }
 
@@ -133,6 +131,40 @@ describe('initializeStartupSettings', () => {
     // migrateTrackerModuleSystemPromptContent is idempotent for a Module that already stores a
     // string `content` - it must never overwrite existing (possibly customized) content with ''.
     expect(settings.modules[0].systemPrompt.content).toBe('existing content');
+  });
+
+  test('an upgrading install migrates legacy World Info allowlist names once and saves once', async () => {
+    const settings: any = {
+      version: '0.1.0',
+      formatVersion: 'F_2.0',
+      modules: [
+        {
+          id: 'scene-tracker',
+          name: 'Scene Tracker',
+          enabled: true,
+          order: 0,
+          auto: { enabled: false, direction: 'both' },
+          systemPrompt: { mode: 'profile', savedName: '', content: '' },
+          generation: {
+            includeModules: [{ target: 'self', count: 1 }],
+            worldInfoAllowlistBookNames: ['Lore A'],
+            worldInfoAllowlistEntryIds: [1],
+          },
+          injection: { includeLastXMessages: 1 },
+        },
+      ],
+      debugLogging: false,
+    };
+    const saveSettings = jest.fn();
+    const settingsManager = { getSettings: () => settings, saveSettings };
+
+    await initializeStartupSettings({ isFreshInstall: false, settingsManager, importMetaUrl: 'file:///dist/index.js' });
+
+    expect(settings.modules[0].generation.worldInfoAllowlist).toEqual([{ book: 'Lore A', activeVia: [], entryIds: [] }]);
+    expect(saveSettings).toHaveBeenCalledTimes(1);
+
+    await initializeStartupSettings({ isFreshInstall: false, settingsManager, importMetaUrl: 'file:///dist/index.js' });
+    expect(saveSettings).toHaveBeenCalledTimes(1);
   });
 
   test('an error while reading settings on an upgrading install propagates to the caller', async () => {

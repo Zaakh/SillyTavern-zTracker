@@ -146,8 +146,7 @@
       "skipCharacterCardInTrackerGeneration": false,
       "conversationRoleMode": "preserve",
       "worldInfoPolicyMode": "include_all",
-      "worldInfoAllowlistBookNames": [],
-      "worldInfoAllowlistEntryIds": [],
+      "worldInfoAllowlist": [],
       "includeModules": [
         {
           "target": "self",

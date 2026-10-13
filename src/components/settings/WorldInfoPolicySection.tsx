@@ -1,25 +1,12 @@
-import { FC, useCallback, useMemo, useState } from 'react';
-import { STButton, STTextarea } from 'sillytavern-utils-lib/components/react';
+/**
+ * World Info settings: policy mode plus, in allowlist mode, one row per lorebook with its
+ * activation scope, optional entry UIDs, and a scope warning for the open chat.
+ */
+import { FC, useCallback, useMemo, useRef, useState } from 'react';
+import { STButton } from 'sillytavern-utils-lib/components/react';
 import { getWorldInfos } from 'sillytavern-utils-lib';
-import { TrackerModuleSettings, TrackerWorldInfoPolicyMode } from '../../config.js';
-
-function normalizeWorldInfoAllowlist(text: string): string[] {
-  const lines = text
-    .split(/\r?\n/g)
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  const deduped: string[] = [];
-  const seen = new Set<string>();
-  for (const line of lines) {
-    const key = line.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      deduped.push(line);
-    }
-  }
-  return deduped;
-}
+import { TrackerModuleSettings, TrackerWorldInfoActivation, TrackerWorldInfoPolicyMode } from '../../config.js';
+import { useWorldInfoScopeStatus } from './useWorldInfoScopeStatus.js';
 
 function normalizeWorldInfoEntryIdAllowlist(text: string): number[] {
   const parts = text
@@ -72,8 +59,9 @@ export const WorldInfoPolicySection: FC<{
   updateAndRefresh: (updater: (current: TrackerModuleSettings) => void) => void;
 }> = ({ settings, updateAndRefresh }) => {
   const worldInfoPolicyMode = settings.trackerWorldInfoPolicyMode ?? TrackerWorldInfoPolicyMode.INCLUDE_ALL;
-  const worldInfoAllowlistText = (settings.trackerWorldInfoAllowlistBookNames ?? []).join('\n');
-  const worldInfoEntryIdAllowlistText = (settings.trackerWorldInfoAllowlistEntryIds ?? []).join('\n');
+  const allowlistRows = settings.trackerWorldInfoAllowlist ?? [];
+  const rootRef = useRef<HTMLDivElement>(null);
+  const { statuses, recheck } = useWorldInfoScopeStatus(allowlistRows, rootRef);
 
   const [availableWorldInfoBooks, setAvailableWorldInfoBooks] = useState<string[]>([]);
   const [worldInfoBookSearch, setWorldInfoBookSearch] = useState<string>('');
@@ -126,8 +114,9 @@ export const WorldInfoPolicySection: FC<{
       const trimmed = name.trim();
       if (!trimmed) return;
       updateAndRefresh((s) => {
-        const current = s.trackerWorldInfoAllowlistBookNames ?? [];
-        s.trackerWorldInfoAllowlistBookNames = normalizeWorldInfoAllowlist([...current, trimmed].join('\n'));
+        const current = s.trackerWorldInfoAllowlist ?? [];
+        if (current.some((row) => row.book.toLowerCase() === trimmed.toLowerCase())) return;
+        s.trackerWorldInfoAllowlist = [...current, { book: trimmed, activeVia: [], entryIds: [] }];
       });
     },
     [updateAndRefresh],
@@ -137,15 +126,30 @@ export const WorldInfoPolicySection: FC<{
     (name: string) => {
       const key = name.trim().toLowerCase();
       updateAndRefresh((s) => {
-        const current = s.trackerWorldInfoAllowlistBookNames ?? [];
-        s.trackerWorldInfoAllowlistBookNames = current.filter((b) => b.trim().toLowerCase() !== key);
+        s.trackerWorldInfoAllowlist = (s.trackerWorldInfoAllowlist ?? []).filter((row) => row.book.trim().toLowerCase() !== key);
       });
     },
     [updateAndRefresh],
   );
 
+  const updateRow = useCallback(
+    (book: string, patch: Partial<{ activeVia: TrackerWorldInfoActivation[]; entryIds: number[] }>) => {
+      updateAndRefresh((s) => {
+        s.trackerWorldInfoAllowlist = (s.trackerWorldInfoAllowlist ?? []).map((row) =>
+          row.book === book ? { ...row, ...patch } : row,
+        );
+      });
+    },
+    [updateAndRefresh],
+  );
+
+  const toggleScope = (row: { book: string; activeVia: TrackerWorldInfoActivation[] }, scope: TrackerWorldInfoActivation) =>
+    updateRow(row.book, {
+      activeVia: (['card', 'global'] as const).filter((v) => (v === scope ? !row.activeVia.includes(v) : row.activeVia.includes(v))),
+    });
+
   return (
-    <>
+    <div ref={rootRef}>
       <div className="setting-row">
         <label title="Controls whether SillyTavern World Info is included when zTracker builds the prompt for tracker generation.">
           World Info during tracker generation
@@ -162,15 +166,18 @@ export const WorldInfoPolicySection: FC<{
         >
           <option value={TrackerWorldInfoPolicyMode.INCLUDE_ALL}>Allow all (default)</option>
           <option value={TrackerWorldInfoPolicyMode.EXCLUDE_ALL}>Exclude all</option>
-          <option value={TrackerWorldInfoPolicyMode.ALLOWLIST}>Allow only specified books/UIDs</option>
+          <option value={TrackerWorldInfoPolicyMode.ALLOWLIST}>Allow only specified books</option>
         </select>
       </div>
 
       {worldInfoPolicyMode === TrackerWorldInfoPolicyMode.ALLOWLIST && (
         <div className="setting-row">
-          <label title="World Info books (lorebooks) that are allowed when using the allowlist mode.">Allowed World Info book names</label>
+          <label title="World Info books (lorebooks) that are allowed when using the allowlist mode.">Allowed World Info books</label>
 
-          <div className="notes">Use the picker to add detected books, then optionally fine-tune via the textarea.</div>
+          <div className="notes">
+            Use the picker to add detected books. A book with no scope checked is always injected; checking a scope injects it only when
+            it is also active that way for the open chat.
+          </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -217,71 +224,66 @@ export const WorldInfoPolicySection: FC<{
 
             {worldInfoBooksError && <div className="notes">Failed to load books: {worldInfoBooksError}</div>}
 
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {(settings.trackerWorldInfoAllowlistBookNames ?? []).length === 0 ? (
-                <span className="notes">No allowlisted books yet.</span>
-              ) : (
-                (settings.trackerWorldInfoAllowlistBookNames ?? []).map((b) => (
-                  <span
-                    key={b}
+            {allowlistRows.length === 0 ? (
+              <span className="notes">No allowlisted books yet.</span>
+            ) : (
+              allowlistRows.map((row) => {
+                const status = statuses[row.book.toLowerCase()];
+                return (
+                  <div
+                    key={row.book}
+                    data-testid="world-info-row"
                     style={{
-                      display: 'inline-flex',
+                      display: 'flex',
                       alignItems: 'center',
-                      gap: 6,
-                      padding: '2px 8px',
+                      gap: 10,
+                      flexWrap: 'wrap',
+                      padding: '4px 8px',
                       border: '1px solid var(--SmartThemeBorderColor)',
-                      borderRadius: 999,
+                      borderRadius: 6,
                     }}
                   >
-                    <span>{b}</span>
+                    <strong>{row.book}</strong>
+                    <label title="Inject only if the book is attached to the open chat's character card (any member in a group chat) or is the chat-bound lorebook.">
+                      <input type="checkbox" checked={row.activeVia.includes('card')} onChange={() => toggleScope(row, 'card')} /> Character
+                      card or chat
+                    </label>
+                    <label title="Inject only if the book is globally selected.">
+                      <input type="checkbox" checked={row.activeVia.includes('global')} onChange={() => toggleScope(row, 'global')} /> Global
+                    </label>
+                    <input
+                      key={row.entryIds.join(',')}
+                      className="text_pole"
+                      style={{ width: 170 }}
+                      defaultValue={row.entryIds.join(', ')}
+                      onBlur={(e) => updateRow(row.book, { entryIds: normalizeWorldInfoEntryIdAllowlist(e.target.value) })}
+                      placeholder="Entry UIDs (empty = all)"
+                      title="Optional entry UIDs of this book to inject, comma/space separated. Empty injects all enabled entries."
+                    />
+                    {status === 'skipped' && <span className="notes">⚠ Skipped for the open chat (scope not satisfied)</span>}
+                    {status === 'unknown' && <span className="notes">Scope cannot be checked right now (no chat open or lookup incomplete)</span>}
                     <button
                       className="menu_button"
                       type="button"
                       title="Remove"
-                      onClick={() => removeWorldInfoBookName(b)}
-                      style={{ padding: '0 6px' }}
+                      onClick={() => removeWorldInfoBookName(row.book)}
+                      style={{ padding: '0 6px', marginLeft: 'auto' }}
                     >
                       ×
                     </button>
-                  </span>
-                ))
-              )}
+                  </div>
+                );
+              })
+            )}
+
+            <div>
+              <STButton title="Recheck scope against the open chat" onClick={() => void recheck()}>
+                Recheck
+              </STButton>
             </div>
-
-            <details>
-              <summary title="Edit the allowlisted lorebook names directly (one per line). Matching is case-insensitive.">
-                Advanced: edit book names manually
-              </summary>
-              <STTextarea
-                value={worldInfoAllowlistText}
-                onChange={(e) => {
-                  const allowlist = normalizeWorldInfoAllowlist(e.target.value);
-                  updateAndRefresh((s) => {
-                    s.trackerWorldInfoAllowlistBookNames = allowlist;
-                  });
-                }}
-                rows={4}
-                placeholder="Example:\nMy Global Lorebook\nCharacter Lorebook"
-              />
-            </details>
           </div>
-
-          <label title="Allowed World Info entry IDs (UIDs). Use one per line, or separate with commas/spaces.">
-            Allowed World Info entry IDs (UIDs; one per line or comma/space separated)
-          </label>
-          <STTextarea
-            value={worldInfoEntryIdAllowlistText}
-            onChange={(e) => {
-              const allowlist = normalizeWorldInfoEntryIdAllowlist(e.target.value);
-              updateAndRefresh((s) => {
-                s.trackerWorldInfoAllowlistEntryIds = allowlist;
-              });
-            }}
-            rows={4}
-            placeholder="Example:\n12\n42\n1337"
-          />
         </div>
       )}
-    </>
+    </div>
   );
 };

@@ -10,6 +10,7 @@ import {
   createDefaultTrackerModule,
   createTrackerModuleId,
   normalizeTrackerModuleIncludeList,
+  normalizeWorldInfoAllowlist,
 } from '../../config.js';
 
 export type ImportedTrackerModule = Partial<Omit<TrackerModule, 'auto' | 'schema' | 'prompts' | 'systemPrompt' | 'connection' | 'generation' | 'injection'>>
@@ -75,7 +76,11 @@ export function parseImportedTrackerModule(text: string): ImportedTrackerModule 
 export function createImportedTrackerModule(importedModule: ImportedTrackerModule, modules: TrackerModule[]): TrackerModule {
   const id = createTrackerModuleId(modules, importedModule.id || importedModule.name);
   const base = createDefaultTrackerModule({ id, name: importedModule.name.trim(), order: modules.length });
-  const mergedGeneration = { ...base.generation, ...importedModule.generation };
+  const mergedGeneration = { ...base.generation, ...importedModule.generation } as Record<string, any>;
+  // Old exports carry the pre-row name/UID lists; convert them and drop the stray keys.
+  const worldInfoAllowlist = normalizeWorldInfoAllowlist(importedModule.generation as Record<string, unknown> | undefined);
+  delete mergedGeneration.worldInfoAllowlistBookNames;
+  delete mergedGeneration.worldInfoAllowlistEntryIds;
   return {
     ...base,
     ...JSON.parse(JSON.stringify(importedModule)),
@@ -89,7 +94,8 @@ export function createImportedTrackerModule(importedModule: ImportedTrackerModul
     systemPrompt: { ...base.systemPrompt, ...importedModule.systemPrompt },
     connection: { ...base.connection, ...importedModule.connection },
     generation: {
-      ...mergedGeneration,
+      ...(mergedGeneration as TrackerModule['generation']),
+      worldInfoAllowlist,
       // The include list is validated on its own: a missing/malformed/self-less imported value
       // must never leave the Module without its mandatory self entry (settings UI and generation
       // assembly both assume it is always present).

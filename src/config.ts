@@ -114,6 +114,20 @@ export interface TrackerModuleIncludeEntry {
   count: number;
 }
 
+/** Where an allowlisted book must also be active to be injected: its card (or chat-bound book) and/or the global selection. */
+export type TrackerWorldInfoActivation = 'card' | 'global';
+
+/**
+ * One allowlisted lorebook. An empty `activeVia` means "always inject"; otherwise the book is
+ * injected only when it is active through one of the listed sources. `entryIds` limits injection
+ * to those entry UIDs of this book (empty = all enabled entries).
+ */
+export interface TrackerWorldInfoAllowlistRow {
+  book: string;
+  activeVia: TrackerWorldInfoActivation[];
+  entryIds: number[];
+}
+
 export interface TrackerModuleGenerationSettings {
   mode: TrackerGenerationMode;
   maxResponseToken: number;
@@ -122,8 +136,8 @@ export interface TrackerModuleGenerationSettings {
   skipCharacterCardInTrackerGeneration: boolean;
   conversationRoleMode: TrackerGenerationConversationRoleMode;
   worldInfoPolicyMode: TrackerWorldInfoPolicyMode;
-  worldInfoAllowlistBookNames: string[];
-  worldInfoAllowlistEntryIds: number[];
+  /** Allowlisted lorebooks, one row per book (see `TrackerWorldInfoAllowlistRow`). */
+  worldInfoAllowlist: TrackerWorldInfoAllowlistRow[];
   /** Which Modules' stored tracker history (including this Module's own) feed this Module's own generation context. Always contains a 'self' entry. */
   includeModules: TrackerModuleIncludeEntry[];
 }
@@ -219,16 +233,8 @@ export interface TrackerModuleSettings extends ExtensionSettings {
    * - allowlist: omit World Info during prompt build, then inject only allowlisted World Info books
    */
   trackerWorldInfoPolicyMode: TrackerWorldInfoPolicyMode;
-  /**
-   * World Info (lorebook) names to allow during tracker generation when mode=allowlist.
-   * Matching is case-insensitive.
-   */
-  trackerWorldInfoAllowlistBookNames: string[];
-  /**
-   * World Info entry UIDs to allow during tracker generation when mode=allowlist.
-   * These are the numeric `uid` values on WI entries.
-   */
-  trackerWorldInfoAllowlistEntryIds: number[];
+  /** Lorebooks to allow during tracker generation when mode=allowlist; book names match case-insensitively. */
+  trackerWorldInfoAllowlist: TrackerWorldInfoAllowlistRow[];
 }
 
 export const DEFAULT_EMBED_SNAPSHOT_HEADER = 'Tracker:';
@@ -766,8 +772,7 @@ export function createDefaultTrackerModule(options: Partial<Pick<TrackerModule, 
       skipCharacterCardInTrackerGeneration: false,
       conversationRoleMode: 'preserve',
       worldInfoPolicyMode: TrackerWorldInfoPolicyMode.INCLUDE_ALL,
-      worldInfoAllowlistBookNames: [],
-      worldInfoAllowlistEntryIds: [],
+      worldInfoAllowlist: [],
       includeModules: [{ target: 'self', count: DEFAULT_INCLUDE_LAST_ZTRACKER_MESSAGES }],
     },
     injection: {
@@ -779,6 +784,38 @@ export function createDefaultTrackerModule(options: Partial<Pick<TrackerModule, 
       transformPresets: createDefaultEmbedSnapshotTransformPresets(),
     },
   };
+}
+
+/**
+ * Normalizes a Module's World Info allowlist from either shape into valid rows: an existing
+ * `worldInfoAllowlist` (rows sanitized) or the legacy `worldInfoAllowlistBookNames` (each name
+ * becomes an "always" row). The legacy book-less entry UID list is intentionally ignored.
+ * Never throws; shared by the startup migration, Module import, and the legacy flat upgrade.
+ */
+export function normalizeWorldInfoAllowlist(
+  source: { worldInfoAllowlist?: unknown; worldInfoAllowlistBookNames?: unknown } | null | undefined,
+): TrackerWorldInfoAllowlistRow[] {
+  const raw = Array.isArray(source?.worldInfoAllowlist)
+    ? source.worldInfoAllowlist
+    : Array.isArray(source?.worldInfoAllowlistBookNames)
+      ? source.worldInfoAllowlistBookNames
+      : [];
+  const seen = new Set<string>();
+  const rows: TrackerWorldInfoAllowlistRow[] = [];
+  for (const item of raw) {
+    const fields = (typeof item === 'object' && item !== null ? item : {}) as Record<string, unknown>;
+    const book = typeof item === 'string' ? item : fields.book;
+    if (typeof book !== 'string' || !book.trim() || seen.has(book.trim().toLowerCase())) continue;
+    seen.add(book.trim().toLowerCase());
+    rows.push({
+      book: book.trim(),
+      activeVia: (['card', 'global'] as const).filter((v) => Array.isArray(fields.activeVia) && fields.activeVia.includes(v)),
+      entryIds: Array.isArray(fields.entryIds)
+        ? [...new Set(fields.entryIds.filter((id): id is number => Number.isInteger(id) && id >= 0))]
+        : [],
+    });
+  }
+  return rows;
 }
 
 export function createTrackerModuleFromLegacySettings(
@@ -799,12 +836,11 @@ export function createTrackerModuleFromLegacySettings(
   module.generation.conversationRoleMode =
     settings.trackerGenerationConversationRoleMode ?? module.generation.conversationRoleMode;
   module.generation.worldInfoPolicyMode = settings.trackerWorldInfoPolicyMode ?? module.generation.worldInfoPolicyMode;
-  module.generation.worldInfoAllowlistBookNames = cloneSettingsValue(
-    settings.trackerWorldInfoAllowlistBookNames ?? module.generation.worldInfoAllowlistBookNames,
-  );
-  module.generation.worldInfoAllowlistEntryIds = cloneSettingsValue(
-    settings.trackerWorldInfoAllowlistEntryIds ?? module.generation.worldInfoAllowlistEntryIds,
-  );
+  // Legacy flat settings carry the pre-row names list as an untyped property.
+  module.generation.worldInfoAllowlist = normalizeWorldInfoAllowlist({
+    worldInfoAllowlist: settings.trackerWorldInfoAllowlist,
+    worldInfoAllowlistBookNames: (settings as Record<string, unknown>).trackerWorldInfoAllowlistBookNames,
+  });
   // Reads the raw top-level legacy `autoMode` field from very old pre-Module settings JSON.
   // Not part of `TrackerModuleSettings` (superseded by `autoModeEnabled`/`autoModeDirection`), so
   // it is read here as an untyped legacy property rather than a typed field.
@@ -884,8 +920,7 @@ export function getSettingsForTrackerModule(settings: ExtensionSettings, moduleI
     promptToon: module.prompts.promptToon,
     grammarEnforcementEnabled: module.prompts.grammarEnforcementEnabled,
     trackerWorldInfoPolicyMode: module.generation.worldInfoPolicyMode,
-    trackerWorldInfoAllowlistBookNames: module.generation.worldInfoAllowlistBookNames,
-    trackerWorldInfoAllowlistEntryIds: module.generation.worldInfoAllowlistEntryIds,
+    trackerWorldInfoAllowlist: module.generation.worldInfoAllowlist,
   };
 }
 
@@ -930,8 +965,7 @@ export function applySettingsToTrackerModule(module: TrackerModule, settings: Tr
   module.injection.transformPreset = settings.embedZTrackerSnapshotTransformPreset;
   module.injection.transformPresets = cloneSettingsValue(settings.embedZTrackerSnapshotTransformPresets);
   module.generation.worldInfoPolicyMode = settings.trackerWorldInfoPolicyMode;
-  module.generation.worldInfoAllowlistBookNames = cloneSettingsValue(settings.trackerWorldInfoAllowlistBookNames);
-  module.generation.worldInfoAllowlistEntryIds = cloneSettingsValue(settings.trackerWorldInfoAllowlistEntryIds);
+  module.generation.worldInfoAllowlist = cloneSettingsValue(settings.trackerWorldInfoAllowlist);
 }
 
 /** Removes any include-list entry across all Modules that references a deleted Module id, leaving other entries untouched. */
@@ -1000,6 +1034,26 @@ export function migrateLegacySettingsToModules(settings: ExtensionSettings): boo
   settings.modules = [createTrackerModuleFromLegacySettings(settings, { id: DEFAULT_MODULE_ID, name: 'Default', order: 0 })];
   settings.formatVersion = FORMAT_VERSION;
   return true;
+}
+
+/**
+ * Upgrades each Module's name-only World Info allowlist to per-book rows (names become "always"
+ * rows, the legacy entry UID list is discarded). Idempotent: only acts on a Module whose
+ * `worldInfoAllowlist` is not an array or that still carries a legacy field.
+ */
+export function migrateTrackerModuleWorldInfoAllowlists(settings: ExtensionSettings): boolean {
+  let changed = false;
+  for (const module of settings.modules ?? []) {
+    const generation = module.generation as unknown as Record<string, unknown> | undefined;
+    if (!generation) continue;
+    const hasLegacy = 'worldInfoAllowlistBookNames' in generation || 'worldInfoAllowlistEntryIds' in generation;
+    if (Array.isArray(generation.worldInfoAllowlist) && !hasLegacy) continue;
+    generation.worldInfoAllowlist = normalizeWorldInfoAllowlist(generation);
+    delete generation.worldInfoAllowlistBookNames;
+    delete generation.worldInfoAllowlistEntryIds;
+    changed = true;
+  }
+  return changed;
 }
 
 /**

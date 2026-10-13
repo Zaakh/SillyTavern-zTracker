@@ -608,8 +608,7 @@ export const ZTrackerSettings: FC<{
         connection: { ...module.connection },
         generation: {
           ...module.generation,
-          worldInfoAllowlistBookNames: [...module.generation.worldInfoAllowlistBookNames],
-          worldInfoAllowlistEntryIds: [...module.generation.worldInfoAllowlistEntryIds],
+          worldInfoAllowlist: module.generation.worldInfoAllowlist.map((row) => ({ ...row, activeVia: [...row.activeVia], entryIds: [...row.entryIds] })),
           includeModules: module.generation.includeModules.map((entry) => ({ ...entry })),
         },
         injection: { ...module.injection, transformPresets: JSON.parse(JSON.stringify(module.injection.transformPresets)) },

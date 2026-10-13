@@ -60,8 +60,7 @@
       "skipCharacterCardInTrackerGeneration": false,
       "conversationRoleMode": "preserve",
       "worldInfoPolicyMode": "exclude_all",
-      "worldInfoAllowlistBookNames": [],
-      "worldInfoAllowlistEntryIds": [],
+      "worldInfoAllowlist": [],
       "includeModules": [
         { "target": "self", "count": 1 },
         { "target": "plot-log", "count": 3 }

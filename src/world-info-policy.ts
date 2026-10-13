@@ -17,22 +17,13 @@ export function normalizeWorldInfoName(name: string): string {
   return name.trim().toLowerCase();
 }
 
-export function formatAllowlistedWorldInfo(options: {
-  allowlistBookNames: string[];
-  allowlistEntryIds: number[];
-  worldInfos: Record<string, WorldInfoEntry[]>;
-}): string {
-  const allowBooks = new Set(options.allowlistBookNames.map(normalizeWorldInfoName));
-  const allowEntryIds = new Set(options.allowlistEntryIds.map((id) => Math.trunc(id)).filter((id) => id >= 0));
-
-  const bookNames = Object.keys(options.worldInfos).sort((a, b) => a.localeCompare(b));
-
+export function formatAllowlistedWorldInfo(
+  books: Array<{ name: string; entries: WorldInfoEntry[]; entryIds: number[] }>,
+): string {
   const lines: string[] = [];
-  for (const bookName of bookNames) {
-    const bookAllowed = allowBooks.has(normalizeWorldInfoName(bookName));
-    const entries = (options.worldInfos[bookName] ?? []).filter(
-      (e) => !e.disable && (bookAllowed || allowEntryIds.has(Math.trunc(e.uid))),
-    );
+  for (const book of [...books].sort((a, b) => a.name.localeCompare(b.name))) {
+    const onlyIds = new Set(book.entryIds.map((id) => Math.trunc(id)));
+    const entries = book.entries.filter((e) => !e.disable && (onlyIds.size === 0 || onlyIds.has(Math.trunc(e.uid))));
     if (entries.length === 0) continue;
 
     for (const entry of entries) {
@@ -43,9 +34,6 @@ export function formatAllowlistedWorldInfo(options: {
     lines.push('');
   }
 
-  const body = lines.join('\n').trim();
-  if (!body) return '';
-
   // Keep prompt injection minimal: only entry content.
-  return body;
+  return lines.join('\n').trim();
 }

@@ -160,11 +160,16 @@ If a dependency-linked array becomes inconsistent during generation, zTracker no
 
 ## World Info (lorebooks)
 
-In **Extensions → zTracker**, you can control World Info during tracker generation: include all (default), exclude all, or allowlist specific lorebook **book names** (case-insensitive) and/or entry **UIDs** (numbers). This only affects zTracker tracker generation (button / Auto Mode), not normal SillyTavern generations.
+In **Extensions → zTracker**, you can control World Info during tracker generation: include all (default), exclude all, or allowlist specific lorebooks (names are case-insensitive). This only affects zTracker tracker generation (button / Auto Mode), not normal SillyTavern generations.
 
-In allowlist mode, zTracker loads the allowlisted lorebooks by name and injects their matching entries into the tracker-generation prompt, even if those lorebooks are not currently active in SillyTavern.
+In allowlist mode, zTracker loads each allowlisted lorebook by name and injects its enabled entries into the tracker-generation prompt. Each book has an **activation scope**:
 
-When using **Allow only specified books/UIDs**, you can click **Refresh book list** to detect available books, search/select them, and **Add** them to the allowlist (with quick remove buttons). A manual textarea is still available under “Advanced”.
+- **No scope checked (default):** always injected, even if the book is not active anywhere in SillyTavern.
+- **Character card or chat:** injected only if the book is attached to the open chat's character card (primary or additional lorebook) or is the chat-bound lorebook. In a group chat, any member's card counts (disabled members included).
+- **Global:** injected only if the book is globally selected.
+- Both checked: injected if either holds.
+
+A book can optionally list **entry UIDs** to inject only those entries. Click **Refresh book list** to detect available books, search/select one, and **Add** it. When a scope is not satisfied by the open chat, the row shows a warning that it will be skipped (and "cannot be checked" when no chat is open). The check runs when the section is shown and when rows change; use **Recheck** after switching chats.
 
 ## Embedding tracker snapshots into normal generations
 
