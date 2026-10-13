@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-10-13
+
 ### Added
 
 - World Info allowlist books now have an **activation scope**: inject a book always (default), only when it is attached to the open chat's character card (any member of a group chat) or bound to the chat, only when it is globally selected, or either. Settings show a per-row warning when a scope is not satisfied by the open chat (checked when the section is viewed, when rows change, and via **Recheck**).
