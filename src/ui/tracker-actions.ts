@@ -16,12 +16,12 @@ import { applyTrackerModuleIncludeList, resolveTrackerModuleIncludeEntries } fro
 import type { ExtensionSettingsManager } from 'sillytavern-utils-lib';
 import { buildPrompt, Generator, getWorldInfos, Message } from 'sillytavern-utils-lib';
 import type { ExtractedData } from 'sillytavern-utils-lib/types';
-import { characters, st_echo } from 'sillytavern-utils-lib/config';
+import { characters, st_echo, st_formatWorldInfo, st_getMaxContextSize } from 'sillytavern-utils-lib/config';
 import { POPUP_RESULT, POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
-import { shouldIgnoreWorldInfoDuringTrackerBuild } from '../world-info-policy.js';
-import { buildAllowlistedWorldInfoText } from '../world-info-allowlist.js';
+import { buildTrackerWorldInfoText } from '../world-info-allowlist.js';
+import { buildWorldInfoScanChat, buildWorldInfoScanData, scanWorldInfo } from '../world-info-scan.js';
 import { createHostWorldInfoScopeDeps, resolveWorldInfoScopeSources } from '../world-info-scope.js';
-import { loadWorldInfoBookByName } from '../sillytavern-world-info.js';
+import { loadFullWorldInfoEntries, loadWorldInfoBookByName } from '../sillytavern-world-info.js';
 import { parseResponse } from '../parser.js';
 import {
   applyPrefill,
@@ -1400,7 +1400,6 @@ export function createTrackerActions(options: {
     characterId = characterId !== -1 ? characterId : undefined;
 
     const trackerWorldInfoMode = settings.trackerWorldInfoPolicyMode ?? TrackerWorldInfoPolicyMode.INCLUDE_ALL;
-    const ignoreWorldInfo = shouldIgnoreWorldInfoDuringTrackerBuild(trackerWorldInfoMode);
     const skipCharacterCardInTrackerGeneration = settings.skipCharacterCardInTrackerGeneration ?? false;
 
     const syspromptName = resolveTrackerSystemPromptName(settings, context, profile);
@@ -1435,7 +1434,8 @@ export function createTrackerActions(options: {
       },
       ...promptPresetSelections,
       includeNames: includePromptNames,
-      ignoreWorldInfo,
+      // zTracker runs its own dry-run scan below; the library's scan is a real run that advances sticky/cooldown timers.
+      ignoreWorldInfo: true,
       ...(skipCharacterCardInTrackerGeneration ? { ignoreCharacterFields: true } : {}),
     });
 
@@ -1458,45 +1458,62 @@ export function createTrackerActions(options: {
     debugLog(settingsManager, 'prompt built', {
       trackerGenerationConversationRoleMode: settings.trackerGenerationConversationRoleMode ?? 'preserve',
       skipCharacterCardInTrackerGeneration,
-      ignoreWorldInfo,
       messageCount: messages.length,
       roles: messages.map((m: any) => m.role),
     });
 
-    if (trackerWorldInfoMode === TrackerWorldInfoPolicyMode.ALLOWLIST) {
+    try {
       const allowlistRows = settings.trackerWorldInfoAllowlist ?? [];
-      if (allowlistRows.length > 0) {
-        try {
-          debugLog(settingsManager, 'allowlist injection starting', { allowlistRows });
-          const sources = await resolveWorldInfoScopeSources(
+      const worldInfoText = await buildTrackerWorldInfoText({
+        mode: trackerWorldInfoMode,
+        rows: allowlistRows,
+        debug: !!settings.debugLogging,
+        resolveSources: () =>
+          resolveWorldInfoScopeSources(
             createHostWorldInfoScopeDeps(context, async () => Object.keys(await getWorldInfos(['global'], true))),
             { card: allowlistRows.some((r) => r.activeVia.includes('card')), global: allowlistRows.some((r) => r.activeVia.includes('global')) },
-          );
-          const worldInfoText = await buildAllowlistedWorldInfoText({
-            rows: allowlistRows,
-            sources,
-            debug: !!settings.debugLogging,
-            loadBookByName: (name) => loadWorldInfoBookByName(name, { debug: !!settings.debugLogging }),
-          });
-          if (worldInfoText) {
-            const firstNonSystem = messages.findIndex((m: any) => m.role !== 'system');
-            const insertAt = firstNonSystem === -1 ? messages.length : firstNonSystem;
-            messages.splice(insertAt, 0, { role: 'system', content: worldInfoText } as Message);
-
-            debugLog(settingsManager, 'allowlist injected', {
-              insertAt,
-              systemCount: messages.filter((m: any) => m.role === 'system').length,
-              injectedLength: worldInfoText.length,
-              allowlistBooks: allowlistRows.map((r) => r.book),
-              preview: worldInfoText.slice(0, 200),
-            });
-          } else {
-            debugLog(settingsManager, 'allowlist produced empty worldInfoText', { allowlistRows });
-          }
-        } catch (e) {
-          console.warn('zTracker: failed to load allowlisted World Info; proceeding without it.', e);
-        }
+          ),
+        loadBookByName: (name) => loadWorldInfoBookByName(name, { debug: !!settings.debugLogging }),
+        loadFullEntries: (name) => loadFullWorldInfoEntries(name, (book) => (context as any).loadWorldInfo(book)),
+        scan: (restrictTo) =>
+          scanWorldInfo({
+            host: {
+              getWorldInfoPrompt: (context as any).getWorldInfoPrompt,
+              eventSource: context.eventSource as any,
+              eventTypes: (context as any).eventTypes,
+              // streamingProcessor only exists while streaming; the host also marks any generation on <body>.
+              isGenerating: () =>
+                !!(SillyTavern.getContext() as any).streamingProcessor || document.body?.dataset?.generating === 'true',
+            },
+            chat: buildWorldInfoScanChat(globalContext.chat, messageId, settings.includeLastXMessages),
+            chatLength: globalContext.chat.length,
+            maxContext: st_getMaxContextSize(),
+            scanData: buildWorldInfoScanData(context, characterId),
+            restrictTo,
+          }),
+        // Only chat completion has a World Info format; text completion put World Info in the story string unwrapped.
+        wrapIncludeAll: (text) =>
+          apiMap.selected === 'textgenerationwebui'
+            ? text
+            : st_formatWorldInfo(text, {
+                wiFormat: (context.getPresetManager?.('openai') as any)?.getCompletionPresetByName?.(promptPresetSelections.presetName)?.wi_format,
+              }),
+      });
+      if (worldInfoText) {
+        const firstNonSystem = messages.findIndex((m: any) => m.role !== 'system');
+        const insertAt = firstNonSystem === -1 ? messages.length : firstNonSystem;
+        messages.splice(insertAt, 0, { role: 'system', content: worldInfoText } as Message);
+        debugLog(settingsManager, 'world info injected', {
+          mode: trackerWorldInfoMode,
+          insertAt,
+          injectedLength: worldInfoText.length,
+          preview: worldInfoText.slice(0, 200),
+        });
+      } else {
+        debugLog(settingsManager, 'world info produced no text', { mode: trackerWorldInfoMode });
       }
+    } catch (e) {
+      console.warn('zTracker: failed to build World Info; proceeding without it.', e);
     }
 
     // Text-completion prompt assembly can consume saved sysprompt presets directly.

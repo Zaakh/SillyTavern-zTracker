@@ -175,7 +175,7 @@ describe('tracker module defaults', () => {
         includeLastXMessages: 4,
         conversationRoleMode: 'all_assistant',
         worldInfoPolicyMode: 'allowlist',
-        worldInfoAllowlist: [{ book: 'Book', activeVia: [], entryIds: [] }],
+        worldInfoAllowlist: [{ book: 'Book', activeVia: [], entryIds: [], trigger: 'always' }],
       }),
     );
     expect(legacySettings.modules[0].schema).toEqual({
@@ -422,9 +422,17 @@ describe('normalizeWorldInfoAllowlist', () => {
     expect(
       normalizeWorldInfoAllowlist({ worldInfoAllowlistBookNames: ['Lore A', 'Lore B'], worldInfoAllowlistEntryIds: [1] } as any),
     ).toEqual([
-      { book: 'Lore A', activeVia: [], entryIds: [] },
-      { book: 'Lore B', activeVia: [], entryIds: [] },
+      { book: 'Lore A', activeVia: [], entryIds: [], trigger: 'always' },
+      { book: 'Lore B', activeVia: [], entryIds: [], trigger: 'always' },
     ]);
+  });
+
+  test('keeps a valid engine trigger and reads missing or invalid values as always, idempotently', () => {
+    const once = normalizeWorldInfoAllowlist({
+      worldInfoAllowlist: [{ book: 'A', trigger: 'engine' }, { book: 'B' }, { book: 'C', trigger: 'bogus' }],
+    });
+    expect(once.map((r) => r.trigger)).toEqual(['engine', 'always', 'always']);
+    expect(normalizeWorldInfoAllowlist({ worldInfoAllowlist: once })).toEqual(once);
   });
 
   test('sanitizes rows: blank/non-string/duplicate books, bad activeVia and entryIds', () => {
@@ -440,14 +448,23 @@ describe('normalizeWorldInfoAllowlist', () => {
         ],
       }),
     ).toEqual([
-      { book: 'Lore A', activeVia: ['card', 'global'], entryIds: [3, 0] },
-      { book: 'Plain', activeVia: [], entryIds: [] },
+      { book: 'Lore A', activeVia: ['card', 'global'], entryIds: [3, 0], trigger: 'always' },
+      { book: 'Plain', activeVia: [], entryIds: [], trigger: 'always' },
     ]);
   });
 
   test('tolerates missing or malformed input', () => {
     expect(normalizeWorldInfoAllowlist(undefined)).toEqual([]);
     expect(normalizeWorldInfoAllowlist({ worldInfoAllowlist: 'nope', worldInfoAllowlistBookNames: 5 })).toEqual([]);
+  });
+});
+
+describe('getSettingsForTrackerModule World Info rows', () => {
+  test('fills a missing trigger with always so the UI and generation read the same value', () => {
+    const settings = { modules: [createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 })] } as any;
+    settings.modules[0].generation.worldInfoAllowlist = [{ book: 'Stored', activeVia: [], entryIds: [] }];
+    const flat = getSettingsForTrackerModule(settings, 'scene');
+    expect(flat.trackerWorldInfoAllowlist).toEqual([{ book: 'Stored', activeVia: [], entryIds: [], trigger: 'always' }]);
   });
 });
 
@@ -461,7 +478,7 @@ describe('migrateTrackerModuleWorldInfoAllowlists', () => {
     const settings: any = { ...structuredClone(defaultSettings), modules: [module] };
 
     expect(migrateTrackerModuleWorldInfoAllowlists(settings)).toBe(true);
-    expect(settings.modules[0].generation.worldInfoAllowlist).toEqual([{ book: 'Lore A', activeVia: [], entryIds: [] }]);
+    expect(settings.modules[0].generation.worldInfoAllowlist).toEqual([{ book: 'Lore A', activeVia: [], entryIds: [], trigger: 'always' }]);
     expect(settings.modules[0].generation).not.toHaveProperty('worldInfoAllowlistBookNames');
     expect(settings.modules[0].generation).not.toHaveProperty('worldInfoAllowlistEntryIds');
     expect(migrateTrackerModuleWorldInfoAllowlists(settings)).toBe(false);

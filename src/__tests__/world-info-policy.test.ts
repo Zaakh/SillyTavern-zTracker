@@ -1,17 +1,6 @@
-import { TrackerWorldInfoPolicyMode } from '../config.js';
-import {
-  formatAllowlistedWorldInfo,
-  normalizeWorldInfoName,
-  shouldIgnoreWorldInfoDuringTrackerBuild,
-} from '../world-info-policy.js';
+import { formatAllowlistedWorldInfo, normalizeWorldInfoName } from '../world-info-policy.js';
 
 describe('world info policy', () => {
-  test('shouldIgnoreWorldInfoDuringTrackerBuild', () => {
-    expect(shouldIgnoreWorldInfoDuringTrackerBuild(TrackerWorldInfoPolicyMode.INCLUDE_ALL)).toBe(false);
-    expect(shouldIgnoreWorldInfoDuringTrackerBuild(TrackerWorldInfoPolicyMode.EXCLUDE_ALL)).toBe(true);
-    expect(shouldIgnoreWorldInfoDuringTrackerBuild(TrackerWorldInfoPolicyMode.ALLOWLIST)).toBe(true);
-  });
-
   test('normalizeWorldInfoName is case-insensitive', () => {
     expect(normalizeWorldInfoName('  My Book  ')).toBe('my book');
   });

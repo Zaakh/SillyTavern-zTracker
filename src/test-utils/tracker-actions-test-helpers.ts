@@ -12,6 +12,8 @@ export const renderTrackerWithDepsMock = jest.fn();
 export const stEchoMock = jest.fn();
 export const getWorldInfosMock = jest.fn<(...args: unknown[]) => Promise<Record<string, unknown[]>>>(async () => ({}));
 export const loadWorldInfoBookByNameMock = jest.fn<(name: string) => Promise<{ name: string; entries: unknown[] } | null>>();
+export const loadFullWorldInfoEntriesMock = jest.fn<(name: string) => Promise<Array<Record<string, unknown>> | null>>();
+export const scanWorldInfoMock = jest.fn<(options: any) => Promise<string>>(async () => '');
 export const includeZTrackerMessagesMock = jest.fn((messages: Array<unknown>) => [...messages]);
 const embeddedTrackerSnapshotMarker = Symbol('embeddedTrackerSnapshot');
 
@@ -110,6 +112,8 @@ jest.unstable_mockModule('sillytavern-utils-lib/config', () => ({
   characters: [],
   selected_group: false,
   st_echo: stEchoMock,
+  st_getMaxContextSize: () => 8192,
+  st_formatWorldInfo: (text: string, opts?: { wiFormat?: string }) => (opts?.wiFormat ? opts.wiFormat.replace('{0}', text) : text),
 }));
 
 jest.unstable_mockModule('sillytavern-utils-lib/types/popup', () => ({
@@ -128,7 +132,13 @@ jest.unstable_mockModule('../schema-to-example.js', () => ({
 
 jest.unstable_mockModule('../sillytavern-world-info.js', () => ({
   loadWorldInfoBookByName: loadWorldInfoBookByNameMock,
+  loadFullWorldInfoEntries: loadFullWorldInfoEntriesMock,
 }));
+
+// Only the scan call is faked; the input builders stay real so scan inputs can be asserted.
+const realWorldInfoScan = await import('../world-info-scan.js');
+export const realScanWorldInfo = realWorldInfoScan.scanWorldInfo;
+jest.unstable_mockModule('../world-info-scan.js', () => ({ ...realWorldInfoScan, scanWorldInfo: scanWorldInfoMock }));
 
 jest.unstable_mockModule('../tracker.js', () => ({
   applyTrackerUpdateAndRender: applyTrackerUpdateAndRenderMock,
@@ -447,6 +457,9 @@ export function resetTrackerActionTestState(): void {
   getWorldInfosMock.mockReset();
   getWorldInfosMock.mockImplementation(async () => ({}));
   loadWorldInfoBookByNameMock.mockReset();
+  loadFullWorldInfoEntriesMock.mockReset();
+  scanWorldInfoMock.mockReset();
+  scanWorldInfoMock.mockImplementation(async () => '');
   document.body.innerHTML = '';
   installExtensionsMenuDom();
 }

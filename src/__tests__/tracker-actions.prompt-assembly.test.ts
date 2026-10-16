@@ -914,7 +914,7 @@ describe('createTrackerActions prompt assembly', () => {
       'openai',
       expect.objectContaining({
         ignoreCharacterFields: true,
-        ignoreWorldInfo: false,
+        ignoreWorldInfo: true,
       }),
     );
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();

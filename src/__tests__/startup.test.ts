@@ -160,7 +160,7 @@ describe('initializeStartupSettings', () => {
 
     await initializeStartupSettings({ isFreshInstall: false, settingsManager, importMetaUrl: 'file:///dist/index.js' });
 
-    expect(settings.modules[0].generation.worldInfoAllowlist).toEqual([{ book: 'Lore A', activeVia: [], entryIds: [] }]);
+    expect(settings.modules[0].generation.worldInfoAllowlist).toEqual([{ book: 'Lore A', activeVia: [], entryIds: [], trigger: 'always' }]);
     expect(saveSettings).toHaveBeenCalledTimes(1);
 
     await initializeStartupSettings({ isFreshInstall: false, settingsManager, importMetaUrl: 'file:///dist/index.js' });

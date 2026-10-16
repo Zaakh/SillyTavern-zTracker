@@ -101,3 +101,16 @@ export async function loadWorldInfoBookByName(
     return null;
   }
 }
+
+/**
+ * Loads a lorebook's full entry objects (group, probability, filters, ...) through the host's own
+ * `loadWorldInfo`, which the activation engine needs for engine rows. Returns null when the book is missing.
+ */
+export async function loadFullWorldInfoEntries(
+  name: string,
+  loadWorldInfo: (name: string) => Promise<{ entries?: Record<string, unknown> } | null | undefined>,
+): Promise<Array<Record<string, any>> | null> {
+  const data = await loadWorldInfo(name);
+  if (!data?.entries || typeof data.entries !== 'object') return null;
+  return Object.values(data.entries).filter((e): e is Record<string, any> => !!e && typeof e === 'object');
+}

@@ -32,8 +32,8 @@ function buildMessage(messageId: number): string {
 
 /** Flushes pending microtasks so the async request reaches the in-flight badge state before assertions. */
 async function flushAsyncWork(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
+  // A macrotask hop lets the World Info scan step and the request reach the in-flight state.
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 describe('createTrackerActions context-menu indicator', () => {

@@ -13,7 +13,7 @@ describe('createImportedTrackerModule World Info allowlist', () => {
 
     const module = createImportedTrackerModule(imported, []);
 
-    expect(module.generation.worldInfoAllowlist).toEqual([{ book: 'Lore A', activeVia: [], entryIds: [] }]);
+    expect(module.generation.worldInfoAllowlist).toEqual([{ book: 'Lore A', activeVia: [], entryIds: [], trigger: 'always' }]);
     expect(module.generation).not.toHaveProperty('worldInfoAllowlistBookNames');
     expect(module.generation).not.toHaveProperty('worldInfoAllowlistEntryIds');
   });
@@ -21,7 +21,7 @@ describe('createImportedTrackerModule World Info allowlist', () => {
   test('keeps a new-shape allowlist and defaults to an empty one when absent', () => {
     const withRows: any = { name: 'New', generation: { worldInfoAllowlist: [{ book: 'B', activeVia: ['card'], entryIds: [1] }] } };
     expect(createImportedTrackerModule(withRows, []).generation.worldInfoAllowlist).toEqual([
-      { book: 'B', activeVia: ['card'], entryIds: [1] },
+      { book: 'B', activeVia: ['card'], entryIds: [1], trigger: 'always' },
     ]);
     expect(createImportedTrackerModule({ name: 'Bare' } as any, []).generation.worldInfoAllowlist).toEqual([]);
   });

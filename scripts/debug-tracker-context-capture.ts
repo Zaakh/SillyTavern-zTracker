@@ -24,6 +24,8 @@ jest.unstable_mockModule('sillytavern-utils-lib/config', () => ({
 	characters: [{ avatar: 'alice.png' }],
 	selected_group: false,
 	st_echo: stEchoMock,
+	st_getMaxContextSize: () => 8192,
+	st_formatWorldInfo: (text: string) => text,
 }));
 
 jest.unstable_mockModule('sillytavern-utils-lib/types/popup', () => ({

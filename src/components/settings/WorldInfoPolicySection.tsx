@@ -5,7 +5,13 @@
 import { FC, useCallback, useMemo, useRef, useState } from 'react';
 import { STButton } from 'sillytavern-utils-lib/components/react';
 import { getWorldInfos } from 'sillytavern-utils-lib';
-import { TrackerModuleSettings, TrackerWorldInfoActivation, TrackerWorldInfoPolicyMode } from '../../config.js';
+import {
+  TrackerModuleSettings,
+  TrackerWorldInfoActivation,
+  TrackerWorldInfoAllowlistRow,
+  TrackerWorldInfoPolicyMode,
+  TrackerWorldInfoTrigger,
+} from '../../config.js';
 import { useWorldInfoScopeStatus } from './useWorldInfoScopeStatus.js';
 
 function normalizeWorldInfoEntryIdAllowlist(text: string): number[] {
@@ -116,7 +122,7 @@ export const WorldInfoPolicySection: FC<{
       updateAndRefresh((s) => {
         const current = s.trackerWorldInfoAllowlist ?? [];
         if (current.some((row) => row.book.toLowerCase() === trimmed.toLowerCase())) return;
-        s.trackerWorldInfoAllowlist = [...current, { book: trimmed, activeVia: [], entryIds: [] }];
+        s.trackerWorldInfoAllowlist = [...current, { book: trimmed, activeVia: [], entryIds: [], trigger: 'engine' }];
       });
     },
     [updateAndRefresh],
@@ -133,7 +139,7 @@ export const WorldInfoPolicySection: FC<{
   );
 
   const updateRow = useCallback(
-    (book: string, patch: Partial<{ activeVia: TrackerWorldInfoActivation[]; entryIds: number[] }>) => {
+    (book: string, patch: Partial<Omit<TrackerWorldInfoAllowlistRow, 'book'>>) => {
       updateAndRefresh((s) => {
         s.trackerWorldInfoAllowlist = (s.trackerWorldInfoAllowlist ?? []).map((row) =>
           row.book === book ? { ...row, ...patch } : row,
@@ -175,8 +181,9 @@ export const WorldInfoPolicySection: FC<{
           <label title="World Info books (lorebooks) that are allowed when using the allowlist mode.">Allowed World Info books</label>
 
           <div className="notes">
-            Use the picker to add detected books. A book with no scope checked is always injected; checking a scope injects it only when
-            it is also active that way for the open chat.
+            Use the picker to add detected books. A book with no scope checked is always considered; checking a scope uses it only when
+            it is also active that way for the open chat. "Engine rules" lets SillyTavern pick entries (keywords, inclusion groups,
+            probability); "Always inject all" bypasses keywords, inclusion groups and the other activation rules.
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -244,6 +251,16 @@ export const WorldInfoPolicySection: FC<{
                     }}
                   >
                     <strong>{row.book}</strong>
+                    <select
+                      className="text_pole"
+                      aria-label={`Activation for ${row.book}`}
+                      value={row.trigger}
+                      onChange={(e) => updateRow(row.book, { trigger: e.target.value as TrackerWorldInfoTrigger })}
+                      title="Engine: SillyTavern decides which entries activate (keywords, inclusion groups, probability, budget). Always: every enabled entry is injected, bypassing keywords, inclusion groups and the other activation rules."
+                    >
+                      <option value="engine">Engine rules</option>
+                      <option value="always">Always inject all</option>
+                    </select>
                     <label title="Inject only if the book is attached to the open chat's character card (any member in a group chat) or is the chat-bound lorebook.">
                       <input type="checkbox" checked={row.activeVia.includes('card')} onChange={() => toggleScope(row, 'card')} /> Character
                       card or chat

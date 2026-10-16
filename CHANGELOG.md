@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.11.0] - 2026-10-16
+
+### Added
+
+- Each World Info allowlist book now has an **activation** setting: **Engine rules** (SillyTavern decides which entries activate: keywords, constants, inclusion groups, probability, recursion, budget) or **Always inject all** (every enabled entry, verbatim, as before). New rows default to Engine rules; existing rows migrate to Always inject all, so nothing changes until you opt in.
+
+### Changed
+
+- **Include-all** World Info is now scanned by zTracker as a dry run instead of the prompt builder's real run, and is injected as one system message (wrapped with the active chat-completion preset's World Info format) instead of the preset's before/after slots. Tracker generation no longer starts, advances or clears sticky/cooldown timers and no longer fires SillyTavern's World Info activated event. As a consequence sticky and cooldown are not applied to tracker generations, and depth, Author's Note and outlet positions are not reproduced (their content is joined into the same message).
+
+### Fixed
+
+- World Info inclusion groups, keyword/constant triggering, probability and character filters are now honored for allowlisted books set to **Engine rules**; allowlist mode previously injected every enabled entry and ignored all of them.
+
 ## [2.10.0] - 2026-10-13
 
 ### Added
