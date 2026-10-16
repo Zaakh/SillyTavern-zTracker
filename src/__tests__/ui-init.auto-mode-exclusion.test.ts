@@ -559,6 +559,9 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     (document.querySelector('.mes[mesid="0"] .mes_ztracker_button') as HTMLElement).dispatchEvent(
       new MouseEvent('click', { bubbles: true }),
     );
+    (document.querySelector('.ztracker-module-generate-option') as HTMLElement).dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
 
     expect(actions.generateTracker).toHaveBeenCalledWith(0, { showStatusIndicator: true });
   });

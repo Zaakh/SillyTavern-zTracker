@@ -190,7 +190,7 @@ function positionManualModuleMenu(menu: HTMLElement, button: HTMLElement): void 
   menu.style.top = `${Math.round(top)}px`;
 }
 
-/** Lets the truck button target any enabled Module when multiple Modules are available. */
+/** Lists every non-Off Module for the truck button, even when only one exists, and generates only after a pick. */
 function openManualModuleMenu(options: {
   actions: TrackerActions;
   button: HTMLElement;
@@ -199,13 +199,7 @@ function openManualModuleMenu(options: {
 }): void {
   const modules = getOrderedTrackerModules(options.settings);
   if (modules.length === 0) {
-    st_echo('warning', 'No zTracker Modules are enabled. Enable a Module before generating a tracker.');
-    return;
-  }
-
-  if (modules.length === 1) {
-    const moduleId = modules[0].id;
-    options.actions.generateTracker(options.messageId, withModuleActionOption({ showStatusIndicator: true }, moduleId));
+    st_echo('warning', 'No zTracker Modules are enabled. Set a Module to Manual or Auto before generating a tracker.');
     return;
   }
 

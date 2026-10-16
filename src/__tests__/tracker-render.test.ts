@@ -128,6 +128,31 @@ describe('renderTracker', () => {
     consoleErrorSpy.mockRestore();
   });
 
+  it('labels the stored block of an Off module with its name, not its id', () => {
+    const offModule = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 0 });
+    offModule.enabled = false;
+    const context: TrackerContext = {
+      chat: [
+        {
+          extra: {
+            [EXTENSION_KEY]: {
+              [CHAT_MESSAGE_MODULES_KEY]: {
+                agenda: {
+                  [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { task: 'Find the exit' },
+                  [CHAT_MESSAGE_SCHEMA_HTML_KEY]: '<div class="agenda-content">{{data.task}}</div>',
+                },
+              },
+            },
+          },
+        } as any,
+      ],
+    };
+
+    renderTracker(0, { context, document, handlebars: Handlebars, settings: { modules: [offModule] } as any });
+
+    expect(document.querySelector('.ztracker-module-label')?.textContent).toBe('Agenda');
+  });
+
   it('re-renders one module block without replacing other module blocks', () => {
     const agendaModule = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 0 });
     const defaultModule = createDefaultTrackerModule({ id: DEFAULT_MODULE_ID, name: 'Scene', order: 1 });

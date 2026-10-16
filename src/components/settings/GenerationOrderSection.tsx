@@ -24,7 +24,7 @@ export const GenerationOrderSection: FC<{
           >
             <span className="ztracker-generation-order-index">{index + 1}.</span>
             <span className="ztracker-generation-order-name">{module.name}</span>
-            {!module.enabled && <span className="ztracker-module-badge is-off">Disabled</span>}
+            {!module.enabled && <span className="ztracker-module-badge is-off">Off</span>}
             <div className="ztracker-generation-order-controls">
               <button
                 type="button"

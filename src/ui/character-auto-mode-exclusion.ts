@@ -302,7 +302,7 @@ export function findCharacterPanelButtonRow(root: ParentNode = document): HTMLEl
 
 /** Suffix appended to a tooltip when the owning Module is hard-disabled, since a disabled Module cannot generate regardless of any override set here. */
 function disabledModuleSuffix(module: TrackerModule): string {
-  return module.enabled ? '' : ' (Module is currently disabled and will not generate until re-enabled.)';
+  return module.enabled ? '' : ' (Module is currently Off and will not generate until set to Manual or Auto.)';
 }
 
 /** Builds the tooltip for the single-Module inline toggle, describing that Module's current override. */

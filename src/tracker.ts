@@ -187,8 +187,10 @@ function getRenderableTrackerModules(
     return [];
   }
 
-  const configuredModules = settings ? getOrderedTrackerModules(settings) : [];
-  const configuredNames = new Map(configuredModules.map((module) => [module.id, module.name]));
+  const allModules = settings ? getOrderedTrackerModules(settings, { includeDisabled: true }) : [];
+  const configuredModules = allModules.filter((module) => module.enabled);
+  // Off Modules keep their saved blocks, so their names must resolve too.
+  const configuredNames = new Map(allModules.map((module) => [module.id, module.name]));
   const orderedIds = configuredModules.length > 0
     ? configuredModules.map((module) => module.id)
     : Object.keys(records).sort((left, right) => {

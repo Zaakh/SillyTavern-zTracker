@@ -1023,7 +1023,7 @@ describe('settings sections', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0].querySelector('.ztracker-generation-order-name')?.textContent).toBe('Scene');
     expect(rows[1].querySelector('.ztracker-generation-order-name')?.textContent).toBe('Agenda');
-    expect(rows[1].querySelector('.ztracker-module-badge')?.textContent).toBe('Disabled');
+    expect(rows[1].querySelector('.ztracker-module-badge')?.textContent).toBe('Off');
 
     const firstRowButtons = Array.from(rows[0].querySelectorAll('button'));
     const secondRowButtons = Array.from(rows[1].querySelectorAll('button'));

@@ -9,28 +9,12 @@ export const GenerationBehaviorSection: FC<SettingsSectionProps> = ({ settings, 
   return (
     <>
       <div className="setting-row">
-        <label title="Turns automatic tracker generation on or off for this Module. The trigger direction below is remembered even while this is off.">
-          Auto Mode Enabled
-        </label>
-        <input
-          type="checkbox"
-          title="Turns automatic tracker generation on or off for this Module. The trigger direction below is remembered even while this is off."
-          checked={settings.autoModeEnabled}
-          onChange={(e) =>
-            updateAndRefresh((s) => {
-              s.autoModeEnabled = e.target.checked;
-            })
-          }
-        />
-      </div>
-
-      <div className="setting-row">
-        <label title="Controls which chat events trigger automatic generation for this Module: incoming assistant messages, your inputs, or both. Stays editable even while Auto Mode Enabled is off, since a per-character 'on' override uses this direction regardless.">
+        <label title="Controls which chat events trigger automatic generation for this Module: incoming assistant messages, your inputs, or both. Stays editable while the Module is not Auto, since a per-character 'on' override uses this direction regardless.">
           Direction
         </label>
         <select
           className="text_pole"
-          title="Controls which chat events trigger automatic generation for this Module: incoming assistant messages, your inputs, or both. Stays editable even while Auto Mode Enabled is off, since a per-character 'on' override uses this direction regardless."
+          title="Controls which chat events trigger automatic generation for this Module: incoming assistant messages, your inputs, or both. Stays editable while the Module is not Auto, since a per-character 'on' override uses this direction regardless."
           value={settings.autoModeDirection}
           onChange={(e) =>
             updateAndRefresh((s) => {
