@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.13.0] - 2026-10-16
+
+### Added
+
+- The schema lint reports token-wasting nesting as notes: a `maxItems: 1` array, an array of one-field objects, a non-root one-field object, and same-shaped sibling arrays (merge into one array with a `kind` field). Flattening changes the stored data shape, so the template must change with it. Generate schema now tells the model to avoid these and re-asks (up to twice) if a reply still contains a wrapper.
+
 ## [2.12.0] - 2026-10-16
 
 ### Added

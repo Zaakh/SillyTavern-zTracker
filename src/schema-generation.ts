@@ -68,6 +68,7 @@ export function buildDialectCheatSheet(): string {
     '- Do NOT use $ref, $defs, oneOf, anyOf, allOf or patternProperties; inline every shape instead.',
     '- Omit "additionalProperties".',
     '- An array of objects needs a unique string field (named "name", or declare it with "x-ztracker-idKey") so single items can be regenerated.',
+    '- Never wrap a single value in an array or object; use the value directly. Use an array of objects only when items have two or more fields. Prefer one array with a "kind" field over several arrays with the same item shape.',
     '- "x-ztracker-dependsOn" (top-level fields only) lists other top-level fields that must be generated first.',
     '- Do not copy the example field names unless the brief calls for them; design fields for the brief.',
   ].join('\n');
@@ -196,6 +197,10 @@ function countSeverity(findings: SchemaDialectFinding[], severity: SchemaDialect
   return findings.filter((finding) => finding.severity === severity).length;
 }
 
+function countWrappers(findings: SchemaDialectFinding[]): number {
+  return findings.filter((finding) => finding.kind === 'wrapper').length;
+}
+
 /** Brief -> lint-checked schema, repairing from findings for at most MAX_SCHEMA_ATTEMPTS replies. */
 export async function generateSchemaFromBrief(options: {
   brief: string;
@@ -242,14 +247,19 @@ export async function generateSchemaFromBrief(options: {
     const findings = lintSchemaDialect(schema, mode, grammarEnabled);
     const errors = countSeverity(findings, 'error');
     const warnings = countSeverity(findings, 'warning');
+    const wrappers = countWrappers(findings);
     const bestErrors = best ? countSeverity(best.findings, 'error') : Infinity;
     const bestWarnings = best ? countSeverity(best.findings, 'warning') : Infinity;
-    if (errors < bestErrors || (errors === bestErrors && warnings <= bestWarnings)) {
+    const bestWrappers = best ? countWrappers(best.findings) : Infinity;
+    if (
+      errors < bestErrors ||
+      (errors === bestErrors && (warnings < bestWarnings || (warnings === bestWarnings && wrappers <= bestWrappers)))
+    ) {
       best = { schema, findings };
     }
 
-    if (errors + warnings === 0) break;
-    messages = buildRepairMessages(messages, reply, { findings: findings.filter((finding) => finding.severity !== 'info') });
+    if (errors + warnings + wrappers === 0) break;
+    messages = buildRepairMessages(messages, reply, { findings: findings.filter((finding) => finding.severity !== 'info' || finding.kind === 'wrapper') });
   }
 
   return { schema: best?.schema, findings: best?.findings ?? [], attempts, parsed: !!best };

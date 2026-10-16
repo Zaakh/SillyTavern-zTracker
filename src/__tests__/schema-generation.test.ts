@@ -43,6 +43,7 @@ describe('dialect cheat sheet', () => {
     for (const keyword of PROMPT_SCHEMA_KEYWORD_ALLOWLIST) expect(sheet).toContain(keyword);
     expect(sheet).toMatch(/Omit "additionalProperties"/);
     expect(sheet).toMatch(/Do not copy the example field names/);
+    expect(sheet).toMatch(/Never wrap a single value/);
   });
 });
 
@@ -160,6 +161,41 @@ describe('generateSchemaFromBrief', () => {
       expect(request).toHaveBeenCalledTimes(1);
       expect(result.findings.filter((finding) => finding.severity !== 'info')).toEqual([]);
     }
+  });
+
+  describe('wrapper findings', () => {
+    const str = { type: 'string', description: 'x' };
+    const WRAP = (n: number) => {
+      const props: Record<string, unknown> = {};
+      // One-field object items: a wrapper finding with no warning, so only the wrapper logic is exercised.
+      const oneField = { type: 'object', description: 'i', properties: { v: str }, required: ['v'] };
+      for (let i = 0; i < n; i += 1) props[`k${i}`] = { type: 'array', description: 'a', items: oneField };
+      return { type: 'object', description: 'T', properties: props, required: Object.keys(props) };
+    };
+    const SIBLINGS = (() => {
+      const item = { type: 'object', description: 'i', properties: { name: str, note: str }, required: ['name', 'note'] };
+      return { type: 'object', description: 'T', properties: { x: { type: 'array', description: 'x', items: item }, y: { type: 'array', description: 'y', items: item } }, required: ['x', 'y'] };
+    })();
+
+    test('a wrapper-only reply retries with the finding', async () => {
+      const request = scripted([JSON.stringify(WRAP(1)), JSON.stringify(CLEAN)]);
+      const result = await run(request);
+      expect(request).toHaveBeenCalledTimes(2);
+      expect(JSON.stringify(request.mock.calls[1][0])).toMatch(/single property/);
+      expect(result.schema).toEqual(CLEAN);
+    });
+
+    test('a sibling-only reply does not retry', async () => {
+      const request = scripted([JSON.stringify(SIBLINGS)]);
+      await run(request);
+      expect(request).toHaveBeenCalledTimes(1);
+    });
+
+    test('fewer wrappers win a tie', async () => {
+      const result = await run(scripted([JSON.stringify(WRAP(2)), JSON.stringify(WRAP(1)), JSON.stringify(WRAP(2))]));
+      expect(result.schema).toEqual(WRAP(1));
+    });
+
   });
 });
 
