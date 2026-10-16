@@ -146,7 +146,7 @@ When editing a schema preset's JSON or HTML in **Extensions → zTracker**, chan
 zTracker honors only a subset of JSON Schema: `type`, `properties`, `items`, `required`, `enum`, `const`, `default`, `format`, `description`, `title`, and the `x-ztracker-*` annotations. The editor lists findings for the current Schema JSON draft:
 - **Errors** block saving Schema JSON: an array with no `items`, or an object with no `properties`.
 - **Warnings** flag things silently dropped from JSON/XML/TOON prompts (`$ref`/`$defs`, `oneOf`/`anyOf`/`allOf`, `patternProperties`, any other keyword such as `minLength`/`pattern`, `additionalProperties` while grammar enforcement is off), arrays of objects with neither `x-ztracker-idKey` nor a `name` field, and invalid `x-ztracker-dependsOn` references or cycles.
-- **Notes** list fields with no `description`. Descriptions are what actually tell the model what to write (TOON mode drops them).
+- **Notes** list fields with no `description`. Descriptions are what actually tell the model what to write (TOON mode drops them). Notes also flag wrappers that only cost tokens: a `maxItems: 1` array, an array of one-field objects, a one-field object, and same-shaped sibling arrays that could be one array with a `kind` field. Flattening changes the stored data shape, so the HTML template must change with it; `x-ztracker-idKey` on array items opts out.
 
 **Diagnostics** reports the same findings for every Module and preset.
 
@@ -156,7 +156,7 @@ Don't want to hand-write the HTML template? Click **Generate HTML from schema** 
 
 Instead of writing everything by hand, describe the tracker in the **Design brief** box (saved with the Module) and use the three buttons next to it (hover each for what it produces, reads and replaces):
 
-- **Generate schema** (model): drafts the Schema JSON from your brief. The draft is checked by the dialect lint and sent back for repair up to twice if it has errors or warnings; the best attempt stays in the draft with its findings shown. Nothing is saved until you click Save.
+- **Generate schema** (model): drafts the Schema JSON from your brief. The draft is checked by the dialect lint and sent back for repair up to twice if it has errors, warnings or wrapper notes; the best attempt stays in the draft with its findings shown. Nothing is saved until you click Save.
 - **Generate HTML from schema** (no model): derives the HTML from the Schema JSON draft, as above. Run it after a schema was generated.
 - **Generate prompts** (model): writes a system prompt and a base prompt from your brief and the current Schema JSON draft and **applies them immediately**, saving a system prompt preset named `zTracker-<module id>-generated` (overwritten on each run). Your globally selected SillyTavern system prompt is not changed.
 

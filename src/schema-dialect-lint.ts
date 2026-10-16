@@ -24,6 +24,8 @@ export interface SchemaDialectFinding {
   /** Author-facing field path (e.g. `characters[].name`), or `(root)` for a schema-wide finding. */
   path: string;
   message: string;
+  /** Set on information-free wrapper findings so the generation repair loop can count them without matching message text. */
+  kind?: 'wrapper';
 }
 
 /**
@@ -169,12 +171,56 @@ function checkAdditionalProperties(node: Record<string, any>, path: string, ctx:
   }
 }
 
+function hasIdKey(itemsSchema: Record<string, any>): boolean {
+  const idKey = itemsSchema['x-ztracker-idKey'];
+  return typeof idKey === 'string' && idKey.trim().length > 0;
+}
+
+/** Wrapper findings are info: the schema is valid and honored, but each nesting level costs tokens in the prompt, the reply and every embedded snapshot. */
+function pushWrapperInfo(ctx: LintContext, path: string, message: string): void {
+  ctx.findings.push({
+    severity: 'info',
+    path,
+    message: `${message} Flattening changes the stored data shape, so the template must change with it.`,
+    kind: 'wrapper',
+  });
+}
+
+/** Normalized item shape (property names, types, enums; descriptions ignored) used to spot same-shaped sibling arrays. */
+function itemShapeSignature(itemsSchema: Record<string, any>): string | undefined {
+  if (!isObjectSchema(itemsSchema) || !isPlainObject(itemsSchema.properties)) return undefined;
+  const props = itemsSchema.properties;
+  // One-field items already get the (better) flatten-to-values wrapper finding.
+  if (Object.keys(props).length < 2) return undefined;
+  return JSON.stringify(
+    Object.keys(props)
+      .sort()
+      .map((key) => [key, isPlainObject(props[key]) ? [props[key].type, props[key].enum] : null]),
+  );
+}
+
+function checkSiblingArrays(properties: Record<string, any>, path: string, ctx: LintContext): void {
+  const groups = new Map<string, string[]>();
+  for (const [key, child] of Object.entries(properties)) {
+    if (!isPlainObject(child) || !isArraySchema(child) || !isPlainObject(child.items)) continue;
+    const signature = itemShapeSignature(child.items);
+    if (signature) groups.set(signature, [...(groups.get(signature) ?? []), key]);
+  }
+  for (const keys of groups.values()) {
+    if (keys.length > 1) {
+      ctx.findings.push({
+        severity: 'info',
+        path,
+        message: `${describePath(path)} has arrays (${keys.join(', ')}) whose items have the same shape; consider one array with a discriminator field (e.g. "kind"). Merging removes them as separate parts for per-part regeneration and ordering, and the template must change with it.`,
+      });
+    }
+  }
+}
+
 /** An array of objects with no explicit identity annotation and no `name` property leaves per-item regeneration/cleanup unable to target items in it. */
 function checkArrayItemIdentity(itemsSchema: Record<string, any>, arrayPath: string, ctx: LintContext): void {
-  const idKey = itemsSchema['x-ztracker-idKey'];
-  const hasIdKey = typeof idKey === 'string' && idKey.trim().length > 0;
   const hasNameProperty = isPlainObject(itemsSchema.properties) && Object.prototype.hasOwnProperty.call(itemsSchema.properties, 'name');
-  if (!hasIdKey && !hasNameProperty) {
+  if (!hasIdKey(itemsSchema) && !hasNameProperty) {
     pushWarning(
       ctx,
       arrayPath,
@@ -195,6 +241,11 @@ function lintObjectNode(node: Record<string, any>, path: string, ctx: LintContex
     pushNoPropertiesError(ctx, path);
     return;
   }
+  // An array's `items` node (path ending in `[]`) is reported by the array check instead.
+  if (propertyKeys.length === 1 && path !== ROOT_PATH && !path.endsWith('[]')) {
+    pushWrapperInfo(ctx, path, `${describePath(path)} is an object with a single property "${propertyKeys[0]}"; the field can be that property directly.`);
+  }
+  checkSiblingArrays(properties!, path, ctx);
   for (const key of propertyKeys) {
     const childSchema = properties![key];
     const childPath = appendFieldPath(path, key);
@@ -216,8 +267,16 @@ function lintArrayNode(node: Record<string, any>, path: string, ctx: LintContext
   }
 
   const itemsSchema = node.items;
+  if (node.maxItems === 1) {
+    pushWrapperInfo(ctx, path, `Array ${describePath(path)} has "maxItems: 1"; use the item directly instead of a one-element list.`);
+  }
   if (isPlainObject(itemsSchema) && isObjectSchema(itemsSchema)) {
-    checkArrayItemIdentity(itemsSchema, path, ctx);
+    const itemKeys = isPlainObject(itemsSchema.properties) ? Object.keys(itemsSchema.properties) : [];
+    if (itemKeys.length === 1 && !hasIdKey(itemsSchema)) {
+      pushWrapperInfo(ctx, path, `Array ${describePath(path)} holds objects with the single property "${itemKeys[0]}"; the array can hold those values directly.`);
+    } else {
+      checkArrayItemIdentity(itemsSchema, path, ctx);
+    }
   }
   lintNode(itemsSchema, appendArrayItemPath(path), ctx);
 }

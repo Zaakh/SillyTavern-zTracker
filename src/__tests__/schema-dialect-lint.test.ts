@@ -226,7 +226,7 @@ describe('lintSchemaDialect', () => {
           characters: {
             type: 'array',
             description: 'x',
-            items: { type: 'object', description: 'x', properties: { hair: { type: 'string', description: 'x' } }, ...itemsExtra },
+            items: { type: 'object', description: 'x', properties: { hair: { type: 'string', description: 'x' }, eyes: { type: 'string', description: 'x' } }, ...itemsExtra },
           },
         },
       };
@@ -355,6 +355,83 @@ describe('lintSchemaDialect', () => {
       expect(isUnsupportedSchema({ oneOf: [] })).toBe(true);
       expect(isUnsupportedSchema({})).toBe(true);
       expect(isUnsupportedSchema({ type: 'string' })).toBe(false);
+    });
+  });
+});
+
+describe('information-free wrapper and sibling-array findings', () => {
+  const str = (d = 'd') => ({ type: 'string', description: d });
+  const root = (properties: Record<string, unknown>) => ({ type: 'object', description: 'T', properties, required: Object.keys(properties) });
+  const wrappers = (schema: unknown) => lint(schema).filter((f) => f.kind === 'wrapper');
+  const siblings = (schema: unknown) => lint(schema).filter((f) => f.severity === 'info' && /same shape/.test(f.message));
+
+  it('reports maxItems: 1 arrays', () => {
+    const found = wrappers(root({ a: { type: 'array', description: 'a', maxItems: 1, items: str() } }));
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ severity: 'info', path: 'a' });
+    expect(found[0].message).toMatch(/stored data shape/);
+  });
+
+  it('reports array items with one property, without an identity warning', () => {
+    const findings = lint(root({ a: { type: 'array', description: 'a', items: { type: 'object', description: 'i', properties: { text: str() }, required: ['text'] } } }));
+    expect(findings.filter((f) => f.kind === 'wrapper')).toHaveLength(1);
+    expect(errorsAndWarnings(findings)).toEqual([]);
+  });
+
+  it('lets x-ztracker-idKey opt an array out', () => {
+    const items = { type: 'object', description: 'i', 'x-ztracker-idKey': 'text', properties: { text: str() }, required: ['text'] };
+    expect(wrappers(root({ a: { type: 'array', description: 'a', items } }))).toEqual([]);
+  });
+
+  it('gives one-field sibling arrays only wrapper findings, and no identity warning with an idKey', () => {
+    const items = { type: 'object', description: 'i', properties: { text: str() }, required: ['text'] };
+    const findings = lint(root({ a: { type: 'array', description: 'a', items }, b: { type: 'array', description: 'b', items } }));
+    expect(findings.filter((f) => f.kind === 'wrapper')).toHaveLength(2);
+    expect(findings.filter((f) => /same shape/.test(f.message))).toEqual([]);
+    const keyed = { ...items, 'x-ztracker-idKey': 'text' };
+    expect(lint(root({ a: { type: 'array', description: 'a', items: keyed } }))).toEqual([]);
+  });
+
+  it('does not double-report a one-field object nested in array items', () => {
+    const inner = { type: 'object', description: 'in', properties: { v: str() }, required: ['v'] };
+    const items = { type: 'object', description: 'i', properties: { name: str(), inner }, required: ['name', 'inner'] };
+    const found = wrappers(root({ a: { type: 'array', description: 'a', items } }));
+    expect(found.map((f) => f.path)).toEqual(['a[].inner']);
+  });
+
+  it('does not report multi-field items', () => {
+    const items = { type: 'object', description: 'i', properties: { name: str(), note: str() }, required: ['name', 'note'] };
+    expect(wrappers(root({ a: { type: 'array', description: 'a', items } }))).toEqual([]);
+  });
+
+  it('reports a non-root single-property object, but not the root', () => {
+    const found = wrappers(root({ scene: { type: 'object', description: 's', properties: { place: str() }, required: ['place'] } }));
+    expect(found).toHaveLength(1);
+    expect(found[0].path).toBe('scene');
+    expect(wrappers(root({ only: str() }))).toEqual([]);
+  });
+
+  it('never raises severity above info', () => {
+    const schema = root({ scene: { type: 'object', description: 's', properties: { place: str() }, required: ['place'] } });
+    expect(errorsAndWarnings(lint(schema))).toEqual([]);
+  });
+
+  describe('same-shaped sibling arrays', () => {
+    const item = (extra = 'b') => ({ type: 'object', description: 'i', properties: { name: str(), [extra]: str() }, required: ['name', extra] });
+    const arr = (items: unknown) => ({ type: 'array', description: 'a', items });
+
+    it('reports identical siblings once, naming them, in every mode', () => {
+      const schema = root({ likes: arr(item()), dislikes: arr(item()) });
+      for (const mode of [PromptEngineeringMode.JSON, PromptEngineeringMode.TOON]) {
+        const found = lintSchemaDialect(schema, mode, false).filter((f) => /same shape/.test(f.message));
+        expect(found).toHaveLength(1);
+        expect(found[0].severity).toBe('info');
+        expect(found[0].message).toMatch(/likes, dislikes/);
+      }
+    });
+
+    it('does not report differently shaped siblings', () => {
+      expect(siblings(root({ likes: arr(item('b')), dislikes: arr(item('c')) }))).toEqual([]);
     });
   });
 });
