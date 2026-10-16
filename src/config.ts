@@ -117,15 +117,19 @@ export interface TrackerModuleIncludeEntry {
 /** Where an allowlisted book must also be active to be injected: its card (or chat-bound book) and/or the global selection. */
 export type TrackerWorldInfoActivation = 'card' | 'global';
 
+/** How an allowlisted book's entries activate: 'engine' runs SillyTavern's World Info rules, 'always' injects every enabled entry verbatim. */
+export type TrackerWorldInfoTrigger = 'engine' | 'always';
+
 /**
  * One allowlisted lorebook. An empty `activeVia` means "always inject"; otherwise the book is
  * injected only when it is active through one of the listed sources. `entryIds` limits injection
- * to those entry UIDs of this book (empty = all enabled entries).
+ * to those entry UIDs of this book (empty = all enabled entries). `trigger` picks the activation mode.
  */
 export interface TrackerWorldInfoAllowlistRow {
   book: string;
   activeVia: TrackerWorldInfoActivation[];
   entryIds: number[];
+  trigger: TrackerWorldInfoTrigger;
 }
 
 export interface TrackerModuleGenerationSettings {
@@ -815,6 +819,8 @@ export function normalizeWorldInfoAllowlist(
       entryIds: Array.isArray(fields.entryIds)
         ? [...new Set(fields.entryIds.filter((id): id is number => Number.isInteger(id) && id >= 0))]
         : [],
+      // Rows stored before the trigger existed keep their verbatim-injection behavior.
+      trigger: fields.trigger === 'engine' ? 'engine' : 'always',
     });
   }
   return rows;
@@ -922,7 +928,8 @@ export function getSettingsForTrackerModule(settings: ExtensionSettings, moduleI
     promptToon: module.prompts.promptToon,
     grammarEnforcementEnabled: module.prompts.grammarEnforcementEnabled,
     trackerWorldInfoPolicyMode: module.generation.worldInfoPolicyMode,
-    trackerWorldInfoAllowlist: module.generation.worldInfoAllowlist,
+    // Stored rows can predate newer row fields; normalizing here is the single place that fills them.
+    trackerWorldInfoAllowlist: normalizeWorldInfoAllowlist({ worldInfoAllowlist: module.generation.worldInfoAllowlist }),
   };
 }
 

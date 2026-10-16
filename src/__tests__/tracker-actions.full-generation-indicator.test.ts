@@ -37,8 +37,8 @@ function buildMessage(messageId: number): string {
 
 /** Flushes pending microtasks so async tracker setup reaches the request boundary before assertions. */
 async function flushAsyncWork(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
+  // A macrotask hop lets the World Info scan step and the request reach the in-flight state.
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 describe('createTrackerActions full generation indicator', () => {

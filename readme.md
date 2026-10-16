@@ -172,12 +172,23 @@ If a dependency-linked array becomes inconsistent during generation, zTracker no
 
 In **Extensions → zTracker**, you can control World Info during tracker generation: include all (default), exclude all, or allowlist specific lorebooks (names are case-insensitive). This only affects zTracker tracker generation (button / Auto Mode), not normal SillyTavern generations.
 
-In allowlist mode, zTracker loads each allowlisted lorebook by name and injects its enabled entries into the tracker-generation prompt. Each book has an **activation scope**:
+In allowlist mode, zTracker uses only the allowlisted lorebooks. Each book has an **activation scope**:
 
-- **No scope checked (default):** always injected, even if the book is not active anywhere in SillyTavern.
-- **Character card or chat:** injected only if the book is attached to the open chat's character card (primary or additional lorebook) or is the chat-bound lorebook. In a group chat, any member's card counts (disabled members included).
-- **Global:** injected only if the book is globally selected.
-- Both checked: injected if either holds.
+- **No scope checked (default):** always used, even if the book is not active anywhere in SillyTavern.
+- **Character card or chat:** used only if the book is attached to the open chat's character card (primary or additional lorebook) or is the chat-bound lorebook. In a group chat, any member's card counts (disabled members included).
+- **Global:** used only if the book is globally selected.
+- Both checked: used if either holds.
+
+Each allowlisted book also has an **activation** setting:
+
+- **Engine rules** (default for newly added books): SillyTavern's own World Info engine decides which of the book's entries activate (keywords, constants, inclusion groups, probability, recursion, budget, character filters). Only the allowlisted books (and their entry UIDs, if set) are considered; other active lorebooks are ignored.
+- **Always inject all** (what existing allowlists migrate to): every enabled entry is injected as plain content, bypassing keywords, inclusion groups and the other activation rules.
+
+How World Info reaches the tracker prompt:
+
+- All World Info, in every mode, is delivered as **one system message** placed before the first chat message. In "Allow all" mode with a chat-completion connection it is wrapped with the active preset's World Info format (text completion has no such format, so it is injected as-is). Position settings (before/after character, depth, Author's Note, outlets) are not reproduced; their content is joined into that message.
+- Tracker generation scans World Info as a **dry run**: it never starts, advances or clears sticky/cooldown timers and never fires SillyTavern's activated event. The flip side is that sticky and cooldown are not applied to tracker scans (an entry that is sticky in the chat is not kept alive for the tracker, and an entry on cooldown can still appear), and entry `delay` is evaluated against the real chat length.
+- Known limits: character filters use the character currently selected in SillyTavern, not the tracker's target character; a scan clears entries force-activated by other extensions or slash commands before your next generation; a restricted (Engine rules) scan waits briefly for an in-progress SillyTavern generation to finish; the engine path needs SillyTavern 1.18 or newer, otherwise no World Info is injected.
 
 A book can optionally list **entry UIDs** to inject only those entries. Click **Refresh book list** to detect available books, search/select one, and **Add** it. When a scope is not satisfied by the open chat, the row shows a warning that it will be skipped (and "cannot be checked" when no chat is open). The check runs when the section is shown and when rows change; use **Recheck** after switching chats.
 

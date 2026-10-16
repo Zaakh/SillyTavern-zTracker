@@ -545,8 +545,8 @@ describe('settings sections', () => {
   const flush = () => act(async () => { await Promise.resolve(); await Promise.resolve(); });
   const rowTexts = () => Array.from(document.querySelectorAll('[data-testid="world-info-row"]')).map((r) => r.textContent ?? '');
 
-  test('refreshes, filters, adds (as always rows, ignoring duplicates) and removes allowlisted books', async () => {
-    const settings = renderAllowlist([{ book: 'Existing', activeVia: [], entryIds: [] }]);
+  test('refreshes, filters, adds (as engine rows, ignoring duplicates) and removes allowlisted books', async () => {
+    const settings = renderAllowlist([{ book: 'Existing', activeVia: [], entryIds: [], trigger: 'always' }]);
     getWorldInfosMock.mockResolvedValue({ 'Lore B': {}, 'Lore A': {} });
 
     const refreshButton = document.querySelector('button[title="Refresh detected books"]') as HTMLButtonElement;
@@ -564,15 +564,15 @@ describe('settings sections', () => {
     const addButton = document.querySelector('button[title="Add selected book"]') as HTMLButtonElement;
     act(() => addButton.click());
     expect(settings.trackerWorldInfoAllowlist).toEqual([
-      { book: 'Existing', activeVia: [], entryIds: [] },
-      { book: 'Lore B', activeVia: [], entryIds: [] },
+      { book: 'Existing', activeVia: [], entryIds: [], trigger: 'always' },
+      { book: 'Lore B', activeVia: [], entryIds: [], trigger: 'engine' },
     ]);
 
     act(() => addButton.click());
     expect(settings.trackerWorldInfoAllowlist).toHaveLength(2);
 
     act(() => (document.querySelector('button[title="Remove"]') as HTMLButtonElement).click());
-    expect(settings.trackerWorldInfoAllowlist).toEqual([{ book: 'Lore B', activeVia: [], entryIds: [] }]);
+    expect(settings.trackerWorldInfoAllowlist).toEqual([{ book: 'Lore B', activeVia: [], entryIds: [], trigger: 'engine' }]);
     expect(document.querySelectorAll('textarea')).toHaveLength(0);
   });
 
@@ -593,6 +593,17 @@ describe('settings sections', () => {
       uidInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
     });
     expect(settings.trackerWorldInfoAllowlist[0].entryIds).toEqual([12, 42, 7]);
+  });
+
+  test('the per-row trigger select switches between engine and always', () => {
+    const settings = renderAllowlist([{ book: 'Lore A', activeVia: [], entryIds: [], trigger: 'always' }]);
+    const select = document.querySelector('select[aria-label="Activation for Lore A"]') as HTMLSelectElement;
+    expect(select.value).toBe('always');
+
+    act(() => setSelectValue(select, 'engine'));
+    expect(settings.trackerWorldInfoAllowlist[0].trigger).toBe('engine');
+    act(() => setSelectValue(select, 'always'));
+    expect(settings.trackerWorldInfoAllowlist[0].trigger).toBe('always');
   });
 
   describe('scope status', () => {

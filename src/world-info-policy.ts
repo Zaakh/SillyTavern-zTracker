@@ -1,5 +1,3 @@
-import { TrackerWorldInfoPolicyMode } from './config.js';
-
 export interface WorldInfoEntry {
   uid: number;
   key: string[];
@@ -7,10 +5,6 @@ export interface WorldInfoEntry {
   comment?: string;
   disable: boolean;
   keysecondary?: string[];
-}
-
-export function shouldIgnoreWorldInfoDuringTrackerBuild(mode: TrackerWorldInfoPolicyMode): boolean {
-  return mode !== TrackerWorldInfoPolicyMode.INCLUDE_ALL;
 }
 
 export function normalizeWorldInfoName(name: string): string {

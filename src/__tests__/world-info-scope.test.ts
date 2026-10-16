@@ -11,7 +11,7 @@ import {
   resolveWorldInfoScopeSources,
 } from '../world-info-scope.js';
 
-const row = (book: string, activeVia: any[] = []) => ({ book, activeVia, entryIds: [] });
+const row = (book: string, activeVia: any[] = []) => ({ book, activeVia, entryIds: [], trigger: 'always' as const });
 
 function makeDeps(overrides: any = {}) {
   return {
