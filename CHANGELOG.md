@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.12.0] - 2026-10-16
+
 ### Added
 
 - A **Module State** selector (Off / Manual / Auto) replaces the Module Enabled checkbox, and the Module list shows the same state. Manual Modules generate only on demand but are still injected and chainable.
