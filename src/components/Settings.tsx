@@ -40,6 +40,12 @@ import {
   resolvePresetSelection,
 } from './settings/preset-state.js';
 import { createImportedTrackerModule, parseImportedTrackerModule } from './settings/module-import.js';
+import {
+  applyModuleActivation,
+  getModuleActivation,
+  MODULE_ACTIVATION_LABELS,
+  type ModuleActivation,
+} from './settings/module-activation.js';
 import { generateHtmlFromSchema } from './settings/generate-schema-html.js';
 import { SchemaGenerationControls } from './settings/SchemaGenerationControls.js';
 import { useSchemaGeneration, type SchemaGenerationOptions } from './settings/useSchemaGeneration.js';
@@ -77,6 +83,9 @@ type CurrentChatSchemaPresetState = {
 };
 
 const MODULE_EXPORT_VERSION = 1;
+const ACTIVATION_TOOLTIP =
+  'Off: no generation, injection, chaining, or manual menu entry; saved tracker blocks stay visible. Manual: generates only when you trigger it, and is still injected and chainable. Auto: also generates automatically.';
+const activationBadgeClass: Record<ModuleActivation, string> = { off: 'is-off', manual: 'is-on', auto: 'is-auto' };
 
 function normalizeModuleOrder(modules: TrackerModule[]): void {
   modules.forEach((module, index) => {
@@ -816,12 +825,9 @@ export const ZTrackerSettings: FC<{
                         <span className="ztracker-module-row-marker fa-solid fa-pen" aria-hidden="true"></span>
                         <span className="ztracker-module-row-name">{module.name}</span>
                         <span className="ztracker-module-row-badges">
-                          <span className={`ztracker-module-badge ${module.enabled ? 'is-on' : 'is-off'}`}>
-                            {module.enabled ? 'Enabled' : 'Disabled'}
+                          <span className={`ztracker-module-badge ${activationBadgeClass[getModuleActivation(module)]}`}>
+                            {MODULE_ACTIVATION_LABELS[getModuleActivation(module)]}
                           </span>
-                          {module.auto.enabled && (
-                            <span className="ztracker-module-badge is-auto">Auto</span>
-                          )}
                         </span>
                       </button>
                     );
@@ -868,15 +874,20 @@ export const ZTrackerSettings: FC<{
               </div>
 
             <div className="setting-row">
-              <label title="Controls whether this Module generates, injects context, and appears in manual generation actions. Existing saved tracker blocks remain visible until deleted.">Module Enabled</label>
-              <input
-                type="checkbox"
-                checked={selectedModule.enabled}
+              <label title={ACTIVATION_TOOLTIP}>Module State</label>
+              <select
+                className="text_pole"
+                title={ACTIVATION_TOOLTIP}
+                value={getModuleActivation(selectedModule)}
                 onChange={(e) => updateAndRefresh((currentSettings) => {
                   const module = resolveOrCreateModule(currentSettings, selectedModule.id);
-                  module.enabled = e.target.checked;
+                  applyModuleActivation(module, e.target.value as ModuleActivation);
                 })}
-              />
+              >
+                <option value="off">{MODULE_ACTIVATION_LABELS.off}</option>
+                <option value="manual">{MODULE_ACTIVATION_LABELS.manual}</option>
+                <option value="auto">{MODULE_ACTIVATION_LABELS.auto}</option>
+              </select>
             </div>
 
             <div className="setting-row">

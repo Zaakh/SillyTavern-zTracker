@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.12.0] - 2026-10-16
+
+### Added
+
+- A **Module State** selector (Off / Manual / Auto) replaces the Module Enabled checkbox, and the Module list shows the same state. Manual Modules generate only on demand but are still injected and chainable.
+- The message truck menu always lists the Manual and Auto Modules, even when only one exists, instead of generating immediately.
+
+### Changed
+
+- The separate **Auto Mode Enabled** checkbox is merged into the Module State selector; **Direction** is unchanged. The Generation Order and character-panel hints now say **Off** instead of disabled.
+
+### Fixed
+
+- Saved tracker blocks of an Off Module are labeled with the Module name instead of its internal id.
+
 ## [2.11.0] - 2026-10-16
 
 ### Added

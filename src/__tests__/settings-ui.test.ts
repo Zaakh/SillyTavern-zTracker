@@ -676,6 +676,41 @@ describe('zTracker settings connection source UI', () => {
     return { json: rerenderedSchemaJsonTextarea.value, html: rerenderedSchemaHtmlTextarea.value };
   }
 
+  test('Module State selector writes enabled/auto flags, explains Off, and replaces both checkboxes', () => {
+    const container = renderSettings();
+    const select = container.querySelector('select[title^="Off:"]') as HTMLSelectElement | null;
+    if (!select) throw new Error('Module State select not found');
+    const module = () => mockSettings.modules[0];
+
+    expect(select.value).toBe('manual');
+    expect(container.textContent).not.toContain('Auto Mode Enabled');
+    expect(container.textContent).not.toContain('Module Enabled');
+    expect(select.title).toContain('saved tracker blocks stay visible');
+
+    for (const [value, enabled, auto] of [['manual', true, false], ['off', false, false], ['auto', true, true]] as const) {
+      act(() => {
+        select.value = value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      expect([module().enabled, module().auto.enabled]).toEqual([enabled, auto]);
+    }
+
+    const badge = container.querySelector('.ztracker-module-row .ztracker-module-badge');
+    expect(badge?.textContent).toBe('Auto');
+  });
+
+  test('Module list and order view label Off and Manual Modules', () => {
+    seedModuleSettings();
+    mockSettings.modules[0].enabled = false;
+    mockSettings.modules[0].auto.enabled = true;
+    mockSettings.modules[1].auto.enabled = false;
+    const container = renderSettings();
+
+    const labels = Array.from(container.querySelectorAll('.ztracker-module-row .ztracker-module-badge')).map((b) => b.textContent);
+    expect(labels).toEqual(['Off', 'Manual']);
+    expect(container.querySelector('.ztracker-generation-order .ztracker-module-badge')?.textContent).toBe('Off');
+  });
+
   test('hides the saved profile picker in active connection mode', () => {
     const container = renderSettings();
 
@@ -685,7 +720,7 @@ describe('zTracker settings connection source UI', () => {
 
   test('shows the saved profile picker after switching to saved connection mode', () => {
     const container = renderSettings();
-    const select = container.querySelector('select');
+    const select = container.querySelector('select[title^="Choose whether zTracker uses"]');
     if (!(select instanceof HTMLSelectElement)) {
       throw new Error('Connection source select not found');
     }

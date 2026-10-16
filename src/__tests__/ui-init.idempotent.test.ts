@@ -102,6 +102,12 @@ describe('initializeGlobalUI idempotence', () => {
       new MouseEvent('click', { bubbles: true }),
     );
 
+
+    expect(actions.generateTracker).not.toHaveBeenCalled();
+    (document.querySelector('.ztracker-module-generate-option[data-ztracker-module="default"]') as HTMLElement).dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
+
     expect(actions.generateTracker).toHaveBeenCalledTimes(1);
     expect(actions.generateTracker).toHaveBeenCalledWith(0, { showStatusIndicator: true });
   });
@@ -172,7 +178,7 @@ describe('initializeGlobalUI idempotence', () => {
     expect(document.querySelector('.ztracker-module-generate-menu')).toBeNull();
   });
 
-  test('uses the only enabled Module directly from the message truck button', async () => {
+  test('lists the only enabled Module and generates only after it is picked from the message truck button', async () => {
     const host = createSillyTavernHost();
     const actions = createUiInitActions();
     const agendaModule = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 0 });
@@ -196,8 +202,43 @@ describe('initializeGlobalUI idempotence', () => {
       new MouseEvent('click', { bubbles: true }),
     );
 
+    expect(document.querySelectorAll('.ztracker-module-generate-option')).toHaveLength(1);
+
+    expect(actions.generateTracker).not.toHaveBeenCalled();
+    (document.querySelector('.ztracker-module-generate-option[data-ztracker-module="agenda"]') as HTMLElement).dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
+
     expect(actions.generateTracker).toHaveBeenCalledTimes(1);
     expect(actions.generateTracker).toHaveBeenCalledWith(0, { showStatusIndicator: true, moduleId: 'agenda' });
+  });
+
+  test('lists a Manual Module (enabled, auto off) in the message truck menu', async () => {
+    const host = createSillyTavernHost();
+    const actions = createUiInitActions();
+    const manualModule = createDefaultTrackerModule({ id: 'manual', name: 'Manual', order: 0 });
+    manualModule.auto.enabled = false;
+    installSillyTavernHost(host.context);
+    installExtensionsMenuDom();
+    installMessageTemplateDom();
+    installChatMessageDom(0, {
+      innerHtml: '<div class="mes_button mes_ztracker_button"></div><div class="mes_text">Message 0</div>',
+    });
+
+    await initializeGlobalUI({
+      globalContext: host.context,
+      settingsManager: {
+        getSettings: jest.fn(() => ({ autoMode: 'none', modules: [manualModule] })),
+      } as any,
+      actions,
+      renderTrackerWithDeps: jest.fn(),
+    });
+
+    (document.querySelector('.mes[mesid="0"] .mes_ztracker_button') as HTMLElement).dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
+
+    expect(document.querySelector('.ztracker-module-generate-option[data-ztracker-module="manual"]')).not.toBeNull();
   });
 
   test('does not fall back to Default when no Module is enabled from the message truck button', async () => {
@@ -226,6 +267,6 @@ describe('initializeGlobalUI idempotence', () => {
     );
 
     expect(actions.generateTracker).not.toHaveBeenCalled();
-    expect(stEchoMock).toHaveBeenCalledWith('warning', 'No zTracker Modules are enabled. Enable a Module before generating a tracker.');
+    expect(stEchoMock).toHaveBeenCalledWith('warning', 'No zTracker Modules are enabled. Set a Module to Manual or Auto before generating a tracker.');
   });
 });

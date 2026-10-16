@@ -279,6 +279,21 @@ describe('character auto-mode override button sync', () => {
     expect(document.querySelector('.ztracker-character-auto-mode-popup')).toBeNull();
   });
 
+  test('hint for an Off module says Off, not disabled', () => {
+    document.body.innerHTML = '<div id="form_create"><div class="avatar_button_row"></div></div>';
+    const context = {
+      characterId: 0,
+      characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+      writeExtensionField: jest.fn(),
+    };
+    const offModule = makeModule('scene', true);
+    offModule.enabled = false;
+
+    const button = syncCharacterAutoModeButton({ getContext: () => context, modules: [offModule] });
+
+    expect(button?.title).toContain('currently Off');
+  });
+
   test('multi-module setup opens a popup with one 3-state control per module', () => {
     document.body.innerHTML = '<div id="form_create"><div class="avatar_button_row"></div></div>';
     const context = {

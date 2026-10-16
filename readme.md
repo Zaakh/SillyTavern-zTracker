@@ -35,7 +35,7 @@ The original single tracker is upgraded into the **Default** Module the first ti
 
 You can add, clone, reorder, delete, export, and import Modules from the settings panel. Export downloads a `.json` file with the Module's full configuration (schema presets, prompts, system prompt, connection, generation, and injection settings); Import reads such a file back through a file picker. Deleting a Module also removes that Module's saved tracker data from the current chat history.
 
-When more than one Module is enabled, the message truck button opens a Module chooser for manual generation. Disabling a Module removes it from generation, injection, and that chooser, but already-saved tracker blocks stay visible until you delete them.
+Each Module has a **Module State** selector with three values: **Off** (no generation, injection, chaining, or chooser entry), **Manual** (generates only when you trigger it, but is still injected and chainable once it has snapshots), and **Auto** (also generates automatically; the **Direction** setting picks which chat events trigger it). The message truck button always opens a chooser listing the Manual and Auto Modules, even when only one exists. Already-saved tracker blocks of an Off Module stay visible, labeled with the Module name, until you delete them.
 
 ### Chaining tracker history across Modules
 
@@ -55,7 +55,7 @@ Each of these Modules ships its own tailored system prompt, installed as a dedic
 
 **If you import Plot Log and Plot Steer manually, import Plot Log first.** Plot Steer's history of Plot Log is a chained include entry, which only works when its target Module was imported earlier and is ordered earlier in **Generation Order**. Importing Plot Steer first leaves that entry dormant (shown with a warning icon in Settings) until you also import Plot Log and confirm the order. The automatic seeding on a fresh install always creates them in the correct order.
 
-**Plot Steer auto-generates by default once enabled**, right after each of your messages and before the character's reply, using whichever SillyTavern connection is currently active in the chat. This means one extra LLM call every turn once enabled - leave it disabled, or turn off its Auto Mode in Settings, if you'd rather trigger it manually.
+**Plot Steer auto-generates by default once enabled**, right after each of your messages and before the character's reply, using whichever SillyTavern connection is currently active in the chat. This means one extra LLM call every turn once enabled - leave it **Off**, or set its Module State to **Manual** in Settings, if you'd rather trigger it yourself.
 
 ## Installation
 
@@ -114,7 +114,7 @@ If character-card prose is adding noise to extraction, enable **Skip character c
 
 If the model seems to over-weight who said a line instead of the scene content itself, change **Conversation role handling** in **Extensions → zTracker** from **Preserve user and assistant roles** to **Treat all chat turns as assistant**. This only changes how zTracker labels chat turns during tracker-generation requests; it does not affect normal chat generation or tracker snapshot injection.
 
-To change how a specific character participates in **Auto Mode**, open that character's panel and use the zTracker truck control in the avatar action row. With one Module configured, clicking it cycles that Module's override for this character: **Default** (use the Module's own Auto Mode setting) → **Off** (never auto-generate for this character on that Module) → **On** (always auto-generate for this character on that Module, using that Module's configured direction, even if Auto Mode is off for everyone else) → back to **Default**. With multiple Modules configured, clicking the control opens a small menu so you can set each Module's override independently. This only affects **Auto Mode**; manual tracker generation from message controls always works regardless of the override.
+To change how a specific character participates in **Auto Mode**, open that character's panel and use the zTracker truck control in the avatar action row. With one Module configured, clicking it cycles that Module's override for this character: **Default** (follow the Module's own state: only an **Auto** Module generates automatically) → **Off** (never auto-generate for this character on that Module) → **On** (always auto-generate for this character on that Module, using that Module's configured direction, even if the Module is Manual for everyone else) → back to **Default**. With multiple Modules configured, clicking the control opens a small menu so you can set each Module's override independently. This only affects **Auto Mode**; manual tracker generation from message controls always works regardless of the override.
 
 When a tracker is rendered on a message, use the tracker controls:
 - **Regenerate Tracker** (rotate icon) regenerates the whole tracker.
