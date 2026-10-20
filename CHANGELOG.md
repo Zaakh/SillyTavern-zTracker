@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.14.0] - 2026-10-20
+
 ### Changed
 
 - Settings drawer layout: **Add** and **Import** sit in the Modules header, while Up/Down, Clone, Export and a separated, red **Delete** sit under the list. Module rows show their generation position and a hint explains that a Module can only chain in Modules listed above it.
