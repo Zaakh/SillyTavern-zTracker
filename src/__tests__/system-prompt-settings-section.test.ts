@@ -12,8 +12,8 @@ import { jest } from '@jest/globals';
 import React, { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 
-const buttonMock = jest.fn(({ children, onClick, title, className }: any) =>
-  React.createElement('button', { type: 'button', title, className, onClick }, children),
+const buttonMock = jest.fn(({ children, className, ...props }: any) =>
+  React.createElement('button', { type: 'button', ...props, className: ['menu_button', 'interactable', className].filter(Boolean).join(' ') }, children),
 );
 
 jest.unstable_mockModule('sillytavern-utils-lib/components/react', () => ({

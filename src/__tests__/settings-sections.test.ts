@@ -74,9 +74,8 @@ const presetSelectMock = jest.fn(
     ),
 );
 
-const buttonMock = jest.fn(
-  ({ children, onClick, title, disabled }: { children?: React.ReactNode; onClick?: () => void; title?: string; disabled?: boolean }) =>
-    React.createElement('button', { type: 'button', title, disabled, onClick }, children),
+const buttonMock = jest.fn(({ children, className, ...props }: any) =>
+  React.createElement('button', { type: 'button', ...props, className: ['menu_button', 'interactable', className].filter(Boolean).join(' ') }, children),
 );
 
 const textareaMock = jest.fn(
@@ -160,7 +159,6 @@ const { SystemPromptSettingsSection } = await import('../components/settings/Sys
 const { WorldInfoPolicySection } = await import('../components/settings/WorldInfoPolicySection.js');
 const { EmbedSnapshotTransformSection } = await import('../components/settings/EmbedSnapshotTransformSection.js');
 const { DiagnosticsSection } = await import('../components/settings/DiagnosticsSection.js');
-const { GenerationOrderSection } = await import('../components/settings/GenerationOrderSection.js');
 const { IncludeModulesSection } = await import('../components/settings/IncludeModulesSection.js');
 const { GenerationPromptTemplatesSection } = await import('../components/settings/GenerationPromptTemplatesSection.js');
 const { TrackerWorldInfoPolicyMode, PromptEngineeringMode, createDefaultTrackerModule } = await import('../config.js');
@@ -464,6 +462,34 @@ describe('settings sections', () => {
     expect(document.body.textContent).toContain('Not confirmed for this connection.');
   });
 
+  test('Test button sits in its own row beside the result, and restore icons name the value they restore', async () => {
+    const settings = {
+      promptEngineeringMode: PromptEngineeringMode.JSON,
+      prompt: 'native prompt',
+      promptJson: 'json prompt',
+      promptXml: 'xml prompt',
+      promptToon: 'toon prompt',
+      grammarEnforcementEnabled: true,
+    } as any;
+    const testGrammarSchemaEnforcement = jest.fn<any>().mockResolvedValue({ supported: true, message: 'Supported.' });
+
+    ({ root } = renderElement(
+      React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh: jest.fn(), moduleId: 'm', testGrammarSchemaEnforcement }),
+    ));
+
+    const testButton = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Test') as HTMLButtonElement;
+    expect(testButton.closest('label')).toBeNull();
+    const row = testButton.closest('.ztracker-button-row') as HTMLElement;
+    await act(async () => {
+      testButton.click();
+      await Promise.resolve();
+    });
+    expect(testGrammarSchemaEnforcement).toHaveBeenCalledWith('m');
+    expect(row.textContent).toContain('Supported.');
+
+    expect(document.querySelector('button[aria-label="Restore Prompt to its default value"]')).not.toBeNull();
+  });
+
   test('discards a stale Test result that resolves after the selected Module has changed', async () => {
     // Regression test for a module-switch race: an in-flight Test request for the previously
     // selected Module must not overwrite the newly selected Module's (reset) result once it
@@ -574,6 +600,21 @@ describe('settings sections', () => {
     act(() => (document.querySelector('button[title="Remove"]') as HTMLButtonElement).click());
     expect(settings.trackerWorldInfoAllowlist).toEqual([{ book: 'Lore B', activeVia: [], entryIds: [], trigger: 'engine' }]);
     expect(document.querySelectorAll('textarea')).toHaveLength(0);
+  });
+
+  test('add row reads Search, Select, Add; Refresh and Recheck are grouped apart; remove names the book', () => {
+    renderAllowlist([{ book: 'Lore A', activeVia: [], entryIds: [] }]);
+
+    const rows = Array.from(document.querySelectorAll('.ztracker-worldinfo-allowlist > .ztracker-button-row'));
+    expect(rows).toHaveLength(2);
+    const [addRow, secondaryRow] = rows;
+    expect(Array.from(addRow.children).map((el) => el.tagName)).toEqual(['INPUT', 'SELECT', 'BUTTON']);
+    expect(addRow.querySelector('button')?.textContent).toBe('Add');
+    expect(Array.from(secondaryRow.querySelectorAll('button')).map((b) => b.textContent)).toEqual(['Refresh book list', 'Recheck']);
+
+    const remove = document.querySelector('[data-testid="world-info-row"] button[title="Remove"]') as HTMLButtonElement;
+    expect(remove.getAttribute('aria-label')).toBe('Remove Lore A');
+    expect(remove.querySelector('i.fa-xmark')).not.toBeNull();
   });
 
   test('toggling scope checkboxes and the UID field persist onto the row', () => {
@@ -1007,33 +1048,5 @@ describe('settings sections', () => {
     });
 
     expect(agenda.generation.includeModules).toEqual([{ target: 'self', count: 1 }]);
-  });
-
-  test('lists modules in generation order and calls moveModule with the right module id and direction', () => {
-    const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
-    const agenda = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
-    agenda.enabled = false;
-    const moveModule = jest.fn();
-
-    ({ root } = renderElement(
-      React.createElement(GenerationOrderSection, { orderedModules: [scene, agenda], moveModule }),
-    ));
-
-    const rows = document.querySelectorAll('.ztracker-generation-order-row');
-    expect(rows).toHaveLength(2);
-    expect(rows[0].querySelector('.ztracker-generation-order-name')?.textContent).toBe('Scene');
-    expect(rows[1].querySelector('.ztracker-generation-order-name')?.textContent).toBe('Agenda');
-    expect(rows[1].querySelector('.ztracker-module-badge')?.textContent).toBe('Off');
-
-    const firstRowButtons = Array.from(rows[0].querySelectorAll('button'));
-    const secondRowButtons = Array.from(rows[1].querySelectorAll('button'));
-    expect(firstRowButtons.find((button) => button.textContent === 'Up')?.hasAttribute('disabled')).toBe(true);
-    expect(secondRowButtons.find((button) => button.textContent === 'Down')?.hasAttribute('disabled')).toBe(true);
-
-    act(() => {
-      secondRowButtons.find((button) => button.textContent === 'Up')?.click();
-    });
-
-    expect(moveModule).toHaveBeenCalledWith('agenda', -1);
   });
 });

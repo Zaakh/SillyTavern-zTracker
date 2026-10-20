@@ -1,4 +1,5 @@
 import { FC } from 'react';
+import { STButton } from 'sillytavern-utils-lib/components/react';
 import type { TrackerModule } from '../../config.js';
 import { getEligibleChainableModules, resolveTrackerModuleIncludeEntries } from '../../tracker-module-chaining.js';
 import { sanitizeIntegerSetting } from '../../settings-numeric.js';
@@ -77,9 +78,9 @@ export const IncludeModulesSection: FC<SettingsSectionProps & { selectedModule: 
                   }
                 />
                 {!resolved.isSelf && (
-                  <button type="button" className="menu_button" onClick={() => removeEntry(index)}>
+                  <STButton type="button" className="ztracker-btn-secondary" onClick={() => removeEntry(index)}>
                     Remove
-                  </button>
+                  </STButton>
                 )}
               </div>
             );

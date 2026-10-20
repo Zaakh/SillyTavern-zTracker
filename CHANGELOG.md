@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Settings drawer layout: **Add** and **Import** sit in the Modules header, while Up/Down, Clone, Export and a separated, red **Delete** sit under the list. Module rows show their generation position and a hint explains that a Module can only chain in Modules listed above it.
+- **Save JSON** / **Save HTML** now sit directly under their textarea (before lint findings), **Generate HTML from schema** sits between the two editors, and **Restore JSON and HTML to default** moved to the bottom as a secondary button.
+- The Design brief actions are labeled buttons below the brief, **Generate schema (draft)** and **Generate prompts (applies now)**, with a labeled **Cancel** while running.
+- World Info allowlist: the add row reads Search, Select, Add; **Refresh book list** and **Recheck** are grouped as secondary actions; the row remove button is an icon. The grammar **Test** button no longer sits inside the checkbox label.
+- Buttons share one look (primary, secondary, danger); icon buttons that name their target (rename/delete preset, remove book, restore default) have accessible names that say which value they act on. The preset selector notes that the preset list is shared by all Modules.
+
+### Removed
+
+- The **Generation Order** drawer, which only repeated the Module list. Reorder with the Up/Down buttons under the Module list.
+
 ## [2.13.0] - 2026-10-16
 
 ### Added

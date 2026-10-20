@@ -11,9 +11,8 @@ const selectMock = jest.fn(
     React.createElement('select', { 'data-testid': title?.includes('modifying') ? 'default-schema-select' : 'current-chat-schema-select', value: value ?? '', onChange, title }, children),
 );
 
-const buttonMock = jest.fn(
-  ({ title, disabled, onClick }: { title?: string; disabled?: boolean; onClick?: () => void }) =>
-    React.createElement('button', { type: 'button', title, disabled, onClick }),
+const buttonMock = jest.fn(({ children, ...props }: any) =>
+  React.createElement('button', { type: 'button', title: props.title, disabled: props.disabled, onClick: props.onClick, 'aria-label': props['aria-label'] }, children),
 );
 
 const textareaMock = jest.fn(
@@ -154,6 +153,32 @@ describe('SchemaPresetSection', () => {
     expect(container.querySelector('button[title="Create a new schema preset"]')).not.toBeNull();
     expect(container.querySelector('button[title="Rename selected schema preset"]')).not.toBeNull();
     expect(container.querySelector('button[title="Delete selected schema preset"]')).not.toBeNull();
+  });
+
+  test('Save sits right after its textarea, before findings, and the preset list is marked shared', () => {
+    const container = renderSection({
+      schemaPresetKey: 'alternate',
+      schemaDialectFindings: [{ severity: 'warning', path: '$.a', message: 'uses $ref' }],
+    });
+
+    const saveJson = container.querySelector('button[title^="Save the current Schema JSON"]') as HTMLElement;
+    const findings = container.querySelector('.ztracker-schema-warning') as HTMLElement;
+    expect(saveJson.textContent).toContain('Save JSON');
+    expect(saveJson.compareDocumentPosition(findings) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const order = ['Schema JSON', 'Generate HTML from schema', 'Schema HTML', 'Restore JSON and HTML to default'].map((text) =>
+      (container.textContent ?? '').indexOf(text),
+    );
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(container.textContent).toContain('Preset list is shared by all Modules.');
+  });
+
+  test('rename and delete expose accessible names that include the selected preset name', () => {
+    const container = renderSection({ schemaPresetKey: 'alternate' });
+
+    expect(container.querySelector('button[aria-label="Rename schema preset Alternate"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Delete schema preset Alternate"]')).not.toBeNull();
   });
 
   test('disables rename and delete for the read-only default preset', () => {

@@ -98,14 +98,16 @@ export const DiagnosticsSection: FC<{
       <div className="setting-row">
         <div className="title_restorable">
           <span title="Checks whether required zTracker HTML templates are reachable from SillyTavern (helps debug 404s).">Diagnostics</span>
-          <STButton className="fa-solid fa-stethoscope" title="Run diagnostics" onClick={runDiagnostics} />
+          <STButton type="button" className="ztracker-btn-secondary" title="Run diagnostics" onClick={runDiagnostics}>
+            <i className="fa-solid fa-stethoscope" aria-hidden="true"></i> Run diagnostics
+          </STButton>
         </div>
         <textarea
           className="text_pole"
           readOnly
           value={diagnosticsText}
           rows={6}
-          placeholder="Click the stethoscope button to generate diagnostics (also prints to console.debug)."
+          placeholder="Click Run diagnostics to generate diagnostics (also prints to console.debug)."
         />
       </div>
     </>

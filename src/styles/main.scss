@@ -71,6 +71,43 @@
 		opacity: 0.7;
 	}
 
+	// Treatments: primary is the plain menu_button; secondary is de-emphasised, danger marks destructive actions.
+	// Declared after :disabled so the disabled look still wins via its !important background.
+	button.menu_button.ztracker-btn-secondary {
+		background: transparent;
+		opacity: 0.85;
+	}
+
+	button.menu_button.ztracker-btn-danger {
+		color: var(--error-color, #f44336);
+		border-color: var(--error-color, #f44336);
+	}
+
+	.ztracker-button-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.ztracker-button-row-end {
+		margin-left: auto;
+	}
+
+	.ztracker-module-header {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 6px;
+	}
+
+	.ztracker-module-row-position {
+		flex: 0 0 auto;
+		min-width: 1.6em;
+		opacity: 0.7;
+	}
+
 	.ztracker-module-manager {
 		display: flex;
 		flex-direction: column;
@@ -186,12 +223,6 @@
 		}
 	}
 
-	.ztracker-module-actions {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 4px;
-	}
-
 	.ztracker-module-detail {
 		display: flex;
 		flex-direction: column;
@@ -219,54 +250,6 @@
 
 		strong {
 			color: var(--SmartThemeQuoteColor, #e18a24);
-		}
-	}
-
-	.ztracker-generation-order {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-
-	.ztracker-generation-order-list {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-
-	.ztracker-generation-order-row {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 6px 10px;
-		border-radius: 6px;
-		border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.18));
-		background: var(--black30a, rgba(0, 0, 0, 0.3));
-
-		.ztracker-generation-order-index {
-			flex: 0 0 auto;
-			opacity: 0.7;
-		}
-
-		.ztracker-generation-order-name {
-			flex: 1 1 auto;
-			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
-		}
-
-		.ztracker-generation-order-controls {
-			flex: 0 0 auto;
-			display: flex;
-			gap: 4px;
-		}
-
-		&.is-disabled .ztracker-generation-order-name {
-			opacity: 0.65;
-			font-style: italic;
 		}
 	}
 
@@ -311,6 +294,41 @@
 				color: var(--warning, #e1a324);
 			}
 		}
+	}
+
+	.ztracker-worldinfo-allowlist {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.ztracker-worldinfo-search {
+		flex: 1 1 160px;
+		min-width: 0;
+	}
+
+	.ztracker-worldinfo-select {
+		flex: 2 1 200px;
+		min-width: 0;
+	}
+
+	.ztracker-worldinfo-row {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 10px;
+		padding: 4px 8px;
+		border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.18));
+		border-radius: 6px;
+	}
+
+	.ztracker-worldinfo-entry-ids {
+		width: 170px;
+		max-width: 100%;
+	}
+
+	.ztracker-worldinfo-remove {
+		padding: 0 6px;
 	}
 
 	.ztracker-settings-section {

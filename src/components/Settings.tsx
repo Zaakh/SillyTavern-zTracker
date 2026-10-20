@@ -1,5 +1,5 @@
 import { FC, useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { STConnectionProfileSelect, PresetItem } from 'sillytavern-utils-lib/components/react';
+import { STButton, STConnectionProfileSelect, PresetItem } from 'sillytavern-utils-lib/components/react';
 import { ExtensionSettingsManager } from 'sillytavern-utils-lib';
 import { st_echo } from 'sillytavern-utils-lib/config';
 import {
@@ -60,7 +60,6 @@ import {
   shouldSyncSchemaTextFromSettings,
   validateSchemaPresetDraftPair,
 } from './settings/schema-editor-state.js';
-import { GenerationOrderSection } from './settings/GenerationOrderSection.js';
 import { SettingsSectionDrawer } from './settings/SettingsSectionDrawer.js';
 import { TrackerGenerationSection } from './settings/TrackerGenerationSection.js';
 import { TrackerInjectionSection } from './settings/TrackerInjectionSection.js';
@@ -230,7 +229,6 @@ export const ZTrackerSettings: FC<{
   const [isRecreatingSystemPrompt, setRecreatingSystemPrompt] = useState(false);
   const [isGenerationOpen, setGenerationOpen] = useState(true);
   const [isInjectionOpen, setInjectionOpen] = useState(true);
-  const [isOrderOpen, setOrderOpen] = useState(false);
 
   const [schemaText, setSchemaText] = useState(formatSchemaText(moduleSettings.schemaPresets[moduleSettings.schemaPreset]));
   const [schemaHtmlText, setSchemaHtmlText] = useState(formatSchemaHtml(moduleSettings.schemaPresets[moduleSettings.schemaPreset]));
@@ -713,9 +711,9 @@ export const ZTrackerSettings: FC<{
     });
   };
 
-  const moveModuleById = (moduleId: string, direction: -1 | 1) => {
+  const moveSelectedModule = (direction: -1 | 1) => {
     updateModuleList((modules) => {
-      const index = modules.findIndex((module) => module.id === moduleId);
+      const index = modules.findIndex((module) => module.id === selectedModule.id);
       const nextIndex = index + direction;
       if (index < 0 || nextIndex < 0 || nextIndex >= modules.length) {
         return undefined;
@@ -724,8 +722,6 @@ export const ZTrackerSettings: FC<{
       return selectedModuleId;
     });
   };
-
-  const moveSelectedModule = (direction: -1 | 1) => moveModuleById(selectedModule.id, direction);
 
   const deleteSelectedModule = async () => {
     if (orderedModules.length <= 1) {
@@ -809,10 +805,20 @@ export const ZTrackerSettings: FC<{
         <div className="inline-drawer-content">
           <div className="ztracker-container">
             <div className="setting-row">
-              <label>Modules</label>
+              <div className="ztracker-module-header">
+                <label>Modules</label>
+                <div className="ztracker-button-row">
+                  <STButton type="button" onClick={addModule}>
+                    <i className="fa-solid fa-plus" aria-hidden="true"></i> Add
+                  </STButton>
+                  <STButton type="button" onClick={() => void importModule()}>
+                    <i className="fa-solid fa-file-import" aria-hidden="true"></i> Import
+                  </STButton>
+                </div>
+              </div>
               <div className="ztracker-module-manager">
                 <div className="ztracker-module-list">
-                  {orderedModules.map((module) => {
+                  {orderedModules.map((module, index) => {
                     const isSelected = module.id === selectedModule.id;
                     return (
                       <button
@@ -823,6 +829,7 @@ export const ZTrackerSettings: FC<{
                         onClick={() => setSelectedModuleId(module.id)}
                       >
                         <span className="ztracker-module-row-marker fa-solid fa-pen" aria-hidden="true"></span>
+                        <span className="ztracker-module-row-position">{index + 1}.</span>
                         <span className="ztracker-module-row-name">{module.name}</span>
                         <span className="ztracker-module-row-badges">
                           <span className={`ztracker-module-badge ${activationBadgeClass[getModuleActivation(module)]}`}>
@@ -833,25 +840,35 @@ export const ZTrackerSettings: FC<{
                     );
                   })}
                 </div>
-                <div className="ztracker-module-actions">
-                  <button type="button" className="menu_button" onClick={addModule}>Add</button>
-                  <button type="button" className="menu_button" onClick={cloneModule}>Clone</button>
-                  <button type="button" className="menu_button" disabled={selectedModuleIndex <= 0} onClick={() => moveSelectedModule(-1)}>Up</button>
-                  <button type="button" className="menu_button" disabled={selectedModuleIndex < 0 || selectedModuleIndex >= orderedModules.length - 1} onClick={() => moveSelectedModule(1)}>Down</button>
-                  <button type="button" className="menu_button" disabled={orderedModules.length <= 1} onClick={() => void deleteSelectedModule()}>Delete</button>
-                  <button type="button" className="menu_button" onClick={exportSelectedModule}>Export</button>
-                  <button type="button" className="menu_button" onClick={() => void importModule()}>Import</button>
+                <div className="ztracker-button-row">
+                  <STButton type="button" disabled={selectedModuleIndex <= 0} onClick={() => moveSelectedModule(-1)}>
+                    <i className="fa-solid fa-arrow-up" aria-hidden="true"></i> Up
+                  </STButton>
+                  <STButton
+                    type="button"
+                    disabled={selectedModuleIndex < 0 || selectedModuleIndex >= orderedModules.length - 1}
+                    onClick={() => moveSelectedModule(1)}
+                  >
+                    <i className="fa-solid fa-arrow-down" aria-hidden="true"></i> Down
+                  </STButton>
+                  <STButton type="button" onClick={cloneModule}>
+                    <i className="fa-solid fa-clone" aria-hidden="true"></i> Clone
+                  </STButton>
+                  <STButton type="button" onClick={exportSelectedModule}>
+                    <i className="fa-solid fa-file-export" aria-hidden="true"></i> Export
+                  </STButton>
+                  <STButton
+                    type="button"
+                    className="ztracker-btn-danger ztracker-button-row-end"
+                    disabled={orderedModules.length <= 1}
+                    onClick={() => void deleteSelectedModule()}
+                  >
+                    <i className="fa-solid fa-trash" aria-hidden="true"></i> Delete
+                  </STButton>
                 </div>
+                <small className="notes">A Module can only chain in the history of Modules listed above it.</small>
               </div>
             </div>
-
-            <SettingsSectionDrawer
-              title="Generation Order"
-              isOpen={isOrderOpen}
-              onToggle={() => setOrderOpen((value) => !value)}
-            >
-              <GenerationOrderSection orderedModules={orderedModules} moveModule={moveModuleById} />
-            </SettingsSectionDrawer>
 
             <div className="ztracker-module-detail">
               <div className="ztracker-module-detail-header">
