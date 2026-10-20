@@ -46,9 +46,7 @@ const presetSelectMock = jest.fn(
     ),
 );
 
-const buttonMock = jest.fn(({ onClick, title }: { onClick?: () => void; title?: string }) =>
-  React.createElement('button', { type: 'button', title, onClick }),
-);
+const buttonMock = jest.fn(({ children, className, ...props }: any) =>  React.createElement('button', { type: 'button', ...props, className: ['menu_button', 'interactable', className].filter(Boolean).join(' ') }, children),);
 
 const textareaMock = jest.fn(
   ({
@@ -699,7 +697,7 @@ describe('zTracker settings connection source UI', () => {
     expect(badge?.textContent).toBe('Auto');
   });
 
-  test('Module list and order view label Off and Manual Modules', () => {
+  test('Module list labels Off and Manual Modules and numbers rows by position', () => {
     seedModuleSettings();
     mockSettings.modules[0].enabled = false;
     mockSettings.modules[0].auto.enabled = true;
@@ -708,7 +706,7 @@ describe('zTracker settings connection source UI', () => {
 
     const labels = Array.from(container.querySelectorAll('.ztracker-module-row .ztracker-module-badge')).map((b) => b.textContent);
     expect(labels).toEqual(['Off', 'Manual']);
-    expect(container.querySelector('.ztracker-generation-order .ztracker-module-badge')?.textContent).toBe('Off');
+expect(Array.from(container.querySelectorAll('.ztracker-module-row-position')).map((p) => p.textContent)).toEqual(['1.', '2.']);
   });
 
   test('hides the saved profile picker in active connection mode', () => {
@@ -1334,7 +1332,7 @@ describe('zTracker settings connection source UI', () => {
     const container = renderSettings();
     expect(getSchemaTextareas(container).schemaJsonTextarea.value).toContain('mood');
 
-    const deleteButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Delete');
+    const deleteButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Delete');
     if (!(deleteButton instanceof HTMLButtonElement)) {
       throw new Error('Delete button not found');
     }
@@ -1356,7 +1354,7 @@ describe('zTracker settings connection source UI', () => {
     const container = renderSettings();
     const buttons = () => Array.from(container.querySelectorAll('button'));
     const clickByText = async (text: string) => {
-      const button = buttons().find((candidate) => candidate.textContent === text);
+      const button = buttons().find((candidate) => candidate.textContent?.trim() === text);
       if (!(button instanceof HTMLButtonElement)) {
         throw new Error(`${text} button not found`);
       }
@@ -1385,6 +1383,39 @@ describe('zTracker settings connection source UI', () => {
     expect(mockSettings.modules.map((module: any) => module.order)).toEqual([0, 1, 2, 3]);
   });
 
+  test('Module toolbar separates creation from selection actions, shows the chaining hint, and reordering updates positions', async () => {
+    seedModuleSettings();
+    const container = renderSettings();
+    const labelsIn = (selector: string) =>
+      Array.from(container.querySelectorAll(`${selector} button`)).map((button) => button.textContent?.trim());
+
+    expect(labelsIn('.ztracker-module-header')).toEqual(['Add', 'Import']);
+    const selectionRow = container.querySelector('.ztracker-module-manager > .ztracker-button-row') as HTMLElement;
+    expect(Array.from(selectionRow.querySelectorAll('button')).map((button) => button.textContent?.trim())).toEqual([
+      'Up',
+      'Down',
+      'Clone',
+      'Export',
+      'Delete',
+    ]);
+    expect(selectionRow.querySelector('button.ztracker-btn-danger')?.textContent?.trim()).toBe('Delete');
+    expect(container.textContent).toContain('A Module can only chain in the history of Modules listed above it.');
+
+    const rowNames = () => Array.from(container.querySelectorAll('.ztracker-module-row-name')).map((name) => name.textContent);
+    const [first, second] = rowNames();
+    const secondRow = container.querySelectorAll('button.ztracker-module-row')[1] as HTMLButtonElement;
+    await act(async () => {
+      secondRow.click();
+    });
+    const up = Array.from(selectionRow.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Up');
+    await act(async () => {
+      (up as HTMLButtonElement).click();
+    });
+
+    expect(rowNames()).toEqual([second, first]);
+    expect(Array.from(container.querySelectorAll('.ztracker-module-row-position')).map((p) => p.textContent)).toEqual(['1.', '2.']);
+  });
+
   test('deleting a module removes its saved tracker data from the current chat', async () => {
     seedModuleSettings();
     sillyTavernContext.chat = [
@@ -1404,7 +1435,7 @@ describe('zTracker settings connection source UI', () => {
       await Promise.resolve();
     });
 
-    const deleteButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Delete');
+    const deleteButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Delete');
     if (!(deleteButton instanceof HTMLButtonElement)) {
       throw new Error('Delete button not found');
     }
@@ -1440,7 +1471,7 @@ describe('zTracker settings connection source UI', () => {
       await Promise.resolve();
     });
 
-    const deleteButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Delete');
+    const deleteButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Delete');
     if (!(deleteButton instanceof HTMLButtonElement)) {
       throw new Error('Delete button not found');
     }
@@ -1460,8 +1491,8 @@ describe('zTracker settings connection source UI', () => {
     const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
     const container = renderSettings();
 
-    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Export');
-    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Import');
+    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Export');
+    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Import');
     if (!(exportButton instanceof HTMLButtonElement) || !(importButton instanceof HTMLButtonElement)) {
       throw new Error('Import/export buttons not found');
     }
@@ -1505,7 +1536,7 @@ describe('zTracker settings connection source UI', () => {
     );
     const container = renderSettings();
 
-    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Import');
+    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Import');
     if (!(importButton instanceof HTMLButtonElement)) {
       throw new Error('Import button not found');
     }
@@ -1530,7 +1561,7 @@ describe('zTracker settings connection source UI', () => {
       module: { name: 'Malformed', generation: { includeModules: [{ target: modules[1].id, count: 3 }] } },
     }));
     const container = renderSettings();
-    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Import');
+    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Import');
     if (!(importButton instanceof HTMLButtonElement)) {
       throw new Error('Import button not found');
     }
@@ -1569,7 +1600,7 @@ describe('zTracker settings connection source UI', () => {
       module: { name: 'Legacy Auto', auto: { enabled: true, mode: 'responses' } },
     }));
     const container = renderSettings();
-    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Import');
+    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Import');
     if (!(importButton instanceof HTMLButtonElement)) {
       throw new Error('Import button not found');
     }
@@ -1589,7 +1620,7 @@ describe('zTracker settings connection source UI', () => {
       module: { name: 'Legacy Disabled Auto', auto: { enabled: false, mode: 'none' } },
     }));
     const container = renderSettings();
-    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Import');
+    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Import');
     if (!(importButton instanceof HTMLButtonElement)) {
       throw new Error('Import button not found');
     }
@@ -1608,7 +1639,7 @@ describe('zTracker settings connection source UI', () => {
     seedModuleSettings();
     readTextFileViaPickerMock.mockResolvedValue(null);
     const container = renderSettings();
-    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Import');
+    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Import');
     if (!(importButton instanceof HTMLButtonElement)) {
       throw new Error('Import button not found');
     }
@@ -1627,7 +1658,7 @@ describe('zTracker settings connection source UI', () => {
     seedModuleSettings();
     readTextFileViaPickerMock.mockResolvedValue('{bad json');
     const container = renderSettings();
-    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Import');
+    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Import');
     if (!(importButton instanceof HTMLButtonElement)) {
       throw new Error('Import button not found');
     }

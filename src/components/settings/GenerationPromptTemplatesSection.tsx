@@ -115,12 +115,14 @@ export const GenerationPromptTemplatesSection: FC<
               })
             }
           />
-          <button type="button" className="menu_button" disabled={isTesting} onClick={() => void runGrammarSchemaEnforcementTest()}>
-            {isTesting ? 'Testing…' : 'Test'}
-          </button>
-          {testResult && (
-            <div className="notes">{testResult.supported ? `✅ ${testResult.message}` : `❌ ${testResult.message}`}</div>
-          )}
+          <div className="ztracker-button-row">
+            <STButton type="button" className="ztracker-btn-secondary" disabled={isTesting} onClick={() => void runGrammarSchemaEnforcementTest()}>
+              {isTesting ? 'Testing…' : 'Test'}
+            </STButton>
+            {testResult && (
+              <span className="notes">{testResult.supported ? `✅ ${testResult.message}` : `❌ ${testResult.message}`}</span>
+            )}
+          </div>
         </div>
       )}
 
@@ -138,6 +140,7 @@ export const GenerationPromptTemplatesSection: FC<
               <STButton
                 className="fa-solid fa-undo"
                 title={`Restore ${template.label} to default`}
+                aria-label={`Restore ${template.label} to its default value`}
                 disabled={disabled}
                 onClick={() =>
                   updateAndRefresh((s) => {

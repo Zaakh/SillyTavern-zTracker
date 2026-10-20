@@ -41,7 +41,7 @@ Each Module has a **Module State** selector with three values: **Off** (no gener
 
 Each Module has an **Include Module History** list under **Tracker Generation** that controls which Modules' past tracker snapshots are pulled into that Module's own generation context, separate from **Tracker Injection**'s embedding into normal generations. Every Module always has a **self** entry for its own history, which stays bound to that Module's raw message window like before. Chained entries (for other Modules that generate earlier than the current one) are not limited by that window at all - they are found directly from chat history and included as extra context ahead of the window. A count of `0` on any entry (self or chained) means that entry contributes nothing.
 
-A Module can only chain in another Module that is listed earlier in the **Generation Order** view (a dedicated list of all Modules in generation order, since Modules already generate in that order for each message). If a chained Module is later disabled or reordered so it is no longer earlier, that entry goes dormant (shown with a warning icon) and stops contributing until you fix the order, re-enable the Module, or remove the entry. Chained snapshots are always formatted using the referenced Module's own **Tracker Injection** settings (header, virtual-character mode, transform preset).
+A Module can only chain in another Module that is listed above it in the **Modules** list (the list is the generation order, and each row shows its position; reorder with Up/Down). If a chained Module is later disabled or reordered so it is no longer earlier, that entry goes dormant (shown with a warning icon) and stops contributing until you fix the order, re-enable the Module, or remove the entry. Chained snapshots are always formatted using the referenced Module's own **Tracker Injection** settings (header, virtual-character mode, transform preset).
 
 ### Pre-made Modules
 
@@ -73,7 +73,7 @@ Your API/model might not support structured output. Change `Prompt Engineering` 
 
 > zTracker UI buttons / schema popup are broken (template 404).
 
-In **Extensions → zTracker**, enable **Debug logging** and use the **Diagnostics** panel (stethoscope button) to print template URL checks to the console. This helps confirm whether SillyTavern can access the extension’s HTML templates.
+In **Extensions → zTracker**, enable **Debug logging** and use the **Diagnostics** panel (**Run diagnostics** button) to print template URL checks to the console. This helps confirm whether SillyTavern can access the extension’s HTML templates.
 
 ## Grammar/schema enforcement (JSON mode only)
 
@@ -141,7 +141,7 @@ Optional (advanced): you can annotate your JSON schema preset to help zTracker k
 - `x-ztracker-dependsOn`: top-level part ordering hints for sequential generation.
 - `x-ztracker-idKey`: which string field to use as the array-item identity for per-item regeneration (defaults to `name`).
 
-When editing a schema preset's JSON or HTML in **Extensions → zTracker**, changes stay local until you click that editor's Save icon. Schema JSON and Schema HTML save independently: each one must still render against the other's *saved* version, and invalid drafts show an inline error instead of overwriting the saved preset. When you have edited both (for example, renaming a field in each) and they work together, either Save button saves both.
+When editing a schema preset's JSON or HTML in **Extensions → zTracker**, changes stay local until you click that editor's **Save JSON** / **Save HTML** button (directly under the textarea). Schema JSON and Schema HTML save independently: each one must still render against the other's *saved* version, and invalid drafts show an inline error instead of overwriting the saved preset. When you have edited both (for example, renaming a field in each) and they work together, either Save button saves both.
 
 zTracker honors only a subset of JSON Schema: `type`, `properties`, `items`, `required`, `enum`, `const`, `default`, `format`, `description`, `title`, and the `x-ztracker-*` annotations. The editor lists findings for the current Schema JSON draft:
 - **Errors** block saving Schema JSON: an array with no `items`, or an object with no `properties`.
@@ -150,15 +150,15 @@ zTracker honors only a subset of JSON Schema: `type`, `properties`, `items`, `re
 
 **Diagnostics** reports the same findings for every Module and preset.
 
-Don't want to hand-write the HTML template? Click **Generate HTML from schema** (next to Restore Default) to derive one automatically from the current Schema JSON draft. It always overwrites the Schema HTML draft (click Save to apply) and is disabled while the Schema JSON draft is invalid.
+Don't want to hand-write the HTML template? Click **Generate HTML from schema** (between the JSON and HTML editors) to derive one automatically from the current Schema JSON draft. It always overwrites the Schema HTML draft (click Save to apply) and is disabled while the Schema JSON draft is invalid.
 
 ### Generating a schema and prompts from a description
 
-Instead of writing everything by hand, describe the tracker in the **Design brief** box (saved with the Module) and use the three buttons next to it (hover each for what it produces, reads and replaces):
+Instead of writing everything by hand, describe the tracker in the **Design brief** box (saved with the Module) and use the buttons below it (hover each for what it produces, reads and replaces):
 
-- **Generate schema** (model): drafts the Schema JSON from your brief. The draft is checked by the dialect lint and sent back for repair up to twice if it has errors, warnings or wrapper notes; the best attempt stays in the draft with its findings shown. Nothing is saved until you click Save.
+- **Generate schema (draft)** (model): drafts the Schema JSON from your brief. The draft is checked by the dialect lint and sent back for repair up to twice if it has errors, warnings or wrapper notes; the best attempt stays in the draft with its findings shown. Nothing is saved until you click Save.
 - **Generate HTML from schema** (no model): derives the HTML from the Schema JSON draft, as above. Run it after a schema was generated.
-- **Generate prompts** (model): writes a system prompt and a base prompt from your brief and the current Schema JSON draft and **applies them immediately**, saving a system prompt preset named `zTracker-<module id>-generated` (overwritten on each run). Your globally selected SillyTavern system prompt is not changed.
+- **Generate prompts (applies now)** (model): writes a system prompt and a base prompt from your brief and the current Schema JSON draft and **applies them immediately**, saving a system prompt preset named `zTracker-<module id>-generated` (overwritten on each run). Your globally selected SillyTavern system prompt is not changed.
 
 Both model-backed buttons use the **global active SillyTavern connection** (shown next to the buttons), not the Module's own connection settings. Replies get at least 2048 tokens, so use a connection with a context window large enough for the examples sent along (a small local model with a 2048-token context cannot fit a repair round). Overwrites are announced inline; there is no confirmation dialog, and you can cancel a running generation.
 

@@ -186,15 +186,10 @@ export const WorldInfoPolicySection: FC<{
             probability); "Always inject all" bypasses keywords, inclusion groups and the other activation rules.
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <STButton title="Refresh detected books" onClick={refreshAvailableWorldInfoBooks} disabled={worldInfoBooksLoading}>
-                {worldInfoBooksLoading ? 'Refreshing…' : 'Refresh book list'}
-              </STButton>
-
+          <div className="ztracker-worldinfo-allowlist">
+            <div className="ztracker-button-row">
               <input
-                className="text_pole"
-                style={{ minWidth: 220 }}
+                className="text_pole ztracker-worldinfo-search"
                 value={worldInfoBookSearch}
                 onChange={(e) => setWorldInfoBookSearch(e.target.value)}
                 placeholder="Search detected books…"
@@ -202,8 +197,7 @@ export const WorldInfoPolicySection: FC<{
               />
 
               <select
-                className="text_pole"
-                style={{ minWidth: 260 }}
+                className="text_pole ztracker-worldinfo-select"
                 value={selectedWorldInfoBookToAdd}
                 onChange={(e) => setSelectedWorldInfoBookToAdd(e.target.value)}
                 disabled={filteredAvailableBooks.length === 0}
@@ -221,11 +215,32 @@ export const WorldInfoPolicySection: FC<{
               </select>
 
               <STButton
+                type="button"
                 title="Add selected book"
                 onClick={() => addWorldInfoBookName(selectedWorldInfoBookToAdd)}
                 disabled={!selectedWorldInfoBookToAdd}
               >
                 Add
+              </STButton>
+            </div>
+
+            <div className="ztracker-button-row">
+              <STButton
+                type="button"
+                className="ztracker-btn-secondary"
+                title="Refresh detected books"
+                onClick={refreshAvailableWorldInfoBooks}
+                disabled={worldInfoBooksLoading}
+              >
+                {worldInfoBooksLoading ? 'Refreshing…' : 'Refresh book list'}
+              </STButton>
+              <STButton
+                type="button"
+                className="ztracker-btn-secondary"
+                title="Recheck scope against the open chat"
+                onClick={() => void recheck()}
+              >
+                Recheck
               </STButton>
             </div>
 
@@ -240,15 +255,7 @@ export const WorldInfoPolicySection: FC<{
                   <div
                     key={row.book}
                     data-testid="world-info-row"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      flexWrap: 'wrap',
-                      padding: '4px 8px',
-                      border: '1px solid var(--SmartThemeBorderColor)',
-                      borderRadius: 6,
-                    }}
+                    className="ztracker-worldinfo-row"
                   >
                     <strong>{row.book}</strong>
                     <select
@@ -270,8 +277,7 @@ export const WorldInfoPolicySection: FC<{
                     </label>
                     <input
                       key={row.entryIds.join(',')}
-                      className="text_pole"
-                      style={{ width: 170 }}
+                      className="text_pole ztracker-worldinfo-entry-ids"
                       defaultValue={row.entryIds.join(', ')}
                       onBlur={(e) => updateRow(row.book, { entryIds: normalizeWorldInfoEntryIdAllowlist(e.target.value) })}
                       placeholder="Entry UIDs (empty = all)"
@@ -279,25 +285,19 @@ export const WorldInfoPolicySection: FC<{
                     />
                     {status === 'skipped' && <span className="notes">⚠ Skipped for the open chat (scope not satisfied)</span>}
                     {status === 'unknown' && <span className="notes">Scope cannot be checked right now (no chat open or lookup incomplete)</span>}
-                    <button
-                      className="menu_button"
+                    <STButton
                       type="button"
                       title="Remove"
                       onClick={() => removeWorldInfoBookName(row.book)}
-                      style={{ padding: '0 6px', marginLeft: 'auto' }}
+                      aria-label={`Remove ${row.book}`}
+                      className="ztracker-worldinfo-remove ztracker-button-row-end"
                     >
-                      ×
-                    </button>
+                      <i className="fa-solid fa-xmark" aria-hidden="true"></i>
+                    </STButton>
                   </div>
                 );
               })
             )}
-
-            <div>
-              <STButton title="Recheck scope against the open chat" onClick={() => void recheck()}>
-                Recheck
-              </STButton>
-            </div>
           </div>
         </div>
       )}

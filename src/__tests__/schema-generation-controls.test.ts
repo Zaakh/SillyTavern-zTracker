@@ -10,7 +10,7 @@ import React, { act, useState } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 
 jest.unstable_mockModule('sillytavern-utils-lib/components/react', () => ({
-  STButton: ({ title, disabled, onClick }: any) => React.createElement('button', { type: 'button', title, disabled, onClick }),
+  STButton: ({ title, disabled, onClick, children }: any) => React.createElement('button', { type: 'button', title, disabled, onClick }, children),
   STTextarea: ({ value, onChange, placeholder }: any) => React.createElement('textarea', { value, onChange, placeholder }),
 }));
 
@@ -123,6 +123,8 @@ describe('schema generation controls', () => {
 
     expect(button('Generate schema').title).toMatch(/Schema JSON.*Design brief.*Replaces the Schema JSON draft/);
     expect(button('Generate prompts').title).toMatch(/Design brief.*Schema JSON draft.*applies immediately/);
+    expect(button('Generate schema').textContent).toBe(' Generate schema (draft)');
+    expect(button('Generate prompts').textContent).toBe(' Generate prompts (applies now)');
     expect(document.body.textContent).toMatch(/global active connection \(openai · gpt-x\)/);
   });
 

@@ -86,10 +86,13 @@ export const SystemPromptSettingsSection: FC<{
               />
             )}
             <STButton
-              className="fa-solid fa-rotate"
+              type="button"
+              className="ztracker-btn-secondary"
               title="Refresh the saved prompt list and current global prompt warning"
               onClick={refreshSystemPromptState}
-            />
+            >
+              <i className="fa-solid fa-rotate" aria-hidden="true"></i> Refresh
+            </STButton>
           </div>
           <small>
             Each Module auto-installs its own saved system prompt from its <code>systemPrompt</code> content the first time it is created or imported - pick that Module&apos;s preset here, or use &quot;Recreate from shipped prompt&quot; below if it&apos;s missing. Older zTracker prompt presets are left in place so you can remove them manually if they are no longer needed. Click refresh after changing prompts elsewhere in SillyTavern.
@@ -100,15 +103,14 @@ export const SystemPromptSettingsSection: FC<{
               {showRecreateSystemPromptAction && (
                 <>
                   {' '}
-                  <button
+                  <STButton
                     type="button"
-                    className="menu_button"
                     data-testid="recreate-system-prompt-button"
                     disabled={isRecreatingSystemPrompt}
                     onClick={() => void recreateModuleSystemPromptPreset()}
                   >
                     {isRecreatingSystemPrompt ? 'Recreating…' : 'Recreate from shipped prompt'}
-                  </button>
+                  </STButton>
                 </>
               )}
             </small>
