@@ -193,3 +193,41 @@ describe('createTrackerActions editTracker', () => {
     expect(stEchoMock).toHaveBeenCalledWith('error', 'Tracker changes could not be saved. Changes were rolled back.');
   });
 });
+
+describe('createTrackerActions deleteTracker', () => {
+  test('removes the lorebook link together with the Module record', async () => {
+    resetTrackerActionTestState();
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+    const message = {
+      extra: {
+        zTracker: {
+          byId: {
+            agenda: {
+              schemaValue: { task: 'x' },
+              schemaHtml: '<div/>',
+              lorebookLink: { book: 'Characters', uid: 1, title: 'Bob' },
+            },
+          },
+        },
+      },
+    };
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [message],
+        saveChat: jest.fn(async () => undefined),
+        Popup: { show: { confirm: jest.fn(async () => true) } },
+        extensionSettings: { connectionManager: { profiles: [makeProfile()] } },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: { getSettings: () => makeSettings() } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+
+    await actions.deleteTracker(0, 'agenda');
+
+    expect((message.extra.zTracker.byId as any).agenda).toBeUndefined();
+  });
+});

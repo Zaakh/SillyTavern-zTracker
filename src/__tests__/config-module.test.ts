@@ -82,7 +82,7 @@ describe('tracker module defaults', () => {
     expect(module.schema.presets.default.html).toBe(PLACEHOLDER_SCHEMA_HTML);
     expect(module.generation.mode).toBe('full');
     expect(module.generation.conversationRoleMode).toBe('preserve');
-    expect(module.injection.transformPreset).toBe('default');
+    expect(module.injection.transformPreset).toBe('flat');
     expect((module.injection as any).transformPresets).toBeUndefined();
     expect(defaultSettings.transformPresets.default.name).toBe('Default (JSON)');
   });
@@ -518,7 +518,26 @@ describe('global transform presets', () => {
   }
 
   test('fresh defaults already contain every built-in', () => {
-    expect(Object.keys(defaultSettings.transformPresets).sort()).toEqual(['default', 'minimal', 'toon']);
+    expect(Object.keys(defaultSettings.transformPresets).sort()).toEqual(['default', 'flat', 'minimal', 'toon']);
+  });
+
+  test('an existing Module keeps its selection yet gains flat', () => {
+    const settings: any = { transformPresets: { default: builtIn().default }, modules: [createDefaultTrackerModule({ id: 'a' })] };
+    settings.modules[0].injection.transformPreset = 'default';
+
+    expect(seedBuiltInTransformPresets(settings)).toBe(true);
+
+    expect(settings.transformPresets.flat).toEqual(builtIn().flat);
+    expect(settings.modules[0].injection.transformPreset).toBe('default');
+  });
+
+  test('a pre-existing flat key is not overwritten', () => {
+    const mine = { ...builtIn().flat, name: 'Mine' };
+    const settings: any = { transformPresets: { flat: mine } };
+
+    seedBuiltInTransformPresets(settings);
+
+    expect(settings.transformPresets.flat).toEqual(mine);
   });
 
   test('identical copies collapse to the built-in key', () => {
@@ -530,7 +549,7 @@ describe('global transform presets', () => {
 
     expect(migrateTransformPresetsToGlobal(settings)).toBe(true);
 
-    expect(Object.keys(settings.transformPresets).sort()).toEqual(['default', 'minimal', 'toon']);
+    expect(Object.keys(settings.transformPresets).sort()).toEqual(['default', 'flat', 'minimal', 'toon']);
     expect(settings.modules.map((m: any) => m.injection.transformPreset)).toEqual(['minimal', 'minimal', 'toon']);
     expect(settings.modules.every((m: any) => m.injection.transformPresets === undefined)).toBe(true);
   });
@@ -556,7 +575,7 @@ describe('global transform presets', () => {
 
     migrateTransformPresetsToGlobal(settings);
 
-    expect(Object.keys(settings.transformPresets).sort()).toEqual(['default', 'minimal', 'minimal-2', 'toon']);
+    expect(Object.keys(settings.transformPresets).sort()).toEqual(['default', 'flat', 'minimal', 'minimal-2', 'toon']);
     expect(settings.modules.map((m: any) => m.injection.transformPreset)).toEqual(['minimal-2', 'minimal-2', 'minimal-2']);
   });
 

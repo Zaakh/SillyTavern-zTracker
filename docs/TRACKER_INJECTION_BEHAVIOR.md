@@ -29,6 +29,7 @@ The injected chat shape is primarily controlled by these settings and runtime hi
    - anchored standalone assistant insertion after the tracked source turn for mid-chat or multi-character flows.
 7. zTracker prefers a host-confirmed solo reply label over history inference when SillyTavern already exposes the active assistant speaker for the current chat.
 
+8. The snapshot text comes from the Module's transform preset. New Modules and the shipped templates select **Flat**, which injects `[Topic: <Module name>` + one `key: value` line per field + `]` and is never code-fenced; existing Modules keep the preset they already selected.
 ## Behavior matrix
 
 | Context | Resulting injected shape | Virtual-character effect |

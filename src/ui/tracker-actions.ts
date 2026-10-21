@@ -18,6 +18,7 @@ import { buildPrompt, Generator, getWorldInfos, Message } from 'sillytavern-util
 import type { ExtractedData } from 'sillytavern-utils-lib/types';
 import { characters, st_echo, st_formatWorldInfo, st_getMaxContextSize } from 'sillytavern-utils-lib/config';
 import { POPUP_RESULT, POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
+import { createLorebookActions } from './lorebook-actions.js';
 import { buildTrackerWorldInfoText } from '../world-info-allowlist.js';
 import { buildWorldInfoScanChat, buildWorldInfoScanData, scanWorldInfo } from '../world-info-scan.js';
 import { createHostWorldInfoScopeDeps, resolveWorldInfoScopeSources } from '../world-info-scope.js';
@@ -2099,6 +2100,7 @@ export function createTrackerActions(options: {
   }
 
   return {
+    ...createLorebookActions({ globalContext, settingsManager, renderTrackerWithDeps }),
     cancelTracker,
     deleteTracker,
     editTracker,

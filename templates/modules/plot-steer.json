@@ -71,7 +71,7 @@
       "embedRole": "system",
       "embedAsCharacter": false,
       "snapshotHeader": "Narrative directive:",
-      "transformPreset": "minimal"
+      "transformPreset": "flat"
     }
   }
 }

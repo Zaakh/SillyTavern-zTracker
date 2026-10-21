@@ -159,7 +159,7 @@
       "embedRole": "user",
       "embedAsCharacter": false,
       "snapshotHeader": "Tracker:",
-      "transformPreset": "default"
+      "transformPreset": "flat"
     }
   }
 }

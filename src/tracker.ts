@@ -5,6 +5,7 @@ import { DEFAULT_EMBED_SNAPSHOT_HEADER, getOrderedTrackerModules } from './confi
 import type { ExtensionSettings, TrackerModuleSettings } from './config.js';
 import { CHAT_METADATA_SCHEMA_PRESET_KEY, DEFAULT_MODULE_ID, EXTENSION_KEY } from './extension-metadata.js';
 import { formatEmbeddedTrackerSnapshot } from './embed-snapshot-transform.js';
+import { getLorebookLink } from './lorebook-export.js';
 import { toShortTrackerLabel } from './tracker-helpers.js';
 import {
   buildArrayItemCleanupTarget,
@@ -363,6 +364,23 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
     container.prepend(pendingStatus);
   }
 
+  // Text-labeled so each button states exactly what it does; Replace names its target and is
+  // disabled until an export link exists.
+  const link = getLorebookLink(extra);
+  const lorebookActions = doc.createElement('div');
+  lorebookActions.className = 'ztracker-lorebook-actions';
+  const exportButton = doc.createElement('button');
+  exportButton.type = 'button';
+  exportButton.className = 'ztracker-lorebook-export-button menu_button';
+  exportButton.textContent = 'Export to lorebook...';
+  const replaceButton = doc.createElement('button');
+  replaceButton.type = 'button';
+  replaceButton.className = 'ztracker-lorebook-replace-button menu_button';
+  replaceButton.disabled = !link;
+  replaceButton.textContent = link ? `Replace linked entry: ${link.book} / ${link.title}` : 'Replace linked entry';
+  lorebookActions.append(exportButton, replaceButton);
+  container.append(lorebookActions);
+
   const label = doc.createElement('div');
   label.className = 'ztracker-module-label';
   label.textContent = moduleEntry.name;
@@ -572,7 +590,9 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
         const trackerValue = getTrackerModuleRecordFromExtra(extra, moduleId)?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY] || {};
         const useCharacterName = settings.embedZTrackerAsCharacter ?? false;
         const header = settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER;
-        const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(trackerValue, settings);
+        const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(trackerValue, settings, {
+          moduleName: settings.modules?.find((module) => module.id === moduleId)?.name,
+        });
         const speakerName = useCharacterName ? deriveEmbeddedTrackerSpeakerName(settings) : undefined;
         const prefix = !useCharacterName && header ? `${header}\n` : '';
         const content = wrapInCodeFence

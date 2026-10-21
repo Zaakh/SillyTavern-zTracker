@@ -325,6 +325,10 @@ function installTrackerActionClickHandler(): void {
       actions.generateTracker(messageId, withModuleActionOption({ showStatusIndicator: true }, moduleId));
     } else if (target.classList.contains('ztracker-delete-button')) {
       actions.deleteTracker(messageId, ...moduleArgs);
+    } else if (target.closest('.ztracker-lorebook-export-button')) {
+      actions.exportToLorebook(messageId, ...moduleArgs);
+    } else if (target.closest('.ztracker-lorebook-replace-button')) {
+      actions.replaceLorebookEntry(messageId, ...moduleArgs);
     }
   });
 

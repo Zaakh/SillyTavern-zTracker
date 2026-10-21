@@ -24,6 +24,7 @@ import {
   type ImportedTrackerModule,
 } from '../components/settings/module-import.js';
 import { defaultSettings, type TrackerModule } from '../config.js';
+import { formatEmbeddedTrackerSnapshot } from '../embed-snapshot-transform.js';
 import { resolveTrackerModuleIncludeEntries } from '../tracker-module-chaining.js';
 import {
   applyTrackerUpdateAndRenderMock,
@@ -326,5 +327,20 @@ describe('shipped templates reference transform presets by key only', () => {
     const base = loadTemplate('plot-log.json');
     expect(presetProblem({ ...base, injection: { ...base.injection, transformPreset: 'not-built-in' } })).toMatch(/non-built-in/);
     expect(presetProblem({ ...base, injection: { ...base.injection, transformPresets: {} } as any })).toMatch(/embeds/);
+  });
+});
+
+describe('shipped templates use the Flat preset', () => {
+  test.each(['scene-tracker.json', 'plot-log.json', 'plot-steer.json'])('%s selects flat and formats a bracket block', (fileName) => {
+    const template = loadTemplate(fileName);
+    expect(template.injection?.transformPreset).toBe('flat');
+    const module = createImportedTrackerModule(template, [], JSON.parse(JSON.stringify(defaultSettings.transformPresets)));
+    const data = module.schema.presets[module.schema.preset].value;
+    const { text } = formatEmbeddedTrackerSnapshot(data, {
+      embedZTrackerSnapshotTransformPreset: 'flat',
+      embedZTrackerSnapshotTransformPresets: defaultSettings.transformPresets,
+    }, { moduleName: module.name });
+    expect(text.startsWith(`[Topic: ${module.name}\n`)).toBe(true);
+    expect(text.endsWith('\n]')).toBe(true);
   });
 });

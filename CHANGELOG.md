@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.16.0] - 2026-10-21
+
+### Added
+
+- **Export to lorebook...** and **Replace linked entry** buttons on each tracker block: copy a tracker into a World Info entry (new entry, or overwrite the content of the entry created by the last export). Entries are complete, saved immediately and confirmed by re-reading the book; Replace keeps hand-edited keys, order and position and never creates silently.
+- **Suggest title** in the export dialog sends the tracker to the live connection to propose an entry title, only when pressed.
+- Built-in **Flat** snapshot transform preset (`[Topic: <title>` + `key: value` lines + `]`), available to every existing Module without changing its selection.
+
+### Changed
+
+- New Modules and the shipped Module templates now select the **Flat** snapshot preset by default; existing Modules keep their current preset.
+
 ## [2.15.0] - 2026-10-21
 
 ### Changed

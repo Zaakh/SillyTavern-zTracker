@@ -120,6 +120,24 @@ describe('applyTrackerModuleIncludeList', () => {
     expect(result[0].content).not.toContain('Find exit');
   });
 
+  test('Flat titles each injected block with the owning Module name, for chained and self history', () => {
+    const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene Tracker', order: 0 });
+    const agenda = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 1 });
+    agenda.generation.includeModules = [
+      { target: 'self', count: 1 },
+      { target: 'scene', count: 1 },
+    ];
+    const agendaSettings = getSettingsForTrackerModule(buildSettings([scene, agenda]), 'agenda');
+    const chat = [buildMessageWithModuleTrackers({ scene: { place: 'Bridge' }, agenda: { goal: 'Find exit' } })];
+    const messages = [chat[0], { content: 'current', role: 'user' }];
+
+    const result = applyTrackerModuleIncludeList(messages as any, agenda, agendaSettings, { chat: chat as any, messageId: 0 }) as any[];
+    const injected = result.map((message) => message.content as string);
+
+    expect(injected.some((text) => text.includes('[Topic: Scene Tracker\nplace: Bridge\n]'))).toBe(true);
+    expect(injected.some((text) => text.includes('[Topic: Agenda\ngoal: Find exit\n]'))).toBe(true);
+  });
+
   test('self entry count is independent of injection.includeLastXMessages', () => {
     const scene = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
     scene.injection.includeLastXMessages = 0; // downstream injection disabled

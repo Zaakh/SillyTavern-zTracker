@@ -120,6 +120,7 @@ export const EmbedSnapshotTransformSection: FC<{
               <option value="pretty_json">Pretty JSON</option>
               <option value="top_level_lines">Top-level lines</option>
               <option value="toon">TOON (compact)</option>
+              <option value="flat_lines">Flat (key: value lines)</option>
             </select>
           </div>
 
@@ -182,7 +183,8 @@ export const EmbedSnapshotTransformSection: FC<{
             <input
               type="checkbox"
               title="When enabled, wraps the embedded snapshot in a Markdown code fence for readability (example: ```json ... ```)."
-              checked={preset.wrapInCodeFence !== false}
+              checked={preset.input !== 'flat_lines' && preset.wrapInCodeFence !== false}
+              disabled={preset.input === 'flat_lines'}
               onChange={(e) =>
                 editPreset({ wrapInCodeFence: e.target.checked })
               }

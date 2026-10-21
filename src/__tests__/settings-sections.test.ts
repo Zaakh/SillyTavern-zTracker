@@ -718,6 +718,7 @@ describe('settings sections', () => {
           default: preset('Default'),
           minimal: preset('Minimal', { input: 'top_level_lines' }),
           toon: preset('TOON', { input: 'toon' }),
+          flat: preset('Flat', { input: 'flat_lines' }),
           custom: preset('Custom', { input: 'top_level_lines', pattern: 'time', flags: 'gi', replacement: 'clock', wrapInCodeFence: false }),
         },
         modules: selections.map((transformPreset) => ({ injection: { transformPreset } })),

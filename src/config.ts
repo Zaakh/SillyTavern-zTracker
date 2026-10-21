@@ -41,7 +41,7 @@ export interface Schema {
   html: string;
 }
 
-export type EmbedSnapshotTransformInput = 'pretty_json' | 'top_level_lines' | 'toon';
+export type EmbedSnapshotTransformInput = 'pretty_json' | 'top_level_lines' | 'toon' | 'flat_lines';
 
 export interface EmbedSnapshotRegexTransformPreset {
   name: string;
@@ -50,6 +50,7 @@ export interface EmbedSnapshotRegexTransformPreset {
    * - pretty_json: JSON.stringify(data, null, 2)
    * - top_level_lines: one line per top-level property (values are JSON-stringified)
   * - toon: tab-delimited TOON encoded with @toon-format/toon
+   * - flat_lines: `[Topic: <title>` + one `key: value` line per field + `]` (never fenced)
    */
   input: EmbedSnapshotTransformInput;
   /** JavaScript regex source (without leading/trailing slashes). Empty disables transform. */
@@ -728,6 +729,15 @@ export function createDefaultEmbedSnapshotTransformPresets(): Record<string, Emb
       codeFenceLang: 'toon',
       wrapInCodeFence: true,
     },
+    flat: {
+      name: 'Flat (key: value lines)',
+      input: 'flat_lines',
+      pattern: '',
+      flags: 'g',
+      replacement: '',
+      codeFenceLang: 'text',
+      wrapInCodeFence: false,
+    },
   };
 }
 
@@ -788,7 +798,7 @@ export function createDefaultTrackerModule(options: Partial<Pick<TrackerModule, 
       embedRole: 'user',
       embedAsCharacter: false,
       snapshotHeader: DEFAULT_EMBED_SNAPSHOT_HEADER,
-      transformPreset: 'default',
+      transformPreset: 'flat',
     },
   };
 }
