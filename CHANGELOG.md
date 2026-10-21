@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.17.0] - 2026-10-21
+
+### Changed
+
+- Settings drawer cleanup: buttons are an icon plus at most two words (full explanations moved to tooltips), model-calling actions keep one row under the Design brief, and the grammar-enforcement controls fit one line.
+- Only the prompt template used by the selected Prompt Engineering mode is shown; hidden templates keep their stored text.
+- Tracker Generation drawer: Prompt Engineering, prompt template and system prompt now sit above the schema editor.
+
 ## [2.16.1] - 2026-10-21
 
 ### Changed
