@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-10-21
+
 ### Changed
 
 - Snapshot transform presets are now one list shared by all Modules; each Module only remembers which preset it selects. Editing a preset applies to every Module that selects it, and the editor shows how many Modules share it. Built-in presets (Default, Minimal, TOON) can be edited but no longer deleted; deleting another preset sends the Modules that selected it back to Default.
