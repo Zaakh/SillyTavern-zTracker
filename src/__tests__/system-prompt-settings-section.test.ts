@@ -3,7 +3,7 @@
  */
 
 /**
- * Focused component test for the "Recreate from shipped prompt" action added to
+ * Focused component test for the "Recreate prompt" action added to
  * SystemPromptSettingsSection (see openspec/changes/seed-starter-modules). Renders the section
  * directly with controlled props rather than through the full Settings.tsx tree, since that tree
  * mocks TrackerGenerationSection (and therefore this section) away in settings-ui.test.ts.
@@ -125,7 +125,7 @@ describe('SystemPromptSettingsSection recreate-preset action', () => {
     const recreateButton = findRecreateButton();
     expect(recreateButton).toBeDefined();
     expect(recreateButton?.disabled).toBe(true);
-    expect(recreateButton?.textContent).toBe('Recreating…');
+    expect(recreateButton?.textContent).toBe(' Recreating…');
   });
 });
 

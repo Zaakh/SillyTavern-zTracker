@@ -94,8 +94,8 @@ export const SystemPromptSettingsSection: FC<{
               <i className="fa-solid fa-rotate" aria-hidden="true"></i> Refresh
             </STButton>
           </div>
-          <small>
-            Each Module auto-installs its own saved system prompt from its <code>systemPrompt</code> content the first time it is created or imported - pick that Module&apos;s preset here, or use &quot;Recreate from shipped prompt&quot; below if it&apos;s missing. Older zTracker prompt presets are left in place so you can remove them manually if they are no longer needed. Click refresh after changing prompts elsewhere in SillyTavern.
+          <small title="Each Module auto-installs its own saved system prompt from its systemPrompt content the first time it is created or imported. Older zTracker prompt presets are left in place so you can remove them manually. Click refresh after changing prompts elsewhere in SillyTavern.">
+            Each Module installs its own saved prompt; pick it here, or use Recreate prompt if it is missing.
           </small>
           {showMissingSavedSystemPromptWarning && (
             <small style={{ color: 'var(--warning-color, #f0ad4e)' }}>
@@ -108,8 +108,10 @@ export const SystemPromptSettingsSection: FC<{
                     data-testid="recreate-system-prompt-button"
                     disabled={isRecreatingSystemPrompt}
                     onClick={() => void recreateModuleSystemPromptPreset()}
+                    title="Recreate this Module's saved system prompt from the shipped prompt"
                   >
-                    {isRecreatingSystemPrompt ? 'Recreating…' : 'Recreate from shipped prompt'}
+                    <i className="fa-solid fa-rotate-right" aria-hidden="true"></i>{' '}
+                    {isRecreatingSystemPrompt ? 'Recreating…' : 'Recreate prompt'}
                   </STButton>
                 </>
               )}

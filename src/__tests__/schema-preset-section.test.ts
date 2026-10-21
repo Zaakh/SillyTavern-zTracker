@@ -166,7 +166,7 @@ describe('SchemaPresetSection', () => {
     expect(saveJson.textContent).toContain('Save JSON');
     expect(saveJson.compareDocumentPosition(findings) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    const order = ['Schema JSON', 'Generate HTML from schema', 'Schema HTML', 'Restore JSON and HTML to default'].map((text) =>
+    const order = ['Schema JSON', 'Generate HTML', 'Schema HTML', 'Reset JSON+HTML'].map((text) =>
       (container.textContent ?? '').indexOf(text),
     );
     expect(order.every((index) => index >= 0)).toBe(true);

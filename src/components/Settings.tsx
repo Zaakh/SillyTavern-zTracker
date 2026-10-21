@@ -841,22 +841,26 @@ export const ZTrackerSettings: FC<{
                   })}
                 </div>
                 <div className="ztracker-button-row">
-                  <STButton type="button" disabled={selectedModuleIndex <= 0} onClick={() => moveSelectedModule(-1)}>
-                    <i className="fa-solid fa-arrow-up" aria-hidden="true"></i> Up
-                  </STButton>
-                  <STButton
-                    type="button"
-                    disabled={selectedModuleIndex < 0 || selectedModuleIndex >= orderedModules.length - 1}
-                    onClick={() => moveSelectedModule(1)}
-                  >
-                    <i className="fa-solid fa-arrow-down" aria-hidden="true"></i> Down
-                  </STButton>
-                  <STButton type="button" onClick={cloneModule}>
-                    <i className="fa-solid fa-clone" aria-hidden="true"></i> Clone
-                  </STButton>
-                  <STButton type="button" onClick={exportSelectedModule}>
-                    <i className="fa-solid fa-file-export" aria-hidden="true"></i> Export
-                  </STButton>
+                  <div className="ztracker-button-group">
+                    <STButton type="button" disabled={selectedModuleIndex <= 0} onClick={() => moveSelectedModule(-1)}>
+                      <i className="fa-solid fa-arrow-up" aria-hidden="true"></i> Up
+                    </STButton>
+                    <STButton
+                      type="button"
+                      disabled={selectedModuleIndex < 0 || selectedModuleIndex >= orderedModules.length - 1}
+                      onClick={() => moveSelectedModule(1)}
+                    >
+                      <i className="fa-solid fa-arrow-down" aria-hidden="true"></i> Down
+                    </STButton>
+                  </div>
+                  <div className="ztracker-button-group">
+                    <STButton type="button" onClick={cloneModule}>
+                      <i className="fa-solid fa-clone" aria-hidden="true"></i> Clone
+                    </STButton>
+                    <STButton type="button" onClick={exportSelectedModule}>
+                      <i className="fa-solid fa-file-export" aria-hidden="true"></i> Export
+                    </STButton>
+                  </div>
                   <STButton
                     type="button"
                     className="ztracker-btn-danger ztracker-button-row-end"

@@ -48,8 +48,11 @@ export const TrackerInjectionSection: FC<SettingsSectionProps & { updateGlobal: 
           <option value="system">System</option>
           <option value="assistant">Assistant</option>
         </select>
-        <div className="notes">
-          In Text Completion chats, assistant-role snapshots stay as assistant turns when zTracker can keep a clear reply cue, such as a host-confirmed solo speaker or trailing assistant prefill, and only inline into the final user turn for ambiguous terminal no-prefill cases. Confirmed single-speaker terminal fallbacks still use a raw assistant block so the prompt can end on the real assistant reply cue.
+        <div
+          className="notes"
+          title="In Text Completion chats, assistant-role snapshots stay as assistant turns when zTracker can keep a clear reply cue, such as a host-confirmed solo speaker or trailing assistant prefill, and only inline into the final user turn for ambiguous terminal no-prefill cases. Confirmed single-speaker terminal fallbacks still use a raw assistant block so the prompt can end on the real assistant reply cue."
+        >
+          Assistant snapshots stay assistant turns in Text Completion when a clear reply cue exists (hover for details).
         </div>
       </div>
 

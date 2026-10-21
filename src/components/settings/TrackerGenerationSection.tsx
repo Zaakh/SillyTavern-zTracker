@@ -110,6 +110,26 @@ export const TrackerGenerationSection: FC<{
 
       <IncludeModulesSection settings={settings} selectedModule={selectedModule} updateAndRefresh={updateAndRefresh} />
 
+      <GenerationPromptTemplatesSection
+        settings={settings}
+        updateAndRefresh={updateAndRefresh}
+        moduleId={selectedModule.id}
+        testGrammarSchemaEnforcement={testGrammarSchemaEnforcement}
+      />
+
+      <SystemPromptSettingsSection
+        settings={settings}
+        updateAndRefresh={updateAndRefresh}
+        systemPromptItems={systemPromptItems}
+        refreshSystemPromptState={refreshSystemPromptState}
+        showMissingSavedSystemPromptWarning={showMissingSavedSystemPromptWarning}
+        showSharedSystemPromptWarning={showSharedSystemPromptWarning}
+        showRecreateSystemPromptAction={showRecreateSystemPromptAction}
+        recreateModuleSystemPromptPreset={recreateModuleSystemPromptPreset}
+        isRecreatingSystemPrompt={isRecreatingSystemPrompt}
+        currentGlobalSystemPromptName={currentGlobalSystemPromptName}
+      />
+
       <SchemaPresetSection
         schemaPresetKey={settings.schemaPreset}
         schemaPresetItems={schemaPresetItems}
@@ -145,26 +165,6 @@ export const TrackerGenerationSection: FC<{
         canGenerateSchemaHtml={canGenerateSchemaHtml}
         generateSchemaHtmlFromSchema={generateSchemaHtmlFromSchema}
         schemaGenerationControls={schemaGenerationControls}
-      />
-
-      <SystemPromptSettingsSection
-        settings={settings}
-        updateAndRefresh={updateAndRefresh}
-        systemPromptItems={systemPromptItems}
-        refreshSystemPromptState={refreshSystemPromptState}
-        showMissingSavedSystemPromptWarning={showMissingSavedSystemPromptWarning}
-        showSharedSystemPromptWarning={showSharedSystemPromptWarning}
-        showRecreateSystemPromptAction={showRecreateSystemPromptAction}
-        recreateModuleSystemPromptPreset={recreateModuleSystemPromptPreset}
-        isRecreatingSystemPrompt={isRecreatingSystemPrompt}
-        currentGlobalSystemPromptName={currentGlobalSystemPromptName}
-      />
-
-      <GenerationPromptTemplatesSection
-        settings={settings}
-        updateAndRefresh={updateAndRefresh}
-        moduleId={selectedModule.id}
-        testGrammarSchemaEnforcement={testGrammarSchemaEnforcement}
       />
 
       <WorldInfoPolicySection settings={settings} updateAndRefresh={updateAndRefresh} />

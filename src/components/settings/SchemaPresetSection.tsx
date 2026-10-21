@@ -288,7 +288,7 @@ export const SchemaPresetSection: FC<{
           onClick={generateSchemaHtmlFromSchema}
           disabled={!canGenerateSchemaHtml}
         >
-          <i className="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Generate HTML from schema
+          <i className="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Generate HTML
         </STButton>
       </div>
 
@@ -324,10 +324,10 @@ export const SchemaPresetSection: FC<{
         <STButton
           type="button"
           className="ztracker-btn-secondary"
-          title="Restore default schema JSON and HTML"
+          title="Restore both the Schema JSON and the Schema HTML to their defaults"
           onClick={restoreSchemaToDefault}
         >
-          <i className="fa-solid fa-undo" aria-hidden="true"></i> Restore JSON and HTML to default
+          <i className="fa-solid fa-undo" aria-hidden="true"></i> Reset JSON+HTML
         </STButton>
       </div>
     </div>

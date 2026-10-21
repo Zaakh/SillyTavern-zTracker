@@ -78,8 +78,13 @@ export const IncludeModulesSection: FC<SettingsSectionProps & { selectedModule: 
                   }
                 />
                 {!resolved.isSelf && (
-                  <STButton type="button" className="ztracker-btn-secondary" onClick={() => removeEntry(index)}>
-                    Remove
+                  <STButton
+                    type="button"
+                    className="ztracker-btn-secondary"
+                    title="Remove this Module from the include list"
+                    onClick={() => removeEntry(index)}
+                  >
+                    <i className="fa-solid fa-xmark" aria-hidden="true"></i> Remove
                   </STButton>
                 )}
               </div>
