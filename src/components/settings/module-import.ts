@@ -6,9 +6,13 @@
  */
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import {
+  EmbedSnapshotRegexTransformPreset,
   TrackerModule,
+  canonicalPresetJson,
+  createDefaultEmbedSnapshotTransformPresets,
   createDefaultTrackerModule,
   createTrackerModuleId,
+  mergeTransformPresets,
   normalizeTrackerModuleIncludeList,
   normalizeWorldInfoAllowlist,
 } from '../../config.js';
@@ -23,7 +27,24 @@ export type ImportedTrackerModule = Partial<Omit<TrackerModule, 'auto' | 'schema
     connection?: Partial<TrackerModule['connection']>;
     generation?: Partial<TrackerModule['generation']>;
     injection?: Partial<TrackerModule['injection']>;
+    /** Definition of the selected transform preset, embedded by export when it is not a pristine built-in. */
+    transformPresetDefinition?: EmbedSnapshotRegexTransformPreset;
   };
+
+
+/**
+ * Returns the Module as exported: self-contained, so the selected transform preset's definition is
+ * embedded unless it is a built-in still identical to the shipped one (the key alone is enough then).
+ */
+export function buildExportedTrackerModule(
+  module: TrackerModule,
+  globalPresets: Record<string, EmbedSnapshotRegexTransformPreset>,
+): ImportedTrackerModule {
+  const selected = globalPresets[module.injection.transformPreset];
+  const shipped = createDefaultEmbedSnapshotTransformPresets()[module.injection.transformPreset];
+  const needsDefinition = selected && !(shipped && canonicalPresetJson(shipped) === canonicalPresetJson(selected));
+  return needsDefinition ? { ...module, transformPresetDefinition: structuredClone(selected) } : module;
+}
 
 /**
  * Normalizes an imported Module's `auto` settings into the current `{ enabled, direction }`
@@ -72,8 +93,16 @@ export function parseImportedTrackerModule(text: string): ImportedTrackerModule 
   }
 }
 
-/** Builds a full Module from an imported (possibly partial/legacy-shaped) Module, appended at the end of `modules`. */
-export function createImportedTrackerModule(importedModule: ImportedTrackerModule, modules: TrackerModule[]): TrackerModule {
+/**
+ * Builds a full Module from an imported (possibly partial/legacy-shaped) Module, appended at the end
+ * of `modules`. The Module's embedded preset (or, for an old export, the selected entry of its
+ * per-Module list) is merged into `globalPresets`, which may rename it and repoint the selection.
+ */
+export function createImportedTrackerModule(
+  importedModule: ImportedTrackerModule,
+  modules: TrackerModule[],
+  globalPresets: Record<string, EmbedSnapshotRegexTransformPreset> = {},
+): TrackerModule {
   const id = createTrackerModuleId(modules, importedModule.id || importedModule.name);
   const base = createDefaultTrackerModule({ id, name: importedModule.name.trim(), order: modules.length });
   const mergedGeneration = { ...base.generation, ...importedModule.generation } as Record<string, any>;
@@ -81,9 +110,18 @@ export function createImportedTrackerModule(importedModule: ImportedTrackerModul
   const worldInfoAllowlist = normalizeWorldInfoAllowlist(importedModule.generation as Record<string, unknown> | undefined);
   delete mergedGeneration.worldInfoAllowlistBookNames;
   delete mergedGeneration.worldInfoAllowlistEntryIds;
+  const { transformPresetDefinition, ...moduleFields } = importedModule;
+  const injection = { ...base.injection, ...importedModule.injection } as TrackerModule['injection'] & {
+    transformPresets?: Record<string, EmbedSnapshotRegexTransformPreset>;
+  };
+  const embeddedPreset = transformPresetDefinition ?? injection.transformPresets?.[injection.transformPreset];
+  delete injection.transformPresets;
+  if (embeddedPreset) {
+    injection.transformPreset = mergeTransformPresets(globalPresets, injection.transformPreset, embeddedPreset);
+  }
   return {
     ...base,
-    ...JSON.parse(JSON.stringify(importedModule)),
+    ...JSON.parse(JSON.stringify(moduleFields)),
     id,
     name: importedModule.name.trim(),
     enabled: importedModule.enabled ?? base.enabled,
@@ -101,6 +139,6 @@ export function createImportedTrackerModule(importedModule: ImportedTrackerModul
       // assembly both assume it is always present).
       includeModules: normalizeTrackerModuleIncludeList(mergedGeneration.includeModules, base.generation.includeModules[0].count),
     },
-    injection: { ...base.injection, ...importedModule.injection },
+    injection,
   };
 }

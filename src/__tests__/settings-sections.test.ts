@@ -699,124 +699,177 @@ describe('settings sections', () => {
     });
   });
 
-  test('updates transform preset selection, CRUD, and field edits from the settings surface', () => {
-    const settings = {
-      embedZTrackerSnapshotHeader: 'Tracker:',
-      embedZTrackerSnapshotTransformPreset: 'default',
-      embedZTrackerSnapshotTransformPresets: {
-        default: {
-          name: 'Default',
-          input: 'pretty_json',
-          pattern: '',
-          flags: '',
-          replacement: '',
-          codeFenceLang: 'json',
-          wrapInCodeFence: true,
-        },
-        custom: {
-          name: 'Custom',
-          input: 'top_level_lines',
-          pattern: 'time',
-          flags: 'gi',
-          replacement: 'clock',
-          codeFenceLang: 'text',
-          wrapInCodeFence: false,
-        },
-      },
-    } as any;
-    const updateAndRefresh = (updater: (current: any) => void) => updater(settings);
+  describe('transform preset editor (global list)', () => {
+    const preset = (name: string, extra: Record<string, unknown> = {}) => ({
+      name,
+      input: 'pretty_json',
+      pattern: '',
+      flags: '',
+      replacement: '',
+      codeFenceLang: 'json',
+      wrapInCodeFence: true,
+      ...extra,
+    });
 
-    ({ root } = renderElement(React.createElement(EmbedSnapshotTransformSection, { settings, updateAndRefresh })));
-
-    const headerInput = document.querySelector('input[title="Header line to prepend before the embedded zTracker snapshot in normal generations. Set empty to omit."]');
-    const presetSelect = document.querySelector('[data-testid="preset-select-Embed snapshot transform preset"]');
-    if (!(headerInput instanceof HTMLInputElement) || !(presetSelect instanceof HTMLSelectElement)) {
-      throw new Error('Transform header or preset select not found');
+    /** Extension-wide state plus the flattened view of the first Module, rebuilt on every render like Settings.tsx does. */
+    function setup(selections: string[]) {
+      const global: any = {
+        transformPresets: {
+          default: preset('Default'),
+          minimal: preset('Minimal', { input: 'top_level_lines' }),
+          toon: preset('TOON', { input: 'toon' }),
+          custom: preset('Custom', { input: 'top_level_lines', pattern: 'time', flags: 'gi', replacement: 'clock', wrapInCodeFence: false }),
+        },
+        modules: selections.map((transformPreset) => ({ injection: { transformPreset } })),
+      };
+      const draft = { embedZTrackerSnapshotHeader: 'Tracker:' } as any;
+      const flat = () => ({
+        ...global,
+        ...draft,
+        embedZTrackerSnapshotTransformPreset: global.modules[0].injection.transformPreset,
+        embedZTrackerSnapshotTransformPresets: global.transformPresets,
+      });
+      const updateAndRefresh = (updater: (current: any) => void) => {
+        const view = flat();
+        updater(view);
+        draft.embedZTrackerSnapshotHeader = view.embedZTrackerSnapshotHeader;
+        global.modules[0].injection.transformPreset = view.embedZTrackerSnapshotTransformPreset;
+      };
+      const updateGlobal = (updater: (current: any) => void) => updater(global);
+      const render = () =>
+        act(() => {
+          const element = React.createElement(EmbedSnapshotTransformSection, { settings: flat() as any, updateAndRefresh, updateGlobal });
+          if (root) root.render(element);
+          else ({ root } = renderElement(element));
+        });
+      render();
+      return { global, render };
     }
 
+    const control = (id: string) => document.querySelector(`[data-testid="preset-${id}-Embed snapshot transform preset"]`) as any;
+
+    test('selection writes the Module key and field edits write the global list', () => {
+      const { global, render } = setup(['default']);
+
+      act(() => {
+        setSelectValue(control('select'), 'custom');
+      });
+      expect(global.modules[0].injection.transformPreset).toBe('custom');
+      render();
+
+      const flags = document.querySelector('input[title="JavaScript regex flags (e.g. g, i, m)."]') as HTMLInputElement;
+      const patternTextarea = document.querySelectorAll('textarea')[0] as HTMLTextAreaElement;
+      const wrap = document.querySelector('input[title^="When enabled, wraps the embedded snapshot"]') as HTMLInputElement;
+      act(() => {
+        setTextControlValue(patternTextarea, 'scene');
+        setTextControlValue(flags, 'm');
+      });
+      act(() => {
+        wrap.click();
+      });
+
+      expect(global.transformPresets.custom).toMatchObject({ pattern: 'scene', flags: 'm', wrapInCodeFence: true });
+    });
+
+    test('create and rename update the global list', () => {
+      const { global, render } = setup(['default']);
+      delete global.transformPresets.custom;
+      render();
+
+      act(() => {
+        control('create').click();
+      });
+      expect(global.transformPresets.custom?.name).toBe('Custom');
+      render();
+
+      act(() => {
+        control('rename').click();
+      });
+      expect(global.transformPresets.renamed?.name).toBe('Renamed');
+      expect(global.transformPresets.custom).toBeUndefined();
+    });
+
+    test('deleting a user preset repoints every Module that selected it to a surviving key', () => {
+      const { global } = setup(['custom', 'custom', 'minimal']);
+
+      act(() => {
+        control('delete').click();
+      });
+
+      expect(global.transformPresets.custom).toBeUndefined();
+      expect(global.modules.map((m: any) => global.transformPresets[m.injection.transformPreset] !== undefined)).toEqual([true, true, true]);
+      expect(global.modules[2].injection.transformPreset).toBe('minimal');
+      expect(global.modules[1].injection.transformPreset).toBe('default');
+    });
+
+    test('built-in presets cannot be deleted but stay editable', () => {
+      const { global } = setup(['minimal']);
+
+      // The list writer re-adds a built-in even if the widget drops it.
+      const props = presetSelectMock.mock.calls.at(-1)![0] as any;
+      act(() => {
+        props.onItemsChange([{ value: 'default', label: 'Default' }]);
+      });
+      expect(Object.keys(global.transformPresets)).toEqual(expect.arrayContaining(['default', 'minimal', 'toon']));
+      expect(global.transformPresets.minimal.name).toBe('Minimal');
+
+      const flags = document.querySelector('input[title="JavaScript regex flags (e.g. g, i, m)."]') as HTMLInputElement;
+      act(() => {
+        setTextControlValue(flags, 'x');
+      });
+      expect(global.transformPresets.minimal.flags).toBe('x');
+    });
+
+    test('renaming a user preset moves every Module that selected it to the new key', () => {
+      const { global } = setup(['custom', 'custom', 'minimal']);
+
+      act(() => {
+        control('rename').click();
+      });
+
+      expect(global.transformPresets.renamed?.name).toBe('Renamed');
+      expect(global.modules.map((m: any) => m.injection.transformPreset)).toEqual(['renamed', 'renamed', 'minimal']);
+    });
+
+    test('renaming a built-in keeps the built-in and follows the rename', () => {
+      const { global } = setup(['minimal']);
+      const props = presetSelectMock.mock.calls.at(-1)![0] as any;
+      const items = props.items.map((i: any) => (i.value === 'minimal' ? { value: 'mine', label: 'Mine' } : i));
+
+      act(() => {
+        props.onItemsChange(items);
+      });
+
+      expect(global.transformPresets.minimal.name).toBe('Minimal');
+      expect(global.transformPresets.mine.name).toBe('Mine');
+      expect(global.modules[0].injection.transformPreset).toBe('mine');
+    });
+
+    test('shows how many Modules share the selected preset', () => {
+      setup(['custom', 'custom', 'minimal']);
+      expect(document.body.textContent).toContain('currently shared by 2 Modules');
+    });
+
+    test('does not claim sharing for a preset only one Module selects', () => {
+      setup(['custom', 'minimal']);
+      expect(document.body.textContent).not.toContain('currently shared by');
+    });
+  });
+
+  test('edits the snapshot header on the Module draft', () => {
+    const settings = { embedZTrackerSnapshotHeader: 'Tracker:', embedZTrackerSnapshotTransformPreset: 'default', embedZTrackerSnapshotTransformPresets: {}, modules: [] } as any;
+    ({ root } = renderElement(
+      React.createElement(EmbedSnapshotTransformSection, {
+        settings,
+        updateAndRefresh: (updater: (current: any) => void) => updater(settings),
+        updateGlobal: jest.fn(),
+      }),
+    ));
+    const headerInput = document.querySelector('input[title="Header line to prepend before the embedded zTracker snapshot in normal generations. Set empty to omit."]') as HTMLInputElement;
     act(() => {
       setTextControlValue(headerInput, 'Scene:');
     });
-
     expect(settings.embedZTrackerSnapshotHeader).toBe('Scene:');
-
-    act(() => {
-      setSelectValue(presetSelect, 'custom');
-    });
-
-    expect(settings.embedZTrackerSnapshotTransformPreset).toBe('custom');
-
-    act(() => {
-      root?.render(React.createElement(EmbedSnapshotTransformSection, { settings, updateAndRefresh }));
-    });
-
-    const transformInputSelect = document.querySelector('select[title="Controls what text the regex runs against."]');
-    const regexFlagsInput = document.querySelector('input[title="JavaScript regex flags (e.g. g, i, m)."]');
-    const codeFenceLangInput = document.querySelector('input[title="Language tag used for the Markdown code fence when wrapping is enabled (e.g. json, text). Ignored if wrapping is disabled."]');
-    const wrapCheckbox = document.querySelector('input[title="When enabled, wraps the embedded snapshot in a Markdown code fence for readability (example: ```json ... ```)."]');
-    const textareas = Array.from(document.querySelectorAll('textarea')) as HTMLTextAreaElement[];
-    const patternTextarea = textareas[0];
-    const replacementTextarea = textareas[1];
-
-    if (!(transformInputSelect instanceof HTMLSelectElement)
-      || !(regexFlagsInput instanceof HTMLInputElement)
-      || !(codeFenceLangInput instanceof HTMLInputElement)
-      || !(wrapCheckbox instanceof HTMLInputElement)
-      || !(patternTextarea instanceof HTMLTextAreaElement)
-      || !(replacementTextarea instanceof HTMLTextAreaElement)) {
-      throw new Error('Transform field controls not found');
-    }
-
-    act(() => {
-      setSelectValue(transformInputSelect, 'toon');
-      setTextControlValue(patternTextarea, 'scene');
-      setTextControlValue(regexFlagsInput, 'm');
-      setTextControlValue(replacementTextarea, 'place');
-      setTextControlValue(codeFenceLangInput, 'yaml');
-    });
-
-    act(() => {
-      wrapCheckbox.click();
-    });
-
-    expect(settings.embedZTrackerSnapshotTransformPresets.custom).toMatchObject({
-      input: 'toon',
-      pattern: 'scene',
-      flags: 'm',
-      replacement: 'place',
-      codeFenceLang: 'yaml',
-      wrapInCodeFence: true,
-    });
-
-    const createButton = document.querySelector('[data-testid="preset-create-Embed snapshot transform preset"]');
-    const renameButton = document.querySelector('[data-testid="preset-rename-Embed snapshot transform preset"]');
-    const deleteButton = document.querySelector('[data-testid="preset-delete-Embed snapshot transform preset"]');
-    if (!(createButton instanceof HTMLButtonElement) || !(renameButton instanceof HTMLButtonElement) || !(deleteButton instanceof HTMLButtonElement)) {
-      throw new Error('Transform preset CRUD buttons not found');
-    }
-
-    act(() => {
-      createButton.click();
-    });
-    expect(settings.embedZTrackerSnapshotTransformPresets.custom).toBeDefined();
-
-    act(() => {
-      root?.render(React.createElement(EmbedSnapshotTransformSection, { settings, updateAndRefresh }));
-    });
-
-    act(() => {
-      renameButton.click();
-    });
-    expect(settings.embedZTrackerSnapshotTransformPresets.renamed?.name).toBe('Renamed');
-
-    act(() => {
-      root?.render(React.createElement(EmbedSnapshotTransformSection, { settings, updateAndRefresh }));
-    });
-
-    act(() => {
-      deleteButton.click();
-    });
-    expect(settings.embedZTrackerSnapshotTransformPresets.renamed).toBeUndefined();
   });
 
   test('toggles debug logging and writes diagnostics output from the diagnostics surface', async () => {

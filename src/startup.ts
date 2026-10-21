@@ -14,6 +14,7 @@ import {
   migrateLegacySettingsToModules,
   migrateTrackerModuleAutoSettings,
   migrateTrackerModuleIncludeLists,
+  migrateTransformPresetsToGlobal,
   migrateTrackerModuleSystemPromptContent,
   migrateTrackerModuleWorldInfoAllowlists,
 } from './config.js';
@@ -55,6 +56,7 @@ export async function initializeStartupSettings(options: {
     migrateCorruptedSchemaPresetRequiredMetadata(settings),
     migrateInvalidNumericSettings(settings),
     migrateLegacySettingsToModules(settings),
+    migrateTransformPresetsToGlobal(settings),
     migrateTrackerModuleAutoSettings(settings),
     migrateTrackerModuleIncludeLists(settings),
     migrateTrackerModuleSystemPromptContent(settings),

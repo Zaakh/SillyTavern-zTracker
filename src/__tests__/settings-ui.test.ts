@@ -207,6 +207,9 @@ function createMockSettings() {
     embedZTrackerSnapshotHeader: 'Tracker:',
     embedZTrackerSnapshotTransformPreset: 'default',
     embedZTrackerSnapshotTransformPresets: {},
+    transformPresets: {
+      default: { name: 'Default (JSON)', input: 'pretty_json', pattern: '', flags: 'g', replacement: '', codeFenceLang: 'json', wrapInCodeFence: true },
+    },
     promptEngineeringMode: 'native',
     debugLogging: false,
     trackerWorldInfoPolicyMode: 'include_all',
@@ -264,7 +267,6 @@ function createMockModule(overrides: Record<string, any> = {}) {
       embedAsCharacter: overrides.injection?.embedAsCharacter ?? false,
       snapshotHeader: overrides.injection?.snapshotHeader ?? 'Tracker:',
       transformPreset: overrides.injection?.transformPreset ?? 'default',
-      transformPresets: overrides.injection?.transformPresets ?? {},
     },
   };
 }

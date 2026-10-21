@@ -69,7 +69,7 @@ export async function seedStarterTrackerModules(options: {
       if (!imported) {
         throw new Error(`${templateName}.json did not parse as an importable Module`);
       }
-      const module = createImportedTrackerModule(imported, seededModules);
+      const module = createImportedTrackerModule(imported, seededModules, settings.transformPresets);
       module.enabled = templateName === ENABLED_BY_DEFAULT_TEMPLATE;
       seededModules.push(module);
     } catch (error) {

@@ -229,7 +229,7 @@ export function makeLiveLikeSettings(mode: PromptEngineeringMode) {
     embedZTrackerRole: 'system',
     embedZTrackerSnapshotHeader: 'Scene details:',
     embedZTrackerSnapshotTransformPreset: 'minimal',
-    embedZTrackerSnapshotTransformPresets: {
+    transformPresets: {
       default: {
         name: 'Default (JSON)',
         input: 'pretty_json',

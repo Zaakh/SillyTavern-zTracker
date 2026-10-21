@@ -301,3 +301,30 @@ describe('pre-made Module templates (templates/modules/*.json)', () => {
     );
   });
 });
+
+describe('shipped templates reference transform presets by key only', () => {
+  const builtInKeys = Object.keys(defaultSettings.transformPresets);
+
+  /** Returns why a template's preset selection is invalid, or null when it is a bare built-in key. */
+  function presetProblem(template: ImportedTrackerModule): string | null {
+    if ((template.injection as any)?.transformPresets) return 'embeds a preset list';
+    const key = template.injection?.transformPreset;
+    return key && builtInKeys.includes(key) ? null : `selects non-built-in preset "${key}"`;
+  }
+
+  test.each(['scene-tracker.json', 'plot-log.json', 'plot-steer.json'])('%s selects a built-in key and embeds no list', (fileName) => {
+    expect(presetProblem(loadTemplate(fileName))).toBeNull();
+  });
+
+  test('importing a shipped template adds no presets to the global list', () => {
+    const globalPresets = JSON.parse(JSON.stringify(defaultSettings.transformPresets));
+    createImportedTrackerModule(loadTemplate('plot-steer.json'), [], globalPresets);
+    expect(globalPresets).toEqual(defaultSettings.transformPresets);
+  });
+
+  test('the guard fails a template with an unknown key or an embedded list', () => {
+    const base = loadTemplate('plot-log.json');
+    expect(presetProblem({ ...base, injection: { ...base.injection, transformPreset: 'not-built-in' } })).toMatch(/non-built-in/);
+    expect(presetProblem({ ...base, injection: { ...base.injection, transformPresets: {} } as any })).toMatch(/embeds/);
+  });
+});

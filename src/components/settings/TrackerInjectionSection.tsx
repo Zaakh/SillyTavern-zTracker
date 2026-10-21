@@ -1,10 +1,14 @@
 import { FC } from 'react';
 import { sanitizeIntegerSetting } from '../../settings-numeric.js';
 import { EmbedSnapshotTransformSection } from './EmbedSnapshotTransformSection.js';
-import type { SettingsSectionProps } from './settings-shared.js';
+import type { SettingsSectionProps, SettingsUpdateGlobal } from './settings-shared.js';
 
 // Renders settings that only affect how tracker snapshots are injected into normal generations.
-export const TrackerInjectionSection: FC<SettingsSectionProps> = ({ settings, updateAndRefresh }) => {
+export const TrackerInjectionSection: FC<SettingsSectionProps & { updateGlobal: SettingsUpdateGlobal }> = ({
+  settings,
+  updateAndRefresh,
+  updateGlobal,
+}) => {
   return (
     <>
       <div className="setting-row">
@@ -65,7 +69,7 @@ export const TrackerInjectionSection: FC<SettingsSectionProps> = ({ settings, up
         />
       </div>
 
-      <EmbedSnapshotTransformSection settings={settings} updateAndRefresh={updateAndRefresh} />
+      <EmbedSnapshotTransformSection settings={settings} updateAndRefresh={updateAndRefresh} updateGlobal={updateGlobal} />
     </>
   );
 };
