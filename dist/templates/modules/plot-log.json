@@ -85,36 +85,7 @@
       "embedRole": "user",
       "embedAsCharacter": false,
       "snapshotHeader": "Tracker:",
-      "transformPreset": "default",
-      "transformPresets": {
-        "default": {
-          "name": "Default (JSON)",
-          "input": "pretty_json",
-          "pattern": "",
-          "flags": "g",
-          "replacement": "",
-          "codeFenceLang": "json",
-          "wrapInCodeFence": true
-        },
-        "minimal": {
-          "name": "Minimal (top-level properties)",
-          "input": "top_level_lines",
-          "pattern": "^[\\t ]*\"([^\"]+)\"[\\t ]*:[\\t ]*(.*?)(?:,)?[\\t ]*$",
-          "flags": "gm",
-          "replacement": "$1: $2",
-          "codeFenceLang": "text",
-          "wrapInCodeFence": false
-        },
-        "toon": {
-          "name": "TOON (compact)",
-          "input": "toon",
-          "pattern": "",
-          "flags": "g",
-          "replacement": "",
-          "codeFenceLang": "toon",
-          "wrapInCodeFence": true
-        }
-      }
+      "transformPreset": "default"
     }
   }
 }

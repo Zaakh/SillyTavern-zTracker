@@ -18,6 +18,9 @@ import {
   migrateTrackerModuleIncludeLists,
   migrateTrackerModuleSystemPromptContent,
   migrateTrackerModuleWorldInfoAllowlists,
+  migrateTransformPresetsToGlobal,
+  mergeTransformPresets,
+  seedBuiltInTransformPresets,
   normalizeWorldInfoAllowlist,
   normalizeTrackerModuleIncludeList,
   pruneTrackerModuleIncludeReferences,
@@ -80,7 +83,8 @@ describe('tracker module defaults', () => {
     expect(module.generation.mode).toBe('full');
     expect(module.generation.conversationRoleMode).toBe('preserve');
     expect(module.injection.transformPreset).toBe('default');
-    expect(module.injection.transformPresets.default.name).toBe('Default (JSON)');
+    expect((module.injection as any).transformPresets).toBeUndefined();
+    expect(defaultSettings.transformPresets.default.name).toBe('Default (JSON)');
   });
 
   test('new modules default grammar/schema enforcement to disabled', () => {
@@ -492,5 +496,145 @@ describe('migrateTrackerModuleWorldInfoAllowlists', () => {
 
     expect(migrateTrackerModuleWorldInfoAllowlists(settings)).toBe(true);
     expect(settings.modules[0].generation.worldInfoAllowlist).toEqual([]);
+  });
+});
+
+describe('global transform presets', () => {
+  const builtIn = () => structuredClone(defaultSettings.transformPresets);
+  const edited = (name = 'Edited') => ({ ...builtIn().minimal, name, replacement: '$1 = $2' });
+
+  /** Settings in the pre-global shape: every Module carries its own list and selected key. */
+  function legacySettings(modules: Array<{ id: string; selected: string; list: Record<string, unknown> }>): any {
+    return {
+      ...structuredClone(defaultSettings),
+      transformPresets: builtIn(),
+      modules: modules.map((m, order) => {
+        const module: any = createDefaultTrackerModule({ id: m.id, order });
+        module.injection.transformPreset = m.selected;
+        module.injection.transformPresets = structuredClone(m.list);
+        return module;
+      }),
+    };
+  }
+
+  test('fresh defaults already contain every built-in', () => {
+    expect(Object.keys(defaultSettings.transformPresets).sort()).toEqual(['default', 'minimal', 'toon']);
+  });
+
+  test('identical copies collapse to the built-in key', () => {
+    const settings = legacySettings([
+      { id: 'a', selected: 'minimal', list: builtIn() },
+      { id: 'b', selected: 'minimal', list: builtIn() },
+      { id: 'c', selected: 'toon', list: builtIn() },
+    ]);
+
+    expect(migrateTransformPresetsToGlobal(settings)).toBe(true);
+
+    expect(Object.keys(settings.transformPresets).sort()).toEqual(['default', 'minimal', 'toon']);
+    expect(settings.modules.map((m: any) => m.injection.transformPreset)).toEqual(['minimal', 'minimal', 'toon']);
+    expect(settings.modules.every((m: any) => m.injection.transformPresets === undefined)).toBe(true);
+  });
+
+  test('a conflicting edit keeps the built-in and is stored under a new key the Module is repointed to', () => {
+    const list = { ...builtIn(), minimal: edited() };
+    const settings = legacySettings([{ id: 'a', selected: 'minimal', list }]);
+
+    migrateTransformPresetsToGlobal(settings);
+
+    expect(settings.transformPresets.minimal).toEqual(builtIn().minimal);
+    expect(settings.transformPresets['minimal-2']).toEqual(edited());
+    expect(settings.modules[0].injection.transformPreset).toBe('minimal-2');
+  });
+
+  test('Modules sharing one edited copy share one new key', () => {
+    const list = { ...builtIn(), minimal: edited() };
+    const settings = legacySettings([
+      { id: 'a', selected: 'minimal', list },
+      { id: 'b', selected: 'minimal', list },
+      { id: 'c', selected: 'minimal', list },
+    ]);
+
+    migrateTransformPresetsToGlobal(settings);
+
+    expect(Object.keys(settings.transformPresets).sort()).toEqual(['default', 'minimal', 'minimal-2', 'toon']);
+    expect(settings.modules.map((m: any) => m.injection.transformPreset)).toEqual(['minimal-2', 'minimal-2', 'minimal-2']);
+  });
+
+  test('different edits of one key each get their own key', () => {
+    const settings = legacySettings([
+      { id: 'a', selected: 'minimal', list: { ...builtIn(), minimal: edited('One') } },
+      { id: 'b', selected: 'minimal', list: { ...builtIn(), minimal: edited('Two') } },
+    ]);
+
+    migrateTransformPresetsToGlobal(settings);
+
+    expect(settings.modules.map((m: any) => m.injection.transformPreset)).toEqual(['minimal-2', 'minimal-3']);
+    expect(settings.transformPresets['minimal-3'].name).toBe('Two');
+  });
+
+  test('unselected user presets are still merged', () => {
+    const custom = { ...builtIn().default, name: 'Mine' };
+    const settings = legacySettings([{ id: 'a', selected: 'default', list: { ...builtIn(), mine: custom } }]);
+
+    migrateTransformPresetsToGlobal(settings);
+
+    expect(settings.transformPresets.mine).toEqual(custom);
+    expect(settings.modules[0].injection.transformPreset).toBe('default');
+  });
+
+  test('legacy flat settings merge through the first Module', () => {
+    const flat: any = {
+      ...structuredClone(defaultSettings),
+      formatVersion: 'F_1.0',
+      modules: [],
+      embedZTrackerSnapshotTransformPreset: 'plain',
+      embedZTrackerSnapshotTransformPresets: {
+        plain: { name: 'Plain', input: 'top_level_lines', pattern: '', flags: 'g', replacement: '', codeFenceLang: 'text' },
+      },
+    };
+
+    migrateLegacySettingsToModules(flat);
+    migrateTransformPresetsToGlobal(flat);
+
+    expect(flat.transformPresets.plain.name).toBe('Plain');
+    expect(flat.modules[0].injection.transformPreset).toBe('plain');
+    expect(flat.modules[0].injection.transformPresets).toBeUndefined();
+  });
+
+  test('migration is idempotent', () => {
+    const settings = legacySettings([{ id: 'a', selected: 'minimal', list: { ...builtIn(), minimal: edited() } }]);
+    migrateTransformPresetsToGlobal(settings);
+    const after = structuredClone(settings);
+
+    expect(migrateTransformPresetsToGlobal(settings)).toBe(false);
+    expect(settings).toEqual(after);
+  });
+
+  test('seeding re-adds a missing built-in but never overwrites an edited one', () => {
+    const settings: any = { ...structuredClone(defaultSettings), transformPresets: { minimal: edited() } };
+
+    expect(seedBuiltInTransformPresets(settings)).toBe(true);
+    expect(settings.transformPresets.default).toEqual(builtIn().default);
+    expect(settings.transformPresets.minimal).toEqual(edited());
+    expect(seedBuiltInTransformPresets(settings)).toBe(false);
+  });
+
+  test('mergeTransformPresets ignores property order when comparing', () => {
+    const global = builtIn();
+    const reordered = Object.fromEntries(Object.entries(global.toon).reverse()) as any;
+
+    expect(mergeTransformPresets(global, 'copy', reordered)).toBe('toon');
+  });
+
+  test('a Module resolves its preset from the global list and falls back to default for a missing key', () => {
+    const settings: any = { ...structuredClone(defaultSettings), modules: [createDefaultTrackerModule()] };
+    settings.transformPresets.minimal = edited();
+    settings.modules[0].injection.transformPreset = 'minimal';
+
+    const flat = getSettingsForTrackerModule(settings, settings.modules[0].id);
+    expect(flat.embedZTrackerSnapshotTransformPresets.minimal.name).toBe('Edited');
+
+    applySettingsToTrackerModule(settings.modules[0], flat);
+    expect(settings.modules[0].injection.transformPresets).toBeUndefined();
   });
 });

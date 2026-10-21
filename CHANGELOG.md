@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-10-21
+
+### Changed
+
+- Snapshot transform presets are now one list shared by all Modules; each Module only remembers which preset it selects. Editing a preset applies to every Module that selects it, and the editor shows how many Modules share it. Built-in presets (Default, Minimal, TOON) can be edited but no longer deleted; deleting another preset sends the Modules that selected it back to Default.
+- Existing settings upgrade automatically and one-way, with no change to what any Module injects. Identical per-Module copies collapse into one preset; when a Module's edited copy conflicts with another preset under the same key, it is kept under a new key (for example `minimal-2`) and that Module is repointed to it. Older versions cannot read the upgraded settings. Known limit: Minimal's whitespace and code-fence handling is tied to the key `minimal`, so an edited Minimal that gets renamed (for example `minimal-2`) formats with the generic top-level-lines rules instead.
+- Module export embeds the selected preset when it is custom or an edited built-in, and import merges it into the shared list (renaming on a clash), so an exported Module formats identically on another install. Shipped Module templates now reference built-in presets by key only.
+
 ## [2.14.0] - 2026-10-20
 
 ### Changed

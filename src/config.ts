@@ -151,8 +151,8 @@ export interface TrackerModuleInjectionSettings {
   embedRole: 'user' | 'assistant' | 'system';
   embedAsCharacter: boolean;
   snapshotHeader: string;
+  /** Key of the selected preset in the global `ExtensionSettings.transformPresets` list. */
   transformPreset: string;
-  transformPresets: Record<string, EmbedSnapshotRegexTransformPreset>;
 }
 
 export interface TrackerModule {
@@ -175,6 +175,8 @@ export interface ExtensionSettings {
   version: string;
   formatVersion: string;
   modules: TrackerModule[];
+  /** Snapshot transform presets shared by every Module; a Module stores only the selected key. */
+  transformPresets: Record<string, EmbedSnapshotRegexTransformPreset>;
   debugLogging: boolean;
 }
 
@@ -697,7 +699,7 @@ function createPlaceholderSchemaPresets(): Record<string, Schema> {
   };
 }
 
-function createDefaultEmbedSnapshotTransformPresets(): Record<string, EmbedSnapshotRegexTransformPreset> {
+export function createDefaultEmbedSnapshotTransformPresets(): Record<string, EmbedSnapshotRegexTransformPreset> {
   return {
     default: {
       name: 'Default (JSON)',
@@ -787,7 +789,6 @@ export function createDefaultTrackerModule(options: Partial<Pick<TrackerModule, 
       embedAsCharacter: false,
       snapshotHeader: DEFAULT_EMBED_SNAPSHOT_HEADER,
       transformPreset: 'default',
-      transformPresets: createDefaultEmbedSnapshotTransformPresets(),
     },
   };
 }
@@ -872,9 +873,10 @@ export function createTrackerModuleFromLegacySettings(
   module.injection.embedAsCharacter = settings.embedZTrackerAsCharacter ?? module.injection.embedAsCharacter;
   module.injection.snapshotHeader = settings.embedZTrackerSnapshotHeader ?? module.injection.snapshotHeader;
   module.injection.transformPreset = settings.embedZTrackerSnapshotTransformPreset ?? module.injection.transformPreset;
-  module.injection.transformPresets = cloneSettingsValue(
-    settings.embedZTrackerSnapshotTransformPresets ?? module.injection.transformPresets,
-  );
+  // Carried as an untyped legacy list so migrateTransformPresetsToGlobal merges it into the global list.
+  if (settings.embedZTrackerSnapshotTransformPresets) {
+    (module.injection as LegacyInjection).transformPresets = cloneSettingsValue(settings.embedZTrackerSnapshotTransformPresets);
+  }
   // Preserve prior self-history behavior: seed the mandatory self entry from the same legacy value
   // that used to double as both self-history and downstream-injection count.
   module.generation.includeModules = [{ target: 'self', count: module.injection.includeLastXMessages }];
@@ -921,7 +923,7 @@ export function getSettingsForTrackerModule(settings: ExtensionSettings, moduleI
     embedZTrackerAsCharacter: module.injection.embedAsCharacter,
     embedZTrackerSnapshotHeader: module.injection.snapshotHeader,
     embedZTrackerSnapshotTransformPreset: module.injection.transformPreset,
-    embedZTrackerSnapshotTransformPresets: module.injection.transformPresets,
+    embedZTrackerSnapshotTransformPresets: settings.transformPresets ?? createDefaultEmbedSnapshotTransformPresets(),
     promptEngineeringMode: module.prompts.promptEngineeringMode,
     promptJson: module.prompts.promptJson,
     promptXml: module.prompts.promptXml,
@@ -972,7 +974,6 @@ export function applySettingsToTrackerModule(module: TrackerModule, settings: Tr
   module.injection.embedAsCharacter = settings.embedZTrackerAsCharacter;
   module.injection.snapshotHeader = settings.embedZTrackerSnapshotHeader;
   module.injection.transformPreset = settings.embedZTrackerSnapshotTransformPreset;
-  module.injection.transformPresets = cloneSettingsValue(settings.embedZTrackerSnapshotTransformPresets);
   module.generation.worldInfoPolicyMode = settings.trackerWorldInfoPolicyMode;
   module.generation.worldInfoAllowlist = cloneSettingsValue(settings.trackerWorldInfoAllowlist);
 }
@@ -1139,6 +1140,71 @@ export function migrateTrackerModuleSystemPromptContent(settings: ExtensionSetti
   return changed;
 }
 
+/** Pre-global-list shape: each Module carried its own preset list. Read only by the migration. */
+type LegacyInjection = TrackerModuleInjectionSettings & {
+  transformPresets?: Record<string, EmbedSnapshotRegexTransformPreset>;
+};
+
+/** Key-order-independent JSON, so two presets with the same fields compare equal. */
+export function canonicalPresetJson(preset: EmbedSnapshotRegexTransformPreset): string {
+  return JSON.stringify(preset, Object.keys(preset).sort());
+}
+
+/**
+ * Merges one preset into the global list and returns the key it now lives under: the same key when
+ * identical there, any other key holding an identical preset, a new `<key>-N` when the key is taken
+ * by different content, or `key` itself when free. Shared by the startup migration and Module import.
+ */
+export function mergeTransformPresets(
+  global: Record<string, EmbedSnapshotRegexTransformPreset>,
+  key: string,
+  preset: EmbedSnapshotRegexTransformPreset,
+): string {
+  const wanted = canonicalPresetJson(preset);
+  if (global[key] && canonicalPresetJson(global[key]) === wanted) return key;
+  const identicalKey = Object.keys(global).find((existing) => canonicalPresetJson(global[existing]) === wanted);
+  if (identicalKey) return identicalKey;
+  let target = key;
+  for (let suffix = 2; global[target]; suffix += 1) target = `${key}-${suffix}`;
+  global[target] = cloneSettingsValue(preset);
+  return target;
+}
+
+/** Adds each built-in preset whose key is missing; never overwrites an existing (possibly edited) key. */
+export function seedBuiltInTransformPresets(settings: ExtensionSettings): boolean {
+  settings.transformPresets ??= {};
+  let changed = false;
+  for (const [key, preset] of Object.entries(createDefaultEmbedSnapshotTransformPresets())) {
+    if (settings.transformPresets[key]) continue;
+    settings.transformPresets[key] = preset;
+    changed = true;
+  }
+  return changed;
+}
+
+/**
+ * Moves every Module's own preset list into the global list (see `mergeTransformPresets`), repoints
+ * a Module whose selected key was renamed, then drops the per-Module list. Runs after
+ * `migrateLegacySettingsToModules` (the legacy upgrade copies the flat list into the first Module)
+ * and is idempotent: a Module without a list is untouched, and seeding never overwrites.
+ */
+export function migrateTransformPresetsToGlobal(settings: ExtensionSettings): boolean {
+  let changed = seedBuiltInTransformPresets(settings);
+  for (const module of settings.modules ?? []) {
+    const injection = module.injection as LegacyInjection | undefined;
+    const legacyList = injection?.transformPresets;
+    if (!injection || !legacyList) continue;
+    const resolvedKeys: Record<string, string> = {};
+    for (const [key, preset] of Object.entries(legacyList)) {
+      resolvedKeys[key] = mergeTransformPresets(settings.transformPresets, key, preset);
+    }
+    injection.transformPreset = resolvedKeys[injection.transformPreset] ?? injection.transformPreset;
+    delete injection.transformPresets;
+    changed = true;
+  }
+  return changed;
+}
+
 // No synchronous default Module: a fresh install's only Module content comes from seeding the
 // shipped starter templates (see main()'s fresh-install branch in src/index.tsx). If every
 // template fails to seed, getTrackerModule()/getOrderedTrackerModules() already recover a
@@ -1147,5 +1213,6 @@ export const defaultSettings: ExtensionSettings = {
   version: VERSION,
   formatVersion: FORMAT_VERSION,
   modules: [],
+  transformPresets: createDefaultEmbedSnapshotTransformPresets(),
   debugLogging: false,
 };

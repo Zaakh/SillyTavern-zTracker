@@ -33,7 +33,7 @@ In **Extensions -> zTracker**, use **Modules** when you want more than one track
 
 The original single tracker is upgraded into the **Default** Module the first time this version runs. That settings format upgrade is one-way. Existing saved tracker data, current-chat schema choices, and character auto-mode exclusions are preserved under the Default Module. A brand-new install instead automatically seeds all three [pre-made Modules](#pre-made-modules) below - **Scene Tracker** enabled, **Plot Log** and **Plot Steer** disabled until you opt in.
 
-You can add, clone, reorder, delete, export, and import Modules from the settings panel. Export downloads a `.json` file with the Module's full configuration (schema presets, prompts, system prompt, connection, generation, and injection settings); Import reads such a file back through a file picker. Deleting a Module also removes that Module's saved tracker data from the current chat history.
+You can add, clone, reorder, delete, export, and import Modules from the settings panel. Export downloads a `.json` file with the Module's full configuration (schema presets, prompts, system prompt, connection, generation, and injection settings); Import reads such a file back through a file picker. If the Module uses a custom (or edited built-in) snapshot transform preset, the export carries that preset and import adds it to your shared preset list, under a new name if yours already differs. Deleting a Module also removes that Module's saved tracker data from the current chat history.
 
 Each Module has a **Module State** selector with three values: **Off** (no generation, injection, chaining, or chooser entry), **Manual** (generates only when you trigger it, but is still injected and chainable once it has snapshots), and **Auto** (also generates automatically; the **Direction** setting picks which chat events trigger it). The message truck button always opens a chooser listing the Manual and Auto Modules, even when only one exists. Already-saved tracker blocks of an Off Module stay visible, labeled with the Module name, until you delete them.
 
@@ -204,7 +204,7 @@ If SillyTavern's prompt formatting is producing awkward prefixes like `Assistant
 
 In the text-completion-safe terminal assistant fallback, zTracker still keeps the tracker label inside the raw injected content so the prompt can end on the real assistant reply cue. See `docs/TRACKER_INJECTION_BEHAVIOR.md` for the current behavior matrix, including when that reply cue is host-confirmed versus inferred from prior assistant history.
 
-You can also apply a **regex-based transform** to the embedded snapshot text (for prompt-friendly formatting) via **Embed snapshot transform preset**.
+You can also apply a **regex-based transform** to the embedded snapshot text (for prompt-friendly formatting) via **Embed snapshot transform preset**. The preset list is shared by all Modules: a Module only picks which preset it uses, editing a preset changes it for every Module that selects it (the editor shows how many), and the built-in presets can be edited but not deleted. Deleting a custom preset sends the Modules that used it back to Default.
 
 You can customize (or remove) the embedded snapshot header via **Embed snapshot header**.
 

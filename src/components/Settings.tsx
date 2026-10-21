@@ -39,7 +39,7 @@ import {
   reconcilePresetItems,
   resolvePresetSelection,
 } from './settings/preset-state.js';
-import { createImportedTrackerModule, parseImportedTrackerModule } from './settings/module-import.js';
+import { buildExportedTrackerModule, createImportedTrackerModule, parseImportedTrackerModule } from './settings/module-import.js';
 import {
   applyModuleActivation,
   getModuleActivation,
@@ -680,7 +680,7 @@ export const ZTrackerSettings: FC<{
           worldInfoAllowlist: module.generation.worldInfoAllowlist.map((row) => ({ ...row, activeVia: [...row.activeVia], entryIds: [...row.entryIds] })),
           includeModules: module.generation.includeModules.map((entry) => ({ ...entry })),
         },
-        injection: { ...module.injection, transformPresets: JSON.parse(JSON.stringify(module.injection.transformPresets)) },
+        injection: { ...module.injection },
         auto: { ...module.auto },
       }));
       nextSelectedModuleId = updater(currentSettings.modules);
@@ -754,7 +754,7 @@ export const ZTrackerSettings: FC<{
   };
 
   const exportSelectedModule = () => {
-    const payload = JSON.stringify({ version: MODULE_EXPORT_VERSION, module: selectedModule }, null, 2);
+    const payload = JSON.stringify({ version: MODULE_EXPORT_VERSION, module: buildExportedTrackerModule(selectedModule, settings.transformPresets) }, null, 2);
     const blob = new Blob([payload], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -778,7 +778,7 @@ export const ZTrackerSettings: FC<{
     let importedName = '';
     let importedModuleRef: TrackerModule | undefined;
     updateModuleList((modules) => {
-      const module = createImportedTrackerModule(importedModule, modules);
+      const module = createImportedTrackerModule(importedModule, modules, settingsManager.getSettings().transformPresets);
       importedName = module.name;
       importedModuleRef = module;
       modules.push(module);
@@ -1004,7 +1004,7 @@ export const ZTrackerSettings: FC<{
               isOpen={isInjectionOpen}
               onToggle={() => setInjectionOpen((value) => !value)}
             >
-              <TrackerInjectionSection settings={moduleSettings} updateAndRefresh={updateSelectedModuleAndRefresh} />
+              <TrackerInjectionSection settings={moduleSettings} updateAndRefresh={updateSelectedModuleAndRefresh} updateGlobal={updateAndRefresh} />
             </SettingsSectionDrawer>
             </div>
 

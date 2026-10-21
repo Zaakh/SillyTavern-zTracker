@@ -1,12 +1,25 @@
 import { FC, useMemo } from 'react';
 import { STPresetSelect, STTextarea, PresetItem } from 'sillytavern-utils-lib/components/react';
-import { DEFAULT_EMBED_SNAPSHOT_HEADER, TrackerModuleSettings } from '../../config.js';
+import {
+  DEFAULT_EMBED_SNAPSHOT_HEADER,
+  EmbedSnapshotRegexTransformPreset,
+  ExtensionSettings,
+  TrackerModuleSettings,
+  createDefaultEmbedSnapshotTransformPresets,
+} from '../../config.js';
 import { reconcilePresetItems, resolvePresetSelection } from './preset-state.js';
 
+const BUILT_IN_PRESET_KEYS = Object.keys(createDefaultEmbedSnapshotTransformPresets());
+
+/**
+ * Snapshot header + transform preset editor. The preset list is global (shared by every Module), so
+ * list and field edits go through `updateGlobal`; only the selected key is written to the Module.
+ */
 export const EmbedSnapshotTransformSection: FC<{
   settings: TrackerModuleSettings;
   updateAndRefresh: (updater: (current: TrackerModuleSettings) => void) => void;
-}> = ({ settings, updateAndRefresh }) => {
+  updateGlobal: (updater: (current: ExtensionSettings) => void) => void;
+}> = ({ settings, updateAndRefresh, updateGlobal }) => {
   const embedTransformItems = useMemo((): PresetItem[] => {
     const presets = settings.embedZTrackerSnapshotTransformPresets ?? {};
     return Object.entries(presets).map(([value, preset]) => ({
@@ -24,15 +37,36 @@ export const EmbedSnapshotTransformSection: FC<{
   };
 
   const handleEmbedTransformPresetsListChange = (newItems: PresetItem[]) => {
-    updateAndRefresh((s) => {
-      const nextState = reconcilePresetItems(s.embedZTrackerSnapshotTransformPresets, s.embedZTrackerSnapshotTransformPreset, newItems);
-      s.embedZTrackerSnapshotTransformPresets = nextState.presets as TrackerModuleSettings['embedZTrackerSnapshotTransformPresets'];
-      s.embedZTrackerSnapshotTransformPreset = nextState.activeKey;
+    updateGlobal((g) => {
+      const before = g.transformPresets;
+      const nextState = reconcilePresetItems(before, settings.embedZTrackerSnapshotTransformPreset, newItems);
+      const next = nextState.presets as ExtensionSettings['transformPresets'];
+      // The widget reports rename and delete alike as a new item list: exactly one key gone and one
+      // new key is a rename, so Modules that selected the old key follow it to the new key.
+      const removed = Object.keys(before).filter((k) => !(k in next));
+      const added = Object.keys(next).filter((k) => !(k in before));
+      const renamed = removed.length === 1 && added.length === 1 ? { from: removed[0], to: added[0] } : null;
+      // Built-ins can be edited and renamed but never removed: a dropped or renamed built-in key stays.
+      for (const builtInKey of BUILT_IN_PRESET_KEYS) next[builtInKey] ??= before[builtInKey];
+      for (const module of g.modules ?? []) {
+        if (renamed && module.injection.transformPreset === renamed.from) module.injection.transformPreset = renamed.to;
+        // A deleted preset sends its Modules back to the always-present default.
+        if (!next[module.injection.transformPreset]) module.injection.transformPreset = 'default';
+      }
+      g.transformPresets = next;
     });
   };
 
   const key = settings.embedZTrackerSnapshotTransformPreset ?? 'default';
   const preset = settings.embedZTrackerSnapshotTransformPresets?.[key];
+  const sharedBy = (settings.modules ?? []).filter((module) => module.injection.transformPreset === key).length;
+
+  const editPreset = (patch: Partial<EmbedSnapshotRegexTransformPreset>) =>
+    updateGlobal((g) => {
+      const current = g.transformPresets?.[key];
+      if (!current) return;
+      g.transformPresets = { ...g.transformPresets, [key]: { ...current, ...patch } };
+    });
 
   return (
     <div className="setting-row">
@@ -69,6 +103,10 @@ export const EmbedSnapshotTransformSection: FC<{
 
       {!preset ? null : (
         <div style={{ marginTop: '0.5em' }}>
+          <div className="notes">
+            Presets are shared by all Modules: edits apply everywhere this preset is selected
+            {sharedBy > 1 ? ` (currently shared by ${sharedBy} Modules).` : '.'}
+          </div>
           <div className="setting-row">
             <label title="Controls what text the regex runs against (the raw snapshot).">Transform input</label>
             <select
@@ -76,14 +114,7 @@ export const EmbedSnapshotTransformSection: FC<{
               title="Controls what text the regex runs against."
               value={preset.input ?? 'pretty_json'}
               onChange={(e) =>
-                updateAndRefresh((s) => {
-                  const current = s.embedZTrackerSnapshotTransformPresets?.[key];
-                  if (!current) return;
-                  s.embedZTrackerSnapshotTransformPresets = {
-                    ...s.embedZTrackerSnapshotTransformPresets,
-                    [key]: { ...current, input: e.target.value as any },
-                  };
-                })
+                editPreset({ input: e.target.value as any })
               }
             >
               <option value="pretty_json">Pretty JSON</option>
@@ -97,14 +128,7 @@ export const EmbedSnapshotTransformSection: FC<{
             <STTextarea
               value={preset.pattern ?? ''}
               onChange={(e) =>
-                updateAndRefresh((s) => {
-                  const current = s.embedZTrackerSnapshotTransformPresets?.[key];
-                  if (!current) return;
-                  s.embedZTrackerSnapshotTransformPresets = {
-                    ...s.embedZTrackerSnapshotTransformPresets,
-                    [key]: { ...current, pattern: e.target.value },
-                  };
-                })
+                editPreset({ pattern: e.target.value })
               }
               rows={2}
             />
@@ -119,14 +143,7 @@ export const EmbedSnapshotTransformSection: FC<{
               title="JavaScript regex flags (e.g. g, i, m)."
               value={preset.flags ?? ''}
               onChange={(e) =>
-                updateAndRefresh((s) => {
-                  const current = s.embedZTrackerSnapshotTransformPresets?.[key];
-                  if (!current) return;
-                  s.embedZTrackerSnapshotTransformPresets = {
-                    ...s.embedZTrackerSnapshotTransformPresets,
-                    [key]: { ...current, flags: e.target.value },
-                  };
-                })
+                editPreset({ flags: e.target.value })
               }
             />
           </div>
@@ -136,14 +153,7 @@ export const EmbedSnapshotTransformSection: FC<{
             <STTextarea
               value={preset.replacement ?? ''}
               onChange={(e) =>
-                updateAndRefresh((s) => {
-                  const current = s.embedZTrackerSnapshotTransformPresets?.[key];
-                  if (!current) return;
-                  s.embedZTrackerSnapshotTransformPresets = {
-                    ...s.embedZTrackerSnapshotTransformPresets,
-                    [key]: { ...current, replacement: e.target.value },
-                  };
-                })
+                editPreset({ replacement: e.target.value })
               }
               rows={2}
             />
@@ -160,14 +170,7 @@ export const EmbedSnapshotTransformSection: FC<{
               title="Language tag used for the Markdown code fence when wrapping is enabled (e.g. json, text). Ignored if wrapping is disabled."
               value={preset.codeFenceLang ?? ''}
               onChange={(e) =>
-                updateAndRefresh((s) => {
-                  const current = s.embedZTrackerSnapshotTransformPresets?.[key];
-                  if (!current) return;
-                  s.embedZTrackerSnapshotTransformPresets = {
-                    ...s.embedZTrackerSnapshotTransformPresets,
-                    [key]: { ...current, codeFenceLang: e.target.value },
-                  };
-                })
+                editPreset({ codeFenceLang: e.target.value })
               }
             />
           </div>
@@ -181,14 +184,7 @@ export const EmbedSnapshotTransformSection: FC<{
               title="When enabled, wraps the embedded snapshot in a Markdown code fence for readability (example: ```json ... ```)."
               checked={preset.wrapInCodeFence !== false}
               onChange={(e) =>
-                updateAndRefresh((s) => {
-                  const current = s.embedZTrackerSnapshotTransformPresets?.[key];
-                  if (!current) return;
-                  s.embedZTrackerSnapshotTransformPresets = {
-                    ...s.embedZTrackerSnapshotTransformPresets,
-                    [key]: { ...current, wrapInCodeFence: e.target.checked },
-                  };
-                })
+                editPreset({ wrapInCodeFence: e.target.checked })
               }
             />
           </div>
