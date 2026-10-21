@@ -6,7 +6,16 @@ import {
 } from './sillytavern-host-harness.js';
 
 /** Shared mocks and harness helpers for tracker-action tests. */
-export const buildPromptMock = jest.fn<() => Promise<{ result: Array<{ role: string; content: string }> }>>();
+/** Callbacks the tracker generator invokes around a request; mirrors the hooks object passed by tracker-actions. */
+export type GeneratorHooks = {
+  onStart: (requestId: string) => void;
+  onFinish: (requestId: string, data: unknown, error: unknown) => void;
+};
+
+/** Loosely typed mock for casting module-level jest.fn() mocks whose args the test inspects freely; deliberately skips argument/return type checking. */
+export type AnyMock = jest.Mock<(...args: any[]) => any>;
+
+export const buildPromptMock = jest.fn<() => Promise<{ result: Array<{ role: string; content: string; name?: string }> }>>();
 export const applyTrackerUpdateAndRenderMock = jest.fn();
 export const renderTrackerWithDepsMock = jest.fn();
 export const stEchoMock = jest.fn();
@@ -377,10 +386,10 @@ export function makeContext(options: {
   mainApi?: string;
   powerUserSettings?: Record<string, unknown>;
   getPresetManager?: (apiId?: string) => unknown;
-  textCompletionProcessRequest?: jest.Mock;
-  textCompletionConstructPrompt?: jest.Mock;
-  textCompletionCreateRequestData?: jest.Mock;
-  textCompletionSendRequest?: jest.Mock;
+  textCompletionProcessRequest?: AnyMock;
+  textCompletionConstructPrompt?: AnyMock;
+  textCompletionCreateRequestData?: AnyMock;
+  textCompletionSendRequest?: AnyMock;
 } = {}) {
   const savedPromptPreset = {
     getCompletionPresetByName: (name?: string) =>
@@ -434,7 +443,7 @@ export function makeBuiltPromptResult() {
 export function makeGenerateRequest(response: unknown = { content: { time: '10:00:00' } }) {
   return jest.fn((
     _request: any,
-    hooks: { onStart: (requestId: string) => void; onFinish: (requestId: string, data: unknown, error: unknown) => void },
+    hooks: GeneratorHooks,
   ) => {
     hooks.onStart('request-1');
     hooks.onFinish('request-1', response, null);

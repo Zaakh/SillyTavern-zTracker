@@ -4,6 +4,7 @@
 
 import { jest } from '@jest/globals';
 import {
+  type GeneratorHooks, type AnyMock,
   applyTrackerUpdateAndRenderMock,
   buildPromptMock,
   createTrackerActions,
@@ -34,21 +35,21 @@ describe('createTrackerActions cleanup flow', () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
     applyTrackerUpdateAndRenderMock.mockImplementation(() => undefined);
-    (trackerPartsModule.buildTopLevelPartSchema as jest.Mock).mockReturnValue({
+    (trackerPartsModule.buildTopLevelPartSchema as AnyMock).mockReturnValue({
       type: 'object',
       properties: { time: { type: 'string' } },
       required: ['time'],
     });
-    (trackerPartsModule.mergeTrackerPart as jest.Mock).mockImplementation((currentTracker, partKey, response) => ({
+    (trackerPartsModule.mergeTrackerPart as AnyMock).mockImplementation((currentTracker, partKey, response) => ({
       ...(currentTracker ?? {}),
       [partKey]: response?.[partKey] ?? response,
     }));
-    (trackerPartsModule.clearTrackerCleanupTargets as jest.Mock).mockImplementation((currentTracker) => ({
+    (trackerPartsModule.clearTrackerCleanupTargets as AnyMock).mockImplementation((currentTracker) => ({
       ...currentTracker,
       time: '',
     }));
-    (trackerPartsModule.buildPendingRedactions as jest.Mock).mockImplementation((targets) => ({ version: 1, targets }));
-    (trackerPartsModule.removePendingRedactionTargets as jest.Mock).mockReturnValue(undefined);
+    (trackerPartsModule.buildPendingRedactions as AnyMock).mockImplementation((targets) => ({ version: 1, targets }));
+    (trackerPartsModule.removePendingRedactionTargets as AnyMock).mockReturnValue(undefined);
   });
 
   afterEach(() => {
@@ -112,7 +113,7 @@ describe('createTrackerActions cleanup flow', () => {
       </div>
     `;
 
-    const generateRequest = jest.fn((_request, hooks) => {
+    const generateRequest = jest.fn((_request: unknown, hooks: GeneratorHooks) => {
       hooks.onStart('request-1');
       hooks.onFinish('request-1', { content: { time: '10:00:00' } }, null);
     });
@@ -181,7 +182,7 @@ describe('createTrackerActions cleanup flow', () => {
         CONNECT_API_MAP: { openai: { selected: 'openai' } },
       },
       settingsManager: { getSettings: () => makeSettings() } as any,
-      generator: { generateRequest: jest.fn((_request, hooks) => {
+      generator: { generateRequest: jest.fn((_request: unknown, hooks: GeneratorHooks) => {
         hooks.onStart('request-1');
         hooks.onFinish('request-1', { content: { time: '10:00:00' } }, null);
       }), abortRequest: jest.fn() } as any,
@@ -212,7 +213,7 @@ describe('createTrackerActions cleanup flow', () => {
       </div>
     `;
 
-    const generateRequest = jest.fn((_request, hooks) => {
+    const generateRequest = jest.fn((_request: unknown, hooks: GeneratorHooks) => {
       hooks.onStart('request-1');
       hooks.onFinish('request-1', { content: { time: '10:00:00' } }, null);
     });
@@ -284,7 +285,7 @@ describe('createTrackerActions cleanup flow', () => {
       </div>
     `;
 
-    const generateRequest = jest.fn((_request, hooks) => {
+    const generateRequest = jest.fn((_request: unknown, hooks: GeneratorHooks) => {
       hooks.onStart('request-1');
       hooks.onFinish('request-1', { content: { time: '10:00:00' } }, null);
     });
@@ -344,8 +345,8 @@ describe('createTrackerActions cleanup flow', () => {
   test('shows the schema mismatch notice only once during clear-and-recreate batches', async () => {
     document.body.innerHTML = '<div id="extensionsMenu"></div><div class="mes" mesid="0"><div class="mes_text"></div></div>';
 
-    (trackerPartsModule.resolveTopLevelPartsOrder as jest.Mock).mockReturnValue(['time', 'weather']);
-    (trackerPartsModule.buildTopLevelPartSchema as jest.Mock).mockImplementation((_schema, partKey) => ({
+    (trackerPartsModule.resolveTopLevelPartsOrder as AnyMock).mockReturnValue(['time', 'weather']);
+    (trackerPartsModule.buildTopLevelPartSchema as AnyMock).mockImplementation((_schema, partKey) => ({
       type: 'object',
       properties: { [partKey]: { type: 'string' } },
       required: [partKey],
@@ -362,7 +363,7 @@ describe('createTrackerActions cleanup flow', () => {
       return popupOptions.onClose({ result: 'affirmative', content: container });
     });
 
-    const generateRequest = jest.fn((_request, hooks) => {
+    const generateRequest = jest.fn((_request: unknown, hooks: GeneratorHooks) => {
       hooks.onStart('request-1');
       hooks.onFinish('request-1', { content: { time: '10:00:00', weather: 'Rain' } }, null);
     });

@@ -14,6 +14,7 @@ Working on the extension locally?
 
 - Install dependencies once with `npm install`.
 - Run `npm test` to execute the Jest suite (parser/schema helpers + jsdom render tests).
+- Run `npm run typecheck` to type-check tests and `scripts/` too. Jest uses `isolatedModules` (transpile-only), so test type errors only surface here and in editors.
 - Run `npm run dev` for a watch build while you iterate.
 - Run `npm run debug:tracker-context:json` to print one sample JSON-mode tracker-generation request, including the final prompt array after zTracker snapshot injection and the `json_schema` payload passed to the generator.
 - Run `npm run debug:tracker-context:xml` to print one sample XML prompt-engineering tracker-generation request, including the final prompt array and rendered XML instructions.

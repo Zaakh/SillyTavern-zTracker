@@ -4,6 +4,7 @@
 
 import { jest } from '@jest/globals';
 import {
+  type AnyMock,
   applyTrackerUpdateAndRenderMock,
   buildPromptMock,
   createTrackerActions,
@@ -46,10 +47,10 @@ describe('createTrackerActions prompt assembly', () => {
     selectedProfile?: unknown;
     mainApi?: string;
     textCompletionType?: string;
-    textCompletionProcessRequest?: jest.Mock;
-    textCompletionConstructPrompt?: jest.Mock;
-    textCompletionCreateRequestData?: jest.Mock;
-    textCompletionSendRequest?: jest.Mock;
+    textCompletionProcessRequest?: AnyMock;
+    textCompletionConstructPrompt?: AnyMock;
+    textCompletionCreateRequestData?: AnyMock;
+    textCompletionSendRequest?: AnyMock;
     powerUserSettings?: Record<string, unknown>;
   } = {}) {
     const activeProfile = {
@@ -84,7 +85,7 @@ describe('createTrackerActions prompt assembly', () => {
   function createActiveTrackerActions(options: {
     connectApiMap?: Record<string, unknown>;
     settingsOverrides?: Record<string, unknown>;
-    textCompletionStoryStringFormatterLoader?: () => Promise<unknown>;
+    textCompletionStoryStringFormatterLoader?: Parameters<typeof createTrackerActions>[0]['textCompletionStoryStringFormatterLoader'];
   } = {}) {
     return createTrackerActions({
       globalContext: {
@@ -167,7 +168,7 @@ describe('createTrackerActions prompt assembly', () => {
         includeNames: true,
       }),
     );
-    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    const buildPromptOptions = (buildPromptMock as AnyMock).mock.calls[0][1];
     // The saved profile records a preset, so it wins over the live 'Active Preset'.
     expect(buildPromptOptions).toHaveProperty('presetName', 'Profile Preset');
     expect(buildPromptOptions).not.toHaveProperty('syspromptName');
@@ -566,9 +567,9 @@ describe('createTrackerActions prompt assembly', () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
 
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
-    (trackerPartsModule.resolveTopLevelPartsOrder as jest.Mock).mockReturnValue(['scene']);
-    (trackerPartsModule.buildTopLevelPartSchema as jest.Mock).mockImplementation((schema: unknown) => schema);
-    (trackerPartsModule.mergeTrackerPart as jest.Mock).mockImplementation((currentTracker: Record<string, unknown> | undefined, partKey: string, partResponse: Record<string, unknown>) => ({
+    (trackerPartsModule.resolveTopLevelPartsOrder as AnyMock).mockReturnValue(['scene']);
+    (trackerPartsModule.buildTopLevelPartSchema as AnyMock).mockImplementation((schema: unknown) => schema);
+    (trackerPartsModule.mergeTrackerPart as AnyMock).mockImplementation((currentTracker: Record<string, unknown> | undefined, partKey: string, partResponse: Record<string, unknown>) => ({
       ...(currentTracker ?? {}),
       [partKey]: partResponse?.[partKey],
     }));
@@ -649,12 +650,12 @@ describe('createTrackerActions prompt assembly', () => {
 
     await actions.generateTracker(0);
 
-    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    const buildPromptOptions = (buildPromptMock as AnyMock).mock.calls[0][1];
     expect(buildPromptOptions).toHaveProperty('syspromptName', 'zTracker');
     expect(buildPromptOptions).toHaveProperty('includeNames', false);
 
     expect(generateRequest).not.toHaveBeenCalled();
-    const sentMessages = (context.TextCompletionService.processRequest as jest.Mock).mock.calls[0][0].prompt;
+    const sentMessages = (context.TextCompletionService.processRequest as AnyMock).mock.calls[0][0].prompt;
     expect(sentMessages).toEqual([
       { role: 'system', content: 'Existing system prompt' },
       { role: 'user', content: 'Prior chat message' },
@@ -877,7 +878,7 @@ describe('createTrackerActions prompt assembly', () => {
 
     await actions.generateTracker(0);
 
-    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    const buildPromptOptions = (buildPromptMock as AnyMock).mock.calls[0][1];
     expect(buildPromptOptions).not.toHaveProperty('ignoreCharacterFields');
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
@@ -966,7 +967,7 @@ describe('createTrackerActions prompt assembly', () => {
     await actions.generateTracker(0);
 
     expect(buildPromptMock).toHaveBeenCalledWith('openai', expect.any(Object));
-    expect((buildPromptMock as jest.Mock).mock.calls[0][1]).toHaveProperty('presetName', 'Active Preset');
+    expect((buildPromptMock as AnyMock).mock.calls[0][1]).toHaveProperty('presetName', 'Active Preset');
     expect(generateRequest).toHaveBeenCalled();
     expect(generateRequest.mock.calls[0][0].profileId).toBe('active-profile');
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
@@ -1071,7 +1072,7 @@ describe('createTrackerActions prompt assembly', () => {
 
     await actions.generateTracker(0);
 
-    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    const buildPromptOptions = (buildPromptMock as AnyMock).mock.calls[0][1];
     expect(buildPromptOptions).toHaveProperty('instructName', 'Active Instruct');
     expect(buildPromptOptions).toHaveProperty('contextName', 'Active Context');
     expect(buildPromptOptions).toHaveProperty('syspromptName', 'Active Sysprompt');
@@ -1467,7 +1468,7 @@ describe('createTrackerActions prompt assembly', () => {
       await actions.generateTracker(0);
 
       expect(buildPromptMock).toHaveBeenCalledWith(api, expect.any(Object));
-      const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+      const buildPromptOptions = (buildPromptMock as AnyMock).mock.calls[0][1];
       if (expectedPresetName) {
         expect(buildPromptOptions).toHaveProperty('presetName', expectedPresetName);
       } else {
@@ -1523,7 +1524,7 @@ describe('createTrackerActions prompt assembly', () => {
 
       await actions.generateTracker(0);
 
-      const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+      const buildPromptOptions = (buildPromptMock as AnyMock).mock.calls[0][1];
       if (expectedPresetName) {
         expect(buildPromptOptions).toHaveProperty('presetName', expectedPresetName);
       } else {
@@ -1575,7 +1576,7 @@ describe('createTrackerActions prompt assembly', () => {
 
     await actions.generateTracker(0);
 
-    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    const buildPromptOptions = (buildPromptMock as AnyMock).mock.calls[0][1];
     expect(buildPromptOptions).toHaveProperty('instructName', profilePresets.instruct);
     expect(buildPromptOptions).toHaveProperty('contextName', profilePresets.context);
     expect(buildPromptOptions).toHaveProperty('syspromptName', profilePresets.sysprompt);
@@ -1618,7 +1619,7 @@ describe('createTrackerActions prompt assembly', () => {
 
     await actions.generateTracker(0);
 
-    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    const buildPromptOptions = (buildPromptMock as AnyMock).mock.calls[0][1];
     expect(buildPromptOptions).toHaveProperty('presetName', profilePreset);
     // For chat APIs, syspromptName should be undefined because it's handled via presetName
     expect(buildPromptOptions).not.toHaveProperty('syspromptName');
@@ -1653,7 +1654,7 @@ describe('createTrackerActions prompt assembly', () => {
 
     await actions.generateTracker(0);
 
-    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    const buildPromptOptions = (buildPromptMock as AnyMock).mock.calls[0][1];
     expect(buildPromptOptions).not.toHaveProperty('syspromptName');
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
@@ -1698,7 +1699,7 @@ describe('createTrackerActions prompt assembly', () => {
 
       await actions.generateTracker(0);
 
-      const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+      const buildPromptOptions = (buildPromptMock as AnyMock).mock.calls[0][1];
       if (expectedInstructName) {
         expect(buildPromptOptions).toHaveProperty('instructName', expectedInstructName);
       } else {
@@ -1746,7 +1747,7 @@ describe('createTrackerActions prompt assembly', () => {
 
     await actions.generateTracker(0);
 
-    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    const buildPromptOptions = (buildPromptMock as AnyMock).mock.calls[0][1];
     expect(buildPromptOptions).toHaveProperty('syspromptName', 'Active System Prompt');
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
@@ -1789,7 +1790,7 @@ describe('createTrackerActions prompt assembly', () => {
 
     await actions.generateTracker(0);
 
-    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    const buildPromptOptions = (buildPromptMock as AnyMock).mock.calls[0][1];
     expect(buildPromptOptions).toHaveProperty('instructName', 'Active Instruct');
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
@@ -1839,10 +1840,10 @@ describe('createTrackerActions prompt assembly', () => {
 
     await actions.generateTracker(0);
 
-    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    const buildPromptOptions = (buildPromptMock as AnyMock).mock.calls[0][1];
     expect(buildPromptOptions).toHaveProperty('instructName', 'Profile Instruct');
     expect(textCompletionProcessRequest).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), true, expect.any(AbortSignal));
-    expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).toMatchObject({
+    expect((textCompletionProcessRequest as AnyMock).mock.calls[0][1]).toMatchObject({
       instructName: 'Profile Instruct',
       presetName: 'preset-1',
     });
@@ -1888,7 +1889,7 @@ describe('createTrackerActions prompt assembly', () => {
 
     await actions.generateTracker(0);
 
-    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    const buildPromptOptions = (buildPromptMock as AnyMock).mock.calls[0][1];
     expect(buildPromptOptions).toHaveProperty('contextName', 'Profile Context');
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
@@ -1954,7 +1955,7 @@ describe('createTrackerActions prompt assembly', () => {
     }
 
     expect(textCompletionProcessRequest).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), true, expect.any(AbortSignal));
-    expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).toMatchObject({
+    expect((textCompletionProcessRequest as AnyMock).mock.calls[0][1]).toMatchObject({
       instructName: 'Profile Instruct',
     });
     expect(instructOptionDuringRequest).toBe('Profile Instruct');
@@ -1974,8 +1975,8 @@ describe('createTrackerActions prompt assembly', () => {
         },
       },
     });
-    (trackerPartsModule.findArrayItemIndexByName as jest.Mock).mockReturnValue(0);
-    (trackerPartsModule.buildArrayItemSchema as jest.Mock).mockReturnValue({
+    (trackerPartsModule.findArrayItemIndexByName as AnyMock).mockReturnValue(0);
+    (trackerPartsModule.buildArrayItemSchema as AnyMock).mockReturnValue({
       type: 'object',
       properties: {
         item: {
@@ -1989,8 +1990,8 @@ describe('createTrackerActions prompt assembly', () => {
       },
       required: ['item'],
     });
-    (trackerPartsModule.redactTrackerArrayItemValue as jest.Mock).mockImplementation((tracker) => tracker);
-    (trackerPartsModule.replaceTrackerArrayItem as jest.Mock).mockImplementation((tracker, partKey, index, item) => ({
+    (trackerPartsModule.redactTrackerArrayItemValue as AnyMock).mockImplementation((tracker) => tracker);
+    (trackerPartsModule.replaceTrackerArrayItem as AnyMock).mockImplementation((tracker, partKey, index, item) => ({
       ...tracker,
       [partKey]: (tracker?.[partKey] ?? []).map((entry: unknown, entryIndex: number) =>
         entryIndex === index ? item : entry,
@@ -2058,17 +2059,17 @@ describe('createTrackerActions prompt assembly', () => {
     });
     const originalStructuredClone = globalThis.structuredClone;
     globalThis.structuredClone = originalStructuredClone ?? ((value: unknown) => JSON.parse(JSON.stringify(value)));
-    (trackerPartsModule.getArrayItemIdentityKey as jest.Mock).mockReturnValue('id');
-    (trackerPartsModule.findArrayItemIndexByIdentity as jest.Mock).mockReturnValue(0);
-    (trackerPartsModule.buildArrayItemFieldSchema as jest.Mock).mockReturnValue({
+    (trackerPartsModule.getArrayItemIdentityKey as AnyMock).mockReturnValue('id');
+    (trackerPartsModule.findArrayItemIndexByIdentity as AnyMock).mockReturnValue(0);
+    (trackerPartsModule.buildArrayItemFieldSchema as AnyMock).mockReturnValue({
       type: 'object',
       properties: {
         value: { type: 'string' },
       },
       required: ['value'],
     });
-    (trackerPartsModule.redactTrackerArrayItemFieldValue as jest.Mock).mockImplementation((tracker) => tracker);
-    (trackerPartsModule.replaceTrackerArrayItemField as jest.Mock).mockImplementation((tracker, partKey, index, fieldKey, value) => ({
+    (trackerPartsModule.redactTrackerArrayItemFieldValue as AnyMock).mockImplementation((tracker) => tracker);
+    (trackerPartsModule.replaceTrackerArrayItemField as AnyMock).mockImplementation((tracker, partKey, index, fieldKey, value) => ({
       ...tracker,
       [partKey]: (tracker?.[partKey] ?? []).map((entry: Record<string, unknown>, entryIndex: number) =>
         entryIndex === index ? { ...entry, [fieldKey]: value } : entry,
@@ -2162,10 +2163,10 @@ describe('createTrackerActions prompt assembly', () => {
 
     await actions.generateTracker(0);
 
-    const buildPromptOptions = (buildPromptMock as jest.Mock).mock.calls[0][1];
+    const buildPromptOptions = (buildPromptMock as AnyMock).mock.calls[0][1];
     expect(buildPromptOptions).toHaveProperty('instructName', 'Profile Instruct');
     expect(textCompletionProcessRequest).toHaveBeenCalledWith(expect.any(Object), expect.any(Object), true, expect.any(AbortSignal));
-    expect((textCompletionProcessRequest as jest.Mock).mock.calls[0][1]).toMatchObject({
+    expect((textCompletionProcessRequest as AnyMock).mock.calls[0][1]).toMatchObject({
       instructName: 'Profile Instruct',
       instructSettings: {},
     });
@@ -2214,7 +2215,7 @@ describe('createTrackerActions prompt assembly', () => {
     expect(createRequestData).toHaveBeenCalledWith(expect.objectContaining({
       prompt: expect.any(Array),
     }));
-    expect((processRequest as jest.Mock).mock.contexts[0]).toBe(context.TextCompletionService);
+    expect((processRequest as AnyMock).mock.contexts[0]).toBe(context.TextCompletionService);
     expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
   });
 
@@ -2339,11 +2340,11 @@ describe('createTrackerActions prompt assembly', () => {
     await actions.generateTracker(0);
 
     expect(sanitizeMessagesForGenerationMock).toHaveBeenCalledTimes(2);
-    expect((sanitizeMessagesForGenerationMock as jest.Mock).mock.calls[0][1]).toEqual(expect.objectContaining({
+    expect((sanitizeMessagesForGenerationMock as AnyMock).mock.calls[0][1]).toEqual(expect.objectContaining({
       inlineNamesIntoContent: true,
       userName: 'Tobias',
     }));
-    expect((sanitizeMessagesForGenerationMock as jest.Mock).mock.calls[1][1]).toEqual({
+    expect((sanitizeMessagesForGenerationMock as AnyMock).mock.calls[1][1]).toEqual({
       inlineNamesIntoContent: true,
     });
     expect(textCompletionStoryStringFormatterLoader).toHaveBeenCalled();
@@ -2584,9 +2585,9 @@ describe('createTrackerActions prompt assembly', () => {
   test('still appends the prompt-engineered instruction as the only message when the prompt window is empty (JSON mode)', async () => {
     installSillyTavernContext(makeContext());
     buildPromptMock.mockResolvedValue({ result: [] });
-    (schemaToExample as jest.Mock).mockReturnValue('{"time":"string"}');
-    (schemaToPromptSchema as jest.Mock).mockReturnValue('type: object');
-    (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
+    (schemaToExample as AnyMock).mockReturnValue('{"time":"string"}');
+    (schemaToPromptSchema as AnyMock).mockReturnValue('type: object');
+    (parseResponse as AnyMock).mockReturnValue({ time: '10:00:00' });
     const generateRequest = makeGenerateRequest({ content: '```json\n{"time":"10:00:00"}\n```' });
 
     const actions = createTrackerActions({

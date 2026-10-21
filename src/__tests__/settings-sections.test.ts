@@ -8,7 +8,9 @@ import { createRoot, Root } from 'react-dom/client';
 
 /** Covers the real settings subcomponents that were still missing focused UI tests. */
 
-const getWorldInfosMock = jest.fn();
+const getWorldInfosMock = jest.fn<(...args: unknown[]) => Promise<Record<string, unknown>>>();
+type FetchResult = { ok: boolean; status: number };
+const fetchMock = () => globalThis.fetch as unknown as jest.Mock<() => Promise<FetchResult>>;
 const getThirdPartyExtensionBasePathMock = jest.fn(() => '/scripts/extensions/third-party/ztracker');
 const formatTrackerRequestDebugSnapshotMock = jest.fn(() => ['lastTrackerRequest:', 'prompt ok']);
 const getLastTrackerRequestDebugSnapshotMock = jest.fn(() => ({ requestId: 'debug-1' }));
@@ -207,7 +209,7 @@ describe('settings sections', () => {
     textareaMock.mockClear();
     reconcilePresetItemsMock.mockClear();
     resolvePresetSelectionMock.mockClear();
-    (globalThis as any).fetch = jest.fn();
+    (globalThis as any).fetch = jest.fn<() => Promise<FetchResult>>();
     jest.restoreAllMocks();
   });
 
@@ -221,7 +223,7 @@ describe('settings sections', () => {
   test('calls the drawer toggle callback and reflects open state changes', () => {
     const onToggle = jest.fn();
     ({ root } = renderElement(
-      React.createElement(SettingsSectionDrawer, { title: 'Tracker Generation', isOpen: false, onToggle }, React.createElement('div', null, 'content')),
+      React.createElement(SettingsSectionDrawer, { title: 'Tracker Generation', isOpen: false, onToggle, children: React.createElement('div', null, 'content') }),
     ));
 
     const header = document.querySelector('.inline-drawer-header');
@@ -240,7 +242,7 @@ describe('settings sections', () => {
 
     act(() => {
       root?.render(
-        React.createElement(SettingsSectionDrawer, { title: 'Tracker Generation', isOpen: true, onToggle }, React.createElement('div', null, 'content')),
+        React.createElement(SettingsSectionDrawer, { title: 'Tracker Generation', isOpen: true, onToggle, children: React.createElement('div', null, 'content') }),
       );
     });
 
@@ -263,6 +265,9 @@ describe('settings sections', () => {
         refreshSystemPromptState,
         showMissingSavedSystemPromptWarning: false,
         showSharedSystemPromptWarning: false,
+        showRecreateSystemPromptAction: false,
+        recreateModuleSystemPromptPreset: () => undefined,
+        isRecreatingSystemPrompt: false,
       }),
     ));
 
@@ -433,7 +438,7 @@ describe('settings sections', () => {
     } as any;
     const updateAndRefresh = (updater: (current: any) => void) => updater(settings);
     const testGrammarSchemaEnforcement = jest
-      .fn()
+      .fn<() => Promise<{ supported: boolean; message: string }>>()
       .mockResolvedValueOnce({ supported: true, message: 'Schema enforcement is supported.' })
       .mockResolvedValueOnce({ supported: false, message: 'Not confirmed for this connection.' });
 
@@ -877,7 +882,7 @@ describe('settings sections', () => {
     const setDebugLogging = jest.fn();
     const setDiagnosticsText = jest.fn();
     const consoleDebugSpy = jest.spyOn(console, 'debug').mockImplementation(() => undefined);
-    (globalThis.fetch as jest.Mock)
+    fetchMock()
       .mockResolvedValueOnce({ ok: true, status: 200 })
       .mockResolvedValueOnce({ ok: true, status: 200 });
 
@@ -927,7 +932,7 @@ describe('settings sections', () => {
     const setDebugLogging = jest.fn();
     const setDiagnosticsText = jest.fn();
     jest.spyOn(console, 'debug').mockImplementation(() => undefined);
-    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200 }).mockResolvedValueOnce({ ok: true, status: 200 });
+    fetchMock().mockResolvedValueOnce({ ok: true, status: 200 }).mockResolvedValueOnce({ ok: true, status: 200 });
 
     const moduleWithMultiplePresets = createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 });
     moduleWithMultiplePresets.schema.presets = {

@@ -1,5 +1,5 @@
 import type { ExtensionSettings, TrackerModule } from '../config.js';
-import { createDefaultTrackerModule, getSettingsForTrackerModule } from '../config.js';
+import { createDefaultEmbedSnapshotTransformPresets, createDefaultTrackerModule, getSettingsForTrackerModule } from '../config.js';
 import { CHAT_MESSAGE_MODULES_KEY, CHAT_MESSAGE_SCHEMA_VALUE_KEY, normalizeTrackerGenerationConversationRoles } from '../tracker.js';
 import { EXTENSION_KEY } from '../extension-metadata.js';
 import {
@@ -93,7 +93,7 @@ describe('getEligibleChainableModules', () => {
 
 describe('applyTrackerModuleIncludeList', () => {
   function buildSettings(modules: TrackerModule[]): ExtensionSettings {
-    return { version: '0', formatVersion: 'test', modules, debugLogging: false };
+    return { version: '0', formatVersion: 'test', modules, debugLogging: false, transformPresets: createDefaultEmbedSnapshotTransformPresets() };
   }
 
   test('reads a chained module snapshot from full chat history, independent of the prompt window', () => {

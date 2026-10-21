@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.16.1] - 2026-10-21
+
+### Changed
+
+- Internal: test files now type-check cleanly; added `npm run typecheck` (also runs before `npm test`).
+
 ## [2.16.0] - 2026-10-21
 
 ### Added

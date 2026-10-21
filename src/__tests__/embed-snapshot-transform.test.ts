@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { decode } from '@toon-format/toon';
 import { formatEmbeddedTrackerSnapshot } from '../embed-snapshot-transform.js';
-import type { ExtensionSettings } from '../config.js';
+import type { TrackerModuleSettings } from '../config.js';
 
 const trackerValue = {
   time: '14:32:05; 09/27/2025 (Saturday)',
@@ -74,14 +74,14 @@ const embedSettings = {
       wrapInCodeFence: true,
     },
   },
-} as Pick<ExtensionSettings, 'embedZTrackerSnapshotTransformPresets'>;
+} as Pick<TrackerModuleSettings, 'embedZTrackerSnapshotTransformPresets'>;
 
 describe('formatEmbeddedTrackerSnapshot (minimal)', () => {
   it('transforms a nested object and writes an artifact file', async () => {
     const settings = {
       ...embedSettings,
       embedZTrackerSnapshotTransformPreset: 'minimal',
-    } as Pick<ExtensionSettings, 'embedZTrackerSnapshotTransformPreset' | 'embedZTrackerSnapshotTransformPresets'>;
+    } as Pick<TrackerModuleSettings, 'embedZTrackerSnapshotTransformPreset' | 'embedZTrackerSnapshotTransformPresets'>;
 
     const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(trackerValue, settings);
     expect(lang).toBe('text');
@@ -131,7 +131,7 @@ describe('formatEmbeddedTrackerSnapshot (toon)', () => {
     const settings = {
       ...embedSettings,
       embedZTrackerSnapshotTransformPreset: 'toon',
-    } as Pick<ExtensionSettings, 'embedZTrackerSnapshotTransformPreset' | 'embedZTrackerSnapshotTransformPresets'>;
+    } as Pick<TrackerModuleSettings, 'embedZTrackerSnapshotTransformPreset' | 'embedZTrackerSnapshotTransformPresets'>;
 
     const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(toonTrackerValue, settings);
 
@@ -160,7 +160,7 @@ describe('formatEmbeddedTrackerSnapshot (flat)', () => {
       ...embedSettings.embedZTrackerSnapshotTransformPresets,
       flat: { name: 'Flat', input: 'flat_lines', pattern: '', flags: 'g', replacement: '', codeFenceLang: 'text' },
     },
-  } as unknown as Pick<ExtensionSettings, 'embedZTrackerSnapshotTransformPreset' | 'embedZTrackerSnapshotTransformPresets'>;
+  } as unknown as Pick<TrackerModuleSettings, 'embedZTrackerSnapshotTransformPreset' | 'embedZTrackerSnapshotTransformPresets'>;
 
   it('renders scalars, nested objects, scalar arrays and arrays of objects on one line each', () => {
     const { text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(

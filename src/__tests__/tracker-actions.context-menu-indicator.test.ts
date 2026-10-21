@@ -4,6 +4,7 @@
 
 import { jest } from '@jest/globals';
 import {
+  type GeneratorHooks, type AnyMock,
   applyTrackerUpdateAndRenderMock,
   buildPromptMock,
   createTrackerActions,
@@ -45,12 +46,12 @@ describe('createTrackerActions context-menu indicator', () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
     applyTrackerUpdateAndRenderMock.mockImplementation(() => undefined);
-    (trackerPartsModule.buildTopLevelPartSchema as jest.Mock).mockReturnValue({
+    (trackerPartsModule.buildTopLevelPartSchema as AnyMock).mockReturnValue({
       type: 'object',
       properties: { time: { type: 'string' } },
       required: ['time'],
     });
-    (trackerPartsModule.mergeTrackerPart as jest.Mock).mockImplementation((currentTracker, partKey, response) => ({
+    (trackerPartsModule.mergeTrackerPart as AnyMock).mockImplementation((currentTracker, partKey, response) => ({
       ...(currentTracker ?? {}),
       [partKey]: response?.[partKey] ?? response,
     }));
@@ -64,7 +65,7 @@ describe('createTrackerActions context-menu indicator', () => {
     document.body.innerHTML = buildMessage(0);
 
     let finishRequest: (() => void) | undefined;
-    const generateRequest = jest.fn((_request, hooks) => {
+    const generateRequest = jest.fn((_request: unknown, hooks: GeneratorHooks) => {
       hooks.onStart('request-1');
       finishRequest = () => hooks.onFinish('request-1', { content: { time: '10:00:00' } }, null);
     });
