@@ -256,7 +256,7 @@ describe('export dialog', () => {
 });
 
 describe('Replace linked entry', () => {
-  beforeEach(() => stEchoMock.mockClear());
+  beforeEach(() => { stEchoMock.mockClear(); });
 
   test('overwrites the linked entry content without opening the dialog or calling the LLM', async () => {
     const f = makeFixture({ link: true, books: { Characters: { entries: { 0: { ...hostEntry(0), key: ['kept'], content: 'old' } } } } });

@@ -597,7 +597,7 @@ describe('zTracker settings connection source UI', () => {
     act(() => {
       // No suite in this file exercises JSON prompt-engineering mode, so a no-op stub is enough
       // to satisfy the required prop without needing real grammar-test behavior here.
-      root?.render(React.createElement(ZTrackerSettings, { testGrammarSchemaEnforcement: jest.fn(), requestWithActiveConnection: jest.fn(), getActiveConnectionLabel: () => "the active connection" }));
+      root?.render(React.createElement(ZTrackerSettings, { testGrammarSchemaEnforcement: jest.fn<() => Promise<{ supported: boolean; message: string }>>(), requestWithActiveConnection: jest.fn<() => Promise<string>>(), getActiveConnectionLabel: () => "the active connection" }));
     });
     return container;
   }

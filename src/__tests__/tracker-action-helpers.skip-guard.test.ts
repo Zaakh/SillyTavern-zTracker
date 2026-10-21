@@ -1,15 +1,15 @@
 // Pins the shared Skip First X Messages guard, including the defensive numeric coercion that
 // prevents an undefined/malformed setting from silently skipping every message on the hot path.
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
-import type { ExtensionSettings } from '../config.js';
+import type { TrackerModuleSettings } from '../config.js';
 import { shouldSkipTrackerGeneration } from '../ui/tracker-action-helpers.js';
 
-const settings = (skipFirstXMessages: unknown): ExtensionSettings =>
-  ({ skipFirstXMessages } as unknown as ExtensionSettings);
+const settings = (skipFirstXMessages: unknown): TrackerModuleSettings =>
+  ({ skipFirstXMessages } as unknown as TrackerModuleSettings);
 
 describe('shouldSkipTrackerGeneration', () => {
   const notify = jest.fn();
-  afterEach(() => notify.mockClear());
+  afterEach(() => { notify.mockClear(); });
 
   it('skips messages within a positive threshold', () => {
     expect(shouldSkipTrackerGeneration(0, settings(2), notify, true)).toBe(true);

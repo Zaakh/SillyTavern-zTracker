@@ -1,4 +1,4 @@
-import type { ExtensionSettings } from '../config.js';
+import type { TrackerModuleSettings } from '../config.js';
 import { createDefaultTrackerModule, getSettingsForTrackerModule } from '../config.js';
 import {
   extractLeadingSystemPrompt,
@@ -13,7 +13,7 @@ import { CHAT_MESSAGE_MODULES_KEY } from '../tracker.js';
 describe('includeZTrackerMessages', () => {
   const makeSettings = (
     count: number,
-    role?: ExtensionSettings['embedZTrackerRole'],
+    role?: TrackerModuleSettings['embedZTrackerRole'],
     asCharacter = false,
     header = 'Tracker:',
   ) => {
@@ -52,7 +52,7 @@ describe('includeZTrackerMessages', () => {
           wrapInCodeFence: true,
         },
       },
-    } as unknown as ExtensionSettings;
+    } as unknown as TrackerModuleSettings;
   };
 
   const buildMessageWithTracker = (value: Record<string, unknown>) => ({
@@ -133,7 +133,7 @@ describe('includeZTrackerMessages', () => {
     agendaModule.injection.embedRole = 'assistant';
     agendaModule.injection.embedAsCharacter = true;
     agendaModule.injection.snapshotHeader = 'Agenda Tracker:';
-    const settings = { ...makeSettings(0), modules: [sceneModule, agendaModule] } as ExtensionSettings;
+    const settings = { ...makeSettings(0), modules: [sceneModule, agendaModule] } as TrackerModuleSettings;
     const messages = [
       {
         content: 'base',
@@ -1103,7 +1103,7 @@ describe('includeZTrackerMessages', () => {
 
     expect(normalizeTrackerGenerationConversationRoles(messages, {
       trackerGenerationConversationRoleMode: 'all_assistant',
-    } as ExtensionSettings)).toEqual([
+    } as TrackerModuleSettings)).toEqual([
       { role: 'system', content: 'Tracker instructions' },
       { role: 'assistant', content: 'Just water, please.', name: 'Tobias' },
       { role: 'assistant', content: 'The barkeeper nods.', name: 'Bar' },
@@ -1118,7 +1118,7 @@ describe('includeZTrackerMessages', () => {
 
     expect(normalizeTrackerGenerationConversationRoles(messages, {
       trackerGenerationConversationRoleMode: 'all_assistant',
-    } as ExtensionSettings)).toEqual([
+    } as TrackerModuleSettings)).toEqual([
       expect.objectContaining({
         role: 'assistant',
         content: 'base',
@@ -1142,6 +1142,6 @@ describe('includeZTrackerMessages', () => {
 
     expect(normalizeTrackerGenerationConversationRoles(messages, {
       trackerGenerationConversationRoleMode: 'preserve',
-    } as ExtensionSettings)).toEqual(messages);
+    } as TrackerModuleSettings)).toEqual(messages);
   });
 });

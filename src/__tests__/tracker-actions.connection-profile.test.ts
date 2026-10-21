@@ -4,6 +4,7 @@
 
 import { jest } from '@jest/globals';
 import {
+  type AnyMock,
   applyTrackerUpdateAndRenderMock,
   buildPromptMock,
   createTrackerActions,
@@ -60,7 +61,7 @@ describe('createTrackerActions connection profile settings', () => {
     sendResponse?: unknown;
     activeProfile?: Record<string, unknown>;
   } = {}) {
-    const constructPrompt = jest.fn((prompt: Array<{ role: string; content: string }>) =>
+    const constructPrompt = jest.fn((prompt: Array<{ role: string; content: string }>, _instruct?: unknown) =>
       prompt.map((message) => `[${message.role}]${message.content}`).join('|'));
     const createRequestData = jest.fn((requestData: Record<string, unknown>) => requestData);
     const sendRequest = jest.fn(async () => ({ content: options.sendResponse ?? { time: '10:00:00' } }));
@@ -94,9 +95,9 @@ describe('createTrackerActions connection profile settings', () => {
         }
         return { getSelectedPresetName: () => 'Live Sampler' };
       },
-      textCompletionConstructPrompt: constructPrompt as jest.Mock,
-      textCompletionCreateRequestData: createRequestData as jest.Mock,
-      textCompletionSendRequest: sendRequest as jest.Mock,
+      textCompletionConstructPrompt: constructPrompt as AnyMock,
+      textCompletionCreateRequestData: createRequestData as AnyMock,
+      textCompletionSendRequest: sendRequest as AnyMock,
     });
     context.TextCompletionService.presetToGeneratePayload = presetToGeneratePayload;
     context.getReasoningTemplateByName = (name: string) => {
@@ -380,10 +381,10 @@ describe('createTrackerActions connection profile settings', () => {
 
   describe('Chat Completion prefill and reply handling', () => {
     beforeEach(() => {
-      (schemaToExample as jest.Mock).mockReturnValue('{}');
-      (schemaToPromptSchema as jest.Mock).mockReturnValue('type: object');
-      (parseResponse as jest.Mock).mockReset();
-      (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
+      (schemaToExample as AnyMock).mockReturnValue('{}');
+      (schemaToPromptSchema as AnyMock).mockReturnValue('type: object');
+      (parseResponse as AnyMock).mockReset();
+      (parseResponse as AnyMock).mockReturnValue({ time: '10:00:00' });
     });
 
     test('sends a saved profile Start Reply With as the last assistant message, right after the instruction', async () => {
@@ -445,7 +446,7 @@ describe('createTrackerActions connection profile settings', () => {
 
       await actions.generateTracker(0);
 
-      expect((parseResponse as jest.Mock).mock.calls[0][0]).toBe('{"time":"10:00:00"}');
+      expect((parseResponse as AnyMock).mock.calls[0][0]).toBe('{"time":"10:00:00"}');
       expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
     });
 
@@ -458,7 +459,7 @@ describe('createTrackerActions connection profile settings', () => {
 
       await actions.generateTracker(0);
 
-      expect((parseResponse as jest.Mock).mock.calls[0][0]).toBe('{"time":"10:00:00"}');
+      expect((parseResponse as AnyMock).mock.calls[0][0]).toBe('{"time":"10:00:00"}');
     });
 
     test('strips a reasoning block before parsing in prompt-engineered mode', async () => {
@@ -470,7 +471,7 @@ describe('createTrackerActions connection profile settings', () => {
 
       await actions.generateTracker(0);
 
-      expect((parseResponse as jest.Mock).mock.calls[0][0]).toBe('{"time":"10:00:00"}');
+      expect((parseResponse as AnyMock).mock.calls[0][0]).toBe('{"time":"10:00:00"}');
       expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
     });
 
@@ -483,7 +484,7 @@ describe('createTrackerActions connection profile settings', () => {
 
       await actions.generateTracker(0);
 
-      expect((parseResponse as jest.Mock).mock.calls[0][0]).toBe('{"time":"10:00:00"}');
+      expect((parseResponse as AnyMock).mock.calls[0][0]).toBe('{"time":"10:00:00"}');
     });
 
     test.each([
@@ -499,7 +500,7 @@ describe('createTrackerActions connection profile settings', () => {
 
       await actions.generateTracker(0);
 
-      expect((parseResponse as jest.Mock).mock.calls[0][0]).toBe('{"time":"10:00:00"}');
+      expect((parseResponse as AnyMock).mock.calls[0][0]).toBe('{"time":"10:00:00"}');
       expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
     });
 
@@ -509,7 +510,7 @@ describe('createTrackerActions connection profile settings', () => {
       ['TOON', PromptEngineeringMode.TOON, 'promptToon'],
       ['Native', PromptEngineeringMode.NATIVE, 'prompt'],
     ])('fails with the unclosed reasoning block error for an unparsable %s reply and saves nothing', async (_label, mode, promptKey) => {
-      (parseResponse as jest.Mock).mockImplementation(() => {
+      (parseResponse as AnyMock).mockImplementation(() => {
         throw new Error('not parseable');
       });
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -529,7 +530,7 @@ describe('createTrackerActions connection profile settings', () => {
     });
 
     test('keeps a plain parse error when the reply had no unclosed reasoning block', async () => {
-      (parseResponse as jest.Mock).mockImplementation(() => {
+      (parseResponse as AnyMock).mockImplementation(() => {
         throw new Error('not parseable');
       });
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -560,7 +561,7 @@ describe('createTrackerActions connection profile settings', () => {
     });
 
     test('grammar probe requests carry no prefill and get no reasoning handling', async () => {
-      (parseResponse as jest.Mock).mockReturnValue({ ok: true });
+      (parseResponse as AnyMock).mockReturnValue({ ok: true });
       const { actions, generateRequest } = setupChatCompletion({
         profile: makeProfile({ id: 'cc-profile', 'start-reply-with': 'Sure,', 'reasoning-template': 'Gemma 4' }),
         response: '<|channel>thought\nhm<channel|>{"ok":true}',
@@ -570,24 +571,24 @@ describe('createTrackerActions connection profile settings', () => {
 
       const sent = (generateRequest.mock.calls[0][0] as any).prompt;
       expect(sent).toEqual([expect.objectContaining({ role: 'system' })]);
-      expect((parseResponse as jest.Mock).mock.calls[0][0]).toBe('<|channel>thought\nhm<channel|>{"ok":true}');
+      expect((parseResponse as AnyMock).mock.calls[0][0]).toBe('<|channel>thought\nhm<channel|>{"ok":true}');
     });
   });
 
   describe('Text Completion reply handling', () => {
     test('restores the prefill, strips the closed empty reasoning block and saves the tracker', async () => {
-      (parseResponse as jest.Mock).mockReset();
-      (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
+      (parseResponse as AnyMock).mockReset();
+      (parseResponse as AnyMock).mockReturnValue({ time: '10:00:00' });
       const { actions } = setupTextCompletion({
         sendResponse: '{"time":"10:00:00"}',
         settings: jsonModeSettings,
       });
-      (schemaToExample as jest.Mock).mockReturnValue('{}');
-      (schemaToPromptSchema as jest.Mock).mockReturnValue('type: object');
+      (schemaToExample as AnyMock).mockReturnValue('{}');
+      (schemaToPromptSchema as AnyMock).mockReturnValue('type: object');
 
       await actions.generateTracker(0);
 
-      expect((parseResponse as jest.Mock).mock.calls[0][0]).toBe('{"time":"10:00:00"}');
+      expect((parseResponse as AnyMock).mock.calls[0][0]).toBe('{"time":"10:00:00"}');
       expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalled();
     });
   });

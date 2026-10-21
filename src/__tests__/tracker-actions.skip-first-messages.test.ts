@@ -4,6 +4,7 @@
 
 import { jest } from '@jest/globals';
 import {
+  type AnyMock,
   applyTrackerUpdateAndRenderMock,
   buildPromptMock,
   createTrackerActions,
@@ -178,12 +179,12 @@ describe('createTrackerActions skipFirstXMessages', () => {
   test('allows full redo before the threshold during sequential generation', async () => {
     applyTrackerUpdateAndRenderMock.mockImplementation(() => undefined);
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
-    (trackerPartsModule.buildTopLevelPartSchema as jest.Mock).mockReturnValue({
+    (trackerPartsModule.buildTopLevelPartSchema as AnyMock).mockReturnValue({
       type: 'object',
       properties: { time: { type: 'string' } },
       required: ['time'],
     });
-    (trackerPartsModule.mergeTrackerPart as jest.Mock).mockImplementation((currentTracker, partKey, response) => ({
+    (trackerPartsModule.mergeTrackerPart as AnyMock).mockImplementation((currentTracker, partKey, response) => ({
       ...(currentTracker ?? {}),
       [partKey]: response?.[partKey] ?? response,
     }));

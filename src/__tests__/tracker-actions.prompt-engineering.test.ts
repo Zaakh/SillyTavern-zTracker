@@ -4,6 +4,7 @@
 
 import { jest } from '@jest/globals';
 import {
+  type AnyMock,
   applyTrackerUpdateAndRenderMock,
   buildPromptMock,
   createTrackerActions,
@@ -43,9 +44,9 @@ describe('createTrackerActions prompt engineering', () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
 
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
-    (schemaToExample as jest.Mock).mockReturnValue('time\tstring');
-    (schemaToPromptSchema as jest.Mock).mockReturnValue('type: object');
-    (parseResponse as jest.Mock).mockImplementation(() => {
+    (schemaToExample as AnyMock).mockReturnValue('time\tstring');
+    (schemaToPromptSchema as AnyMock).mockReturnValue('type: object');
+    (parseResponse as AnyMock).mockImplementation(() => {
       throw new Error('Model response is not valid TOON.');
     });
     const generateRequest = makeGenerateRequest({ content: '```toon\nnot valid\n```' });
@@ -99,9 +100,9 @@ describe('createTrackerActions prompt engineering', () => {
       charactersPresent: ['Silvia', 'Tobias'],
       characters: [{ name: 'Silvia' }],
     };
-    (schemaToExample as jest.Mock).mockReturnValue('time\tstring');
-    (schemaToPromptSchema as jest.Mock).mockReturnValue('type: object');
-    (parseResponse as jest.Mock).mockReturnValue(parsedPayload);
+    (schemaToExample as AnyMock).mockReturnValue('time\tstring');
+    (schemaToPromptSchema as AnyMock).mockReturnValue('type: object');
+    (parseResponse as AnyMock).mockReturnValue(parsedPayload);
     applyTrackerUpdateAndRenderMock.mockImplementation(() => {
       throw new Error('render failed');
     });
@@ -150,9 +151,9 @@ describe('createTrackerActions prompt engineering', () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
 
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
-    (schemaToExample as jest.Mock).mockReturnValue('time\tstring');
-    (schemaToPromptSchema as jest.Mock).mockReturnValue('type: object\nproperties:\n  time:\n    type: string');
-    (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
+    (schemaToExample as AnyMock).mockReturnValue('time\tstring');
+    (schemaToPromptSchema as AnyMock).mockReturnValue('type: object\nproperties:\n  time:\n    type: string');
+    (parseResponse as AnyMock).mockReturnValue({ time: '10:00:00' });
     const generateRequest = makeGenerateRequest({ content: '```toon\ntime\t10:00:00\n```' });
 
     const toonSettings = makeSettings({
@@ -199,9 +200,9 @@ describe('createTrackerActions prompt engineering', () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
 
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
-    (schemaToExample as jest.Mock).mockReturnValue('{"time":"10:00:00"}');
-    (schemaToPromptSchema as jest.Mock).mockReturnValue('{"type":"object"}');
-    (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
+    (schemaToExample as AnyMock).mockReturnValue('{"time":"10:00:00"}');
+    (schemaToPromptSchema as AnyMock).mockReturnValue('{"type":"object"}');
+    (parseResponse as AnyMock).mockReturnValue({ time: '10:00:00' });
     const generateRequest = makeGenerateRequest({ content: '```json\n{"time":"10:00:00"}\n```' });
 
     const actions = createTrackerActions({
@@ -244,9 +245,9 @@ describe('createTrackerActions prompt engineering', () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
 
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
-    (schemaToExample as jest.Mock).mockReturnValue('<time>string</time>');
-    (schemaToPromptSchema as jest.Mock).mockReturnValue('<type>object</type>');
-    (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
+    (schemaToExample as AnyMock).mockReturnValue('<time>string</time>');
+    (schemaToPromptSchema as AnyMock).mockReturnValue('<type>object</type>');
+    (parseResponse as AnyMock).mockReturnValue({ time: '10:00:00' });
     const generateRequest = makeGenerateRequest({ content: '```xml\n<root><time>10:00:00</time></root>\n```' });
 
     const xmlSettings = makeSettings({
@@ -286,17 +287,17 @@ describe('createTrackerActions prompt engineering', () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
 
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
-    (schemaToExample as jest.Mock).mockReturnValue('{"item":{"name":"string"}}');
-    (schemaToPromptSchema as jest.Mock).mockReturnValue('{"type":"object"}');
-    (parseResponse as jest.Mock).mockReturnValue({ item: { name: 'Alice', status: 'updated status' } });
+    (schemaToExample as AnyMock).mockReturnValue('{"item":{"name":"string"}}');
+    (schemaToPromptSchema as AnyMock).mockReturnValue('{"type":"object"}');
+    (parseResponse as AnyMock).mockReturnValue({ item: { name: 'Alice', status: 'updated status' } });
     const generateRequest = makeGenerateRequest({ content: '```json\n{"item":{"name":"Alice","status":"updated status"}}\n```' });
 
-    (trackerPartsModule.buildArrayItemSchema as jest.Mock).mockReturnValue({
+    (trackerPartsModule.buildArrayItemSchema as AnyMock).mockReturnValue({
       type: 'object',
       properties: { item: { type: 'object' } },
     });
-    (trackerPartsModule.redactTrackerArrayItemValue as jest.Mock).mockImplementation((tracker: unknown) => tracker);
-    (trackerPartsModule.replaceTrackerArrayItem as jest.Mock).mockImplementation(
+    (trackerPartsModule.redactTrackerArrayItemValue as AnyMock).mockImplementation((tracker: unknown) => tracker);
+    (trackerPartsModule.replaceTrackerArrayItem as AnyMock).mockImplementation(
       (tracker: any, partKey: string, index: number, item: unknown) => ({
         ...tracker,
         [partKey]: (tracker?.[partKey] ?? []).map((entry: unknown, entryIndex: number) => (entryIndex === index ? item : entry)),
@@ -352,20 +353,20 @@ describe('createTrackerActions prompt engineering', () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
 
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
-    (schemaToExample as jest.Mock).mockReturnValue('{"item":{"status":"string"}}');
-    (schemaToPromptSchema as jest.Mock).mockReturnValue('{"type":"object"}');
+    (schemaToExample as AnyMock).mockReturnValue('{"item":{"status":"string"}}');
+    (schemaToPromptSchema as AnyMock).mockReturnValue('{"type":"object"}');
     // The model omits the identity field entirely; finalizeItem() must restore it verbatim.
-    (parseResponse as jest.Mock).mockReturnValue({ item: { status: 'updated status' } });
+    (parseResponse as AnyMock).mockReturnValue({ item: { status: 'updated status' } });
     const generateRequest = makeGenerateRequest({ content: '```json\n{"item":{"status":"updated status"}}\n```' });
 
-    (trackerPartsModule.getArrayItemIdentityKey as jest.Mock).mockReturnValue('id');
-    (trackerPartsModule.findArrayItemIndexByIdentity as jest.Mock).mockReturnValue(0);
-    (trackerPartsModule.buildArrayItemSchema as jest.Mock).mockReturnValue({
+    (trackerPartsModule.getArrayItemIdentityKey as AnyMock).mockReturnValue('id');
+    (trackerPartsModule.findArrayItemIndexByIdentity as AnyMock).mockReturnValue(0);
+    (trackerPartsModule.buildArrayItemSchema as AnyMock).mockReturnValue({
       type: 'object',
       properties: { item: { type: 'object' } },
     });
-    (trackerPartsModule.redactTrackerArrayItemValue as jest.Mock).mockImplementation((tracker: unknown) => tracker);
-    (trackerPartsModule.replaceTrackerArrayItem as jest.Mock).mockImplementation(
+    (trackerPartsModule.redactTrackerArrayItemValue as AnyMock).mockImplementation((tracker: unknown) => tracker);
+    (trackerPartsModule.replaceTrackerArrayItem as AnyMock).mockImplementation(
       (tracker: any, partKey: string, index: number, item: unknown) => ({
         ...tracker,
         [partKey]: (tracker?.[partKey] ?? []).map((entry: unknown, entryIndex: number) => (entryIndex === index ? item : entry)),
@@ -434,15 +435,15 @@ describe('createTrackerActions prompt engineering', () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
 
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
-    (schemaToExample as jest.Mock).mockReturnValue('{"time":"string"}');
-    (schemaToPromptSchema as jest.Mock).mockReturnValue('{"type":"object"}');
-    (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
+    (schemaToExample as AnyMock).mockReturnValue('{"time":"string"}');
+    (schemaToPromptSchema as AnyMock).mockReturnValue('{"type":"object"}');
+    (parseResponse as AnyMock).mockReturnValue({ time: '10:00:00' });
     const generateRequest = makeGenerateRequest({ content: '```json\n{"time":"10:00:00"}\n```' });
 
     const partSchema = { type: 'object', properties: { time: { type: 'string' } } };
-    (trackerPartsModule.buildTopLevelPartSchema as jest.Mock).mockReturnValue(partSchema);
-    (trackerPartsModule.redactTrackerPartValue as jest.Mock).mockImplementation((tracker: unknown) => tracker);
-    (trackerPartsModule.mergeTrackerPart as jest.Mock).mockImplementation((tracker: any, partKey: string, partObject: any) => ({
+    (trackerPartsModule.buildTopLevelPartSchema as AnyMock).mockReturnValue(partSchema);
+    (trackerPartsModule.redactTrackerPartValue as AnyMock).mockImplementation((tracker: unknown) => tracker);
+    (trackerPartsModule.mergeTrackerPart as AnyMock).mockImplementation((tracker: any, partKey: string, partObject: any) => ({
       ...tracker,
       [partKey]: partObject[partKey],
     }));
@@ -507,9 +508,9 @@ describe('createTrackerActions prompt engineering', () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
 
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
-    (schemaToExample as jest.Mock).mockReturnValue('{"time":"string"}');
-    (schemaToPromptSchema as jest.Mock).mockReturnValue('{"type":"object"}');
-    (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
+    (schemaToExample as AnyMock).mockReturnValue('{"time":"string"}');
+    (schemaToPromptSchema as AnyMock).mockReturnValue('{"type":"object"}');
+    (parseResponse as AnyMock).mockReturnValue({ time: '10:00:00' });
     const generateRequest = makeGenerateRequest({ content: '```json\n{"time":"10:00:00"}\n```' });
 
     const settings = makeSettings({
@@ -547,14 +548,14 @@ describe('createTrackerActions prompt engineering', () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
 
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
-    (schemaToExample as jest.Mock).mockReturnValue('{"time":"string"}');
-    (schemaToPromptSchema as jest.Mock).mockReturnValue('{"type":"object"}');
-    (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
+    (schemaToExample as AnyMock).mockReturnValue('{"time":"string"}');
+    (schemaToPromptSchema as AnyMock).mockReturnValue('{"type":"object"}');
+    (parseResponse as AnyMock).mockReturnValue({ time: '10:00:00' });
     const generateRequest = makeGenerateRequest({ content: '```json\n{"time":"10:00:00"}\n```' });
 
     const partSchema = { type: 'object', properties: { time: { type: 'string' } } };
-    (trackerPartsModule.buildTopLevelPartSchema as jest.Mock).mockReturnValue(partSchema);
-    (trackerPartsModule.mergeTrackerPart as jest.Mock).mockImplementation(
+    (trackerPartsModule.buildTopLevelPartSchema as AnyMock).mockReturnValue(partSchema);
+    (trackerPartsModule.mergeTrackerPart as AnyMock).mockImplementation(
       (tracker: any, partKey: string, partObject: any) => ({ ...tracker, [partKey]: partObject[partKey] }),
     );
 
@@ -592,15 +593,15 @@ describe('createTrackerActions prompt engineering', () => {
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
 
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
-    (schemaToExample as jest.Mock).mockReturnValue('{"time":"string"}');
-    (schemaToPromptSchema as jest.Mock).mockReturnValue('{"type":"object"}');
-    (parseResponse as jest.Mock).mockReturnValue({ time: '10:00:00' });
+    (schemaToExample as AnyMock).mockReturnValue('{"time":"string"}');
+    (schemaToPromptSchema as AnyMock).mockReturnValue('{"type":"object"}');
+    (parseResponse as AnyMock).mockReturnValue({ time: '10:00:00' });
     const generateRequest = makeGenerateRequest({ content: '```json\n{"time":"10:00:00"}\n```' });
 
     const partSchema = { type: 'object', properties: { time: { type: 'string' } } };
-    (trackerPartsModule.buildTopLevelPartSchema as jest.Mock).mockReturnValue(partSchema);
-    (trackerPartsModule.redactTrackerPartValue as jest.Mock).mockImplementation((tracker: unknown) => tracker);
-    (trackerPartsModule.mergeTrackerPart as jest.Mock).mockImplementation(
+    (trackerPartsModule.buildTopLevelPartSchema as AnyMock).mockReturnValue(partSchema);
+    (trackerPartsModule.redactTrackerPartValue as AnyMock).mockImplementation((tracker: unknown) => tracker);
+    (trackerPartsModule.mergeTrackerPart as AnyMock).mockImplementation(
       (tracker: any, partKey: string, partObject: any) => ({ ...tracker, [partKey]: partObject[partKey] }),
     );
 
