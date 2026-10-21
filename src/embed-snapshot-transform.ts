@@ -175,8 +175,73 @@ function formatToonSnapshot(value: unknown): string {
   return encode(normalizeToPlainJsonValue(value ?? {}), { delimiter: '\t' });
 }
 
-function buildBaseSnapshotText(input: EmbedSnapshotTransformInput, value: unknown, presetKey?: string): string {
+/** Caller-supplied names for the Flat `[Topic: ...` wrapper; other presets ignore them. */
+export interface SnapshotFormatOptions {
+  title?: string;
+  moduleName?: string;
+}
+
+const FLAT_LABEL_KEYS = ['name', 'id', 'uid', 'key'];
+
+function collapseLineBreaks(text: string): string {
+  return text.replace(/\s*[\r\n]+\s*/g, ' ').trim();
+}
+
+function isEmptyFlatValue(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  if (typeof value === 'string') return collapseLineBreaks(value).length === 0;
+  if (Array.isArray(value)) return value.length === 0;
+  if (isPlainObject(value)) return Object.keys(value).length === 0;
+  return false;
+}
+
+function formatFlatArrayItem(item: unknown, index: number): string {
+  if (!isPlainObject(item)) return formatFlatValue(item);
+  const label = pickArrayItemLabel(item, index);
+  const labelKey = FLAT_LABEL_KEYS.find((k) => item[k] !== undefined && String(item[k]) === label);
+  const fields = Object.entries(item)
+    .filter(([k, v]) => k !== labelKey && !isEmptyFlatValue(v))
+    .map(([k, v]) => `${k}: ${formatFlatValue(v)}`);
+  return fields.length > 0 ? `${label} (${fields.join(', ')})` : label;
+}
+
+function formatFlatValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => !isEmptyFlatValue(item))
+      .map((item, index) => formatFlatArrayItem(item, index))
+      .join('; ');
+  }
+  if (isPlainObject(value)) {
+    return Object.entries(value)
+      .filter(([, v]) => !isEmptyFlatValue(v))
+      .map(([k, v]) => `${k}: ${formatFlatValue(v)}`)
+      .join('; ');
+  }
+  return typeof value === 'string' ? collapseLineBreaks(value) : String(value);
+}
+
+function formatFlatSnapshot(value: unknown, options: SnapshotFormatOptions): string {
+  const title = collapseLineBreaks(options.title ?? options.moduleName ?? '') || 'Tracker';
+  const lines = isPlainObject(value)
+    ? Object.entries(value)
+        .filter(([, v]) => !isEmptyFlatValue(v))
+        .map(([k, v]) => `${k}: ${formatFlatValue(v)}`)
+    : isEmptyFlatValue(value)
+      ? []
+      : [formatFlatValue(value)];
+  return [`[Topic: ${title}`, ...lines, ']'].join('\n');
+}
+
+function buildBaseSnapshotText(
+  input: EmbedSnapshotTransformInput,
+  value: unknown,
+  presetKey?: string,
+  options: SnapshotFormatOptions = {},
+): string {
   switch (input) {
+    case 'flat_lines':
+      return formatFlatSnapshot(value, options);
     case 'toon':
       return formatToonSnapshot(value);
     case 'top_level_lines':
@@ -204,19 +269,26 @@ function getDefaultCodeFenceWrap(presetKey?: string): boolean {
 export function formatEmbeddedTrackerSnapshot(
   trackerValue: unknown,
   settings: Pick<TrackerModuleSettings, 'embedZTrackerSnapshotTransformPreset' | 'embedZTrackerSnapshotTransformPresets'>,
+  options: SnapshotFormatOptions = {},
 ): { lang: string; text: string; wrapInCodeFence: boolean } {
   const presets = settings.embedZTrackerSnapshotTransformPresets;
   const presetKey = settings.embedZTrackerSnapshotTransformPreset;
   const preset = (presetKey && presets && presets[presetKey]) || presets?.default;
 
   const input = preset?.input ?? 'pretty_json';
-  const baseText = buildBaseSnapshotText(input, trackerValue, presetKey);
+  const baseText = buildBaseSnapshotText(input, trackerValue, presetKey, options);
 
   const pattern = preset?.pattern ?? '';
   const flags = preset?.flags ?? '';
   const replacement = preset?.replacement ?? '';
   const lang = preset?.codeFenceLang || getDefaultCodeFenceLang(input);
-  const wrapInCodeFence = typeof preset?.wrapInCodeFence === 'boolean' ? preset.wrapInCodeFence : getDefaultCodeFenceWrap(presetKey);
+  // Flat is a bracket block, never a fenced one.
+  const wrapInCodeFence =
+    input === 'flat_lines'
+      ? false
+      : typeof preset?.wrapInCodeFence === 'boolean'
+        ? preset.wrapInCodeFence
+        : getDefaultCodeFenceWrap(presetKey);
 
   const baseOrMinified = presetKey === 'minimal' ? minifyEmbeddingWhitespace(baseText) : baseText;
 

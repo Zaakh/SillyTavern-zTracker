@@ -26,6 +26,7 @@ Forked from [SillyTavern WTracker](https://github.com/bmen25124/SillyTavern-WTra
 zTracker follows the SillyTavern chat type of whichever connection it is currently using for tracker generation. In **Connection Source = Use current active SillyTavern connection** mode, zTracker resolves tracker-generation connection state from the live SillyTavern runtime, including the currently active prompt selectors and any host-exposed active connection changes. In **Connection Source = Use selected saved connection profile** mode, zTracker uses the pinned saved profile you selected in zTracker settings.
 
 ---
+- **Export a tracker to a lorebook** (new entry or replace the linked one), with an optional model-suggested title, and a compact **Flat** snapshot format shared by chat injection and lorebook entries.
 
 ## Modules
 
@@ -192,6 +193,15 @@ How World Info reaches the tracker prompt:
 
 A book can optionally list **entry UIDs** to inject only those entries. Click **Refresh book list** to detect available books, search/select one, and **Add** it. When a scope is not satisfied by the open chat, the row shows a warning that it will be skipped (and "cannot be checked" when no chat is open). The check runs when the section is shown and when rows change; use **Recheck** after switching chats.
 
+## Exporting a tracker to a lorebook
+
+Each tracker block has two text-labeled buttons for copying its content into a World Info lorebook, so long-lived content such as a detailed character can be triggered across chats:
+
+- **Export to lorebook...** opens a dialog: pick a lorebook, enter the entry **title** (required) and the **keys** (they default to the title and follow it until you edit them; clear them and the entry is created without keys and will not trigger until you add some). **Suggest title** sends the tracker text to your live SillyTavern connection and fills the title with a short reply. It never runs unless you press it, and you can edit the result. Export always creates a new entry and never touches an existing one; the entry is saved and re-read from the lorebook before zTracker reports success.
+- **Replace linked entry** overwrites the content of the entry created by the last export from this message. It is disabled until an export exists, and its label names the target book and entry. It changes only the entry's content (and its comment only if you have not renamed it), so keys, order, position and enabled state you edited in the lorebook are kept. If the book or entry is gone, nothing is written and you are offered **Export to lorebook...** instead. It never calls the model.
+
+The entry text is the same snapshot the Module injects into chat. With the **Flat** preset (the default for new Modules), it is a `[Topic: <title>` ... `]` block of `key: value` lines, using the title you entered. Deleting the tracker from the message also removes the link.
+
 ## Embedding tracker snapshots into normal generations
 
 zTracker can optionally embed the last $X$ tracker snapshots into the prompt chat array via its `generate_interceptor` (controlled by **Include Last X zTracker Messages**).
@@ -208,6 +218,7 @@ You can also apply a **regex-based transform** to the embedded snapshot text (fo
 
 You can customize (or remove) the embedded snapshot header via **Embed snapshot header**.
 
+- **Flat (key: value lines)** (default for new Modules and the shipped templates): embeds `[Topic: <Module name>`, one `key: value` line per field (nested objects and arrays on one line, empty values left out), then `]`. Never wrapped in a code fence.
 - **Default (JSON)**: embeds pretty-printed JSON (no changes).
 - **Minimal (top-level properties)**: embeds one line per top-level property (newline-separated).
 - **TOON (compact)**: embeds tracker snapshots as tab-delimited TOON for lower-token structured context while preserving arrays and nested objects.

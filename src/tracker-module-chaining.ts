@@ -96,10 +96,14 @@ export function getEligibleChainableModules(
 }
 
 /** Formats one chained tracker snapshot as a standalone message, reusing the target Module's own injection settings. */
-function buildStandaloneSnapshotMessage(trackerValue: unknown, targetSettings: TrackerModuleSettings): Record<string, unknown> {
+function buildStandaloneSnapshotMessage(
+  trackerValue: unknown,
+  targetSettings: TrackerModuleSettings,
+  moduleName: string,
+): Record<string, unknown> {
   const useCharacterName = targetSettings.embedZTrackerAsCharacter ?? false;
   const header = targetSettings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER;
-  const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(trackerValue, targetSettings);
+  const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(trackerValue, targetSettings, { moduleName });
   const speakerName = useCharacterName ? deriveEmbeddedTrackerSpeakerName(targetSettings) : undefined;
   const prefix = !useCharacterName && header ? `${header}\n` : '';
   const content = wrapInCodeFence ? `${prefix}\`\`\`${lang}\n${text}\n\`\`\`` : `${prefix}${text}`;
@@ -162,7 +166,7 @@ export function collectChainedSnapshotMessages<T extends Message | ChatMessage>(
 
     const targetSettings = getSettingsForTrackerModule(sourceSettings, resolved.targetModule.id);
     for (const value of collectChainedEntrySnapshots(resolved, chat, uptoMessageIndex)) {
-      prepended.push(buildStandaloneSnapshotMessage(value, targetSettings) as T);
+      prepended.push(buildStandaloneSnapshotMessage(value, targetSettings, resolved.targetModule.name) as T);
     }
   }
 

@@ -634,6 +634,23 @@
 	position: relative;
 	z-index: 50;
 
+	.ztracker-lorebook-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin: 4px 0;
+
+		button {
+			width: auto;
+			white-space: nowrap;
+		}
+
+		button:disabled {
+			opacity: 0.4;
+			cursor: not-allowed;
+		}
+	}
+
 	.ztracker-controls {
 		position: absolute;
 		top: 8px;

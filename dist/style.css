@@ -561,6 +561,20 @@
   position: relative;
   z-index: 50;
 }
+.mes_ztracker .ztracker-lorebook-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0;
+}
+.mes_ztracker .ztracker-lorebook-actions button {
+  width: auto;
+  white-space: nowrap;
+}
+.mes_ztracker .ztracker-lorebook-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .mes_ztracker .ztracker-controls {
   position: absolute;
   top: 8px;
