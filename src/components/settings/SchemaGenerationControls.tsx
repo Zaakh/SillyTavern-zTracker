@@ -50,23 +50,26 @@ export const SchemaGenerationControls: FC<{
         onClick={onGenerateSchema}
         disabled={!canGenerateSchema}
       >
-        <i className="fa-solid fa-diagram-project" aria-hidden="true"></i> Generate schema (draft)
+        <i className="fa-solid fa-diagram-project" aria-hidden="true"></i> Generate schema
       </STButton>
       <STButton
         type="button"
+        className="ztracker-btn-danger"
         title="Generate prompts: asks the active connection for a system prompt and a base prompt based on the Design brief and the current Schema JSON draft. Replaces this Module's prompts and its generated system-prompt preset, and applies immediately (not as a draft)."
         onClick={onGeneratePrompts}
         disabled={!canGeneratePrompts}
       >
-        <i className="fa-solid fa-file-pen" aria-hidden="true"></i> Generate prompts (applies now)
+        <i className="fa-solid fa-file-pen" aria-hidden="true"></i> Generate prompts
       </STButton>
     </div>
     <div className="notes ztracker-schema-status">
       Generate schema and Generate prompts use the global active connection ({activeConnectionLabel}), not this Module&apos;s own connection settings.
     </div>
-    {replacesDraft ? <div className="notes ztracker-schema-status">Generate schema will replace the current Schema JSON draft.</div> : null}
-    {replacesPrompts ? (
-      <div className="notes ztracker-schema-status">Generate prompts will overwrite this Module&apos;s prompt text and generated preset immediately.</div>
+    {replacesDraft || replacesPrompts ? (
+      <div className="notes ztracker-schema-status">
+        {replacesDraft ? 'Generate schema will replace the current Schema JSON draft. ' : ''}
+        {replacesPrompts ? 'Generate prompts will overwrite this Module’s prompt text and generated preset immediately.' : ''}
+      </div>
     ) : null}
     {isRunning ? (
       <div className="notes ztracker-schema-status">
@@ -79,7 +82,7 @@ export const SchemaGenerationControls: FC<{
     {status.error ? <div className="notes ztracker-schema-error">{status.error}</div> : null}
     {status.info ? <div className="notes ztracker-schema-status">{status.info}</div> : null}
     {status.showHtmlHint ? (
-      <div className="notes ztracker-schema-status">Schema changed: generate HTML next (Generate HTML from schema, below), then save both.</div>
+      <div className="notes ztracker-schema-status">Schema changed: generate HTML next (Generate HTML, below), then save both.</div>
     ) : null}
   </div>
 );

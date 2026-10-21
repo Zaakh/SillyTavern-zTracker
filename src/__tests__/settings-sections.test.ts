@@ -316,7 +316,7 @@ describe('settings sections', () => {
     expect(settings.trackerWorldInfoPolicyMode).toBe(TrackerWorldInfoPolicyMode.ALLOWLIST);
   });
 
-  test('disables the Prompt field outside Native mode and re-enables it back in Native mode', () => {
+  test('shows only the active mode template and keeps hidden text across mode switches', () => {
     const settings = {
       promptEngineeringMode: PromptEngineeringMode.NATIVE,
       prompt: 'native prompt',
@@ -327,39 +327,33 @@ describe('settings sections', () => {
     } as any;
     const updateAndRefresh = (updater: (current: any) => void) => updater(settings);
     const testGrammarSchemaEnforcement = jest.fn(async () => ({ supported: true, message: 'ok' }));
+    const rerender = () =>
+      act(() => {
+        root?.render(
+          React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh, moduleId: 'default', testGrammarSchemaEnforcement }),
+        );
+      });
+    const shown = () => Array.from(document.querySelectorAll('textarea')).map((t) => (t as HTMLTextAreaElement).value);
 
     ({ root } = renderElement(
       React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh, moduleId: 'default', testGrammarSchemaEnforcement }),
     ));
+    expect(shown()).toEqual(['native prompt']);
 
-    const getPromptTextarea = () => document.querySelectorAll('textarea')[0] as HTMLTextAreaElement;
-    const getRestoreButton = () => document.querySelector('button[title="Restore Prompt to default"]') as HTMLButtonElement | null;
+    for (const [mode, text] of [
+      [PromptEngineeringMode.JSON, 'json prompt'],
+      [PromptEngineeringMode.XML, 'xml prompt'],
+      [PromptEngineeringMode.TOON, 'toon prompt'],
+    ] as const) {
+      settings.promptEngineeringMode = mode;
+      rerender();
+      expect(shown()).toEqual([text]);
+    }
 
-    expect(getPromptTextarea().disabled).toBe(false);
-    expect(getRestoreButton()?.disabled).toBe(false);
-    expect(document.body.textContent).not.toContain('use the matching');
-
-    act(() => {
-      settings.promptEngineeringMode = PromptEngineeringMode.JSON;
-      root?.render(
-        React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh, moduleId: 'default', testGrammarSchemaEnforcement }),
-      );
-    });
-
-    expect(getPromptTextarea().disabled).toBe(true);
-    expect(getRestoreButton()?.disabled).toBe(true);
-    expect(document.body.textContent).toContain('use the matching');
-
-    act(() => {
-      settings.promptEngineeringMode = PromptEngineeringMode.NATIVE;
-      root?.render(
-        React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh, moduleId: 'default', testGrammarSchemaEnforcement }),
-      );
-    });
-
-    expect(getPromptTextarea().disabled).toBe(false);
-    expect(getRestoreButton()?.disabled).toBe(false);
-    expect(document.body.textContent).not.toContain('use the matching');
+    settings.promptEngineeringMode = PromptEngineeringMode.NATIVE;
+    rerender();
+    expect(shown()).toEqual(['native prompt']);
+    expect(settings.promptXml).toBe('xml prompt');
   });
 
   test('hides the grammar/schema enforcement setting outside JSON mode and shows it in JSON mode', () => {
@@ -482,7 +476,7 @@ describe('settings sections', () => {
       React.createElement(GenerationPromptTemplatesSection, { settings, updateAndRefresh: jest.fn(), moduleId: 'm', testGrammarSchemaEnforcement }),
     ));
 
-    const testButton = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Test') as HTMLButtonElement;
+    const testButton = Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Test') as HTMLButtonElement;
     expect(testButton.closest('label')).toBeNull();
     const row = testButton.closest('.ztracker-button-row') as HTMLElement;
     await act(async () => {
@@ -492,7 +486,7 @@ describe('settings sections', () => {
     expect(testGrammarSchemaEnforcement).toHaveBeenCalledWith('m');
     expect(row.textContent).toContain('Supported.');
 
-    expect(document.querySelector('button[aria-label="Restore Prompt to its default value"]')).not.toBeNull();
+    expect(document.querySelector('button[aria-label="Restore Prompt (JSON) to its default value"]')).not.toBeNull();
   });
 
   test('discards a stale Test result that resolves after the selected Module has changed', async () => {
@@ -580,7 +574,7 @@ describe('settings sections', () => {
     const settings = renderAllowlist([{ book: 'Existing', activeVia: [], entryIds: [], trigger: 'always' }]);
     getWorldInfosMock.mockResolvedValue({ 'Lore B': {}, 'Lore A': {} });
 
-    const refreshButton = document.querySelector('button[title="Refresh detected books"]') as HTMLButtonElement;
+    const refreshButton = document.querySelector('button[title="Refresh the list of detected World Info books"]') as HTMLButtonElement;
     await act(async () => {
       refreshButton.click();
       await Promise.resolve();
@@ -614,8 +608,8 @@ describe('settings sections', () => {
     expect(rows).toHaveLength(2);
     const [addRow, secondaryRow] = rows;
     expect(Array.from(addRow.children).map((el) => el.tagName)).toEqual(['INPUT', 'SELECT', 'BUTTON']);
-    expect(addRow.querySelector('button')?.textContent).toBe('Add');
-    expect(Array.from(secondaryRow.querySelectorAll('button')).map((b) => b.textContent)).toEqual(['Refresh book list', 'Recheck']);
+    expect(addRow.querySelector('button')?.textContent).toBe(' Add');
+    expect(Array.from(secondaryRow.querySelectorAll('button')).map((b) => b.textContent)).toEqual([' Refresh books', ' Recheck']);
 
     const remove = document.querySelector('[data-testid="world-info-row"] button[title="Remove"]') as HTMLButtonElement;
     expect(remove.getAttribute('aria-label')).toBe('Remove Lore A');

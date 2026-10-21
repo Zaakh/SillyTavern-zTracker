@@ -52,7 +52,7 @@ A fresh install automatically creates all three Modules below: **Scene Tracker**
 - **Plot Log** (`plot-log.json`) tracks ongoing story plot state - current arc, open threads, recent events, and stakes - and renders normally like any other tracker. It is never embedded into live generation.
 - **Plot Steer** (`plot-steer.json`) reads Plot Log's stored history and suggests the single next story beat (plus a pacing hint: escalate, resolve, hold, or twist). Unlike Plot Log, its suggestion **is injected** into the next generation request, not just displayed - only the single most recent suggestion is ever embedded, and its tracker display is a one-line summary rather than a full table.
 
-Each of these Modules ships its own tailored system prompt, installed as a dedicated saved SillyTavern system-prompt preset the moment the Module is created (fresh install or manual Import) - see **System Prompt Source** in that Module's settings. If that preset is ever deleted from SillyTavern, Settings keeps showing the usual missing-preset warning and adds a one-click **Recreate from shipped prompt** action next to it, so restoring it doesn't require re-importing the whole Module.
+Each of these Modules ships its own tailored system prompt, installed as a dedicated saved SillyTavern system-prompt preset the moment the Module is created (fresh install or manual Import) - see **System Prompt Source** in that Module's settings. If that preset is ever deleted from SillyTavern, Settings keeps showing the usual missing-preset warning and adds a one-click **Recreate prompt** action next to it, so restoring it doesn't require re-importing the whole Module.
 
 **If you import Plot Log and Plot Steer manually, import Plot Log first.** Plot Steer's history of Plot Log is a chained include entry, which only works when its target Module was imported earlier and is ordered earlier in **Generation Order**. Importing Plot Steer first leaves that entry dormant (shown with a warning icon in Settings) until you also import Plot Log and confirm the order. The automatic seeding on a fresh install always creates them in the correct order.
 
@@ -101,7 +101,7 @@ zTracker can now choose the system prompt used during tracker generation:
 - **From selected connection profile**: use the system prompt stored on the Module's saved connection profile. This only selects the system prompt; instruct, context and sampler presets follow the Module's connection either way (see above).
 - **From saved ST prompt**: pick a saved SillyTavern system prompt specifically for tracker extraction.
 
-Each Module installs its own system-prompt preset automatically, named after that Module and derived from its own prompt content, the first time the Module is created (fresh install, "Add Module", or manual Import). Select that Module's preset in **Extensions → zTracker → System Prompt Source**, and edit it later in SillyTavern's own **System Prompt** manager. If a Module's preset ever goes missing, use the "Recreate from shipped prompt" action next to the warning to restore it. Older zTracker prompt presets are not deleted automatically.
+Each Module installs its own system-prompt preset automatically, named after that Module and derived from its own prompt content, the first time the Module is created (fresh install, "Add Module", or manual Import). Select that Module's preset in **Extensions → zTracker → System Prompt Source**, and edit it later in SillyTavern's own **System Prompt** manager. If a Module's preset ever goes missing, use the "Recreate prompt" action next to the warning to restore it. Older zTracker prompt presets are not deleted automatically.
 
 This is especially useful for smaller models: you can keep your roleplay-oriented system prompt for normal chat, while using a lean extraction-oriented prompt for tracker generation.
 
@@ -151,15 +151,15 @@ zTracker honors only a subset of JSON Schema: `type`, `properties`, `items`, `re
 
 **Diagnostics** reports the same findings for every Module and preset.
 
-Don't want to hand-write the HTML template? Click **Generate HTML from schema** (between the JSON and HTML editors) to derive one automatically from the current Schema JSON draft. It always overwrites the Schema HTML draft (click Save to apply) and is disabled while the Schema JSON draft is invalid.
+Don't want to hand-write the HTML template? Click **Generate HTML** (between the JSON and HTML editors) to derive one automatically from the current Schema JSON draft. It always overwrites the Schema HTML draft (click Save to apply) and is disabled while the Schema JSON draft is invalid.
 
 ### Generating a schema and prompts from a description
 
 Instead of writing everything by hand, describe the tracker in the **Design brief** box (saved with the Module) and use the buttons below it (hover each for what it produces, reads and replaces):
 
-- **Generate schema (draft)** (model): drafts the Schema JSON from your brief. The draft is checked by the dialect lint and sent back for repair up to twice if it has errors, warnings or wrapper notes; the best attempt stays in the draft with its findings shown. Nothing is saved until you click Save.
-- **Generate HTML from schema** (no model): derives the HTML from the Schema JSON draft, as above. Run it after a schema was generated.
-- **Generate prompts (applies now)** (model): writes a system prompt and a base prompt from your brief and the current Schema JSON draft and **applies them immediately**, saving a system prompt preset named `zTracker-<module id>-generated` (overwritten on each run). Your globally selected SillyTavern system prompt is not changed.
+- **Generate schema** (model): drafts the Schema JSON from your brief. The draft is checked by the dialect lint and sent back for repair up to twice if it has errors, warnings or wrapper notes; the best attempt stays in the draft with its findings shown. Nothing is saved until you click Save.
+- **Generate HTML** (no model): derives the HTML from the Schema JSON draft, as above. Run it after a schema was generated.
+- **Generate prompts** (model): writes a system prompt and a base prompt from your brief and the current Schema JSON draft and **applies them immediately**, saving a system prompt preset named `zTracker-<module id>-generated` (overwritten on each run). Your globally selected SillyTavern system prompt is not changed.
 
 Both model-backed buttons use the **global active SillyTavern connection** (shown next to the buttons), not the Module's own connection settings. Replies get at least 2048 tokens, so use a connection with a context window large enough for the examples sent along (a small local model with a 2048-token context cannot fit a repair round). Overwrites are announced inline; there is no confirmation dialog, and you can cancel a running generation.
 
@@ -191,7 +191,7 @@ How World Info reaches the tracker prompt:
 - Tracker generation scans World Info as a **dry run**: it never starts, advances or clears sticky/cooldown timers and never fires SillyTavern's activated event. The flip side is that sticky and cooldown are not applied to tracker scans (an entry that is sticky in the chat is not kept alive for the tracker, and an entry on cooldown can still appear), and entry `delay` is evaluated against the real chat length.
 - Known limits: character filters use the character currently selected in SillyTavern, not the tracker's target character; a scan clears entries force-activated by other extensions or slash commands before your next generation; a restricted (Engine rules) scan waits briefly for an in-progress SillyTavern generation to finish; the engine path needs SillyTavern 1.18 or newer, otherwise no World Info is injected.
 
-A book can optionally list **entry UIDs** to inject only those entries. Click **Refresh book list** to detect available books, search/select one, and **Add** it. When a scope is not satisfied by the open chat, the row shows a warning that it will be skipped (and "cannot be checked" when no chat is open). The check runs when the section is shown and when rows change; use **Recheck** after switching chats.
+A book can optionally list **entry UIDs** to inject only those entries. Click **Refresh books** to detect available books, search/select one, and **Add** it. When a scope is not satisfied by the open chat, the row shows a warning that it will be skipped (and "cannot be checked" when no chat is open). The check runs when the section is shown and when rows change; use **Recheck** after switching chats.
 
 ## Exporting a tracker to a lorebook
 

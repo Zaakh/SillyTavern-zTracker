@@ -123,8 +123,8 @@ describe('schema generation controls', () => {
 
     expect(button('Generate schema').title).toMatch(/Schema JSON.*Design brief.*Replaces the Schema JSON draft/);
     expect(button('Generate prompts').title).toMatch(/Design brief.*Schema JSON draft.*applies immediately/);
-    expect(button('Generate schema').textContent).toBe(' Generate schema (draft)');
-    expect(button('Generate prompts').textContent).toBe(' Generate prompts (applies now)');
+    expect(button('Generate schema').textContent).toBe(' Generate schema');
+    expect(button('Generate prompts').textContent).toBe(' Generate prompts');
     expect(document.body.textContent).toMatch(/global active connection \(openai · gpt-x\)/);
   });
 
@@ -177,6 +177,12 @@ describe('schema generation controls', () => {
     render({ request: jest.fn<Request>(), modules: [module] });
 
     expect(document.body.textContent).toMatch(/Generate prompts will overwrite/);
+  });
+
+  test('no overwrite notice when nothing would be replaced', () => {
+    render({ request: jest.fn<Request>(), initial: { brief: 'x' } });
+
+    expect(document.body.textContent).not.toMatch(/will replace|will overwrite/);
   });
 
   test('double click does not start a second request while running', async () => {

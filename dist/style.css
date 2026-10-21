@@ -74,6 +74,15 @@
   align-items: center;
   gap: 6px;
 }
+.ztracker-settings .ztracker-button-group {
+  display: flex;
+  gap: 4px;
+}
+.ztracker-settings .ztracker-button-group + .ztracker-button-group, .ztracker-settings .ztracker-button-group + button:not(.ztracker-button-row-end) {
+  margin-left: 6px;
+  padding-left: 10px;
+  border-left: 1px solid var(--SmartThemeBorderColor, rgba(128, 128, 128, 0.4));
+}
 .ztracker-settings .ztracker-button-row-end {
   margin-left: auto;
 }

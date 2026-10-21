@@ -198,7 +198,7 @@ describe('Schema dialect lint wired into the real Settings UI (openspec: add-sch
     const [schemaJsonTextarea, schemaHtmlTextarea] = Array.from(container.querySelectorAll('textarea.ztracker-schema-textarea'));
     const saveSchemaJsonButton = Array.from(container.querySelectorAll('button')).find((button) => button.title.startsWith('Save the current Schema JSON'));
     const saveSchemaHtmlButton = Array.from(container.querySelectorAll('button')).find((button) => button.title.startsWith('Save the current Schema HTML'));
-    const restoreDefaultButton = Array.from(container.querySelectorAll('button')).find((button) => button.title === 'Restore default schema JSON and HTML');
+    const restoreDefaultButton = Array.from(container.querySelectorAll('button')).find((button) => button.title === 'Restore both the Schema JSON and the Schema HTML to their defaults');
 
     if (!(schemaJsonTextarea instanceof HTMLTextAreaElement) || !(schemaHtmlTextarea instanceof HTMLTextAreaElement)) {
       throw new Error('Schema textareas not found');
@@ -208,6 +208,14 @@ describe('Schema dialect lint wired into the real Settings UI (openspec: add-sch
     }
     return { schemaJsonTextarea, schemaHtmlTextarea, saveSchemaJsonButton, saveSchemaHtmlButton, restoreDefaultButton };
   }
+
+  test('Tracker Generation drawer lists behavior and prompts before the system prompt and schema editors', () => {
+    const container = renderSettings();
+    const text = container.textContent ?? '';
+    const order = ['Include Module History', 'Prompt Engineering', 'System Prompt Source', 'Schema JSON'].map((label) => text.indexOf(label));
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
 
   test('renaming a field in both editors can be saved in one step, even though neither side renders against the other\'s saved version', async () => {
     const cleanSchema = { type: 'object', description: 'x', properties: { mood: { type: 'string', description: 'x' } }, required: ['mood'] };

@@ -220,7 +220,7 @@ export const WorldInfoPolicySection: FC<{
                 onClick={() => addWorldInfoBookName(selectedWorldInfoBookToAdd)}
                 disabled={!selectedWorldInfoBookToAdd}
               >
-                Add
+                <i className="fa-solid fa-plus" aria-hidden="true"></i> Add
               </STButton>
             </div>
 
@@ -228,11 +228,11 @@ export const WorldInfoPolicySection: FC<{
               <STButton
                 type="button"
                 className="ztracker-btn-secondary"
-                title="Refresh detected books"
+                title="Refresh the list of detected World Info books"
                 onClick={refreshAvailableWorldInfoBooks}
                 disabled={worldInfoBooksLoading}
               >
-                {worldInfoBooksLoading ? 'Refreshing…' : 'Refresh book list'}
+                <i className="fa-solid fa-rotate" aria-hidden="true"></i> {worldInfoBooksLoading ? 'Refreshing…' : 'Refresh books'}
               </STButton>
               <STButton
                 type="button"
@@ -240,7 +240,7 @@ export const WorldInfoPolicySection: FC<{
                 title="Recheck scope against the open chat"
                 onClick={() => void recheck()}
               >
-                Recheck
+                <i className="fa-solid fa-magnifying-glass" aria-hidden="true"></i> Recheck
               </STButton>
             </div>
 

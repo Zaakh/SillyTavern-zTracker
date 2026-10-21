@@ -38,6 +38,13 @@ const promptTemplateConfigs = [
   },
 ] as const;
 
+const activeTemplateKey: Record<PromptEngineeringMode, (typeof promptTemplateConfigs)[number]['key']> = {
+  [PromptEngineeringMode.NATIVE]: 'prompt',
+  [PromptEngineeringMode.JSON]: 'promptJson',
+  [PromptEngineeringMode.XML]: 'promptXml',
+  [PromptEngineeringMode.TOON]: 'promptToon',
+};
+
 // Groups the editable prompt templates used by tracker generation and prompt-engineered output modes.
 export const GenerationPromptTemplatesSection: FC<
   SettingsSectionProps & {
@@ -78,6 +85,9 @@ export const GenerationPromptTemplatesSection: FC<
     }
   };
 
+  // Only the template the selected mode actually sends is shown; the others keep their stored text.
+  const activeTemplates = promptTemplateConfigs.filter((t) => t.key === activeTemplateKey[settings.promptEngineeringMode]);
+
   return (
     <>
       <div className="setting-row">
@@ -101,70 +111,63 @@ export const GenerationPromptTemplatesSection: FC<
         </select>
       </div>
 
+      <small>Only the template for the selected mode is shown; other modes keep their own text.</small>
+
       {settings.promptEngineeringMode === PromptEngineeringMode.JSON && (
-        <div className="setting-row">
+        <div className="setting-row ztracker-button-row">
           <label title="Sends this Module's JSON Schema as a json_schema request override, for backends that support constraining generation via grammar/schema sampling (llama.cpp, TabbyAPI, Chat Completion). Backends that don't forward this field silently ignore it - use Test to check your connection.">
+            <input
+              type="checkbox"
+              checked={!!settings.grammarEnforcementEnabled}
+              onChange={(e) =>
+                updateAndRefresh((s) => {
+                  s.grammarEnforcementEnabled = e.target.checked;
+                })
+              }
+            />{' '}
             Enforce schema via grammar sampling
           </label>
-          <input
-            type="checkbox"
-            checked={!!settings.grammarEnforcementEnabled}
-            onChange={(e) =>
-              updateAndRefresh((s) => {
-                s.grammarEnforcementEnabled = e.target.checked;
-              })
-            }
-          />
-          <div className="ztracker-button-row">
-            <STButton type="button" className="ztracker-btn-secondary" disabled={isTesting} onClick={() => void runGrammarSchemaEnforcementTest()}>
-              {isTesting ? 'Testing…' : 'Test'}
-            </STButton>
-            {testResult && (
-              <span className="notes">{testResult.supported ? `✅ ${testResult.message}` : `❌ ${testResult.message}`}</span>
-            )}
-          </div>
+          <STButton
+            type="button"
+            className="ztracker-btn-secondary"
+            title="Check whether the current connection honors schema enforcement"
+            disabled={isTesting}
+            onClick={() => void runGrammarSchemaEnforcementTest()}
+          >
+            <i className="fa-solid fa-vial" aria-hidden="true"></i> {isTesting ? 'Testing…' : 'Test'}
+          </STButton>
+          {testResult && (
+            <span className="notes">{testResult.supported ? `✅ ${testResult.message}` : `❌ ${testResult.message}`}</span>
+          )}
         </div>
       )}
 
-      {promptTemplateConfigs.map((template) => {
-        // The native `Prompt` field is only ever sent to the model in Native mode; JSON/XML/TOON
-        // modes use their own matching template instead, so editing `Prompt` outside Native mode
-        // would silently do nothing.
-        const isNativeOnlyPrompt = template.key === 'prompt';
-        const disabled = isNativeOnlyPrompt && settings.promptEngineeringMode !== PromptEngineeringMode.NATIVE;
-
-        return (
-          <div key={template.key} className="setting-row">
-            <div className="title_restorable">
-              <span title={template.title}>{template.label}</span>
-              <STButton
-                className="fa-solid fa-undo"
-                title={`Restore ${template.label} to default`}
-                aria-label={`Restore ${template.label} to its default value`}
-                disabled={disabled}
-                onClick={() =>
-                  updateAndRefresh((s) => {
-                    s[template.key] = template.defaultValue;
-                  })
-                }
-              />
-            </div>
-            <STTextarea
-              value={settings[template.key]}
-              disabled={disabled}
-              onChange={(e) =>
+      {activeTemplates.map((template) => (
+        <div key={template.key} className="setting-row">
+          <div className="title_restorable">
+            <span title={template.title}>{template.label}</span>
+            <STButton
+              className="fa-solid fa-undo"
+              title={`Restore ${template.label} to default`}
+              aria-label={`Restore ${template.label} to its default value`}
+              onClick={() =>
                 updateAndRefresh((s) => {
-                  s[template.key] = e.target.value;
+                  s[template.key] = template.defaultValue;
                 })
               }
-              rows={4}
             />
-            {disabled && (
-              <small>JSON/XML/TOON modes use the matching &quot;Prompt (JSON/XML/TOON)&quot; template instead of this field.</small>
-            )}
           </div>
-        );
-      })}
+          <STTextarea
+            value={settings[template.key]}
+            onChange={(e) =>
+              updateAndRefresh((s) => {
+                s[template.key] = e.target.value;
+              })
+            }
+            rows={4}
+          />
+        </div>
+      ))}
     </>
   );
 };

@@ -90,6 +90,19 @@
 		gap: 6px;
 	}
 
+	// Adjacent buttons of one scope; a divider separates it from the next group in the row.
+	.ztracker-button-group {
+		display: flex;
+		gap: 4px;
+
+		& + .ztracker-button-group,
+		& + button:not(.ztracker-button-row-end) {
+			margin-left: 6px;
+			padding-left: 10px;
+			border-left: 1px solid var(--SmartThemeBorderColor, rgba(128, 128, 128, 0.4));
+		}
+	}
+
 	.ztracker-button-row-end {
 		margin-left: auto;
 	}
