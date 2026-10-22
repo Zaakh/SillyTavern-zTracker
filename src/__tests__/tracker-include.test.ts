@@ -7,7 +7,8 @@ import {
   sanitizeMessagesForGeneration,
   CHAT_MESSAGE_SCHEMA_VALUE_KEY,
 } from '../tracker.js';
-import { EXTENSION_KEY } from '../extension-metadata.js';
+import { buildStandaloneSnapshotContent, formatEmbeddedTrackerSnapshot } from '../embed-snapshot-transform.js';
+import { DEFAULT_MODULE_ID, EXTENSION_KEY } from '../extension-metadata.js';
 import { CHAT_MESSAGE_MODULES_KEY } from '../tracker.js';
 
 describe('includeZTrackerMessages', () => {
@@ -84,6 +85,42 @@ describe('includeZTrackerMessages', () => {
 
     return `[INST]${speakerName}${content}[/INST]`;
   }).join('');
+
+  it('standalone content equals buildStandaloneSnapshotContent for each setting combination', () => {
+    const value = { scene: 'Bridge', crew: [{ name: 'Ada', role: 'pilot' }] };
+    const base = makeSettings(1);
+    const cases: Array<[string, TrackerModuleSettings]> = [
+      ['default', base],
+      ['minimal', { ...base, embedZTrackerSnapshotTransformPreset: 'minimal' } as TrackerModuleSettings],
+      [
+        'flat',
+        {
+          ...base,
+          embedZTrackerSnapshotTransformPreset: 'flat',
+          embedZTrackerSnapshotTransformPresets: {
+            ...base.embedZTrackerSnapshotTransformPresets,
+            flat: { name: 'Flat', input: 'flat_lines', pattern: '', flags: 'g', replacement: '', codeFenceLang: 'text' },
+          },
+          modules: [{ id: DEFAULT_MODULE_ID, name: 'Bridge Log' }],
+        } as unknown as TrackerModuleSettings,
+      ],
+      ['virtual character', makeSettings(1, 'user', true)],
+    ];
+
+    for (const [label, settings] of cases) {
+      const result = includeZTrackerMessages(
+        [buildMessageWithTracker(value), { content: 'current', role: 'user' }] as any,
+        settings,
+      ) as any[];
+      const moduleName = settings.modules?.find((m) => m.id === DEFAULT_MODULE_ID)?.name;
+      const expected = buildStandaloneSnapshotContent(
+        formatEmbeddedTrackerSnapshot(value, settings, { moduleName }),
+        settings.embedZTrackerSnapshotHeader ?? '',
+        settings.embedZTrackerAsCharacter ?? false,
+      );
+      expect([label, result[1].content]).toEqual([label, expected]);
+    }
+  });
 
   it('injects tracker snapshots after the discovered message', () => {
     const messages = [

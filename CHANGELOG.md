@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.19.0] - 2026-10-22
+
+### Added
+
+- **Injection preview** under the snapshot transform preset editor (Tracker Injection) shows what a normal generation embeds: the raw snapshot, the text after input formatting, after the regex, and the final block with header and code fence. It updates as you edit, previews the newest stored snapshot (pick another message, or an example built from the schema when the chat has none), and shows an invalid regex as an error instead of silently injecting the untransformed text.
+
 ## [2.18.0] - 2026-10-22
 
 ### Added

@@ -266,11 +266,39 @@ function getDefaultCodeFenceWrap(presetKey?: string): boolean {
   return presetKey === 'minimal' ? false : true;
 }
 
+export interface FormattedEmbeddedSnapshot {
+  lang: string;
+  /** Final text (after the regex replacement, if any). */
+  text: string;
+  wrapInCodeFence: boolean;
+  /** Text after input-shape formatting (and minify for `minimal`); the regex runs on this. */
+  formattedText: string;
+  /** Set when the preset's pattern/flags do not compile; `text` is then the untransformed text. */
+  regexError?: string;
+}
+
+/** Header line prefix for a standalone/inline snapshot; a virtual character carries the name instead. */
+export function buildSnapshotHeaderPrefix(header: string, asCharacter: boolean): string {
+  return !asCharacter && header ? `${header}\n` : '';
+}
+
+/** Standalone snapshot message content: header prefix plus the (optionally fenced) text. */
+export function buildStandaloneSnapshotContent(
+  snapshot: Pick<FormattedEmbeddedSnapshot, 'lang' | 'text' | 'wrapInCodeFence'>,
+  header: string,
+  asCharacter: boolean,
+): string {
+  const prefix = buildSnapshotHeaderPrefix(header, asCharacter);
+  return snapshot.wrapInCodeFence
+    ? `${prefix}\`\`\`${snapshot.lang}\n${snapshot.text}\n\`\`\``
+    : `${prefix}${snapshot.text}`;
+}
+
 export function formatEmbeddedTrackerSnapshot(
   trackerValue: unknown,
   settings: Pick<TrackerModuleSettings, 'embedZTrackerSnapshotTransformPreset' | 'embedZTrackerSnapshotTransformPresets'>,
   options: SnapshotFormatOptions = {},
-): { lang: string; text: string; wrapInCodeFence: boolean } {
+): FormattedEmbeddedSnapshot {
   const presets = settings.embedZTrackerSnapshotTransformPresets;
   const presetKey = settings.embedZTrackerSnapshotTransformPreset;
   const preset = (presetKey && presets && presets[presetKey]) || presets?.default;
@@ -293,14 +321,20 @@ export function formatEmbeddedTrackerSnapshot(
   const baseOrMinified = presetKey === 'minimal' ? minifyEmbeddingWhitespace(baseText) : baseText;
 
   if (!pattern.trim()) {
-    return { lang, text: baseOrMinified, wrapInCodeFence };
+    return { lang, text: baseOrMinified, wrapInCodeFence, formattedText: baseOrMinified };
   }
 
   try {
     const re = new RegExp(pattern, flags);
     const replaced = baseOrMinified.replace(re, replacement);
-    return { lang, text: replaced, wrapInCodeFence };
-  } catch {
-    return { lang, text: baseOrMinified, wrapInCodeFence };
+    return { lang, text: replaced, wrapInCodeFence, formattedText: baseOrMinified };
+  } catch (error) {
+    return {
+      lang,
+      text: baseOrMinified,
+      wrapInCodeFence,
+      formattedText: baseOrMinified,
+      regexError: error instanceof Error ? error.message : String(error),
+    };
   }
 }

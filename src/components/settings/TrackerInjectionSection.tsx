@@ -4,10 +4,11 @@ import { EmbedSnapshotTransformSection } from './EmbedSnapshotTransformSection.j
 import type { SettingsSectionProps, SettingsUpdateGlobal } from './settings-shared.js';
 
 // Renders settings that only affect how tracker snapshots are injected into normal generations.
-export const TrackerInjectionSection: FC<SettingsSectionProps & { updateGlobal: SettingsUpdateGlobal }> = ({
+export const TrackerInjectionSection: FC<SettingsSectionProps & { updateGlobal: SettingsUpdateGlobal; moduleId?: string }> = ({
   settings,
   updateAndRefresh,
   updateGlobal,
+  moduleId,
 }) => {
   return (
     <>
@@ -72,7 +73,7 @@ export const TrackerInjectionSection: FC<SettingsSectionProps & { updateGlobal: 
         />
       </div>
 
-      <EmbedSnapshotTransformSection settings={settings} updateAndRefresh={updateAndRefresh} updateGlobal={updateGlobal} />
+      <EmbedSnapshotTransformSection settings={settings} updateAndRefresh={updateAndRefresh} updateGlobal={updateGlobal} moduleId={moduleId} />
     </>
   );
 };

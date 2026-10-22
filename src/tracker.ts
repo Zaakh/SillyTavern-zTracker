@@ -4,7 +4,11 @@ import type { ChatMessage } from 'sillytavern-utils-lib/types';
 import { DEFAULT_EMBED_SNAPSHOT_HEADER, getOrderedTrackerModules } from './config.js';
 import type { ExtensionSettings, TrackerModuleSettings } from './config.js';
 import { CHAT_METADATA_SCHEMA_PRESET_KEY, DEFAULT_MODULE_ID, EXTENSION_KEY } from './extension-metadata.js';
-import { formatEmbeddedTrackerSnapshot } from './embed-snapshot-transform.js';
+import {
+  buildSnapshotHeaderPrefix,
+  buildStandaloneSnapshotContent,
+  formatEmbeddedTrackerSnapshot,
+} from './embed-snapshot-transform.js';
 import { getLorebookLink } from './lorebook-export.js';
 import { toShortTrackerLabel } from './tracker-helpers.js';
 import {
@@ -592,14 +596,13 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
         const trackerValue = getTrackerModuleRecordFromExtra(extra, moduleId)?.[CHAT_MESSAGE_SCHEMA_VALUE_KEY] || {};
         const useCharacterName = settings.embedZTrackerAsCharacter ?? false;
         const header = settings.embedZTrackerSnapshotHeader ?? DEFAULT_EMBED_SNAPSHOT_HEADER;
-        const { lang, text, wrapInCodeFence } = formatEmbeddedTrackerSnapshot(trackerValue, settings, {
+        const snapshot = formatEmbeddedTrackerSnapshot(trackerValue, settings, {
           moduleName: settings.modules?.find((module) => module.id === moduleId)?.name,
         });
+        const { lang, text, wrapInCodeFence } = snapshot;
         const speakerName = useCharacterName ? deriveEmbeddedTrackerSpeakerName(settings) : undefined;
-        const prefix = !useCharacterName && header ? `${header}\n` : '';
-        const content = wrapInCodeFence
-          ? `${prefix}\`\`\`${lang}\n${text}\n\`\`\``
-          : `${prefix}${text}`;
+        const prefix = buildSnapshotHeaderPrefix(header, useCharacterName);
+        const content = buildStandaloneSnapshotContent(snapshot, header, useCharacterName);
         const trailingMessages = copyMessages.slice(foundIndex + 1);
         // Only a single empty assistant turn is treated as SillyTavern's reply prefill.
         // Real multi-character assistant replies must keep the snapshot anchored after

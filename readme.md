@@ -218,6 +218,8 @@ In the text-completion-safe terminal assistant fallback, zTracker still keeps th
 
 You can also apply a **regex-based transform** to the embedded snapshot text (for prompt-friendly formatting) via **Embed snapshot transform preset**. The preset list is shared by all Modules: a Module only picks which preset it uses, editing a preset changes it for every Module that selects it (the editor shows how many), and the built-in presets can be edited but not deleted. Deleting a custom preset sends the Modules that used it back to Default.
 
+The **Injection preview** below the preset editor shows the snapshot block a normal generation would embed (raw snapshot, after input formatting, after the regex, final block), live as you edit the header, virtual-character option, or preset. It uses the newest stored snapshot in the current chat (pick another message from the list, or **Refresh** after generating one); with no stored snapshot it shows an example built from the Module's schema. An invalid regex is reported there. It shows the standalone message only: in Text Completion, inline and terminal-assistant injections add wrapper text (speaker prefix or reply cue) that the preview does not show.
+
 You can customize (or remove) the embedded snapshot header via **Embed snapshot header**.
 
 - **Flat (key: value lines)** (default for new Modules and the shipped templates): embeds `[Topic: <Module name>`, one `key: value` line per field (nested objects and arrays on one line, empty values left out), then `]`. Never wrapped in a code fence.
