@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.20.0] - 2026-10-22
+
+### Added
+
+- **World Info used** record: every tracker generation that stores a result now records which World Info entries went into its prompt (book, uid, title, and for scan-activated entries why: constant, matched keys, recursion, min-activations or other), plus an overall outcome (applied, none matched, excluded, scan unavailable). In allowlist mode it also records allowed entries that were not applied and why (scope, book missing, disabled, outside the entry subset, empty). The record is stored per Module on the message (`byId[moduleId].worldInfo`), replaced by every generation that stores a result (full, part, item, field), and left alone by cleanup and by failed or cancelled runs. Titles and keys are stored in the chat file, never entry content; each list is capped at 50 entries per book (20 books, titles and keys shortened to 100 characters).
+- **World Info used** button (book icon) in the tracker control row opens a popup with the outcome, the applied entries grouped by book with their reason, and a collapsed "Not applied" section. Keyword reasons are labelled as inferred; trackers generated before this version show "not recorded".
+
+### Changed
+
+- Include-all World Info scans now wait for the host to finish generating (bounded, with a warning), as allowlist scans already did, so the activated-entry report cannot pick up entries from an overlapping chat generation.
+
 ## [2.19.0] - 2026-10-22
 
 ### Added

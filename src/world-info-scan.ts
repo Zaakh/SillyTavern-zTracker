@@ -1,8 +1,12 @@
 /**
  * Runs SillyTavern's own World Info activation scan for tracker generation. Always a dry run, so
- * sticky/cooldown timers and the host's activated event are never touched. Host functions are
- * injected so the module stays import-safe and testable with a fake host.
+ * sticky/cooldown timers and the host's activated event are never touched. Besides the injected text,
+ * it captures the activated entries from the host's (undocumented) scan-done event so the report can
+ * say what was applied. Host functions are injected so the module stays import-safe and testable
+ * with a fake host.
  */
+
+import { capReportText, WORLD_INFO_REPORT_MATCHED_KEYS_CAP } from './world-info-policy.js';
 
 const LORE_KEYS = ['globalLore', 'characterLore', 'chatLore', 'personaLore'] as const;
 
@@ -19,8 +23,8 @@ export interface WorldInfoScanData {
 export interface WorldInfoScanHost {
   getWorldInfoPrompt?: (chat: string[], maxContext: number, isDryRun: boolean, scanData?: WorldInfoScanData) => Promise<any>;
   eventSource?: { on: (event: string, cb: (payload: any) => void) => void; removeListener: (event: string, cb: (payload: any) => void) => void };
-  eventTypes?: { WORLDINFO_ENTRIES_LOADED?: string };
-  /** True while the host is generating a reply (the entries-loaded listener is host-global). */
+  eventTypes?: { WORLDINFO_ENTRIES_LOADED?: string; WORLDINFO_SCAN_DONE?: string };
+  /** True while the host is generating a reply (the scan listeners are host-global). */
   isGenerating?: () => boolean;
 }
 
@@ -45,6 +49,37 @@ export interface WorldInfoScanOptions {
   idlePollMs?: number;
 }
 
+/** Loop an entry first activated in, from the host's `scan_state` (1 initial, 2 recursion, 3 min-activations). */
+export type WorldInfoScanLoop = 'initial' | 'recursion' | 'min-activations';
+const SCAN_LOOPS: Record<number, WorldInfoScanLoop> = { 1: 'initial', 2: 'recursion', 3: 'min-activations' };
+
+/** One entry the host scan activated. */
+export interface ScannedWorldInfoEntry {
+  book: string;
+  uid: number;
+  /** The entry's comment ('' when unset). */
+  title: string;
+  content: string;
+  constant: boolean;
+  key: string[];
+  keysecondary: string[];
+  /** Host `selectiveLogic`: 0 AND ANY, 1 NOT ALL, 2 NOT ANY, 3 AND ALL. */
+  selectiveLogic: number;
+  loop: WorldInfoScanLoop;
+}
+
+/**
+ * `entries` is null when the host gave no usable activated-entry data (event missing or malformed).
+ * `unavailable` marks a scan that could not run (host lacks the API, or it threw).
+ */
+export interface WorldInfoScanResult {
+  text: string;
+  entries: ScannedWorldInfoEntry[] | null;
+  unavailable?: boolean;
+}
+
+const UNAVAILABLE: WorldInfoScanResult = { text: '', entries: null, unavailable: true };
+
 const warnedHosts = new WeakSet<object>();
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -58,7 +93,7 @@ async function waitForHostIdle(host: WorldInfoScanHost, timeoutMs: number, pollM
   const deadline = Date.now() + timeoutMs;
   while (host.isGenerating?.()) {
     if (Date.now() >= deadline) {
-      console.warn('zTracker: host still generating; running the restricted World Info scan anyway.');
+      console.warn('zTracker: host still generating; running the World Info scan anyway.');
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, pollMs));
@@ -92,38 +127,115 @@ function joinResult(result: any): string {
     .join('\n');
 }
 
-async function runScan(options: WorldInfoScanOptions): Promise<string> {
+const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []);
+
+/**
+ * Keeps the last cumulative activated map plus each entry's first-activation loop from the scan-done
+ * events. Any unexpected payload shape leaves `entries()` null.
+ */
+function createScanCapture() {
+  const firstLoop = new Map<string, WorldInfoScanLoop>();
+  let activated: Map<string, any> | null = null;
+  const listener = (args: any) => {
+    const map = args?.activated?.entries;
+    if (!(map instanceof Map)) return;
+    activated = map;
+    const loop = SCAN_LOOPS[args?.state?.current] ?? 'initial';
+    for (const entry of Array.isArray(args?.new?.successful) ? args.new.successful : []) {
+      const id = `${entry?.world}.${entry?.uid}`;
+      if (!firstLoop.has(id)) firstLoop.set(id, loop);
+    }
+  };
+  const entries = (): ScannedWorldInfoEntry[] | null =>
+    activated &&
+    [...activated.entries()].map(([id, e]) => ({
+      book: String(e?.world ?? ''),
+      uid: Number(e?.uid),
+      title: typeof e?.comment === 'string' ? e.comment.trim() : '',
+      content: typeof e?.content === 'string' ? e.content : '',
+      constant: !!e?.constant,
+      key: strings(e?.key),
+      keysecondary: strings(e?.keysecondary),
+      selectiveLogic: Number(e?.selectiveLogic ?? 0),
+      loop: firstLoop.get(id) ?? 'initial',
+    }));
+  return { listener, entries };
+}
+
+async function runScan(options: WorldInfoScanOptions): Promise<WorldInfoScanResult> {
   const { host, restrictTo } = options;
   const eventName = host.eventTypes?.WORLDINFO_ENTRIES_LOADED;
+  const doneEventName = host.eventTypes?.WORLDINFO_SCAN_DONE;
   if (!host.getWorldInfoPrompt || (restrictTo && (!host.eventSource || !eventName))) {
     warnOnce(host, 'zTracker: this SillyTavern version lacks the World Info scan API; no World Info is injected.');
-    return '';
+    return UNAVAILABLE;
   }
 
   const padded = [...options.chat];
   while (padded.length < options.chatLength) padded.push('');
 
-  let listener: ((payload: any) => void) | undefined;
+  let restrictListener: ((payload: any) => void) | undefined;
+  const capture = createScanCapture();
+  const capturing = !!(host.eventSource && doneEventName);
   try {
+    await waitForHostIdle(host, options.idleTimeoutMs ?? 5000, options.idlePollMs ?? 100);
     if (restrictTo) {
-      await waitForHostIdle(host, options.idleTimeoutMs ?? 5000, options.idlePollMs ?? 100);
-      listener = (payload) => restrictLore(payload, restrictTo);
-      host.eventSource!.on(eventName!, listener);
+      restrictListener = (payload) => restrictLore(payload, restrictTo);
+      host.eventSource!.on(eventName!, restrictListener);
     }
-    return joinResult(await host.getWorldInfoPrompt(padded, options.maxContext, true, options.scanData));
+    if (capturing) host.eventSource!.on(doneEventName!, capture.listener);
+    const text = joinResult(await host.getWorldInfoPrompt(padded, options.maxContext, true, options.scanData));
+    return { text, entries: capture.entries() };
   } catch (error) {
     console.warn('zTracker: World Info scan failed; proceeding without it.', error);
-    return '';
+    return UNAVAILABLE;
   } finally {
-    if (listener) host.eventSource!.removeListener(eventName!, listener);
+    if (restrictListener) host.eventSource!.removeListener(eventName!, restrictListener);
+    if (capturing) host.eventSource!.removeListener(doneEventName!, capture.listener);
   }
 }
 
-/** Serialized dry-run scan; returns the activated entries' content joined into one string ('' on any failure). */
-export function scanWorldInfo(options: WorldInfoScanOptions): Promise<string> {
+/** Serialized dry-run scan; returns the injected text and activated entries (an empty result on any failure). */
+export function scanWorldInfo(options: WorldInfoScanOptions): Promise<WorldInfoScanResult> {
   const run = queue.then(() => runScan(options));
   queue = run.catch(() => undefined);
   return run;
+}
+
+export type WorldInfoReason = 'constant' | 'keyword' | 'recursion' | 'min-activations' | 'other';
+
+/** Plain keys match case-insensitively as substrings; `/regex/flags` keys are tested as regexes. */
+function keyMatches(key: string, haystack: string): boolean {
+  const trimmed = key.trim();
+  if (!trimmed) return false;
+  const regex = /^\/(.+)\/([a-z]*)$/.exec(trimmed);
+  if (regex) {
+    try {
+      return new RegExp(regex[1], regex[2]).test(haystack);
+    } catch {
+      return false;
+    }
+  }
+  return haystack.toLowerCase().includes(trimmed.toLowerCase());
+}
+
+/**
+ * Why a scan-activated entry got in. Constant and loop reasons come from the host and are exact;
+ * `keyword` is inferred from the scanned window (per-entry depth, case/whole-word overrides, macros
+ * and card fields are not modelled and show as `other`). Secondary keys count only under AND logic.
+ */
+export function inferWorldInfoReason(
+  entry: ScannedWorldInfoEntry,
+  scannedChat: string[],
+): { reason: WorldInfoReason; matchedKeys?: string[] } {
+  if (entry.constant) return { reason: 'constant' };
+  if (entry.loop !== 'initial') return { reason: entry.loop };
+  const haystack = scannedChat.join('\n');
+  const andLogic = entry.selectiveLogic === 0 || entry.selectiveLogic === 3;
+  const matchedKeys = [...entry.key, ...(andLogic ? entry.keysecondary : [])].filter((k) => keyMatches(k, haystack));
+  return matchedKeys.length > 0
+    ? { reason: 'keyword', matchedKeys: matchedKeys.slice(0, WORLD_INFO_REPORT_MATCHED_KEYS_CAP).map(capReportText) }
+    : { reason: 'other' };
 }
 
 /**

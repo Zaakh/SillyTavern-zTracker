@@ -195,7 +195,7 @@ describe('createTrackerActions editTracker', () => {
 });
 
 describe('createTrackerActions deleteTracker', () => {
-  test('removes the lorebook link together with the Module record', async () => {
+  test('removes the lorebook link and the World Info record together with the Module record', async () => {
     resetTrackerActionTestState();
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
     const message = {
@@ -206,6 +206,7 @@ describe('createTrackerActions deleteTracker', () => {
               schemaValue: { task: 'x' },
               schemaHtml: '<div/>',
               lorebookLink: { book: 'Characters', uid: 1, title: 'Bob' },
+              worldInfo: { outcome: 'none-matched', books: [] },
             },
           },
         },
@@ -229,5 +230,58 @@ describe('createTrackerActions deleteTracker', () => {
     await actions.deleteTracker(0, 'agenda');
 
     expect((message.extra.zTracker.byId as any).agenda).toBeUndefined();
+  });
+});
+
+describe('createTrackerActions showWorldInfoReport', () => {
+  function setup(extra: Record<string, unknown>) {
+    resetTrackerActionTestState();
+    installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
+    const callGenericPopup = jest.fn(async (..._args: unknown[]) => undefined);
+    const actions = createTrackerActions({
+      globalContext: {
+        chat: [{ extra }],
+        saveChat: jest.fn(async () => undefined),
+        callGenericPopup,
+        extensionSettings: { connectionManager: { profiles: [makeProfile()] } },
+        CONNECT_API_MAP: { openai: { selected: 'openai' } },
+      },
+      settingsManager: { getSettings: () => makeSettings() } as any,
+      generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
+      pendingRequests: new Map(),
+      renderTrackerWithDeps: renderTrackerWithDepsMock,
+      importMetaUrl: TEST_IMPORT_META_URL,
+    });
+    return { actions, callGenericPopup };
+  }
+
+  const popupText = (callGenericPopup: jest.Mock) => ((callGenericPopup.mock.calls[0][0] as HTMLElement).textContent ?? '');
+
+  test('opens the popup with the record of the clicked Module, not another Module', async () => {
+    const { actions, callGenericPopup } = setup({
+      zTracker: {
+        byId: {
+          default: { schemaValue: {}, worldInfo: { outcome: 'excluded', books: [] } },
+          agenda: {
+            schemaValue: {},
+            worldInfo: { outcome: 'applied', books: [{ book: 'Agenda Book', applied: [{ uid: 1, title: 'Plan', via: 'allowlist' }], skipped: [] }] },
+          },
+        },
+      },
+    });
+
+    await actions.showWorldInfoReport(0, 'agenda');
+
+    expect(callGenericPopup).toHaveBeenCalledTimes(1);
+    expect(popupText(callGenericPopup as jest.Mock)).toContain('Agenda Book');
+    expect(popupText(callGenericPopup as jest.Mock)).not.toContain('excluded for this tracker');
+  });
+
+  test('says the World Info was not recorded for a tracker without a record', async () => {
+    const { actions, callGenericPopup } = setup({ zTracker: { byId: { default: { schemaValue: { time: 'x' } } } } });
+
+    await actions.showWorldInfoReport(0);
+
+    expect(popupText(callGenericPopup as jest.Mock)).toContain('not recorded');
   });
 });

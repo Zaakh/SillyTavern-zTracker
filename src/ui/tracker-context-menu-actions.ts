@@ -228,7 +228,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
       button: partButton,
       errorContext: 'generating tracker part',
       callback: async () => {
-        const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, partsOrder, partsMeta, makeRequest } =
+        const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, worldInfo, partsOrder, partsMeta, makeRequest } =
           await dependencies.prepareExistingTrackerGeneration(id, notifySchemaMismatch, moduleId);
         if (!currentTracker || typeof currentTracker !== 'object') {
           throw new Error('No existing tracker found for this message. Generate a full tracker first.');
@@ -266,6 +266,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
           partsOrder,
           partsMeta,
           detailsState,
+          worldInfo,
           successMessage: `Updated: ${partKey}`,
           resolvedTargets: [{ kind: 'part', partKey }],
         });
@@ -291,7 +292,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
       button: options.button,
       errorContext: options.errorContext,
       callback: async () => {
-        const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, partsOrder, partsMeta, makeRequest } =
+        const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, worldInfo, partsOrder, partsMeta, makeRequest } =
           await dependencies.prepareExistingTrackerGeneration(id, notifySchemaMismatch, moduleId);
         if (!currentTracker || typeof currentTracker !== 'object') {
           throw new Error('No existing tracker found for this message. Generate a full tracker first.');
@@ -335,6 +336,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
           partsOrder,
           partsMeta,
           detailsState,
+          worldInfo,
           successMessage: itemRequest.successMessage,
           resolvedTargets: [itemRequest.resolvedTarget],
         });
@@ -361,7 +363,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
       button: options.button,
       errorContext: options.errorContext,
       callback: async () => {
-        const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, partsOrder, partsMeta, makeRequest } =
+        const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, worldInfo, partsOrder, partsMeta, makeRequest } =
           await dependencies.prepareExistingTrackerGeneration(id, notifySchemaMismatch, moduleId);
         if (!currentTracker || typeof currentTracker !== 'object') {
           throw new Error('No existing tracker found for this message. Generate a full tracker first.');
@@ -408,6 +410,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
           partsOrder,
           partsMeta,
           detailsState,
+          worldInfo,
           successMessage: fieldRequest.successMessage,
           resolvedTargets: [fieldRequest.resolvedTarget],
         });

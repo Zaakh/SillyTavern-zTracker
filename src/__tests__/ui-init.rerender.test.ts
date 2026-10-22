@@ -46,6 +46,7 @@ function createActions() {
     renderExtensionTemplates: jest.fn(async () => undefined),
     generateTracker: jest.fn(),
     editTracker: jest.fn(),
+    showWorldInfoReport: jest.fn(),
     deleteTracker: jest.fn(),
     generateTrackerPart: jest.fn(),
     generateTrackerArrayItem: jest.fn(),

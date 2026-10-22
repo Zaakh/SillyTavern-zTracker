@@ -4,6 +4,8 @@
 
 import { jest } from '@jest/globals';
 import {
+  type AnyMock,
+  applyTrackerUpdateAndRenderMock,
   buildPromptMock,
   createTrackerActions,
   installSillyTavernContext,
@@ -23,7 +25,16 @@ import {
   TrackerWorldInfoPolicyMode,
 } from '../test-utils/tracker-actions-test-helpers.js';
 
+const trackerPartsModule = await import('../tracker-parts.js');
+
 const entry = (uid: number, content: string) => ({ uid, key: ['k'], content, comment: '', disable: false });
+/** A scan result with one keyword entry whose key appears in the generated chat messages. */
+const scanResult = (text: string) => ({
+  text,
+  entries: text
+    ? [{ book: 'Lore', uid: 5, title: 'Message entry', content: text, constant: false, key: ['message'], keysecondary: [], selectiveLogic: 0, loop: 'initial' as const }]
+    : [],
+});
 
 describe('createTrackerActions World Info allowlist scope', () => {
   const originalStructuredClone = globalThis.structuredClone;
@@ -105,7 +116,11 @@ describe('createTrackerActions World Info engine scan', () => {
     globalThis.structuredClone = originalStructuredClone;
   });
 
-  async function generate(mode: string, rows: Array<Record<string, unknown>> = [], options: { wiFormat?: string; chatLength?: number; hostContext?: Record<string, unknown> } = {}) {
+  async function generate(
+    mode: string,
+    rows: Array<Record<string, unknown>> = [],
+    options: { wiFormat?: string; chatLength?: number; hostContext?: Record<string, unknown>; sequential?: boolean; generateRequest?: ReturnType<typeof makeGenerateRequest> } = {},
+  ) {
     const context = makeContext({
       getPresetManager: (apiId?: string) =>
         apiId === 'openai' ? { getCompletionPresetByName: () => ({ wi_format: options.wiFormat }) } : null,
@@ -118,7 +133,7 @@ describe('createTrackerActions World Info engine scan', () => {
     Object.assign(context, options.hostContext);
     installSillyTavernContext(context);
     buildPromptMock.mockResolvedValue(makeBuiltPromptResult());
-    const generateRequest = makeGenerateRequest();
+    const generateRequest = options.generateRequest ?? makeGenerateRequest();
     const chat = makeChat(options.chatLength ?? 1).map((m, i) => ({ ...m, name: 'Bar', mes: `message ${i}` }));
 
     const actions = createTrackerActions({
@@ -130,7 +145,12 @@ describe('createTrackerActions World Info engine scan', () => {
       },
       settingsManager: {
         getSettings: () =>
-          makeSettings({ trackerSystemPromptMode: 'profile', trackerWorldInfoPolicyMode: mode, trackerWorldInfoAllowlist: rows }),
+          makeSettings({
+            trackerSystemPromptMode: 'profile',
+            trackerWorldInfoPolicyMode: mode,
+            trackerWorldInfoAllowlist: rows,
+            ...(options.sequential ? { sequentialPartGeneration: true } : {}),
+          }),
       } as any,
       generator: { generateRequest, abortRequest: jest.fn() } as any,
       pendingRequests: new Map(),
@@ -158,7 +178,7 @@ describe('createTrackerActions World Info engine scan', () => {
   });
 
   test('include-all runs one unfiltered scan with the module window and injects it before the first non-system message', async () => {
-    scanWorldInfoMock.mockResolvedValue('activated lore');
+    scanWorldInfoMock.mockResolvedValue(scanResult('activated lore'));
     const prompt = await generate(TrackerWorldInfoPolicyMode.INCLUDE_ALL, [], { chatLength: 1 });
 
     expect(scanWorldInfoMock).toHaveBeenCalledTimes(1);
@@ -173,7 +193,7 @@ describe('createTrackerActions World Info engine scan', () => {
   });
 
   test('include-all wraps the scan with the preset World Info format, and leaves it bare without one', async () => {
-    scanWorldInfoMock.mockResolvedValue('lore');
+    scanWorldInfoMock.mockResolvedValue(scanResult('lore'));
     const wrapped = await generate(TrackerWorldInfoPolicyMode.INCLUDE_ALL, [], { wiFormat: '[World: {0}]' });
     expect(wrapped.some((m) => m.content === '[World: lore]')).toBe(true);
 
@@ -182,7 +202,7 @@ describe('createTrackerActions World Info engine scan', () => {
   });
 
   test('nothing activated injects no World Info message', async () => {
-    scanWorldInfoMock.mockResolvedValue('');
+    scanWorldInfoMock.mockResolvedValue(scanResult(''));
     const prompt = await generate(TrackerWorldInfoPolicyMode.INCLUDE_ALL);
     expect(prompt.map((m) => m.content)).toEqual(['Existing system prompt', 'Prior chat message']);
   });
@@ -195,7 +215,7 @@ describe('createTrackerActions World Info engine scan', () => {
   });
 
   test('mixed rows: always text first, then engine activations, in one raw system message', async () => {
-    scanWorldInfoMock.mockResolvedValue('engine-activated');
+    scanWorldInfoMock.mockResolvedValue(scanResult('engine-activated'));
     const prompt = await generate(
       TrackerWorldInfoPolicyMode.ALLOWLIST,
       [
@@ -243,7 +263,7 @@ describe('createTrackerActions World Info engine scan', () => {
   });
 
   test('the host counts as generating while streaming or while the host marks a generation on <body>', async () => {
-    scanWorldInfoMock.mockResolvedValue('lore');
+    scanWorldInfoMock.mockResolvedValue(scanResult('lore'));
     await generate(TrackerWorldInfoPolicyMode.INCLUDE_ALL);
     const { isGenerating } = scanWorldInfoMock.mock.calls[0][0].host;
 
@@ -260,5 +280,56 @@ describe('createTrackerActions World Info engine scan', () => {
     const prompt = await generate(TrackerWorldInfoPolicyMode.INCLUDE_ALL);
     expect(prompt).toHaveLength(2);
     warn.mockRestore();
+  });
+
+  describe('stored World Info record', () => {
+    const storedWorldInfo = () => (applyTrackerUpdateAndRenderMock.mock.calls[0][1] as any).extensionData.worldInfo;
+
+    test('a full generation stores the report with the tracker result', async () => {
+      scanWorldInfoMock.mockResolvedValue(scanResult('activated lore'));
+      await generate(TrackerWorldInfoPolicyMode.INCLUDE_ALL);
+
+      expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalledTimes(1);
+      expect(storedWorldInfo()).toEqual({
+        outcome: 'applied',
+        books: [{ book: 'Lore', applied: [{ uid: 5, title: 'Message entry', via: 'scan', reason: 'keyword', matchedKeys: ['message'] }], skipped: [] }],
+      });
+    });
+
+    test('a sequential generation stores the same report once, after all parts', async () => {
+      scanWorldInfoMock.mockResolvedValue(scanResult('activated lore'));
+      (trackerPartsModule.buildTopLevelPartSchema as AnyMock).mockReturnValue({ type: 'object' });
+      (trackerPartsModule.mergeTrackerPart as AnyMock).mockImplementation((tracker, key, response) => ({ ...(tracker ?? {}), [key]: response?.[key] ?? response }));
+      await generate(TrackerWorldInfoPolicyMode.INCLUDE_ALL, [], { sequential: true });
+
+      expect(applyTrackerUpdateAndRenderMock).toHaveBeenCalledTimes(1);
+      expect(storedWorldInfo().outcome).toBe('applied');
+    });
+
+    test('exclude-all stores an excluded record', async () => {
+      await generate(TrackerWorldInfoPolicyMode.EXCLUDE_ALL);
+      expect(storedWorldInfo()).toEqual({ outcome: 'excluded', books: [] });
+    });
+
+    test('a World Info build failure is stored as scan-unavailable, never as nothing matched', async () => {
+      scanWorldInfoMock.mockRejectedValue(new Error('boom'));
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+      await generate(TrackerWorldInfoPolicyMode.INCLUDE_ALL);
+      warn.mockRestore();
+      expect(storedWorldInfo()).toEqual({ outcome: 'scan-unavailable', books: [] });
+    });
+
+    test('a failed generation stores nothing, leaving the previous record intact', async () => {
+      scanWorldInfoMock.mockResolvedValue(scanResult('activated lore'));
+      const failing = jest.fn((_request: unknown, hooks: any) => {
+        hooks.onStart('request-1');
+        hooks.onFinish('request-1', null, new Error('model failed'));
+      });
+      const error = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+      await generate(TrackerWorldInfoPolicyMode.INCLUDE_ALL, [], { generateRequest: failing as any });
+      error.mockRestore();
+
+      expect(applyTrackerUpdateAndRenderMock).not.toHaveBeenCalled();
+    });
   });
 });
