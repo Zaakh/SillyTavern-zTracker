@@ -22,7 +22,9 @@ export const stEchoMock = jest.fn();
 export const getWorldInfosMock = jest.fn<(...args: unknown[]) => Promise<Record<string, unknown[]>>>(async () => ({}));
 export const loadWorldInfoBookByNameMock = jest.fn<(name: string) => Promise<{ name: string; entries: unknown[] } | null>>();
 export const loadFullWorldInfoEntriesMock = jest.fn<(name: string) => Promise<Array<Record<string, unknown>> | null>>();
-export const scanWorldInfoMock = jest.fn<(options: any) => Promise<string>>(async () => '');
+export const scanWorldInfoMock = jest.fn<(options: any) => Promise<{ text: string; entries: any[] | null; unavailable?: boolean }>>(
+  async () => ({ text: '', entries: [] }),
+);
 export const includeZTrackerMessagesMock = jest.fn((messages: Array<unknown>) => [...messages]);
 const embeddedTrackerSnapshotMarker = Symbol('embeddedTrackerSnapshot');
 
@@ -468,7 +470,7 @@ export function resetTrackerActionTestState(): void {
   loadWorldInfoBookByNameMock.mockReset();
   loadFullWorldInfoEntriesMock.mockReset();
   scanWorldInfoMock.mockReset();
-  scanWorldInfoMock.mockImplementation(async () => '');
+  scanWorldInfoMock.mockImplementation(async () => ({ text: '', entries: [] }));
   document.body.innerHTML = '';
   installExtensionsMenuDom();
 }

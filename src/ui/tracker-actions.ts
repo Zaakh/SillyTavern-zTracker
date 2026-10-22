@@ -19,7 +19,8 @@ import type { ExtractedData } from 'sillytavern-utils-lib/types';
 import { characters, st_echo, st_formatWorldInfo, st_getMaxContextSize } from 'sillytavern-utils-lib/config';
 import { POPUP_RESULT, POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
 import { createLorebookActions } from './lorebook-actions.js';
-import { buildTrackerWorldInfoText } from '../world-info-allowlist.js';
+import { buildTrackerWorldInfo } from '../world-info-allowlist.js';
+import type { TrackerWorldInfoReport } from '../world-info-policy.js';
 import { buildWorldInfoScanChat, buildWorldInfoScanData, scanWorldInfo } from '../world-info-scan.js';
 import { createHostWorldInfoScopeDeps, resolveWorldInfoScopeSources } from '../world-info-scope.js';
 import { loadFullWorldInfoEntries, loadWorldInfoBookByName } from '../sillytavern-world-info.js';
@@ -82,6 +83,7 @@ import {
   withMessageStatusIndicator,
 } from './message-status-indicator.js';
 import { createContextMenuTrackerActions } from './tracker-context-menu-actions.js';
+import { buildWorldInfoReportElement } from './world-info-report-popup.js';
 import {
   bindCleanupPopupSummary,
   buildCleanupPopupContent,
@@ -150,6 +152,8 @@ export type PrepareExistingTrackerGenerationResult = {
   chatJsonValue: any;
   chatHtmlValue: string;
   messages: Message[];
+  /** What World Info this regeneration's prompt was built from; stored with the updated tracker. */
+  worldInfo: TrackerWorldInfoReport;
   partsOrder: string[];
   partsMeta: unknown;
   makeRequest: (messages: Message[], overrideParams?: any) => Promise<ExtractedData | undefined>;
@@ -169,11 +173,14 @@ export type RequestStructuredTrackerContentOptions = {
 /** Describes one targeted tracker update that also clears any resolved pending cleanup markers. */
 export type PersistResolvedTrackerUpdateOptions = Omit<PersistTrackerUpdateOptions, 'extensionData'> & {
   resolvedTargets: TrackerCleanupTarget[];
+  worldInfo?: TrackerWorldInfoReport;
 };
 
 const TRACKER_RENDER_FAILURE_MESSAGE = 'Generated data failed to render with the current template. Not saved.';
 const TRACKER_MODULE_RECORDS_KEY = 'byId';
 const TRACKER_PARTS_META_KEY = 'partsMeta';
+/** Per-Module record of the World Info a generation used; lives only under `byId[moduleId]`. */
+const WORLD_INFO_RECORD_KEY = 'worldInfo';
 
 /** Defines the callback contract consumed by the extracted context-menu tracker actions module. */
 export type ContextMenuTrackerActionsDependencies = {
@@ -739,10 +746,13 @@ export function createTrackerActions(options: {
   const persistResolvedTrackerUpdate: ContextMenuTrackerActionsDependencies['persistResolvedTrackerUpdate'] = async (options) => {
     await persistTrackerUpdate({
       ...options,
-      extensionData: buildPendingRedactionExtensionData(options.message, {
-        moduleId: options.moduleId,
-        resolvedTargets: options.resolvedTargets,
-      }),
+      extensionData: {
+        ...buildPendingRedactionExtensionData(options.message, {
+          moduleId: options.moduleId,
+          resolvedTargets: options.resolvedTargets,
+        }),
+        ...(options.worldInfo ? { [WORLD_INFO_RECORD_KEY]: options.worldInfo } : {}),
+      },
     });
   };
 
@@ -1463,10 +1473,14 @@ export function createTrackerActions(options: {
       roles: messages.map((m: any) => m.role),
     });
 
+    // Stays 'scan-unavailable' if building World Info throws below, so a failure is never recorded as "nothing matched".
+    let worldInfo: TrackerWorldInfoReport = { outcome: 'scan-unavailable', books: [] };
     try {
       const allowlistRows = settings.trackerWorldInfoAllowlist ?? [];
-      const worldInfoText = await buildTrackerWorldInfoText({
+      const scannedChat = buildWorldInfoScanChat(globalContext.chat, messageId, settings.includeLastXMessages);
+      const built = await buildTrackerWorldInfo({
         mode: trackerWorldInfoMode,
+        scannedChat,
         rows: allowlistRows,
         debug: !!settings.debugLogging,
         resolveSources: () =>
@@ -1486,7 +1500,7 @@ export function createTrackerActions(options: {
               isGenerating: () =>
                 !!(SillyTavern.getContext() as any).streamingProcessor || document.body?.dataset?.generating === 'true',
             },
-            chat: buildWorldInfoScanChat(globalContext.chat, messageId, settings.includeLastXMessages),
+            chat: scannedChat,
             chatLength: globalContext.chat.length,
             maxContext: st_getMaxContextSize(),
             scanData: buildWorldInfoScanData(context, characterId),
@@ -1500,6 +1514,8 @@ export function createTrackerActions(options: {
                 wiFormat: (context.getPresetManager?.('openai') as any)?.getCompletionPresetByName?.(promptPresetSelections.presetName)?.wi_format,
               }),
       });
+      worldInfo = built.report;
+      const worldInfoText = built.text;
       if (worldInfoText) {
         const firstNonSystem = messages.findIndex((m: any) => m.role !== 'system');
         const insertAt = firstNonSystem === -1 ? messages.length : firstNonSystem;
@@ -1531,6 +1547,7 @@ export function createTrackerActions(options: {
       chatJsonValue,
       chatHtmlValue,
       messages,
+      worldInfo,
     };
   }
 
@@ -1567,6 +1584,15 @@ export function createTrackerActions(options: {
       renderTrackerWithDeps(messageId, moduleId);
       st_echo('success', 'Tracker data deleted.');
     }
+  }
+
+  /** Opens the "World Info used" popup for one Module's stored record ("not recorded" when there is none). */
+  async function showWorldInfoReport(messageId: number, moduleId = DEFAULT_MODULE_ID) {
+    const record = getTrackerModuleRecord(globalContext.chat[messageId], moduleId);
+    await globalContext.callGenericPopup(buildWorldInfoReportElement(record?.[WORLD_INFO_RECORD_KEY]), POPUP_TYPE.TEXT, '', {
+      okButton: 'Close',
+      wide: true,
+    });
   }
 
   async function editTracker(messageId: number, moduleId = DEFAULT_MODULE_ID) {
@@ -1671,6 +1697,7 @@ export function createTrackerActions(options: {
           chatJsonValue,
           chatHtmlValue,
           messages,
+          worldInfo,
         } = await prepareTrackerGeneration(id, { moduleId });
         if (token.cancelled) {
           return false;
@@ -1708,7 +1735,10 @@ export function createTrackerActions(options: {
           partsOrder,
           partsMeta,
           detailsState,
-          extensionData: buildPendingRedactionExtensionData(message, { moduleId, clearAll: true }),
+          extensionData: {
+            ...buildPendingRedactionExtensionData(message, { moduleId, clearAll: true }),
+            [WORLD_INFO_RECORD_KEY]: worldInfo,
+          },
         });
         return true;
       });
@@ -1751,6 +1781,7 @@ export function createTrackerActions(options: {
           chatJsonValue,
           chatHtmlValue,
           messages,
+          worldInfo,
         } = await prepareTrackerGeneration(id, { moduleId });
         if (token.cancelled) {
           return false;
@@ -1819,7 +1850,10 @@ export function createTrackerActions(options: {
           partsOrder,
           partsMeta,
           detailsState,
-          extensionData: buildPendingRedactionExtensionData(message, { moduleId, clearAll: true }),
+          extensionData: {
+            ...buildPendingRedactionExtensionData(message, { moduleId, clearAll: true }),
+            [WORLD_INFO_RECORD_KEY]: worldInfo,
+          },
         });
         return true;
       });
@@ -2104,6 +2138,7 @@ export function createTrackerActions(options: {
     cancelTracker,
     deleteTracker,
     editTracker,
+    showWorldInfoReport,
     generateTracker,
     generateTrackersForMessage,
     openTrackerCleanup,

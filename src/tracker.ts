@@ -359,6 +359,7 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
       <div class="ztracker-parts-list">${partsButtons}</div>
     </details>
     <div class="ztracker-cleanup-button fa-solid fa-eraser" title="Clear or recreate selected tracker targets"></div>
+    <div class="ztracker-world-info-button fa-solid fa-book-atlas" title="World Info used"></div>
     <div class="ztracker-edit-button fa-solid fa-code" title="Edit Tracker Data"></div>
     <div class="ztracker-delete-button fa-solid fa-trash-can" title="Delete Tracker"></div>
   `;

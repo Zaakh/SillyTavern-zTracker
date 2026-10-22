@@ -1,25 +1,38 @@
 import { describe, expect, jest, test, beforeEach } from '@jest/globals';
-import { buildWorldInfoScanChat, buildWorldInfoScanData, scanWorldInfo, type WorldInfoScanHost } from '../world-info-scan.js';
+import {
+  buildWorldInfoScanChat,
+  buildWorldInfoScanData,
+  inferWorldInfoReason,
+  scanWorldInfo,
+  type ScannedWorldInfoEntry,
+  type WorldInfoScanHost,
+} from '../world-info-scan.js';
 
 const EVENT = 'worldinfo_entries_loaded';
+const DONE_EVENT = 'worldinfo_scan_done';
 
 /** Fake host: emits the entries-loaded payload to listeners, then returns `result` for the scan. */
-function createHost(overrides: Partial<WorldInfoScanHost> & { result?: any; onScan?: (args: any[]) => void } = {}) {
+function createHost(overrides: Partial<WorldInfoScanHost> & { result?: any; onScan?: (args: any[]) => void; doneEvents?: any[] } = {}) {
   const listeners = new Set<(payload: any) => void>();
   const payload = { globalLore: [{ uid: 1, world: 'Host' }], characterLore: [{ uid: 2 }], chatLore: [], personaLore: [] };
   const calls: any[][] = [];
+  const doneListeners = new Set<(payload: any) => void>();
   const host: WorldInfoScanHost = {
     getWorldInfoPrompt: jest.fn(async (...args: any[]) => {
       calls.push(args);
       overrides.onScan?.(args);
       listeners.forEach((l) => l(payload));
+      overrides.doneEvents?.forEach((e) => doneListeners.forEach((l) => l(e)));
       return overrides.result ?? { worldInfoBefore: 'before', worldInfoAfter: 'after' };
     }) as any,
-    eventSource: { on: (_e, cb) => listeners.add(cb), removeListener: (_e, cb) => listeners.delete(cb) },
-    eventTypes: { WORLDINFO_ENTRIES_LOADED: EVENT },
+    eventSource: {
+      on: (e, cb) => (e === DONE_EVENT ? doneListeners : listeners).add(cb),
+      removeListener: (e, cb) => (e === DONE_EVENT ? doneListeners : listeners).delete(cb),
+    },
+    eventTypes: { WORLDINFO_ENTRIES_LOADED: EVENT, WORLDINFO_SCAN_DONE: DONE_EVENT },
     isGenerating: overrides.isGenerating,
   };
-  return { host, listeners, payload, calls };
+  return { host, listeners, doneListeners, payload, calls };
 }
 
 const base = { chat: ['m1'], chatLength: 1, maxContext: 4096 };
@@ -41,16 +54,16 @@ describe('scanWorldInfo', () => {
         anAfter: ['', 'an-bottom'],
       },
     });
-    const text = await scanWorldInfo({ host, ...base });
+    const { text } = await scanWorldInfo({ host, ...base });
     expect(calls[0][2]).toBe(true);
     expect(text).toBe('before\nafter\ndepth\noutlet\nan-top\nan-bottom');
   });
 
-  test('unfiltered scan registers no listener', async () => {
+  test('unfiltered scan does not hook the entries-loaded event', async () => {
     const { host } = createHost({ onScan: () => undefined });
     const spy = jest.spyOn(host.eventSource!, 'on');
     await scanWorldInfo({ host, ...base });
-    expect(spy).not.toHaveBeenCalled();
+    expect(spy).not.toHaveBeenCalledWith(EVENT, expect.anything());
   });
 
   test('restricted scan mutates the host arrays in place, applies the UID subset and tags the book', async () => {
@@ -79,7 +92,7 @@ describe('scanWorldInfo', () => {
         throw new Error('boom');
       },
     });
-    expect(await scanWorldInfo({ host: boom.host, ...base, restrictTo: [] })).toBe('');
+    expect(await scanWorldInfo({ host: boom.host, ...base, restrictTo: [] })).toEqual({ text: '', entries: null, unavailable: true });
     expect(boom.listeners.size).toBe(0);
     expect(console.warn).toHaveBeenCalled();
   });
@@ -103,19 +116,19 @@ describe('scanWorldInfo', () => {
     const bad = createHost({ onScan: () => { throw new Error('x'); } });
     await scanWorldInfo({ host: bad.host, ...base });
     const good = createHost();
-    expect(await scanWorldInfo({ host: good.host, ...base })).toBe('before\nafter');
+    expect((await scanWorldInfo({ host: good.host, ...base })).text).toBe('before\nafter');
   });
 
   test('missing scan API or event warns once per host and returns empty', async () => {
     const host: WorldInfoScanHost = {};
-    expect(await scanWorldInfo({ host, ...base })).toBe('');
-    expect(await scanWorldInfo({ host, ...base })).toBe('');
+    expect((await scanWorldInfo({ host, ...base })).text).toBe('');
+    expect((await scanWorldInfo({ host, ...base })).text).toBe('');
     expect(console.warn).toHaveBeenCalledTimes(1);
 
     const noEvent = createHost().host;
     noEvent.eventTypes = {};
     const getWorldInfoPrompt = noEvent.getWorldInfoPrompt as jest.Mock;
-    expect(await scanWorldInfo({ host: noEvent, ...base, restrictTo: [] })).toBe('');
+    expect((await scanWorldInfo({ host: noEvent, ...base, restrictTo: [] })).text).toBe('');
     expect(getWorldInfoPrompt).not.toHaveBeenCalled();
   });
 
@@ -154,10 +167,100 @@ describe('scanWorldInfo', () => {
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('still generating'));
   });
 
-  test('unfiltered scan does not wait for host generation', async () => {
-    const { host, calls } = createHost({ isGenerating: () => true });
-    await scanWorldInfo({ host, ...base, idleTimeoutMs: 20 });
+  test('include-all scan waits for the host to stop generating', async () => {
+    let generating = true;
+    const { host, calls } = createHost({ isGenerating: () => generating });
+    setTimeout(() => (generating = false), 30);
+    await scanWorldInfo({ host, ...base, idlePollMs: 5, idleTimeoutMs: 1000 });
     expect(calls).toHaveLength(1);
+    expect(generating).toBe(false);
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  test('include-all scan proceeds with a warning when the host never goes idle', async () => {
+    const { host, calls } = createHost({ isGenerating: () => true });
+    await scanWorldInfo({ host, ...base, idlePollMs: 5, idleTimeoutMs: 20 });
+    expect(calls).toHaveLength(1);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('still generating'));
+  });
+});
+
+describe('scanWorldInfo entry capture', () => {
+  const entry = (uid: number, extra: Record<string, any> = {}) => ({ world: 'Lore', uid, comment: ` t${uid} `, key: ['k'], ...extra });
+  const doneEvent = (current: number, successful: any[], all: any[]) => ({
+    state: { current },
+    new: { successful },
+    activated: { entries: new Map(all.map((e) => [`${e.world}.${e.uid}`, e])) },
+  });
+
+  test('returns the last cumulative entries with their first-activation loop', async () => {
+    const a = entry(1);
+    const b = entry(2, { constant: true });
+    const { host } = createHost({ doneEvents: [doneEvent(1, [a], [a]), doneEvent(2, [b], [a, b])] });
+    const result = await scanWorldInfo({ host, ...base });
+    expect(result.text).toBe('before\nafter');
+    expect(result.entries).toEqual([
+      expect.objectContaining({ book: 'Lore', uid: 1, title: 't1', constant: false, loop: 'initial' }),
+      expect.objectContaining({ book: 'Lore', uid: 2, constant: true, loop: 'recursion' }),
+    ]);
+  });
+
+  test('removes the scan-done listener after success and after a throw', async () => {
+    const ok = createHost();
+    await scanWorldInfo({ host: ok.host, ...base });
+    expect(ok.doneListeners.size).toBe(0);
+
+    const boom = createHost({ onScan: () => { throw new Error('boom'); } });
+    await scanWorldInfo({ host: boom.host, ...base });
+    expect(boom.doneListeners.size).toBe(0);
+  });
+
+  test('malformed or missing payload gives entries null with the text still returned', async () => {
+    const malformed = createHost({ doneEvents: [{ activated: { entries: [] } }, undefined] });
+    expect(await scanWorldInfo({ host: malformed.host, ...base })).toEqual({ text: 'before\nafter', entries: null });
+
+    const none = createHost();
+    expect((await scanWorldInfo({ host: none.host, ...base })).entries).toBeNull();
+  });
+
+  test('no event and no text is an empty result, not a failure', async () => {
+    const { host } = createHost({ result: {} });
+    expect(await scanWorldInfo({ host, ...base })).toEqual({ text: '', entries: null });
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('inferWorldInfoReason', () => {
+  const scanned = (extra: Partial<ScannedWorldInfoEntry> = {}): ScannedWorldInfoEntry => ({
+    book: 'Lore', uid: 1, title: '', content: 'c', constant: false, key: [], keysecondary: [], selectiveLogic: 0, loop: 'initial', ...extra,
+  });
+  const chat = ['The Dragon sleeps', 'a wyrm appears'];
+
+  test('lists every matched primary key, case-insensitively', () => {
+    expect(inferWorldInfoReason(scanned({ key: ['dragon', 'WYRM', 'absent'] }), chat)).toEqual({ reason: 'keyword', matchedKeys: ['dragon', 'WYRM'] });
+  });
+
+  test('constant entries carry no keys', () => {
+    expect(inferWorldInfoReason(scanned({ constant: true, key: ['dragon'] }), chat)).toEqual({ reason: 'constant' });
+  });
+
+  test('regex keys match', () => {
+    expect(inferWorldInfoReason(scanned({ key: ['/dra.on/i'] }), chat)).toEqual({ reason: 'keyword', matchedKeys: ['/dra.on/i'] });
+  });
+
+  test('secondary keys count under AND logic but not under NOT logic', () => {
+    const keys = { key: ['dragon'], keysecondary: ['wyrm'] };
+    expect(inferWorldInfoReason(scanned({ ...keys, selectiveLogic: 0 }), chat).matchedKeys).toEqual(['dragon', 'wyrm']);
+    expect(inferWorldInfoReason(scanned({ ...keys, selectiveLogic: 1 }), chat).matchedKeys).toEqual(['dragon']);
+  });
+
+  test('recursion and min-activations come from the first-activation loop', () => {
+    expect(inferWorldInfoReason(scanned({ key: ['dragon'], loop: 'recursion' }), chat)).toEqual({ reason: 'recursion' });
+    expect(inferWorldInfoReason(scanned({ loop: 'min-activations' }), chat)).toEqual({ reason: 'min-activations' });
+  });
+
+  test('an initial-loop entry with no key in the window is other', () => {
+    expect(inferWorldInfoReason(scanned({ key: ['castle'] }), chat)).toEqual({ reason: 'other' });
   });
 });
 

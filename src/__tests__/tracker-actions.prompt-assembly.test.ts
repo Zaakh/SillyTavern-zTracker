@@ -2044,6 +2044,7 @@ describe('createTrackerActions prompt assembly', () => {
       expect.any(Object),
       expect.objectContaining({
         trackerData: { characters: [{ name: 'Alice', status: 'updated status' }] },
+        extensionData: expect.objectContaining({ worldInfo: { outcome: 'none-matched', books: [] }, }),
       }),
     );
   });
@@ -2128,6 +2129,7 @@ describe('createTrackerActions prompt assembly', () => {
       expect.any(Object),
       expect.objectContaining({
         trackerData: { characters: [{ id: 'char-1', name: 'Alice', status: 'updated status' }] },
+        extensionData: expect.objectContaining({ worldInfo: { outcome: 'none-matched', books: [] }, }),
       }),
     );
   });

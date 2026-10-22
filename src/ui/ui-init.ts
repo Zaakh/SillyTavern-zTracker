@@ -319,6 +319,8 @@ function installTrackerActionClickHandler(): void {
     } else if (target.classList.contains('ztracker-cleanup-button') && 'openTrackerCleanup' in actions) {
       // @ts-ignore - optional capability depending on build/version.
       actions.openTrackerCleanup(messageId, ...moduleArgs);
+    } else if (target.classList.contains('ztracker-world-info-button')) {
+      actions.showWorldInfoReport(messageId, ...moduleArgs);
     } else if (target.classList.contains('ztracker-edit-button')) {
       actions.editTracker(messageId, ...moduleArgs);
     } else if (target.classList.contains('ztracker-regenerate-button')) {

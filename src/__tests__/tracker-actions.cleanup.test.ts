@@ -102,6 +102,9 @@ describe('createTrackerActions cleanup flow', () => {
         }),
       }),
     );
+    // Clear-only never generates, so it must not carry (and thereby replace or delete) the stored World Info record.
+    const { extensionData } = applyTrackerUpdateAndRenderMock.mock.calls[0][1] as any;
+    expect(Object.keys(extensionData)).not.toContain('worldInfo');
   });
 
   test('clears matching pending metadata after successful targeted regeneration', async () => {
@@ -155,6 +158,7 @@ describe('createTrackerActions cleanup flow', () => {
         extensionData: expect.objectContaining({
           schemaKey: 'default',
           pendingRedactions: undefined,
+          worldInfo: { outcome: 'none-matched', books: [] },
         }),
       }),
     );

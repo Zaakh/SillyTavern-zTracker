@@ -51,6 +51,7 @@ function createUiInitActions(overrides: Record<string, unknown> = {}) {
     renderExtensionTemplates: jest.fn(async () => undefined),
     generateTracker: jest.fn(),
     editTracker: jest.fn(),
+    showWorldInfoReport: jest.fn(),
     deleteTracker: jest.fn(),
     generateTrackerPart: jest.fn(),
     generateTrackerArrayItem: jest.fn(),
@@ -304,6 +305,23 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
       'Agenda Tracker:',
       'Scene Tracker:',
     ]);
+  });
+
+  test('delegates the World Info button to showWorldInfoReport for the owning message', async () => {
+    const { actions } = await initializeTrackerActionHarness();
+
+    installChatMessageDom(4, {
+      innerHtml: `
+        <div class="mes_text">Message 4</div>
+        <div class="mes_ztracker">
+          <div class="ztracker-world-info-button fa-solid fa-book-atlas" title="World Info used"></div>
+        </div>
+      `,
+    });
+
+    document.querySelector('.ztracker-world-info-button')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(actions.showWorldInfoReport).toHaveBeenCalledWith(4);
   });
 
   test('delegates the tracker delete button to deleteTracker for the owning message', async () => {
