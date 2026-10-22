@@ -1,4 +1,4 @@
-// UI side of lorebook export: the export dialog (book, title, keys, "Suggest title") and the
+// UI side of lorebook export: the export dialog (book, title, keys, Suggest title/keys) and the
 // "Replace linked entry" action. All lorebook writing lives in `../lorebook-export.ts`; this file
 // only gathers input and reports results.
 import { POPUP_RESULT, POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
@@ -8,23 +8,35 @@ import { DEFAULT_MODULE_ID, getSettingsForTrackerModule, getTrackerModule } from
 import type { ExtensionSettings } from '../config.js';
 import { formatEmbeddedTrackerSnapshot } from '../embed-snapshot-transform.js';
 import {
+  LOREBOOK_KEYS_ACTION,
+  LOREBOOK_TITLE_ACTION,
   createLorebookHost,
   exportTrackerToLorebook,
   getLorebookLink,
   replaceLinkedLorebookEntry,
-  suggestEntryTitle,
 } from '../lorebook-export.js';
 import type { LorebookHost } from '../lorebook-export.js';
+import { resolveInstruction, runLlmAction } from '../llm-actions.js';
+import type { LlmAction } from '../llm-actions.js';
+import type { GenerationMessage } from '../schema-generation.js';
+import { openLlmActionDialog } from './llm-action-dialog.js';
 import { CHAT_MESSAGE_SCHEMA_VALUE_KEY, getTrackerModuleRecord } from '../tracker.js';
 
 export function createLorebookActions(options: {
   globalContext: any;
   settingsManager: ExtensionSettingsManager<ExtensionSettings>;
   renderTrackerWithDeps: (messageId: number, moduleId?: string) => void;
+  /** One request through the global active connection (reasoning stripped, no prefill); `signal` cancels it. */
+  requestWithActiveConnection: (
+    messages: GenerationMessage[],
+    overridePayload?: Record<string, unknown>,
+    signal?: AbortSignal,
+  ) => Promise<string>;
+  getActiveConnectionLabel: () => string;
   /** Test seam; defaults to the real SillyTavern-backed host. */
   createHost?: () => Promise<LorebookHost>;
 }) {
-  const { globalContext, settingsManager, renderTrackerWithDeps } = options;
+  const { globalContext, settingsManager, renderTrackerWithDeps, requestWithActiveConnection, getActiveConnectionLabel } = options;
   const createHost = options.createHost ?? (() => createLorebookHost(globalContext));
 
   function getTarget(messageId: number, moduleId: string) {
@@ -50,16 +62,23 @@ export function createLorebookActions(options: {
       <label>Entry title (required)
         <div style="display:flex;gap:6px;">
           <input type="text" class="ztracker-lorebook-title text_pole" style="flex:1;" />
-          <button type="button" class="ztracker-lorebook-suggest menu_button">Suggest title</button>
+          <button type="button" class="ztracker-lorebook-suggest-title menu_button fa-solid fa-wand-magic-sparkles" title="Suggest title" aria-label="Suggest title"></button>
+          <button type="button" class="ztracker-lorebook-advanced-title menu_button" title="Suggest a title with an editable prompt and a preview">Advanced...</button>
         </div>
       </label>
       <label>Keys (comma separated; empty means the entry will not trigger)
-        <input type="text" class="ztracker-lorebook-keys text_pole" />
+        <div style="display:flex;gap:6px;">
+          <input type="text" class="ztracker-lorebook-keys text_pole" style="flex:1;" />
+          <button type="button" class="ztracker-lorebook-suggest-keys menu_button fa-solid fa-wand-magic-sparkles" title="Suggest keys" aria-label="Suggest keys"></button>
+          <button type="button" class="ztracker-lorebook-advanced-keys menu_button" title="Suggest keys with an editable prompt and a preview">Advanced...</button>
+        </div>
       </label>`;
     const book = form.querySelector('.ztracker-lorebook-book') as HTMLSelectElement;
     const title = form.querySelector('.ztracker-lorebook-title') as HTMLInputElement;
     const keys = form.querySelector('.ztracker-lorebook-keys') as HTMLInputElement;
-    const suggest = form.querySelector('.ztracker-lorebook-suggest') as HTMLButtonElement;
+    const [suggestTitle, suggestKeys, advancedTitle, advancedKeys] = ['suggest-title', 'suggest-keys', 'advanced-title', 'advanced-keys'].map(
+      (name) => form.querySelector(`.ztracker-lorebook-${name}`) as HTMLButtonElement,
+    );
     for (const name of books) book.add(new Option(name, name));
 
     // Keys mirror the title until the user types in the keys field.
@@ -71,22 +90,85 @@ export function createLorebookActions(options: {
       keysFollowTitle = false;
     });
 
-    suggest.addEventListener('click', async () => {
-      suggest.disabled = true;
-      suggest.textContent = 'Suggesting...';
+    const applyTitle = (suggested: string) => {
+      const keysMatchedTitle = keys.value === title.value;
+      title.value = suggested;
+      if (keysFollowTitle || keysMatchedTitle) keys.value = suggested;
+    };
+    // Applied keys are the user's now: later title edits must not overwrite them.
+    const applyKeys = (text: string) => {
+      keys.value = text.split(',').map((key) => key.trim()).filter(Boolean).join(', ');
+      keysFollowTitle = false;
+    };
+
+    // One run guard for all four buttons: only one suggestion runs at a time.
+    let busy = false;
+    const setBusy = (value: boolean) => {
+      busy = value;
+      for (const button of [suggestTitle, suggestKeys, advancedTitle, advancedKeys]) button.disabled = value;
+    };
+    const store = settingsManager;
+    const inputs = {
+      title: () => ({ snapshotText: snapshotText() }),
+      keys: () => ({ snapshotText: snapshotText(), title: title.value }),
+    };
+
+    /** Runs `work` under the shared guard; a failure is reported to the user, leaving the fields unchanged. */
+    async function guarded(work: () => Promise<void>, failure: string) {
+      if (busy) return;
+      setBusy(true);
       try {
-        const suggested = await suggestEntryTitle(host, snapshotText());
-        const keysMatchedTitle = keys.value === title.value;
-        title.value = suggested;
-        if (keysFollowTitle || keysMatchedTitle) keys.value = suggested;
+        await work();
       } catch (error) {
-        console.error('zTracker: title suggestion failed', error);
-        st_echo('error', `Title suggestion failed: ${error instanceof Error ? error.message : String(error)}`);
+        console.error(`zTracker: ${failure} failed`, error);
+        st_echo('error', `${failure} failed: ${error instanceof Error ? error.message : String(error)}`);
       } finally {
-        suggest.disabled = false;
-        suggest.textContent = 'Suggest title';
+        setBusy(false);
       }
-    });
+    }
+
+    function suggest<Input, Result>(
+      action: LlmAction<Input, Result>,
+      input: () => Input,
+      toText: (result: Result) => string,
+      instruction: string,
+      signal?: AbortSignal,
+    ) {
+      return runLlmAction(action, { instruction, input: input(), request: requestWithActiveConnection, signal }).then(toText);
+    }
+
+    function wire<Input, Result>(
+      quickButton: HTMLButtonElement,
+      advancedButton: HTMLButtonElement,
+      action: LlmAction<Input, Result>,
+      heading: string,
+      input: () => Input,
+      toText: (result: Result) => string,
+      apply: (text: string) => void,
+    ) {
+      quickButton.addEventListener('click', () =>
+        guarded(
+          async () => apply(await suggest(action, input, toText, resolveInstruction(store, action.id, action.defaultInstruction))),
+          heading,
+        ),
+      );
+      advancedButton.addEventListener('click', () =>
+        guarded(() =>
+          openLlmActionDialog(globalContext.callGenericPopup, {
+            title: heading,
+            parts: [{ id: action.id, label: heading, defaultInstruction: action.defaultInstruction }],
+            store,
+            connectionLabel: getActiveConnectionLabel(),
+            run: async ([instruction], signal) => [await suggest(action, input, toText, instruction, signal)],
+            apply: ([text]) => apply(text),
+          }),
+          `${heading} dialog`,
+        ),
+      );
+    }
+
+    wire(suggestTitle, advancedTitle, LOREBOOK_TITLE_ACTION, 'Title suggestion', inputs.title, (result) => result, applyTitle);
+    wire(suggestKeys, advancedKeys, LOREBOOK_KEYS_ACTION, 'Keys suggestion', inputs.keys, (result) => result.join(', '), applyKeys);
 
     return { form, book, title, keys };
   }

@@ -5,6 +5,7 @@
  * UI layer owns connection, reasoning stripping and persistence.
  */
 import type { PromptEngineeringMode } from './config.js';
+import { isAbortError } from './llm-actions.js';
 import { tryParseJsonWithRepair } from './parser/json.js';
 import { lintSchemaDialect, type SchemaDialectFinding } from './schema-dialect-lint.js';
 import { PROMPT_SCHEMA_KEYWORD_ALLOWLIST } from './schema-to-example.js';
@@ -48,10 +49,6 @@ export function getGeneratedPresetName(moduleId: string): string {
   return `zTracker-${moduleId}-generated`;
 }
 
-function isAbortError(error: unknown): boolean {
-  return (error as { name?: string } | null)?.name === 'AbortError';
-}
-
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw new DOMException('Generation cancelled', 'AbortError');
 }
@@ -81,12 +78,20 @@ function formatExamples(examples: GenerationExample[], pick: (example: Generatio
     .join('\n\n');
 }
 
-export function buildSchemaMessages(brief: string, examples: GenerationExample[]): GenerationMessage[] {
+/** The user-editable lead of the schema system prompt; the dialect rules and examples are always appended. */
+export const DEFAULT_SCHEMA_INSTRUCTION =
+  'You design JSON Schemas for a roleplay tracker. Reply with ONLY the JSON Schema object: no prose, no code fence, no reasoning.';
+
+export function buildSchemaMessages(
+  brief: string,
+  examples: GenerationExample[],
+  instruction: string = DEFAULT_SCHEMA_INSTRUCTION,
+): GenerationMessage[] {
   return [
     {
       role: 'system',
       content: [
-        'You design JSON Schemas for a roleplay tracker. Reply with ONLY the JSON Schema object: no prose, no code fence, no reasoning.',
+        instruction.trim() || DEFAULT_SCHEMA_INSTRUCTION,
         '',
         buildDialectCheatSheet(),
         '',
@@ -117,20 +122,31 @@ export function buildRepairMessages(
 const SELF_SUFFICIENT_RULE =
   'The text must be self-sufficient: do not refer to rules, formats or examples "later in the conversation" or elsewhere, because nothing else describes this tracker. Reply with ONLY the text.';
 
+export type PromptsKind = 'system' | 'base';
+
+/** The user-editable lead of each prompts request; the self-sufficient rule and examples are always appended. */
+export const DEFAULT_PROMPTS_INSTRUCTIONS: Record<PromptsKind, string> = {
+  system:
+    'You write a system prompt for the model that fills in this tracker (its role, how to treat the transcript as data, how to carry forward previous values).',
+  base: 'You write the base task prompt for this tracker (the instruction sent with the schema each time the tracker is updated).',
+};
+
 export function buildPromptsMessages(
-  kind: 'system' | 'base',
+  kind: PromptsKind,
   brief: string,
   schema: unknown,
   examples: GenerationExample[],
+  instruction: string = DEFAULT_PROMPTS_INSTRUCTIONS[kind],
 ): GenerationMessage[] {
-  const what =
-    kind === 'system'
-      ? 'a system prompt for the model that fills in this tracker (its role, how to treat the transcript as data, how to carry forward previous values)'
-      : 'the base task prompt for this tracker (the instruction sent with the schema each time the tracker is updated)';
   return [
     {
       role: 'system',
-      content: [`You write ${what}.`, SELF_SUFFICIENT_RULE, '', formatExamples(examples, (example) => `Text:\n${kind === 'system' ? example.systemPrompt : example.prompt}`)].join('\n'),
+      content: [
+        instruction.trim() || DEFAULT_PROMPTS_INSTRUCTIONS[kind],
+        SELF_SUFFICIENT_RULE,
+        '',
+        formatExamples(examples, (example) => `Text:\n${kind === 'system' ? example.systemPrompt : example.prompt}`),
+      ].join('\n'),
     },
     { role: 'user', content: `Brief: ${brief.trim()}\n\nSchema:\n${JSON.stringify(schema)}\n\nWrite the ${kind === 'system' ? 'system prompt' : 'base prompt'}.` },
   ];
@@ -209,9 +225,11 @@ export async function generateSchemaFromBrief(options: {
   examples: GenerationExample[];
   request: GenerationRequest;
   signal?: AbortSignal;
+  /** Replaces the default instruction lead of the system prompt. */
+  instruction?: string;
 }): Promise<SchemaGenerationResult> {
   const { brief, mode, grammarEnabled, examples, request, signal } = options;
-  let messages = buildSchemaMessages(brief, examples);
+  let messages = buildSchemaMessages(brief, examples, options.instruction);
   let override: Record<string, unknown> | undefined = { json_schema: LOOSE_SCHEMA_META };
   let best: { schema: Record<string, unknown>; findings: SchemaDialectFinding[] } | undefined;
   let attempts = 0;
@@ -272,12 +290,14 @@ export async function generatePromptsFromBrief(options: {
   examples: GenerationExample[];
   request: GenerationRequest;
   signal?: AbortSignal;
+  /** Replaces the default instruction lead per prompt. */
+  instructions?: Partial<Record<PromptsKind, string>>;
 }): Promise<{ systemPrompt: string; prompt: string }> {
   const { brief, schema, examples, request, signal } = options;
-  const results: Record<'system' | 'base', string> = { system: '', base: '' };
+  const results: Record<PromptsKind, string> = { system: '', base: '' };
   for (const kind of ['system', 'base'] as const) {
     throwIfAborted(signal);
-    results[kind] = (await request(buildPromptsMessages(kind, brief, schema, examples))).trim();
+    results[kind] = (await request(buildPromptsMessages(kind, brief, schema, examples, options.instructions?.[kind]))).trim();
     if (!results[kind]) {
       throw new Error(`The model returned an empty ${kind === 'system' ? 'system prompt' : 'base prompt'}.`);
     }

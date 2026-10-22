@@ -754,3 +754,46 @@
 .mes_ztracker .ztracker_plot_steer_mes_template {
   font-size: smaller;
 }
+
+.ztracker-llm-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+.ztracker-llm-dialog textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+.ztracker-llm-dialog [hidden] {
+  display: none !important;
+}
+.ztracker-llm-dialog .ztracker-llm-dialog-reset {
+  width: auto;
+  align-self: flex-start;
+  white-space: nowrap;
+}
+.ztracker-llm-dialog .ztracker-llm-dialog-note {
+  opacity: 0.7;
+  font-size: 0.9em;
+}
+.ztracker-llm-dialog .ztracker-llm-dialog-part {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ztracker-llm-dialog .ztracker-llm-dialog-edited {
+  color: var(--SmartThemeQuoteColor, #e0a030);
+}
+.ztracker-llm-dialog .ztracker-llm-dialog-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ztracker-llm-dialog .ztracker-llm-dialog-bar button {
+  width: auto;
+}
+.ztracker-llm-dialog .ztracker-llm-dialog-error {
+  color: var(--SmartThemeFailureColor, #d9534f);
+  white-space: pre-wrap;
+}

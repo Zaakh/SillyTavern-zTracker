@@ -2100,7 +2100,7 @@ export function createTrackerActions(options: {
   }
 
   return {
-    ...createLorebookActions({ globalContext, settingsManager, renderTrackerWithDeps }),
+    ...createLorebookActions({ globalContext, settingsManager, renderTrackerWithDeps, requestWithActiveConnection, getActiveConnectionLabel }),
     cancelTracker,
     deleteTracker,
     editTracker,
