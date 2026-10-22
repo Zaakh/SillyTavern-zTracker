@@ -414,6 +414,28 @@
   text-align: left;
 }
 
+/* The lorebook menu reuses .ztracker-module-generate-menu; rows use the same theme variables as the parts rows so they follow light and dark themes. */
+.ztracker-lorebook-menu {
+  max-width: min(360px, 100vw - 16px);
+}
+
+.ztracker-lorebook-row {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+  word-break: break-word;
+  color: inherit;
+  background: var(--ztracker-menu-part-bg, rgba(255, 255, 255, 0.06));
+}
+.ztracker-lorebook-row:hover:not(:disabled) {
+  background: var(--ztracker-menu-hover-bg, rgba(255, 255, 255, 0.1));
+}
+.ztracker-lorebook-row:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .ztracker-character-auto-mode-popup {
   min-width: 220px;
   padding: 8px;
@@ -570,20 +592,6 @@
   position: relative;
   z-index: 50;
 }
-.mes_ztracker .ztracker-lorebook-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 4px 0;
-}
-.mes_ztracker .ztracker-lorebook-actions button {
-  width: auto;
-  white-space: nowrap;
-}
-.mes_ztracker .ztracker-lorebook-actions button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
 .mes_ztracker .ztracker-controls {
   position: absolute;
   top: 8px;
@@ -596,6 +604,7 @@
 .mes_ztracker .ztracker-controls .ztracker-regenerate-button,
 .mes_ztracker .ztracker-controls .ztracker-cleanup-button,
 .mes_ztracker .ztracker-controls .ztracker-world-info-button,
+.mes_ztracker .ztracker-controls .ztracker-lorebook-button,
 .mes_ztracker .ztracker-controls .ztracker-edit-button,
 .mes_ztracker .ztracker-controls .ztracker-delete-button,
 .mes_ztracker .ztracker-controls .ztracker-parts-summary {
@@ -613,6 +622,7 @@
 .mes_ztracker .ztracker-controls .ztracker-regenerate-button:hover,
 .mes_ztracker .ztracker-controls .ztracker-cleanup-button:hover,
 .mes_ztracker .ztracker-controls .ztracker-world-info-button:hover,
+.mes_ztracker .ztracker-controls .ztracker-lorebook-button:hover,
 .mes_ztracker .ztracker-controls .ztracker-edit-button:hover,
 .mes_ztracker .ztracker-controls .ztracker-delete-button:hover,
 .mes_ztracker .ztracker-controls .ztracker-parts-summary:hover {

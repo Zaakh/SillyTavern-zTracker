@@ -236,6 +236,53 @@ function openManualModuleMenu(options: {
   menu.style.visibility = '';
 }
 
+/** Opens the lorebook menu under a tracker's book icon; Replace is disabled until the icon carries a link target. */
+function openLorebookMenu(options: {
+  actions: TrackerActions;
+  button: HTMLElement;
+  messageId: number;
+  moduleArgs: [string] | [];
+}): void {
+  closeManualModuleMenu();
+
+  const { ztrackerLorebookBook: book, ztrackerLorebookTitle: title } = options.button.dataset;
+  const linked = book !== undefined && title !== undefined;
+  const menu = document.createElement('div');
+  menu.className = 'ztracker-module-generate-menu ztracker-lorebook-menu';
+  menu.setAttribute('role', 'menu');
+  menu.style.position = 'absolute';
+  menu.style.visibility = 'hidden';
+  menu.style.zIndex = '2147483647';
+
+  const addRow = (className: string, label: string, run: () => void, disabled = false) => {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = `${className} ztracker-lorebook-row menu_button`;
+    row.textContent = label;
+    row.disabled = disabled;
+    row.addEventListener('click', (event) => {
+      event.stopPropagation();
+      closeManualModuleMenu();
+      run();
+    });
+    menu.append(row);
+  };
+  addRow('ztracker-lorebook-export-row', 'Export to lorebook...', () =>
+    options.actions.exportToLorebook(options.messageId, ...options.moduleArgs),
+  );
+  addRow(
+    'ztracker-lorebook-replace-row',
+    linked ? `Replace linked entry: ${book} / ${title}` : 'Replace linked entry',
+    () => options.actions.replaceLorebookEntry(options.messageId, ...options.moduleArgs),
+    !linked,
+  );
+
+  document.body.append(menu);
+  activeManualModuleMenu = menu;
+  positionManualModuleMenu(menu, options.button);
+  menu.style.visibility = '';
+}
+
 /** Applies tracker-specific click actions for message buttons and parts-menu controls. */
 function installTrackerActionClickHandler(): void {
   if (trackerActionClickHandlerInstalled) {
@@ -327,10 +374,8 @@ function installTrackerActionClickHandler(): void {
       actions.generateTracker(messageId, withModuleActionOption({ showStatusIndicator: true }, moduleId));
     } else if (target.classList.contains('ztracker-delete-button')) {
       actions.deleteTracker(messageId, ...moduleArgs);
-    } else if (target.closest('.ztracker-lorebook-export-button')) {
-      actions.exportToLorebook(messageId, ...moduleArgs);
-    } else if (target.closest('.ztracker-lorebook-replace-button')) {
-      actions.replaceLorebookEntry(messageId, ...moduleArgs);
+    } else if (target.classList.contains('ztracker-lorebook-button')) {
+      openLorebookMenu({ actions, button: target, messageId, moduleArgs });
     }
   });
 

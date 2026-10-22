@@ -348,8 +348,16 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
     })
     .join('');
 
+  // The body-level lorebook menu would point at a stale icon after a re-render, so drop it.
+  doc.querySelectorAll('.ztracker-lorebook-menu').forEach((menu) => menu.remove());
+
   const controls = doc.createElement('div');
   controls.className = 'ztracker-controls';
+  // The lorebook menu reads the link target from these when it opens, so Replace can name it.
+  const link = getLorebookLink(extra);
+  const lorebookLinkAttrs = link
+    ? ` data-ztracker-lorebook-book="${escapeHtmlAttr(link.book)}" data-ztracker-lorebook-title="${escapeHtmlAttr(link.title)}"`
+    : '';
   const regenerateHint =
     'Regenerate this tracker from scratch using the schema preset selected for this chat and its template. Existing data is replaced, not migrated.';
   controls.innerHTML = `
@@ -360,6 +368,7 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
     </details>
     <div class="ztracker-cleanup-button fa-solid fa-eraser" title="Clear or recreate selected tracker targets"></div>
     <div class="ztracker-world-info-button fa-solid fa-book-atlas" title="World Info used"></div>
+    <div class="ztracker-lorebook-button fa-solid fa-book" title="Lorebook actions"${lorebookLinkAttrs}></div>
     <div class="ztracker-edit-button fa-solid fa-code" title="Edit Tracker Data"></div>
     <div class="ztracker-delete-button fa-solid fa-trash-can" title="Delete Tracker"></div>
   `;
@@ -370,23 +379,6 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
     pendingStatus.textContent = `${pendingTargets.length} tracker ${pendingTargets.length === 1 ? 'target' : 'targets'} cleared`;
     container.prepend(pendingStatus);
   }
-
-  // Text-labeled so each button states exactly what it does; Replace names its target and is
-  // disabled until an export link exists.
-  const link = getLorebookLink(extra);
-  const lorebookActions = doc.createElement('div');
-  lorebookActions.className = 'ztracker-lorebook-actions';
-  const exportButton = doc.createElement('button');
-  exportButton.type = 'button';
-  exportButton.className = 'ztracker-lorebook-export-button menu_button';
-  exportButton.textContent = 'Export to lorebook...';
-  const replaceButton = doc.createElement('button');
-  replaceButton.type = 'button';
-  replaceButton.className = 'ztracker-lorebook-replace-button menu_button';
-  replaceButton.disabled = !link;
-  replaceButton.textContent = link ? `Replace linked entry: ${link.book} / ${link.title}` : 'Replace linked entry';
-  lorebookActions.append(exportButton, replaceButton);
-  container.append(lorebookActions);
 
   const label = doc.createElement('div');
   label.className = 'ztracker-module-label';
