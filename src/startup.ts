@@ -12,6 +12,7 @@ import {
   migrateLegacyAutoMode,
   migrateLegacyPromptTemplates,
   migrateLegacySettingsToModules,
+  migratePromptOverrides,
   migrateTrackerModuleAutoSettings,
   migrateTrackerModuleIncludeLists,
   migrateTransformPresetsToGlobal,
@@ -61,6 +62,7 @@ export async function initializeStartupSettings(options: {
     migrateTrackerModuleIncludeLists(settings),
     migrateTrackerModuleSystemPromptContent(settings),
     migrateTrackerModuleWorldInfoAllowlists(settings),
+    migratePromptOverrides(settings),
   ].some(Boolean);
 
   if (didMigrateLegacySettings) {

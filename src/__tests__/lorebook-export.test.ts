@@ -3,9 +3,13 @@ import {
   exportTrackerToLorebook,
   getLorebookLink,
   replaceLinkedLorebookEntry,
-  suggestEntryTitle,
+  LOREBOOK_KEYS_ACTION,
+  LOREBOOK_TITLE_ACTION,
+  parseKeys,
+  parseTitle,
   type LorebookHost,
 } from '../lorebook-export.js';
+import { runLlmAction } from '../llm-actions.js';
 import { applyTrackerUpdateAndRender, getTrackerModuleRecord } from '../tracker.js';
 import { createDefaultEmbedSnapshotTransformPresets } from '../config.js';
 
@@ -41,7 +45,6 @@ function makeHost(overrides: Partial<LorebookHost> & { books?: Record<string, an
       const uid = Object.keys(data.entries).length;
       return (data.entries[uid] = hostEntry(uid));
     },
-    generateRaw: async () => 'Bob the Elf',
     ...hostOverrides,
   };
   return { host, books, persisted };
@@ -176,35 +179,68 @@ describe('replaceLinkedLorebookEntry', () => {
     expect(host.reloadWorldInfoEditor).not.toHaveBeenCalled();
   });
 
-  it('does not call the LLM', async () => {
-    const generateRaw = jest.fn<LorebookHost['generateRaw']>();
-    const { host } = makeHost({ generateRaw, books: { Characters: { entries: { 0: hostEntry(0) } } } });
-    await replaceLinkedLorebookEntry(host, { link, trackerValue, settings });
-    expect(generateRaw).not.toHaveBeenCalled();
+  it('does not send any request', async () => {
+    const { host } = makeHost({ books: { Characters: { entries: { 0: hostEntry(0) } } } });
+    expect(Object.keys(host)).not.toContain('generateRaw');
+    await expect(replaceLinkedLorebookEntry(host, { link, trackerValue, settings })).resolves.toMatchObject({ ok: true });
   });
 });
 
-describe('suggestEntryTitle', () => {
-  const withReply = (reply: unknown) => makeHost({ generateRaw: async () => reply as string }).host;
+describe('parseTitle', () => {
+  it('reduces a quoted multi-line reply to one unquoted line', () => {
+    expect(parseTitle('\n"Bob the Elf."\nBecause he is an elf.')).toBe('Bob the Elf');
+  });
 
-  it('returns a short title and sends a small, fixed request', async () => {
-    const generateRaw = jest.fn<LorebookHost['generateRaw']>(async () => 'Bob the Elf');
-    const title = await suggestEntryTitle(makeHost({ generateRaw }).host, 'snapshot');
+  it('rejects an empty reply', () => {
+    expect(() => parseTitle('  \n ')).toThrow();
+  });
+});
+
+describe('parseKeys', () => {
+  it('cleans a bulleted, quoted, repeated list', () => {
+    expect(parseKeys('- "Bob"\n* bob\n1. The Builder\n• \'Bobby\', Bob')).toEqual(['Bob', 'The Builder', 'Bobby']);
+  });
+
+  it('strips a bullet that has no space after it', () => {
+    expect(parseKeys('-Bob\n*Bobby')).toEqual(['Bob', 'Bobby']);
+  });
+
+  it('splits commas and caps the count', () => {
+    expect(parseKeys('a, b, c, d, e, f, g, h, i, j')).toHaveLength(8);
+  });
+
+  it('rejects a reply with no usable key', () => {
+    expect(() => parseKeys(' , \n - \n"" ')).toThrow();
+  });
+});
+
+describe('lorebook suggestion actions', () => {
+  it('title: sends the snapshot and the instruction, then parses', async () => {
+    const request = jest.fn<any>(async () => '"Bob the Elf"');
+    const title = await runLlmAction(LOREBOOK_TITLE_ACTION, { instruction: 'TITLE PROMPT', input: { snapshotText: 'snapshot' }, request });
     expect(title).toBe('Bob the Elf');
-    expect(generateRaw).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'snapshot', responseLength: expect.any(Number) }));
+    expect(request.mock.calls[0][0]).toEqual([
+      { role: 'system', content: 'TITLE PROMPT' },
+      { role: 'user', content: 'snapshot' },
+    ]);
   });
 
-  it('reduces a quoted multi-line reply to one unquoted line', async () => {
-    expect(await suggestEntryTitle(withReply('\n"Bob the Elf."\nBecause he is an elf.'), 's')).toBe('Bob the Elf');
+  it('keys: the title is part of the request', async () => {
+    const request = jest.fn<any>(async () => 'Bob, Bobby');
+    const keys = await runLlmAction(LOREBOOK_KEYS_ACTION, { instruction: 'KEYS PROMPT', input: { snapshotText: 'snapshot', title: 'Bob the Builder' }, request });
+    expect(keys).toEqual(['Bob', 'Bobby']);
+    expect((request.mock.calls[0] as any)[0][1].content).toContain('Bob the Builder');
   });
 
-  it('rejects an empty reply', async () => {
-    await expect(suggestEntryTitle(withReply('  \n '), 's')).rejects.toThrow();
+  it('keys: an empty title is still sent, without a title line', async () => {
+    const request = jest.fn<any>(async () => 'Bob');
+    await runLlmAction(LOREBOOK_KEYS_ACTION, { instruction: 'K', input: { snapshotText: 'snapshot', title: '  ' }, request });
+    expect((request.mock.calls[0] as any)[0][1].content).toBe('snapshot');
   });
 
   it('propagates a rejected request', async () => {
-    const host = makeHost({ generateRaw: async () => { throw new Error('offline'); } }).host;
-    await expect(suggestEntryTitle(host, 's')).rejects.toThrow('offline');
+    const request = jest.fn<any>(async () => { throw new Error('offline'); });
+    await expect(runLlmAction(LOREBOOK_TITLE_ACTION, { instruction: '', input: { snapshotText: 's' }, request })).rejects.toThrow('offline');
   });
 });
 

@@ -1,10 +1,11 @@
 import { FC } from 'react';
 import { STButton, STTextarea } from 'sillytavern-utils-lib/components/react';
-import type { GenerationStatus, GenerationKind } from './useSchemaGeneration.js';
+import type { GenerationStatus } from './useSchemaGeneration.js';
 
-// Design brief, the two model-backed generation buttons and their inline status (openspec:
-// add-llm-schema-generation). Purely presentational: all state and run binding live in
-// useSchemaGeneration. Overwrites are announced inline, never through a confirm dialog.
+// Design brief, the model-backed generation buttons and their inline status (openspec:
+// add-llm-schema-generation, add-llm-action-dialog). Purely presentational: all state and run
+// binding live in useSchemaGeneration. Generate schema has Quick (fills the draft) and Advanced
+// (dialog with preview); Generate prompts is Advanced-only and applies only from its dialog.
 export const SchemaGenerationControls: FC<{
   brief: string;
   onBriefChange: (brief: string) => void;
@@ -12,12 +13,11 @@ export const SchemaGenerationControls: FC<{
   canGenerateSchema: boolean;
   canGeneratePrompts: boolean;
   isRunning: boolean;
-  runningKind?: GenerationKind;
   replacesDraft: boolean;
-  replacesPrompts: boolean;
   status: GenerationStatus;
   onGenerateSchema: () => void;
-  onGeneratePrompts: () => void;
+  onGenerateSchemaAdvanced: () => void;
+  onGeneratePromptsAdvanced: () => void;
   onCancel: () => void;
 }> = ({
   brief,
@@ -26,12 +26,11 @@ export const SchemaGenerationControls: FC<{
   canGenerateSchema,
   canGeneratePrompts,
   isRunning,
-  runningKind,
   replacesDraft,
-  replacesPrompts,
   status,
   onGenerateSchema,
-  onGeneratePrompts,
+  onGenerateSchemaAdvanced,
+  onGeneratePromptsAdvanced,
   onCancel,
 }) => (
   <div className="ztracker-schema-generation">
@@ -46,7 +45,7 @@ export const SchemaGenerationControls: FC<{
       <STButton
         type="button"
         className="ztracker-btn-secondary"
-        title="Generate schema: asks the active connection for a Schema JSON based on the Design brief. Replaces the Schema JSON draft (nothing is saved until you click Save). Does not touch the HTML or the prompts."
+        title="Generate schema: asks the active connection for a Schema JSON based on the Design brief and fills the Schema JSON draft (nothing is saved until you click Save). Does not touch the HTML or the prompts."
         onClick={onGenerateSchema}
         disabled={!canGenerateSchema}
       >
@@ -54,26 +53,32 @@ export const SchemaGenerationControls: FC<{
       </STButton>
       <STButton
         type="button"
-        className="ztracker-btn-danger"
-        title="Generate prompts: asks the active connection for a system prompt and a base prompt based on the Design brief and the current Schema JSON draft. Replaces this Module's prompts and its generated system-prompt preset, and applies immediately (not as a draft)."
-        onClick={onGeneratePrompts}
+        className="ztracker-btn-secondary"
+        title="Generate schema (advanced): opens a dialog to edit the system prompt, generate, review and edit the schema, and apply it to the Schema JSON draft only when you press Apply."
+        onClick={onGenerateSchemaAdvanced}
+        disabled={!canGenerateSchema}
+      >
+        <i className="fa-solid fa-sliders" aria-hidden="true"></i> Advanced...
+      </STButton>
+      <STButton
+        type="button"
+        className="ztracker-btn-secondary"
+        title="Generate prompts: opens a dialog to edit the system prompts, generate a system prompt and a base prompt from the Design brief and the current Schema JSON draft, and review them. Pressing Apply then replaces this Module's prompts and its generated system-prompt preset immediately."
+        onClick={onGeneratePromptsAdvanced}
         disabled={!canGeneratePrompts}
       >
-        <i className="fa-solid fa-file-pen" aria-hidden="true"></i> Generate prompts
+        <i className="fa-solid fa-file-pen" aria-hidden="true"></i> Generate prompts...
       </STButton>
     </div>
     <div className="notes ztracker-schema-status">
       Generate schema and Generate prompts use the global active connection ({activeConnectionLabel}), not this Module&apos;s own connection settings.
     </div>
-    {replacesDraft || replacesPrompts ? (
-      <div className="notes ztracker-schema-status">
-        {replacesDraft ? 'Generate schema will replace the current Schema JSON draft. ' : ''}
-        {replacesPrompts ? 'Generate prompts will overwrite this Module’s prompt text and generated preset immediately.' : ''}
-      </div>
+    {replacesDraft ? (
+      <div className="notes ztracker-schema-status">Generate schema (Quick) will replace the current Schema JSON draft.</div>
     ) : null}
     {isRunning ? (
       <div className="notes ztracker-schema-status">
-        Generating {runningKind === 'prompts' ? 'prompts' : 'schema'}…{' '}
+        Generating schema…{' '}
         <STButton type="button" className="ztracker-btn-secondary" title="Cancel this run; nothing is changed" onClick={onCancel}>
           <i className="fa-solid fa-stop" aria-hidden="true"></i> Cancel
         </STButton>

@@ -14,6 +14,7 @@ import {
   getTrackerModule,
   migrateLegacySettingsToModules,
   migrateLegacyChatMetadataToModules,
+  migratePromptOverrides,
   migrateTrackerModuleAutoSettings,
   migrateTrackerModuleIncludeLists,
   migrateTrackerModuleSystemPromptContent,
@@ -347,6 +348,34 @@ describe('migrateTrackerModuleSystemPromptContent', () => {
 
     expect(() => migrateTrackerModuleSystemPromptContent(settings)).not.toThrow();
     expect(migrateTrackerModuleSystemPromptContent(settings)).toBe(false);
+  });
+});
+
+describe('migratePromptOverrides', () => {
+  test('old settings without the key get an empty map and keep everything else', () => {
+    const settings: any = { ...structuredClone(defaultSettings), debugLogging: true };
+    delete settings.promptOverrides;
+
+    expect(migratePromptOverrides(settings)).toBe(true);
+    expect(settings.promptOverrides).toEqual({});
+    expect(settings.debugLogging).toBe(true);
+  });
+
+  test('a valid map is left untouched', () => {
+    const settings: any = { ...structuredClone(defaultSettings), promptOverrides: { 'lorebook-title': 'mine' } };
+
+    expect(migratePromptOverrides(settings)).toBe(false);
+    expect(settings.promptOverrides).toEqual({ 'lorebook-title': 'mine' });
+  });
+
+  test('an invalid value or non-string entries are repaired', () => {
+    const arrayValue: any = { ...structuredClone(defaultSettings), promptOverrides: ['x'] };
+    expect(migratePromptOverrides(arrayValue)).toBe(true);
+    expect(arrayValue.promptOverrides).toEqual({});
+
+    const mixed: any = { ...structuredClone(defaultSettings), promptOverrides: { good: 'ok', bad: 5 } };
+    expect(migratePromptOverrides(mixed)).toBe(true);
+    expect(mixed.promptOverrides).toEqual({ good: 'ok' });
   });
 });
 

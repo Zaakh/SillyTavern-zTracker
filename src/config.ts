@@ -179,6 +179,8 @@ export interface ExtensionSettings {
   /** Snapshot transform presets shared by every Module; a Module stores only the selected key. */
   transformPresets: Record<string, EmbedSnapshotRegexTransformPreset>;
   debugLogging: boolean;
+  /** User-edited system prompts for LLM actions, keyed by generator id; absent key == shipped default. */
+  promptOverrides?: Record<string, string>;
 }
 
 export interface TrackerModuleSettings extends ExtensionSettings {
@@ -1215,6 +1217,23 @@ export function migrateTransformPresetsToGlobal(settings: ExtensionSettings): bo
   return changed;
 }
 
+/** Makes `promptOverrides` a string-to-string map; drops non-string entries. Returns true when it changed anything. */
+export function migratePromptOverrides(settings: ExtensionSettings): boolean {
+  const raw = settings.promptOverrides as unknown;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    settings.promptOverrides = {};
+    return true;
+  }
+  let changed = false;
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value !== 'string') {
+      delete (raw as Record<string, unknown>)[key];
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 // No synchronous default Module: a fresh install's only Module content comes from seeding the
 // shipped starter templates (see main()'s fresh-install branch in src/index.tsx). If every
 // template fails to seed, getTrackerModule()/getOrderedTrackerModules() already recover a
@@ -1225,4 +1244,5 @@ export const defaultSettings: ExtensionSettings = {
   modules: [],
   transformPresets: createDefaultEmbedSnapshotTransformPresets(),
   debugLogging: false,
+  promptOverrides: {},
 };

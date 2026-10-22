@@ -9,7 +9,11 @@ import { jest } from '@jest/globals';
 import { PromptEngineeringMode } from '../config.js';
 import { getStarterGenerationExamples } from '../generation-examples.js';
 import {
+  DEFAULT_PROMPTS_INSTRUCTIONS,
+  DEFAULT_SCHEMA_INSTRUCTION,
   buildDialectCheatSheet,
+  buildPromptsMessages,
+  buildSchemaMessages,
   extractSchemaFromReply,
   generatePromptsFromBrief,
   generateSchemaFromBrief,
@@ -44,6 +48,52 @@ describe('dialect cheat sheet', () => {
     expect(sheet).toMatch(/Omit "additionalProperties"/);
     expect(sheet).toMatch(/Do not copy the example field names/);
     expect(sheet).toMatch(/Never wrap a single value/);
+  });
+});
+
+describe('editable instruction', () => {
+  const systemOf = (messages: Array<{ content: string }>) => messages[0].content;
+
+  test('the default schema message is the default instruction plus the rules and examples', () => {
+    const system = systemOf(buildSchemaMessages('weather', examples));
+    expect(system.startsWith(DEFAULT_SCHEMA_INSTRUCTION + '\n\n' + buildDialectCheatSheet())).toBe(true);
+    expect(system).toContain('### Example 1');
+  });
+
+  test('a custom or emptied schema instruction still carries the dialect rules and examples', () => {
+    for (const instruction of ['My own words.', '   ']) {
+      const system = systemOf(buildSchemaMessages('weather', examples, instruction));
+      expect(system.startsWith(instruction.trim() || DEFAULT_SCHEMA_INSTRUCTION)).toBe(true);
+      expect(system).toContain(buildDialectCheatSheet());
+      expect(system).toContain('### Example 1');
+    }
+  });
+
+  test('a custom or emptied prompts instruction still carries the self-sufficient rule and examples', () => {
+    for (const kind of ['system', 'base'] as const) {
+      for (const instruction of ['Write it my way.', '']) {
+        const system = systemOf(buildPromptsMessages(kind, 'weather', CLEAN, examples, instruction));
+        expect(system.startsWith(instruction || DEFAULT_PROMPTS_INSTRUCTIONS[kind])).toBe(true);
+        expect(system).toMatch(/self-sufficient/);
+        expect(system).toContain('### Example 1');
+      }
+    }
+  });
+
+  test('default prompts messages use the default instruction', () => {
+    expect(systemOf(buildPromptsMessages('system', 'b', CLEAN, examples))).toContain(DEFAULT_PROMPTS_INSTRUCTIONS.system);
+    expect(systemOf(buildPromptsMessages('base', 'b', CLEAN, examples))).toContain(DEFAULT_PROMPTS_INSTRUCTIONS.base);
+  });
+
+  test('the generators pass the instruction through', async () => {
+    const schemaRequest = scripted([JSON.stringify(CLEAN)]);
+    await generateSchemaFromBrief({ brief: 'b', mode: PromptEngineeringMode.JSON, grammarEnabled: false, examples, request: schemaRequest, instruction: 'SCHEMA LEAD' });
+    expect((schemaRequest.mock.calls[0][0] as any)[0].content.startsWith('SCHEMA LEAD')).toBe(true);
+
+    const promptsRequest = scripted(['S', 'B']);
+    await generatePromptsFromBrief({ brief: 'b', schema: CLEAN, examples, request: promptsRequest, instructions: { base: 'BASE LEAD' } });
+    expect((promptsRequest.mock.calls[0][0] as any)[0].content.startsWith(DEFAULT_PROMPTS_INSTRUCTIONS.system)).toBe(true);
+    expect((promptsRequest.mock.calls[1][0] as any)[0].content.startsWith('BASE LEAD')).toBe(true);
   });
 });
 

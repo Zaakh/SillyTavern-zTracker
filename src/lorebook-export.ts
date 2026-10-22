@@ -1,8 +1,9 @@
 // Copies a tracker snapshot into a World Info lorebook entry (export as new / replace the linked
-// entry) and suggests an entry title. Every host call goes through an injected `LorebookHost` so
-// Jest can stub it; `createLorebookHost` wires the real SillyTavern functions.
+// entry) and defines the title/keys suggestion actions. Every host call goes through an injected
+// `LorebookHost` so Jest can stub it; `createLorebookHost` wires the real SillyTavern functions.
 import { formatEmbeddedTrackerSnapshot } from './embed-snapshot-transform.js';
 import type { TrackerModuleSettings } from './config.js';
+import type { LlmAction } from './llm-actions.js';
 import { loadWorldInfoBookByName } from './sillytavern-world-info.js';
 
 /** Where a message's tracker was last exported; stored on the Module's tracker record. */
@@ -26,7 +27,6 @@ export interface LorebookHost {
   reloadWorldInfoEditor(file: string, loadIfNotSelected?: boolean): void;
   /** Host factory for a complete new entry; absent when `/scripts/world-info.js` cannot be imported. */
   createWorldInfoEntry?(name: string, data: HostBook): any;
-  generateRaw(options: { prompt: string; systemPrompt: string; responseLength: number }): Promise<string>;
 }
 
 type SnapshotSettings = Pick<
@@ -54,7 +54,6 @@ export async function createLorebookHost(context: any): Promise<LorebookHost> {
     readBook: (name) => loadWorldInfoBookByName(name),
     reloadWorldInfoEditor: (file, loadIfNotSelected) => context.reloadWorldInfoEditor(file, loadIfNotSelected),
     createWorldInfoEntry,
-    generateRaw: (options) => context.generateRaw(options),
   };
 }
 
@@ -165,15 +164,49 @@ export async function replaceLinkedLorebookEntry(
   return { ok: true, link, warnings: [] };
 }
 
-const TITLE_SYSTEM_PROMPT =
-  'Reply with a title of at most six words for the following text, and nothing else: no quotes, no explanation.';
 const TITLE_MAX_LENGTH = 60;
+const KEYS_MAX_COUNT = 8;
+const QUOTES = /^["'“”‘’`]+|["'“”‘’`]+$/g;
 
-/** One short unquoted line from the live connection; throws on an empty reply or a failed request. */
-export async function suggestEntryTitle(host: LorebookHost, snapshotText: string): Promise<string> {
-  const reply = await host.generateRaw({ prompt: snapshotText, systemPrompt: TITLE_SYSTEM_PROMPT, responseLength: 30 });
+/** One short unquoted line; throws on an empty reply. */
+export function parseTitle(reply: string): string {
   const firstLine = String(reply ?? '').split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? '';
-  const title = firstLine.replace(/^["'“”‘’`]+|["'“”‘’`]+$/g, '').replace(/\.$/, '').trim().slice(0, TITLE_MAX_LENGTH);
+  const title = firstLine.replace(QUOTES, '').replace(/\.$/, '').trim().slice(0, TITLE_MAX_LENGTH);
   if (!title) throw new Error('The connection returned no title.');
   return title;
 }
+
+/** Splits on commas and newlines, strips bullets and quotes, dedupes case-insensitively, caps the count. */
+export function parseKeys(reply: string): string[] {
+  const seen = new Set<string>();
+  const keys: string[] = [];
+  for (const part of String(reply ?? '').split(/[,\n]/)) {
+    const key = part.replace(/^\s*(?:[-*•]\s*|\d+[.)]\s+)/, '').trim().replace(QUOTES, '').trim();
+    if (!key || seen.has(key.toLowerCase())) continue;
+    seen.add(key.toLowerCase());
+    keys.push(key);
+  }
+  if (keys.length === 0) throw new Error('The connection returned no usable keys.');
+  return keys.slice(0, KEYS_MAX_COUNT);
+}
+
+export const LOREBOOK_TITLE_ACTION: LlmAction<{ snapshotText: string }, string> = {
+  id: 'lorebook-title',
+  defaultInstruction: 'Name the subject of the following text in 2 to 6 words. Reply with the title only: no quotes, no explanation.',
+  buildMessages: (instruction, input) => [
+    { role: 'system', content: instruction },
+    { role: 'user', content: input.snapshotText },
+  ],
+  parse: parseTitle,
+};
+
+export const LOREBOOK_KEYS_ACTION: LlmAction<{ snapshotText: string; title: string }, string[]> = {
+  id: 'lorebook-keys',
+  defaultInstruction:
+    "List 2 to 5 short words or phrases that a chat message would literally contain when this lorebook entry should be recalled, such as the subject's name and its variants. Skip generic words. Reply with the keys only, separated by commas.",
+  buildMessages: (instruction, input) => [
+    { role: 'system', content: instruction },
+    { role: 'user', content: `${input.title.trim() ? `Entry title: ${input.title.trim()}\n\n` : ''}${input.snapshotText}` },
+  ],
+  parse: parseKeys,
+};

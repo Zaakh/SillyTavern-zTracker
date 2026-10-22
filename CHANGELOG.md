@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.18.0] - 2026-10-22
+
+### Added
+
+- **Suggest keys** in the lorebook export dialog proposes entry keys from the tracker and the current title, with its own short system prompt. Applied keys stop following the title.
+- **Advanced...** next to Generate schema opens a dialog to edit the instruction part of its system prompt (dialect rules and examples are added automatically), review the schema and apply it to the draft.
+- **Advanced...** next to Suggest title and Suggest keys opens a dialog to edit the system prompt, generate, edit the result and apply it. Edited system prompts are saved in the extension settings, shown as "(edited)", and can be reset to the default; the wand buttons use them too.
+
+### Changed
+
+- **Generate prompts** is now a dialog only (**Generate prompts...**): it shows editable previews of the system prompt and the base prompt and applies them, and saves the system prompt preset, only when you press **Apply**. The previous one-click, immediate-apply behavior is removed.
+- Suggest title and Suggest keys now go through the global active connection with reasoning removed, instead of a 30-token raw request.
+
 ## [2.17.1] - 2026-10-22
 
 ### Changed

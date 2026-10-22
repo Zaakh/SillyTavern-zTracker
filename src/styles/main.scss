@@ -855,3 +855,56 @@
 		font-size: smaller;
 	}
 }
+
+.ztracker-llm-dialog {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	text-align: left;
+
+	textarea {
+		width: 100%;
+		box-sizing: border-box;
+	}
+
+	// SillyTavern's .menu_button sets a display value that would otherwise defeat `hidden`.
+	[hidden] {
+		display: none !important;
+	}
+
+	.ztracker-llm-dialog-reset {
+		width: auto;
+		align-self: flex-start;
+		white-space: nowrap;
+	}
+
+	.ztracker-llm-dialog-note {
+		opacity: 0.7;
+		font-size: 0.9em;
+	}
+
+	.ztracker-llm-dialog-part {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.ztracker-llm-dialog-edited {
+		color: var(--SmartThemeQuoteColor, #e0a030);
+	}
+
+	.ztracker-llm-dialog-bar {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+
+		button {
+			width: auto;
+		}
+	}
+
+	.ztracker-llm-dialog-error {
+		color: var(--SmartThemeFailureColor, #d9534f);
+		white-space: pre-wrap;
+	}
+}

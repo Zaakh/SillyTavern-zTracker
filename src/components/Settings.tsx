@@ -209,7 +209,7 @@ export const ZTrackerSettings: FC<{
    * reports whether the response conformed to a trivial test schema - lets a user confirm their
    * backend actually honors the "Enforce schema via grammar sampling" setting before relying on it. */
   testGrammarSchemaEnforcement: (moduleId: string) => Promise<{ supported: boolean; message: string }>;
-  /** One request through the global active connection, used by "Generate schema" / "Generate prompts". */
+  /** One request through the global active connection, used by "Generate schema" / "Generate prompts" and their dialogs. */
   requestWithActiveConnection: SchemaGenerationOptions['requestWithActiveConnection'];
   getActiveConnectionLabel: () => string;
 }> = ({ testGrammarSchemaEnforcement, requestWithActiveConnection, getActiveConnectionLabel }) => {
@@ -604,6 +604,7 @@ export const ZTrackerSettings: FC<{
     [updateAndRefresh, refreshSystemPromptState],
   );
 
+  const activeConnectionLabel = getActiveConnectionLabel();
   const schemaGeneration = useSchemaGeneration({
     module: selectedModule,
     schemaPresetKey: moduleSettings.schemaPreset,
@@ -614,6 +615,8 @@ export const ZTrackerSettings: FC<{
     setSchemaText: handleSchemaValueChange,
     applyGeneratedPrompts,
     requestWithActiveConnection,
+    overrideStore: settingsManager,
+    activeConnectionLabel,
   });
   const schemaGenerationControls = (
     <SchemaGenerationControls
@@ -623,16 +626,15 @@ export const ZTrackerSettings: FC<{
           resolveOrCreateModule(currentSettings, selectedModuleId).designBrief = brief;
         })
       }
-      activeConnectionLabel={getActiveConnectionLabel()}
+      activeConnectionLabel={activeConnectionLabel}
       canGenerateSchema={schemaGeneration.canGenerateSchema}
       canGeneratePrompts={schemaGeneration.canGeneratePrompts}
       isRunning={schemaGeneration.isRunning}
-      runningKind={schemaGeneration.runningKind}
       replacesDraft={schemaGeneration.replacesDraft}
-      replacesPrompts={schemaGeneration.replacesPrompts}
       status={schemaGeneration.status}
       onGenerateSchema={schemaGeneration.generateSchema}
-      onGeneratePrompts={schemaGeneration.generatePrompts}
+      onGenerateSchemaAdvanced={schemaGeneration.generateSchemaAdvanced}
+      onGeneratePromptsAdvanced={schemaGeneration.generatePromptsAdvanced}
       onCancel={schemaGeneration.cancel}
     />
   );
