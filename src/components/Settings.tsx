@@ -1010,7 +1010,7 @@ export const ZTrackerSettings: FC<{
               isOpen={isInjectionOpen}
               onToggle={() => setInjectionOpen((value) => !value)}
             >
-              <TrackerInjectionSection settings={moduleSettings} updateAndRefresh={updateSelectedModuleAndRefresh} updateGlobal={updateAndRefresh} />
+              <TrackerInjectionSection settings={moduleSettings} updateAndRefresh={updateSelectedModuleAndRefresh} updateGlobal={updateAndRefresh} moduleId={selectedModule.id} />
             </SettingsSectionDrawer>
             </div>
 

@@ -219,3 +219,48 @@ describe('formatEmbeddedTrackerSnapshot (flat)', () => {
     );
   });
 });
+
+describe('formatEmbeddedTrackerSnapshot (stages and regex errors)', () => {
+  const withPreset = (preset: Record<string, unknown>) =>
+    ({
+      embedZTrackerSnapshotTransformPreset: 'custom',
+      embedZTrackerSnapshotTransformPresets: { custom: preset },
+    }) as any;
+
+  it('reports an invalid pattern and returns the untransformed text', () => {
+    const result = formatEmbeddedTrackerSnapshot(
+      { a: 1 },
+      withPreset({ input: 'pretty_json', pattern: '(', flags: 'g', replacement: '' }),
+    );
+    expect(result.regexError).toEqual(expect.any(String));
+    expect(result.text).toBe(result.formattedText);
+    expect(result.text).toBe(JSON.stringify({ a: 1 }, null, 2));
+  });
+
+  it('reports an invalid flag', () => {
+    const result = formatEmbeddedTrackerSnapshot(
+      { a: 1 },
+      withPreset({ input: 'pretty_json', pattern: 'a', flags: 'zz', replacement: '' }),
+    );
+    expect(result.regexError).toEqual(expect.any(String));
+    expect(result.text).toBe(result.formattedText);
+  });
+
+  it('has no regexError for a valid or empty pattern, and text differs from formattedText after a replacement', () => {
+    const ok = formatEmbeddedTrackerSnapshot(
+      { a: 1 },
+      withPreset({ input: 'pretty_json', pattern: '"a"', flags: 'g', replacement: 'A' }),
+    );
+    expect(ok.regexError).toBeUndefined();
+    expect(ok.text).toContain('A');
+    expect(ok.formattedText).toContain('"a"');
+    expect(formatEmbeddedTrackerSnapshot({ a: 1 }, embedSettings as any).regexError).toBeUndefined();
+  });
+
+  it('minifies the formatted stage for the minimal preset', () => {
+    const settings = { ...embedSettings, embedZTrackerSnapshotTransformPreset: 'minimal' } as any;
+    const { formattedText } = formatEmbeddedTrackerSnapshot(trackerValue, settings);
+    expect(formattedText).not.toMatch(/\n\s*\n/);
+    expect(formattedText).not.toMatch(/[\t ]+\n/);
+  });
+});

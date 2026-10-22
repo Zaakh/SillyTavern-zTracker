@@ -7,7 +7,9 @@ import {
   TrackerModuleSettings,
   createDefaultEmbedSnapshotTransformPresets,
 } from '../../config.js';
+import { DEFAULT_MODULE_ID } from '../../extension-metadata.js';
 import { reconcilePresetItems, resolvePresetSelection } from './preset-state.js';
+import { SnapshotInjectionPreview } from './SnapshotInjectionPreview.js';
 
 const BUILT_IN_PRESET_KEYS = Object.keys(createDefaultEmbedSnapshotTransformPresets());
 
@@ -19,7 +21,8 @@ export const EmbedSnapshotTransformSection: FC<{
   settings: TrackerModuleSettings;
   updateAndRefresh: (updater: (current: TrackerModuleSettings) => void) => void;
   updateGlobal: (updater: (current: ExtensionSettings) => void) => void;
-}> = ({ settings, updateAndRefresh, updateGlobal }) => {
+  moduleId?: string;
+}> = ({ settings, updateAndRefresh, updateGlobal, moduleId = DEFAULT_MODULE_ID }) => {
   const embedTransformItems = useMemo((): PresetItem[] => {
     const presets = settings.embedZTrackerSnapshotTransformPresets ?? {};
     return Object.entries(presets).map(([value, preset]) => ({
@@ -192,6 +195,8 @@ export const EmbedSnapshotTransformSection: FC<{
           </div>
         </div>
       )}
+
+      <SnapshotInjectionPreview settings={settings} moduleId={moduleId} />
     </div>
   );
 };
