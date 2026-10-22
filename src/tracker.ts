@@ -346,8 +346,10 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
 
   const controls = doc.createElement('div');
   controls.className = 'ztracker-controls';
+  const regenerateHint =
+    'Regenerate this tracker from scratch using the schema preset selected for this chat and its template. Existing data is replaced, not migrated.';
   controls.innerHTML = `
-    <div class="ztracker-regenerate-button fa-solid fa-arrows-rotate" title="Regenerate Tracker"></div>
+    <div class="ztracker-regenerate-button fa-solid fa-arrows-rotate" title="${regenerateHint}" aria-label="${regenerateHint}"></div>
     <details class="ztracker-parts-details" title="Regenerate individual parts">
       <summary class="ztracker-parts-summary fa-solid fa-list"></summary>
       <div class="ztracker-parts-list">${partsButtons}</div>

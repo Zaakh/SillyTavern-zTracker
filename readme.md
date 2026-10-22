@@ -118,7 +118,7 @@ If the model seems to over-weight who said a line instead of the scene content i
 To change how a specific character participates in **Auto Mode**, open that character's panel and use the zTracker truck control in the avatar action row. With one Module configured, clicking it cycles that Module's override for this character: **Default** (follow the Module's own state: only an **Auto** Module generates automatically) → **Off** (never auto-generate for this character on that Module) → **On** (always auto-generate for this character on that Module, using that Module's configured direction, even if the Module is Manual for everyone else) → back to **Default**. With multiple Modules configured, clicking the control opens a small menu so you can set each Module's override independently. This only affects **Auto Mode**; manual tracker generation from message controls always works regardless of the override.
 
 When a tracker is rendered on a message, use the tracker controls:
-- **Regenerate Tracker** (rotate icon) regenerates the whole tracker.
+- **Regenerate Tracker** (rotate icon) rebuilds the whole tracker from scratch using the schema preset selected for the chat and its template; existing data is replaced, not migrated.
 - **Parts menu** (list icon) lets you regenerate an individual top-level field (e.g. `time`, `location`, `topics`) without regenerating everything.
 - **Cleanup** (eraser icon) lets you clear several wrong tracker targets at once, then either leave them pending or recreate them in one coordinated run.
 

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.17.1] - 2026-10-22
+
+### Changed
+
+- The Regenerate Tracker button's tooltip now explains that the tracker is rebuilt from scratch with the chat's schema preset and template, and that existing data is replaced, not migrated.
+
 ## [2.17.0] - 2026-10-21
 
 ### Changed

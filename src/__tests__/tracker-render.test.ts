@@ -46,6 +46,16 @@ describe('renderTracker', () => {
     expect(tracker?.querySelector('.ztracker-controls')).not.toBeNull();
   });
 
+  it('explains in the regenerate button tooltip that data is rebuilt from scratch and replaced', () => {
+    renderTracker(0, { context: createContext(), document, handlebars: Handlebars });
+
+    const button = document.querySelector('.ztracker-regenerate-button');
+    const title = button?.getAttribute('title');
+    expect(title).toContain('from scratch');
+    expect(title).toContain('replaced');
+    expect(button?.getAttribute('aria-label')).toBe(title);
+  });
+
   it('renders one labeled tracker block per module in module order', () => {
     const agendaModule = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 0 });
     const defaultModule = createDefaultTrackerModule({ id: DEFAULT_MODULE_ID, name: 'Scene', order: 1 });
@@ -83,6 +93,9 @@ describe('renderTracker', () => {
     expect(trackers.map((tracker) => tracker.querySelector('.ztracker-module-label')?.textContent)).toEqual(['Agenda', 'Scene']);
     expect(trackers[0].querySelector('.agenda-content')?.textContent).toBe('Find the exit');
     expect(trackers[1].querySelector('.scene-content')?.textContent).toBe('10:00');
+    trackers.forEach((tracker) => {
+      expect(tracker.querySelector('.ztracker-regenerate-button')?.getAttribute('title')).toContain('from scratch');
+    });
   });
 
   it('isolates one module render failure without dropping other modules', () => {
