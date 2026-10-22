@@ -486,6 +486,30 @@
 	text-align: left;
 }
 
+/* The lorebook menu reuses .ztracker-module-generate-menu; rows use the same theme variables as the parts rows so they follow light and dark themes. */
+.ztracker-lorebook-menu {
+	max-width: min(360px, calc(100vw - 16px));
+}
+
+.ztracker-lorebook-row {
+	width: 100%;
+	justify-content: flex-start;
+	text-align: left;
+	white-space: normal;
+	word-break: break-word;
+	color: inherit;
+	background: var(--ztracker-menu-part-bg, rgba(255, 255, 255, 0.06));
+
+	&:hover:not(:disabled) {
+		background: var(--ztracker-menu-hover-bg, rgba(255, 255, 255, 0.10));
+	}
+
+	&:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+}
+
 .ztracker-character-auto-mode-popup {
 	min-width: 220px;
 	padding: 8px;
@@ -647,23 +671,6 @@
 	position: relative;
 	z-index: 50;
 
-	.ztracker-lorebook-actions {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 6px;
-		margin: 4px 0;
-
-		button {
-			width: auto;
-			white-space: nowrap;
-		}
-
-		button:disabled {
-			opacity: 0.4;
-			cursor: not-allowed;
-		}
-	}
-
 	.ztracker-controls {
 		position: absolute;
 		top: 8px;
@@ -676,6 +683,7 @@
 		.ztracker-regenerate-button,
 		.ztracker-cleanup-button,
 		.ztracker-world-info-button,
+		.ztracker-lorebook-button,
 		.ztracker-edit-button,
 		.ztracker-delete-button,
 		.ztracker-parts-summary {

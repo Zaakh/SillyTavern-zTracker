@@ -78,35 +78,32 @@ function makeFixture(options: { link?: boolean; books?: Record<string, any> } = 
 
 const field = (form: HTMLElement, selector: string) => form.querySelector(selector) as HTMLInputElement;
 
-describe('lorebook controls on the tracker block', () => {
+describe('lorebook icon on the tracker block', () => {
   function renderBlock(link: boolean) {
     const { message, settings } = makeFixture({ link });
     document.body.innerHTML = '<div class="mes" mesid="0"><div class="mes_text"></div></div>';
     renderTracker(0, { context: { chat: [message as any] }, settings });
-    return {
-      exportButton: document.querySelector('.ztracker-lorebook-export-button') as HTMLButtonElement,
-      replaceButton: document.querySelector('.ztracker-lorebook-replace-button') as HTMLButtonElement,
-    };
+    return document.querySelector('.ztracker-controls .ztracker-lorebook-button') as HTMLElement | null;
   }
 
-  test('without a link Replace is disabled and Export is enabled', () => {
-    const { exportButton, replaceButton } = renderBlock(false);
-    expect(exportButton.textContent).toBe('Export to lorebook...');
-    expect(exportButton.disabled).toBe(false);
-    expect(replaceButton.disabled).toBe(true);
+  test('the icon sits in the controls row and no lorebook button exists elsewhere', () => {
+    renderBlock(false);
+    expect(document.querySelectorAll('.ztracker-lorebook-button')).toHaveLength(1);
+    expect(document.querySelector('.ztracker-lorebook-actions')).toBeNull();
+    expect(document.querySelectorAll('.mes_ztracker button')).toHaveLength(0);
   });
 
-  test('with a link Replace is enabled and names the book and entry', () => {
-    const { replaceButton } = renderBlock(true);
-    expect(replaceButton.disabled).toBe(false);
-    expect(replaceButton.textContent).toContain('Characters');
-    expect(replaceButton.textContent).toContain('Bob');
+  test('link attributes are present only with a link', () => {
+    expect(renderBlock(false)!.dataset.ztrackerLorebookBook).toBeUndefined();
+    const icon = renderBlock(true)!;
+    expect(icon.dataset.ztrackerLorebookBook).toBe('Characters');
+    expect(icon.dataset.ztrackerLorebookTitle).toBe('Bob');
   });
 });
 
-describe('lorebook buttons reach the handlers', () => {
-  test('clicks on the export and replace buttons call the matching actions for the owning module', async () => {
-    jest.resetModules();
+describe('lorebook menu', () => {
+  async function boot() {
+    // Import once: ui-init installs its document listeners a single time and re-targets them per boot.
     const { initializeGlobalUI } = await import('../ui/ui-init.js');
     const { bootExtensionForTest, createSillyTavernHost, installChatMessageDom, installMessageTemplateDom } = await import(
       '../test-utils/sillytavern-host-harness.js'
@@ -119,29 +116,84 @@ describe('lorebook buttons reach the handlers', () => {
     };
     document.body.innerHTML = '';
     installMessageTemplateDom();
+    const settings = { ...JSON.parse(JSON.stringify(defaultSettings)), modules: [createDefaultTrackerModule({ id: 'scene', name: 'Scene', order: 0 })] };
     await bootExtensionForTest({
       host,
       boot: () =>
         initializeGlobalUI({
           globalContext: host.context,
-          settingsManager: { getSettings: jest.fn(() => ({ autoMode: 'none', includeLastXZTrackerMessages: 1 })) } as any,
+          settingsManager: { getSettings: jest.fn(() => settings) } as any,
           actions,
           renderTrackerWithDeps: () => undefined,
         }),
     });
+    const icon = (moduleId: string, attrs = '') =>
+      `<div class="mes_ztracker" data-ztracker-module="${moduleId}"><div class="ztracker-lorebook-button" ${attrs}></div></div>`;
     installChatMessageDom(3, {
-      innerHtml: `<div class="mes_text">x</div>
-        <div class="mes_ztracker" data-ztracker-module="scene">
-          <button class="ztracker-lorebook-export-button">Export to lorebook...</button>
-          <button class="ztracker-lorebook-replace-button">Replace linked entry</button>
-        </div>`,
+      innerHtml: `<div class="mes_ztracker_button"></div><div class="mes_text">x</div>${icon('scene')}${icon('agenda', 'data-ztracker-lorebook-book="Characters" data-ztracker-lorebook-title="Bob"')}`,
     });
+    const icons = document.querySelectorAll<HTMLElement>('.ztracker-lorebook-button');
+    return { actions, first: icons[0], second: icons[1] };
+  }
+  const row = (name: string) => document.querySelector(`.ztracker-lorebook-${name}-row`) as HTMLButtonElement;
+  const menuOpen = () => document.querySelector('.ztracker-lorebook-menu') !== null;
 
-    (document.querySelector('.ztracker-lorebook-export-button') as HTMLElement).click();
-    (document.querySelector('.ztracker-lorebook-replace-button') as HTMLElement).click();
+  test('rows are labelled; Replace is disabled without a link and enabled with one naming the target', async () => {
+    const { first, second } = await boot();
+    first.click();
+    expect(row('export').textContent).toBe('Export to lorebook...');
+    expect(row('replace').disabled).toBe(true);
+    second.click();
+    expect(document.querySelectorAll('.ztracker-lorebook-menu')).toHaveLength(1);
+    expect(row('replace').disabled).toBe(false);
+    expect(row('replace').textContent).toBe('Replace linked entry: Characters / Bob');
+  });
 
-    expect(actions.exportToLorebook).toHaveBeenCalledWith(3, 'scene');
-    expect(actions.replaceLorebookEntry).toHaveBeenCalledWith(3, 'scene');
+  test('a disabled Replace row neither closes the menu nor calls the handler', async () => {
+    const { actions, first } = await boot();
+    first.click();
+    row('replace').click();
+    expect(menuOpen()).toBe(true);
+    expect(actions.replaceLorebookEntry).not.toHaveBeenCalled();
+  });
+
+  test('choosing a row closes the menu and acts for the clicked Module', async () => {
+    const { actions, first, second } = await boot();
+    second.click();
+    row('export').click();
+    expect(menuOpen()).toBe(false);
+    expect(actions.exportToLorebook).toHaveBeenCalledWith(3, 'agenda');
+    first.click();
+    row('export').click();
+    expect(actions.exportToLorebook).toHaveBeenLastCalledWith(3, 'scene');
+    second.click();
+    row('replace').click();
+    expect(actions.replaceLorebookEntry).toHaveBeenCalledWith(3, 'agenda');
+  });
+
+  test('Escape and an outside mousedown close it without running anything', async () => {
+    const { actions, first } = await boot();
+    first.click();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(menuOpen()).toBe(false);
+    first.click();
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    expect(menuOpen()).toBe(false);
+    expect(actions.exportToLorebook).not.toHaveBeenCalled();
+  });
+
+  test('opening the Module chooser closes it, and a re-render drops it', async () => {
+    const { first } = await boot();
+    first.click();
+    (document.querySelector('.mes .mes_ztracker_button') as HTMLElement).click();
+    expect(menuOpen()).toBe(false);
+    expect(document.querySelector('.ztracker-module-generate-menu')).not.toBeNull();
+
+    first.click();
+    const { message, settings } = makeFixture();
+    document.body.insertAdjacentHTML('beforeend', '<div class="mes" mesid="0"><div class="mes_text"></div></div>');
+    renderTracker(0, { context: { chat: [message as any] }, settings });
+    expect(menuOpen()).toBe(false);
   });
 });
 
