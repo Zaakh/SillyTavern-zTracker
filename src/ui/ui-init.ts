@@ -59,17 +59,18 @@ function hasAutoModuleForDirection(settings: ExtensionSettings, directionModes: 
   return getOrderedTrackerModules(settings).some((module) => directionModes.includes(module.auto.direction));
 }
 
-function generateDueAutoModules(actions: TrackerActions, messageId: number, moduleIds: string[]) {
+/** Starts the due auto Modules; outgoing runs are shown by the hold badge, so they get no tracker badge of their own. */
+function generateDueAutoModules(actions: TrackerActions, messageId: number, moduleIds: string[], ownedByHold = false) {
   if (typeof actions.generateTrackersForMessage === 'function') {
     return actions.generateTrackersForMessage(messageId, {
       silent: true,
-      showStatusIndicator: false,
+      ...(ownedByHold ? { ownedByHold } : {}),
       autoOnly: true,
       moduleIds,
     });
   }
 
-  return actions.generateTracker(messageId, { silent: true, showStatusIndicator: false });
+  return actions.generateTracker(messageId, { silent: true, ...(ownedByHold ? { ownedByHold } : {}) });
 }
 
 type InitializeGlobalUIOptions = {
@@ -222,10 +223,7 @@ function openManualModuleMenu(options: {
     item.addEventListener('click', (event) => {
       event.stopPropagation();
       closeManualModuleMenu();
-      options.actions.generateTracker(
-        options.messageId,
-        withModuleActionOption({ showStatusIndicator: true }, module.id),
-      );
+      options.actions.generateTracker(options.messageId, withModuleActionOption({}, module.id));
     });
     menu.append(item);
   }
@@ -371,7 +369,7 @@ function installTrackerActionClickHandler(): void {
     } else if (target.classList.contains('ztracker-edit-button')) {
       actions.editTracker(messageId, ...moduleArgs);
     } else if (target.classList.contains('ztracker-regenerate-button')) {
-      actions.generateTracker(messageId, withModuleActionOption({ showStatusIndicator: true }, moduleId));
+      actions.generateTracker(messageId, withModuleActionOption({}, moduleId));
     } else if (target.classList.contains('ztracker-delete-button')) {
       actions.deleteTracker(messageId, ...moduleArgs);
     } else if (target.classList.contains('ztracker-lorebook-button')) {
@@ -509,7 +507,7 @@ export async function initializeGlobalUI(options: InitializeGlobalUIOptions) {
 
         void (async () => {
           try {
-            await generateDueAutoModules(actions, messageId, moduleIds);
+            await generateDueAutoModules(actions, messageId, moduleIds, true);
           } catch (error) {
             console.error('zTracker auto mode failed to generate a tracker before reply.', error);
           }

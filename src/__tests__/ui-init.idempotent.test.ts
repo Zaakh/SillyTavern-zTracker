@@ -110,7 +110,7 @@ describe('initializeGlobalUI idempotence', () => {
     );
 
     expect(actions.generateTracker).toHaveBeenCalledTimes(1);
-    expect(actions.generateTracker).toHaveBeenCalledWith(0, { showStatusIndicator: true });
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, {});
   });
 
   test('routes the redo button through the full regeneration path', async () => {
@@ -137,7 +137,7 @@ describe('initializeGlobalUI idempotence', () => {
     );
 
     expect(actions.generateTracker).toHaveBeenCalledTimes(1);
-    expect(actions.generateTracker).toHaveBeenCalledWith(0, { showStatusIndicator: true });
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, {});
   });
 
   test('opens a Module chooser for the message truck button when multiple Modules are enabled', async () => {
@@ -175,7 +175,7 @@ describe('initializeGlobalUI idempotence', () => {
     );
 
     expect(actions.generateTracker).toHaveBeenCalledTimes(1);
-    expect(actions.generateTracker).toHaveBeenCalledWith(0, { showStatusIndicator: true, moduleId: 'agenda' });
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { moduleId: 'agenda' });
     expect(document.querySelector('.ztracker-module-generate-menu')).toBeNull();
   });
 
@@ -211,7 +211,7 @@ describe('initializeGlobalUI idempotence', () => {
     );
 
     expect(actions.generateTracker).toHaveBeenCalledTimes(1);
-    expect(actions.generateTracker).toHaveBeenCalledWith(0, { showStatusIndicator: true, moduleId: 'agenda' });
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { moduleId: 'agenda' });
   });
 
   test('lists a Manual Module (enabled, auto off) in the message truck menu', async () => {

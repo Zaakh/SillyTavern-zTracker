@@ -7,6 +7,7 @@
  */
 import { POPUP_RESULT, POPUP_TYPE } from 'sillytavern-utils-lib/types/popup';
 import { isAbortError, saveOverride, resolveInstruction } from '../llm-actions.js';
+import { formatElapsed, startRunTimer } from '../run-timer.js';
 import type { OverrideStore } from '../llm-actions.js';
 
 /** One prompt-and-result pair; a single-text generator has exactly one part. */
@@ -25,8 +26,12 @@ export interface LlmDialogOptions {
   connectionLabel?: string;
   /** Shown beside Apply, e.g. an overwrite warning. */
   applyNotice?: string;
-  /** Sends the request(s) with the instructions as currently edited; one instruction and one result per part. */
-  run(instructions: string[], signal: AbortSignal): Promise<string[]>;
+  /**
+   * Sends the request(s) with the instructions as currently edited; one instruction and one result per part.
+   * A generator that sends one request per part calls `onProgress(part, total)` before each request so the
+   * dialog can show "part N/M"; single-request generators ignore it.
+   */
+  run(instructions: string[], signal: AbortSignal, onProgress?: (part: number, total: number) => void): Promise<string[]>;
   /** Writes the previewed results to the target; a throw keeps the dialog open. */
   apply(results: string[]): void | Promise<void>;
 }
@@ -101,6 +106,7 @@ export function buildLlmActionDialog(options: LlmDialogOptions): LlmActionDialog
   let controller: AbortController | undefined;
   let hasResult = false;
   let closed = false;
+  let stopTimer: (() => void) | undefined;
 
   generate.addEventListener('click', async () => {
     if (controller) return;
@@ -108,10 +114,19 @@ export function buildLlmActionDialog(options: LlmDialogOptions): LlmActionDialog
     controller = current;
     generate.disabled = true;
     stop.hidden = false;
-    generate.textContent = 'Generating...';
     error.textContent = '';
+    const startedAt = Date.now();
+    let partLabel = '';
+    const showProgress = () => {
+      generate.textContent = ['Generating...', partLabel, formatElapsed(Date.now() - startedAt)].filter(Boolean).join(' ');
+    };
+    showProgress();
+    stopTimer = startRunTimer(showProgress, startedAt);
     try {
-      const results = await options.run(editors.map((editor) => editor.value), current.signal);
+      const results = await options.run(editors.map((editor) => editor.value), current.signal, (part, total) => {
+        partLabel = `part ${part}/${total}`;
+        showProgress();
+      });
       if (current.signal.aborted || closed) return;
       results.forEach((text, index) => {
         previews[index].value = text;
@@ -123,6 +138,8 @@ export function buildLlmActionDialog(options: LlmDialogOptions): LlmActionDialog
         error.textContent = errorText(failure);
       }
     } finally {
+      stopTimer?.();
+      stopTimer = undefined;
       controller = undefined;
       generate.disabled = false;
       stop.hidden = true;

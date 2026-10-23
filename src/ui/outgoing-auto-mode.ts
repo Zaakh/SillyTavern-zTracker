@@ -18,6 +18,8 @@ type OutgoingAutoModeState = {
   expectedTrackerGenerationStarts: number;
   observedHostGenerationStart: boolean;
   hostGenerationWasSuppressed: boolean;
+  /** When the current hold began; kept here because the hold badge is rebuilt on every sync. */
+  holdStartedAt: number | null;
   runId: number;
 };
 
@@ -42,6 +44,7 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
     expectedTrackerGenerationStarts: 0,
     observedHostGenerationStart: false,
     hostGenerationWasSuppressed: false,
+    holdStartedAt: null,
     runId: 0,
   };
 
@@ -53,6 +56,7 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
     state.expectedTrackerGenerationStarts = 0;
     state.observedHostGenerationStart = false;
     state.hostGenerationWasSuppressed = false;
+    state.holdStartedAt = null;
     if (options.invalidateRun) {
       state.runId += 1;
     }
@@ -123,6 +127,7 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
       text: 'Generating tracker before reply',
       statusClassName: AUTO_MODE_STATUS_CLASS,
       holdClassName: AUTO_MODE_HOLD_CLASS,
+      startedAt: state.holdStartedAt ?? undefined,
     });
   };
 
@@ -132,8 +137,13 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
     syncSendButton();
   };
 
-  /** Filters out the controller's own badge mutations so observer churn does not loop forever. */
+  /** Filters out the controller's own badge mutations (including per-second timer text updates) so observer churn does not loop forever. */
   const isIndicatorOnlyMutation = (mutation: MutationRecord) => {
+    const target = mutation.target instanceof Element ? mutation.target : mutation.target.parentElement;
+    if (target?.closest(`.${MESSAGE_STATUS_BASE_CLASS}`)) {
+      return true;
+    }
+
     const changedNodes = [...mutation.addedNodes, ...mutation.removedNodes];
     return changedNodes.length > 0 && changedNodes.every((node) =>
       node instanceof Element && node.classList.contains(MESSAGE_STATUS_BASE_CLASS)
@@ -201,6 +211,7 @@ export function createOutgoingAutoModeController(options: { actions: TrackerActi
 
     const runId = ++state.runId;
     state.pendingMessageId = messageId;
+    state.holdStartedAt = Date.now();
     state.allowNextGenerationStart = false;
     state.shouldBlockNextGenerationStart = true;
     syncUi();

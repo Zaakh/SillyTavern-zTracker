@@ -292,11 +292,15 @@ export async function generatePromptsFromBrief(options: {
   signal?: AbortSignal;
   /** Replaces the default instruction lead per prompt. */
   instructions?: Partial<Record<PromptsKind, string>>;
+  /** Called before each of the two requests, so a UI can show "part N/M". */
+  onProgress?: (part: number, total: number) => void;
 }): Promise<{ systemPrompt: string; prompt: string }> {
   const { brief, schema, examples, request, signal } = options;
   const results: Record<PromptsKind, string> = { system: '', base: '' };
-  for (const kind of ['system', 'base'] as const) {
+  const kinds = ['system', 'base'] as const;
+  for (const [index, kind] of kinds.entries()) {
     throwIfAborted(signal);
+    options.onProgress?.(index + 1, kinds.length);
     results[kind] = (await request(buildPromptsMessages(kind, brief, schema, examples, options.instructions?.[kind]))).trim();
     if (!results[kind]) {
       throw new Error(`The model returned an empty ${kind === 'system' ? 'system prompt' : 'base prompt'}.`);

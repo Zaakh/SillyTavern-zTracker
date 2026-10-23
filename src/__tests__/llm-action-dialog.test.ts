@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { describe, expect, jest, test } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { POPUP_RESULT } from 'sillytavern-utils-lib/types/popup';
 import { buildLlmActionDialog } from '../ui/llm-action-dialog.js';
 
@@ -118,6 +118,79 @@ describe('LLM action dialog', () => {
     expect(t.preview().value).toBe('keep');
     expect(t.error()).toBe('');
     expect(t.generate().disabled).toBe(false);
+  });
+
+  describe('run progress', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(0);
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    /** A run that stays pending until the test settles it (or aborts it, like a real request). */
+    function pendingRun() {
+      const handles: { progress?: (part: number, total: number) => void; finish?: (value: string[]) => void } = {};
+      const run = jest.fn((_i: string[], s: AbortSignal, progress?: (part: number, total: number) => void) =>
+        new Promise<string[]>((resolve, reject) => {
+          handles.progress = progress;
+          handles.finish = resolve;
+          s.addEventListener('abort', () => reject(new DOMException('x', 'AbortError')));
+        }));
+      return { run, handles };
+    }
+
+    test('shows the elapsed time on the Generate button and no part count for a single request', () => {
+      const { run } = pendingRun();
+      const t = setup({ run });
+      t.generate().click();
+      expect(t.generate().textContent).toBe('Generating... 0:00');
+      jest.advanceTimersByTime(83_000);
+      expect(t.generate().textContent).toBe('Generating... 1:23');
+      expect(t.generate().textContent).not.toContain('part');
+    });
+
+    test('shows part N/M once the generator reports it', () => {
+      const { run, handles } = pendingRun();
+      const t = setup({ run, parts: 2 });
+      t.generate().click();
+      handles.progress!(2, 2);
+      jest.advanceTimersByTime(5000);
+      expect(t.generate().textContent).toBe('Generating... part 2/2 0:05');
+    });
+
+    test('resets and stops ticking after completion', async () => {
+      const { run, handles } = pendingRun();
+      const t = setup({ run });
+      t.generate().click();
+      handles.finish!(['done']);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(t.generate().textContent).toBe('Regenerate');
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    test('resets and stops ticking after a failure', async () => {
+      const run = jest.fn(async () => { throw new Error('offline'); });
+      const t = setup({ run });
+      t.generate().click();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(t.generate().textContent).toBe('Generate');
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    test('resets and stops ticking after Stop', async () => {
+      const { run } = pendingRun();
+      const t = setup({ run });
+      t.generate().click();
+      t.stop().click();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(t.generate().textContent).toBe('Generate');
+      expect(jest.getTimerCount()).toBe(0);
+    });
   });
 
   test('closing during a run aborts it and never applies the late reply', async () => {

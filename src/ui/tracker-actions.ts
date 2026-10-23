@@ -116,14 +116,28 @@ interface TextCompletionStoryStringFormatter {
   ) => string[];
 }
 
-/** Describes the shared full-generation status-indicator options used by manual tracker runs. */
+/** Lets a run report its phase and "part N/M" to its badge. */
+type RunProgress = { setPhase: (phase: string) => void; setPart: (part?: string) => void };
+
+const NO_PROGRESS: RunProgress = { setPhase: () => undefined, setPart: () => undefined };
+const PREPARING_PHASE = 'preparing';
+const WAITING_FOR_MODEL_PHASE = 'waiting for the model';
+
+/** Shared stop flag of one multi-Module trigger; the badge cancel sets it so later Modules never start. */
+type TriggerToken = { cancelled: boolean };
+
+/** Describes the options shared by every full tracker run (manual, auto and per-Module). */
 type GenerateTrackerOptions = {
   moduleId?: string;
   silent?: boolean;
-  showStatusIndicator?: boolean;
+  /** The outgoing auto-mode hold badge already represents this run, so no tracker badge is shown. */
+  ownedByHold?: boolean;
+  /** "module N/M" label when the run is one of several Modules in one trigger. */
+  moduleStep?: string;
+  trigger?: TriggerToken;
 };
 
-type GenerateTrackersForMessageOptions = Omit<GenerateTrackerOptions, 'moduleId'> & {
+type GenerateTrackersForMessageOptions = Omit<GenerateTrackerOptions, 'moduleId' | 'moduleStep' | 'trigger'> & {
   autoOnly?: boolean;
   moduleIds?: string[];
 };
@@ -756,20 +770,36 @@ export function createTrackerActions(options: {
     });
   };
 
-  /** Shows the full-tracker badge only when the caller explicitly opts into that manual UI. */
+  /** Shows a per-run badge (phase, timer, cancel) for every full tracker run, unless the outgoing hold already shows one. */
   const runWithFullTrackerStatusIndicator = <T>(
     messageId: number,
     options: GenerateTrackerOptions | undefined,
-    callback: () => Promise<T>,
+    callback: (progress: RunProgress) => Promise<T>,
   ) => {
-    const shouldShowStatusIndicator = options?.showStatusIndicator ?? false;
-    if (!shouldShowStatusIndicator) {
-      return callback();
+    if (options?.ownedByHold) {
+      return callback(NO_PROGRESS);
     }
 
+    const moduleId = options?.moduleId ?? DEFAULT_MODULE_ID;
     return withMessageStatusIndicator(
-      { messageId, text: getModuleStatusText(options?.moduleId), statusClassName: FULL_TRACKER_STATUS_CLASS },
-      callback,
+      {
+        messageId,
+        text: getModuleStatusText(moduleId),
+        statusClassName: FULL_TRACKER_STATUS_CLASS,
+        runKey: makeTrackerRunKey(messageId, moduleId),
+        onCancel: () => {
+          if (options?.trigger) options.trigger.cancelled = true;
+          cancelIfPending(messageId, moduleId);
+        },
+      },
+      (handle) => {
+        handle.setPhase(PREPARING_PHASE);
+        handle.setStep(options?.moduleStep ?? '');
+        return callback({
+          setPhase: handle.setPhase,
+          setPart: (part) => handle.setStep([options?.moduleStep, part].filter(Boolean).join(' - ')),
+        });
+      },
     );
   };
 
@@ -1688,7 +1718,7 @@ export function createTrackerActions(options: {
       mainButton?.classList.add('spinning');
       regenerateButton?.classList.add('spinning');
 
-      return await runWithFullTrackerStatusIndicator(id, options, async () => {
+      return await runWithFullTrackerStatusIndicator(id, options, async (progress) => {
         const {
           message,
           settings,
@@ -1710,6 +1740,7 @@ export function createTrackerActions(options: {
           moduleId,
           moduleName: getModuleDebugName(moduleId),
         });
+        progress.setPhase(WAITING_FOR_MODEL_PHASE);
         const response = (await requestStructuredTrackerContent({
           messages,
           settings,
@@ -1772,7 +1803,7 @@ export function createTrackerActions(options: {
       mainButton?.classList.add('spinning');
       regenerateButton?.classList.add('spinning');
 
-      return await runWithFullTrackerStatusIndicator(id, options, async () => {
+      return await runWithFullTrackerStatusIndicator(id, options, async (progress) => {
         const {
           message,
           settings,
@@ -1801,9 +1832,11 @@ export function createTrackerActions(options: {
         const baseMessages = structuredClone(messages) as Message[];
         let trackerData: any = {};
 
-        for (const partKey of partsOrder) {
+        for (const [partIndex, partKey] of partsOrder.entries()) {
           if (token.cancelled) break;
 
+          progress.setPart(`part ${partIndex + 1}/${partsOrder.length}`);
+          progress.setPhase(WAITING_FOR_MODEL_PHASE);
           const partSchema = buildTopLevelPartSchema(chatJsonValue, partKey);
           const requestMessages = structuredClone(baseMessages) as Message[];
 
@@ -1897,11 +1930,18 @@ export function createTrackerActions(options: {
       .filter((module) => (moduleIds ? moduleIds.has(module.id) : !options?.autoOnly || module.auto.enabled));
 
     let allSucceeded = true;
-    for (const module of modules) {
+    const trigger: TriggerToken = { cancelled: false };
+    for (const [index, module] of modules.entries()) {
+      if (trigger.cancelled) {
+        return false;
+      }
+
       const succeeded = await generateTracker(id, {
         silent: options?.silent,
-        showStatusIndicator: options?.showStatusIndicator,
+        ownedByHold: options?.ownedByHold,
         moduleId: module.id,
+        trigger,
+        moduleStep: modules.length > 1 ? `module ${index + 1}/${modules.length}` : undefined,
       });
       allSucceeded = allSucceeded && succeeded;
     }

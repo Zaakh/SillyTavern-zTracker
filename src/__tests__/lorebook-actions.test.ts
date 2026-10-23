@@ -362,7 +362,7 @@ describe('export dialog', () => {
     expect(stEchoMock).toHaveBeenCalledWith('error', expect.stringContaining('keys'));
   });
 
-  test('one suggestion at a time: all four buttons are disabled while one runs', async () => {
+  test('one suggestion at a time: the other three buttons are disabled while one runs', async () => {
     const f = makeFixture();
     let release!: (title: string) => void;
     f.request.mockImplementationOnce(() => new Promise<string>((resolve) => { release = resolve; }));
@@ -370,7 +370,8 @@ describe('export dialog', () => {
       const names = ['suggest-title', 'suggest-keys', 'advanced-title', 'advanced-keys'];
       const buttons = names.map((name) => form.querySelector(`.ztracker-lorebook-${name}`) as HTMLButtonElement);
       buttons[0].click();
-      expect(buttons.every((button) => button.disabled)).toBe(true);
+      // The running button is the stop control, so it stays enabled.
+      expect(buttons.map((button) => button.disabled)).toEqual([false, true, true, true]);
       buttons[1].click();
       release('Done');
       await tick();
@@ -379,6 +380,53 @@ describe('export dialog', () => {
     });
     await f.actions.exportToLorebook(0, 'scene');
     expect(f.request).toHaveBeenCalledTimes(1);
+  });
+
+  test('the running Quick button becomes a stop control with the elapsed time; stopping changes nothing', async () => {
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'setTimeout'] });
+    try {
+      jest.setSystemTime(0);
+      const f = makeFixture();
+      let signal: AbortSignal | undefined;
+      f.request.mockImplementationOnce((_messages: unknown, _override: unknown, s: AbortSignal) =>
+        new Promise<string>((_resolve, reject) => {
+          signal = s;
+          s.addEventListener('abort', () => reject(new DOMException('cancelled', 'AbortError')));
+        }));
+      f.onPopup(async (form) => {
+        const title = field(form, '.ztracker-lorebook-title');
+        const keys = field(form, '.ztracker-lorebook-keys');
+        title.value = 'Typed';
+        keys.value = 'k1, k2';
+        const names = ['suggest-title', 'suggest-keys', 'advanced-title', 'advanced-keys'];
+        const [quick, ...others] = names.map((name) => form.querySelector(`.ztracker-lorebook-${name}`) as HTMLButtonElement);
+        const idleClass = quick.className;
+
+        quick.click();
+        jest.advanceTimersByTime(83_000);
+        expect(quick.title).toBe('Stop');
+        expect(quick.disabled).toBe(false);
+        expect(quick.textContent).toContain('1:23');
+        expect(others.every((button) => button.disabled)).toBe(true);
+
+        quick.click();
+        await tick();
+
+        expect(signal?.aborted).toBe(true);
+        expect(title.value).toBe('Typed');
+        expect(keys.value).toBe('k1, k2');
+        expect(quick.title).toBe('Suggest title');
+        expect(quick.className).toBe(idleClass);
+        expect(quick.textContent).toBe('');
+        expect([quick, ...others].every((button) => !button.disabled)).toBe(true);
+        expect(jest.getTimerCount()).toBe(0);
+        return POPUP_RESULT.NEGATIVE;
+      });
+      await f.actions.exportToLorebook(0, 'scene');
+      expect(stEchoMock).not.toHaveBeenCalledWith('error', expect.anything());
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('a failure while opening an Advanced dialog is reported and re-enables the buttons', async () => {

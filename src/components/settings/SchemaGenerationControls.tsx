@@ -1,6 +1,14 @@
-import { FC } from 'react';
+import { FC, useEffect, useState } from 'react';
 import { STButton, STTextarea } from 'sillytavern-utils-lib/components/react';
+import { formatElapsed, startRunTimer } from '../../run-timer.js';
 import type { GenerationStatus } from './useSchemaGeneration.js';
+
+/** Ticking m:ss counted from mount; it is only mounted while a run is in flight, so mount time is the run start. */
+const ElapsedTime: FC = () => {
+  const [elapsedMs, setElapsedMs] = useState(0);
+  useEffect(() => startRunTimer(setElapsedMs), []);
+  return <>{formatElapsed(elapsedMs)}</>;
+};
 
 // Design brief, the model-backed generation buttons and their inline status (openspec:
 // add-llm-schema-generation, add-llm-action-dialog). Purely presentational: all state and run
@@ -78,7 +86,7 @@ export const SchemaGenerationControls: FC<{
     ) : null}
     {isRunning ? (
       <div className="notes ztracker-schema-status">
-        Generating schema…{' '}
+        Generating schema… <ElapsedTime />{' '}
         <STButton type="button" className="ztracker-btn-secondary" title="Cancel this run; nothing is changed" onClick={onCancel}>
           <i className="fa-solid fa-stop" aria-hidden="true"></i> Cancel
         </STButton>
