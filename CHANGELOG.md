@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.22.0] - 2026-10-23
+
 ### Added
 
 - **Run progress feedback.** Every tracker run now shows a message badge with its Module, the current phase (`preparing`, then `waiting for the model`), a ticking `m:ss` timer and a cancel `x`. Sequential runs show `part N/M`, and a trigger that generates several Modules shows `module N/M`; cancelling it stops the Module that is running and the ones that have not started. Each run has its own badge, so two runs on one message no longer remove each other's. No percentage or token bar is shown: requests are not streamed, so the timer is the proof of life.
