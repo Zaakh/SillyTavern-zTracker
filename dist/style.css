@@ -375,6 +375,56 @@
   white-space: normal;
 }
 
+.ztracker-message-status-step,
+.ztracker-message-status-phase,
+.ztracker-message-status-timer {
+  white-space: normal;
+  opacity: 0.85;
+}
+
+.ztracker-message-status-step:empty,
+.ztracker-message-status-phase:empty {
+  display: none;
+}
+
+.ztracker-message-status-step:not(:empty)::before,
+.ztracker-message-status-phase:not(:empty)::before {
+  content: "-";
+  margin-right: 8px;
+}
+
+.ztracker-message-status-timer {
+  font-variant-numeric: tabular-nums;
+}
+
+.ztracker-message-status-cancel {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0 2px;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s ease-in-out;
+}
+.ztracker-message-status-cancel:hover, .ztracker-message-status-cancel:focus-visible {
+  opacity: 1;
+}
+
+/* Narrow screens: drop the tracker badge's Module label; step, phase, timer and cancel stay (the pill wraps). */
+@media (max-width: 480px) {
+  .ztracker-message-status {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+  .ztracker-full-tracker-status .ztracker-message-status-text {
+    display: none;
+  }
+  .ztracker-message-status-step:not(:empty)::before,
+  .ztracker-message-status-phase:not(:empty)::before {
+    content: none;
+  }
+}
 .ztracker-render-error-status {
   border-color: rgba(255, 170, 0, 0.3);
   background: rgba(255, 170, 0, 0.14);

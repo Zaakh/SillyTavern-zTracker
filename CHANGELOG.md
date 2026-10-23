@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Run progress feedback.** Every tracker run now shows a message badge with its Module, the current phase (`preparing`, then `waiting for the model`), a ticking `m:ss` timer and a cancel `x`. Sequential runs show `part N/M`, and a trigger that generates several Modules shows `module N/M`; cancelling it stops the Module that is running and the ones that have not started. Each run has its own badge, so two runs on one message no longer remove each other's. No percentage or token bar is shown: requests are not streamed, so the timer is the proof of life.
+- The outgoing-auto-mode hold badge (`Generating tracker before reply`) shows the timer too.
+- The Advanced dialog's Generate button shows the elapsed time, plus `part N/M` for Generate prompts, which sends two requests.
+- Generate schema (Quick) shows `Generating schema... m:ss` beside its Cancel.
+- The lorebook **Suggest title** / **Suggest keys** buttons turn into a stop button with the elapsed time while they run; clicking it cancels the request and leaves the fields unchanged.
+
+### Changed
+
+- Incoming auto mode now shows the status badge while it generates a tracker (it used to run silently). It is message-local and removed when the run ends.
+
 ## [2.21.0] - 2026-10-22
 
 ### Changed

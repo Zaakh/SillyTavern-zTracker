@@ -258,6 +258,20 @@ describe('generatePromptsFromBrief', () => {
     expect(request).toHaveBeenCalledTimes(2);
   });
 
+  test('reports part 1/2 before the system request and part 2/2 before the base request', async () => {
+    const events: string[] = [];
+    const request = jest.fn(async () => {
+      events.push('request');
+      return 'TEXT';
+    });
+    await generatePromptsFromBrief({
+      ...options,
+      request: request as any,
+      onProgress: (part, total) => events.push(`${part}/${total}`),
+    });
+    expect(events).toEqual(['1/2', 'request', '2/2', 'request']);
+  });
+
   test('an empty reply fails the whole generation', async () => {
     await expect(generatePromptsFromBrief({ ...options, request: scripted(['SYSTEM', '  ']) })).rejects.toThrow(/empty base prompt/);
   });

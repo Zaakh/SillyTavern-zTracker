@@ -16,7 +16,8 @@ import {
   replaceLinkedLorebookEntry,
 } from '../lorebook-export.js';
 import type { LorebookHost } from '../lorebook-export.js';
-import { resolveInstruction, runLlmAction } from '../llm-actions.js';
+import { isAbortError, resolveInstruction, runLlmAction } from '../llm-actions.js';
+import { formatElapsed, startRunTimer } from '../run-timer.js';
 import type { LlmAction } from '../llm-actions.js';
 import type { GenerationMessage } from '../schema-generation.js';
 import { openLlmActionDialog } from './llm-action-dialog.js';
@@ -107,6 +108,34 @@ export function createLorebookActions(options: {
       busy = value;
       for (const button of [suggestTitle, suggestKeys, advancedTitle, advancedKeys]) button.disabled = value;
     };
+
+    /**
+     * While a Quick request runs, its button becomes a stop control with the elapsed time (the other three
+     * stay disabled); returns a function that restores the idle look.
+     */
+    function showRunningAsStop(button: HTMLButtonElement) {
+      const idle = { className: button.className, title: button.title, label: button.getAttribute('aria-label'), html: button.innerHTML };
+      button.className = 'ztracker-lorebook-running menu_button';
+      button.title = 'Stop';
+      button.setAttribute('aria-label', 'Stop');
+      button.disabled = false;
+      const elapsed = document.createElement('span');
+      const startedAt = Date.now();
+      const render = () => {
+        elapsed.textContent = formatElapsed(Date.now() - startedAt);
+      };
+      render();
+      button.replaceChildren(Object.assign(document.createElement('i'), { className: 'fa-solid fa-stop' }), ' ', elapsed);
+      const stopTimer = startRunTimer(render, startedAt);
+      return () => {
+        stopTimer();
+        button.className = idle.className;
+        button.title = idle.title;
+        if (idle.label === null) button.removeAttribute('aria-label');
+        else button.setAttribute('aria-label', idle.label);
+        button.innerHTML = idle.html;
+      };
+    }
     const store = settingsManager;
     const inputs = {
       title: () => ({ snapshotText: snapshotText() }),
@@ -120,8 +149,11 @@ export function createLorebookActions(options: {
       try {
         await work();
       } catch (error) {
-        console.error(`zTracker: ${failure} failed`, error);
-        st_echo('error', `${failure} failed: ${error instanceof Error ? error.message : String(error)}`);
+        // A user stop is not a failure.
+        if (!isAbortError(error)) {
+          console.error(`zTracker: ${failure} failed`, error);
+          st_echo('error', `${failure} failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
       } finally {
         setBusy(false);
       }
@@ -146,12 +178,26 @@ export function createLorebookActions(options: {
       toText: (result: Result) => string,
       apply: (text: string) => void,
     ) {
-      quickButton.addEventListener('click', () =>
-        guarded(
-          async () => apply(await suggest(action, input, toText, resolveInstruction(store, action.id, action.defaultInstruction))),
-          heading,
-        ),
-      );
+      let quickRun: AbortController | undefined;
+      quickButton.addEventListener('click', () => {
+        // While this button is the running one, a click is a stop.
+        if (quickRun) {
+          quickRun.abort();
+          return;
+        }
+        return guarded(async () => {
+          const run = new AbortController();
+          quickRun = run;
+          const restore = showRunningAsStop(quickButton);
+          try {
+            const text = await suggest(action, input, toText, resolveInstruction(store, action.id, action.defaultInstruction), run.signal);
+            apply(text);
+          } finally {
+            quickRun = undefined;
+            restore();
+          }
+        }, heading);
+      });
       advancedButton.addEventListener('click', () =>
         guarded(() =>
           openLlmActionDialog(globalContext.callGenericPopup, {

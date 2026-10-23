@@ -235,7 +235,7 @@ export function useSchemaGeneration(options: SchemaGenerationOptions) {
       applyNotice: replacesPrompts
         ? 'Apply overwrites this Module’s prompt text and generated preset immediately.'
         : 'Apply saves the prompts and a system prompt preset immediately.',
-      run: async ([system, base], signal) => {
+      run: async ([system, base], signal, onProgress) => {
         const result = await generatePromptsFromBrief({
           brief,
           schema,
@@ -243,6 +243,7 @@ export function useSchemaGeneration(options: SchemaGenerationOptions) {
           request: (messages, overridePayload) => options.requestWithActiveConnection(messages, overridePayload, signal),
           signal,
           instructions: { system, base },
+          onProgress,
         });
         return [result.systemPrompt, result.prompt];
       },

@@ -340,6 +340,39 @@ describe('schema generation controls', () => {
     await flush();
   });
 
+  test('Quick shows the elapsed time while running and cancel leaves the draft unchanged', async () => {
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
+    try {
+      jest.setSystemTime(0);
+      let signal: AbortSignal | undefined;
+      const request = jest.fn<Request>(
+        (_messages, _override, s) =>
+          new Promise<string>((_resolve, reject) => {
+            signal = s;
+            s!.addEventListener('abort', () => reject(new DOMException('cancelled', 'AbortError')));
+          }),
+      );
+      render({ request, initial: { brief: 'weather', schemaText: KEEP } });
+
+      await click(button('Generate schema:'));
+      expect(document.body.textContent).toMatch(/Generating schema… 0:00/);
+
+      await act(async () => {
+        jest.advanceTimersByTime(83_000);
+      });
+      expect(document.body.textContent).toMatch(/Generating schema… 1:23/);
+
+      await click(button('Cancel'));
+      await flush();
+
+      expect(signal?.aborted).toBe(true);
+      expect(state.schemaText).toBe(KEEP);
+      expect(document.body.textContent).not.toMatch(/Generating schema/);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('cancel mid-repair sends no further request and leaves the draft unchanged', async () => {
     const request = jest.fn<Request>(async (_messages, _override, signal) => {
       if (request.mock.calls.length === 1) return WARNING;

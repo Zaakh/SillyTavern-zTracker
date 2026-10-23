@@ -18,7 +18,8 @@ import {
   type TrackerCleanupTarget,
 } from '../tracker-parts.js';
 import { appendCurrentTrackerSnapshot, captureDetailsState } from './tracker-action-helpers.js';
-import { CONTEXT_MENU_STATUS_CLASS, withMessageStatusIndicator } from './message-status-indicator.js';
+import { CONTEXT_MENU_STATUS_CLASS, type StatusIndicatorHandle, withMessageStatusIndicator } from './message-status-indicator.js';
+import { DEFAULT_MODULE_ID } from '../extension-metadata.js';
 
 /** Keeps the context-menu regeneration actions out of tracker-actions.ts while preserving the same public API. */
 export function createContextMenuTrackerActions(dependencies: ContextMenuTrackerActionsDependencies) {
@@ -26,16 +27,29 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
   const runContextMenuTrackerUpdate = async (
     options: {
       messageId: number;
+      moduleId?: string;
       button: Element | null | undefined;
       errorContext: string;
-      callback: () => Promise<void>;
+      callback: (handle: StatusIndicatorHandle) => Promise<void>;
     },
   ): Promise<boolean> => {
     try {
       options.button?.classList.add('spinning');
       await withMessageStatusIndicator(
-        { messageId: options.messageId, text: 'Updating tracker from menu', statusClassName: CONTEXT_MENU_STATUS_CLASS },
-        options.callback,
+        {
+          messageId: options.messageId,
+          text: 'Updating tracker from menu',
+          statusClassName: CONTEXT_MENU_STATUS_CLASS,
+          runKey: `${options.messageId}:${options.moduleId ?? DEFAULT_MODULE_ID}:menu`,
+          onCancel: () => {
+            // Always scoped to this run's Module: an undefined id would cancel every run on the message.
+            dependencies.cancelIfPending(options.messageId, options.moduleId ?? DEFAULT_MODULE_ID);
+          },
+        },
+        (handle) => {
+          handle.setPhase('preparing');
+          return options.callback(handle);
+        },
       );
       return true;
     } catch (error: any) {
@@ -225,9 +239,10 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
 
     return runContextMenuTrackerUpdate({
       messageId: id,
+      moduleId,
       button: partButton,
       errorContext: 'generating tracker part',
-      callback: async () => {
+      callback: async (handle) => {
         const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, worldInfo, partsOrder, partsMeta, makeRequest } =
           await dependencies.prepareExistingTrackerGeneration(id, notifySchemaMismatch, moduleId);
         if (!currentTracker || typeof currentTracker !== 'object') {
@@ -242,6 +257,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
           'Current tracker for this message (target part omitted for freshness; keep everything else consistent):',
         );
 
+        handle.setPhase('waiting for the model');
         const partResponse = await dependencies.requestStructuredTrackerContent({
           messages,
           settings,
@@ -289,9 +305,10 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
 
     return runContextMenuTrackerUpdate({
       messageId: id,
+      moduleId,
       button: options.button,
       errorContext: options.errorContext,
-      callback: async () => {
+      callback: async (handle) => {
         const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, worldInfo, partsOrder, partsMeta, makeRequest } =
           await dependencies.prepareExistingTrackerGeneration(id, notifySchemaMismatch, moduleId);
         if (!currentTracker || typeof currentTracker !== 'object') {
@@ -310,6 +327,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
         );
         appendCurrentTrackerSnapshot(messages as any, itemRequest.promptContext, itemRequest.promptContextLabel);
 
+        handle.setPhase('waiting for the model');
         const itemResponse = (await dependencies.requestStructuredTrackerContent({
           messages,
           settings,
@@ -360,9 +378,10 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
 
     return runContextMenuTrackerUpdate({
       messageId: id,
+      moduleId,
       button: options.button,
       errorContext: options.errorContext,
-      callback: async () => {
+      callback: async (handle) => {
         const { message, settings, schemaPresetKey, currentTracker, chatJsonValue, chatHtmlValue, messages, worldInfo, partsOrder, partsMeta, makeRequest } =
           await dependencies.prepareExistingTrackerGeneration(id, notifySchemaMismatch, moduleId);
         if (!currentTracker || typeof currentTracker !== 'object') {
@@ -385,6 +404,7 @@ export function createContextMenuTrackerActions(dependencies: ContextMenuTracker
           'Regenerate ONLY this field within this array item (field value intentionally omitted):',
         );
 
+        handle.setPhase('waiting for the model');
         const fieldResponse = (await dependencies.requestStructuredTrackerContent({
           messages,
           settings,

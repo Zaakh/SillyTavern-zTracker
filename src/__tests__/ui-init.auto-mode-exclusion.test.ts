@@ -216,7 +216,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     });
 
     events.emit('MESSAGE_SENT', 0);
-    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true, showStatusIndicator: false });
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true, ownedByHold: true });
     expect(document.querySelector('.mes[mesid="0"]')?.classList.contains('ztracker-auto-mode-hold')).toBe(true);
     expect(document.querySelector('.ztracker-auto-mode-status')?.textContent).toContain('Generating tracker before reply');
 
@@ -231,6 +231,62 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     expect(host.spies.generate).toHaveBeenCalledWith(undefined, { automatic_trigger: true });
     expect(document.querySelector('.ztracker-auto-mode-status')).toBeNull();
     expect(document.querySelector('.mes[mesid="0"]')?.classList.contains('ztracker-auto-mode-hold')).toBe(false);
+  });
+
+  test('does not rebuild the hold badge when only badge text changes (timer ticks)', async () => {
+    renderMessage(0);
+    const { events } = await initializeAutoModeHarness({
+      host: {
+        chat: [{ original_avatar: 'alice.png' }],
+        characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+        characterId: 0,
+        stopGeneration: jest.fn(() => true),
+        generate: jest.fn(async () => undefined),
+      },
+      actions: { generateTracker: jest.fn(() => new Promise<boolean>(() => undefined)) },
+    });
+
+    events.emit('MESSAGE_SENT', 0);
+    await flushDomObservers();
+    const badge = document.querySelector('.ztracker-auto-mode-status')!;
+    const text = badge.querySelector('.ztracker-message-status-text')!;
+
+    text.textContent = 'tick';
+    await flushDomObservers();
+
+    // syncUi() recreates the badge; the same element surviving proves the observer ignored the text change.
+    expect(document.querySelector('.ztracker-auto-mode-status')).toBe(badge);
+  });
+
+  test('shows exactly one hold badge with a timer that survives a rebuild', async () => {
+    jest.useFakeTimers({ doNotFake: ['setTimeout', 'nextTick', 'setImmediate'] });
+    try {
+      jest.setSystemTime(0);
+      renderMessage(0);
+      const { events, host } = await initializeAutoModeHarness({
+        host: {
+          chat: [{ original_avatar: 'alice.png' }],
+          characters: [{ avatar: 'alice.png', data: { extensions: {} } }],
+          characterId: 0,
+          stopGeneration: jest.fn(() => true),
+          generate: jest.fn(async () => undefined),
+        },
+        actions: { generateTracker: jest.fn(() => new Promise<boolean>(() => undefined)) },
+      });
+
+      events.emit('MESSAGE_SENT', 0);
+      jest.setSystemTime(12_000);
+
+      // The host re-renders the message, which rebuilds the hold badge from controller state.
+      renderMessage(0);
+      events.emit('USER_MESSAGE_RENDERED', 0);
+
+      expect(document.querySelectorAll('.ztracker-message-status')).toHaveLength(1);
+      expect(document.querySelector('.ztracker-auto-mode-status .ztracker-message-status-timer')?.textContent).toBe('0:12');
+      expect(host.spies.stopGeneration).toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('does not keep stopping unrelated generation starts after the initial outgoing auto-mode suppression', async () => {
@@ -316,7 +372,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     });
 
     events.emit('MESSAGE_SENT', 0);
-    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true, showStatusIndicator: false });
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true, ownedByHold: true });
     expect(host.spies.stopGeneration).toHaveBeenCalledTimes(1);
     expect(document.querySelector('.ztracker-auto-mode-status')).toBeNull();
 
@@ -469,7 +525,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     });
 
     events.emit('MESSAGE_SENT', 0);
-    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true, showStatusIndicator: false });
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true, ownedByHold: true });
   });
 
   test('skips auto-generation for excluded character-rendered messages', async () => {
@@ -516,7 +572,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
     });
 
     events.emit('MESSAGE_SENT', 0);
-    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true, showStatusIndicator: false });
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true, ownedByHold: true });
   });
 
   test('a hard-disabled module never auto-generates even with an "on" override for the active character', async () => {
@@ -564,7 +620,7 @@ describe('initializeGlobalUI auto-mode exclusion guards', () => {
       new MouseEvent('click', { bubbles: true }),
     );
 
-    expect(actions.generateTracker).toHaveBeenCalledWith(0, { showStatusIndicator: true });
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, {});
   });
 
   test('does not resume host generation after chat changes during the pending outgoing auto-mode hold', async () => {
@@ -659,7 +715,7 @@ describe('initializeGlobalUI outgoing hold respects Skip First X Messages', () =
 
     expect(actions.generateTrackersForMessage).toHaveBeenCalledWith(0, {
       silent: true,
-      showStatusIndicator: false,
+      ownedByHold: true,
       autoOnly: true,
       moduleIds: ['due'],
     });
@@ -730,7 +786,7 @@ describe('initializeGlobalUI outgoing hold respects Skip First X Messages', () =
     });
 
     events.emit('MESSAGE_SENT', 5);
-    expect(actions.generateTracker).toHaveBeenCalledWith(5, { silent: true, showStatusIndicator: false });
+    expect(actions.generateTracker).toHaveBeenCalledWith(5, { silent: true, ownedByHold: true });
 
     events.emit('GENERATION_STARTED');
     expect(host.spies.stopGeneration).toHaveBeenCalledTimes(1);
@@ -760,7 +816,7 @@ describe('initializeGlobalUI outgoing hold respects Skip First X Messages', () =
     });
 
     events.emit('MESSAGE_SENT', 0);
-    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true, showStatusIndicator: false });
+    expect(actions.generateTracker).toHaveBeenCalledWith(0, { silent: true, ownedByHold: true });
 
     events.emit('GENERATION_STARTED');
     expect(host.spies.stopGeneration).toHaveBeenCalledTimes(1);

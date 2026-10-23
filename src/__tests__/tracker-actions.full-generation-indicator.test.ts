@@ -89,7 +89,7 @@ describe('createTrackerActions full generation indicator', () => {
       importMetaUrl: TEST_IMPORT_META_URL,
     });
 
-    const pending = actions.generateTracker(0, { showStatusIndicator: true });
+    const pending = actions.generateTracker(0);
     await flushAsyncWork();
 
     expect(document.querySelector('.ztracker-full-tracker-status')?.textContent).toContain('Updating tracker');
@@ -142,7 +142,7 @@ describe('createTrackerActions full generation indicator', () => {
       importMetaUrl: TEST_IMPORT_META_URL,
     });
 
-    const pending = actions.generateTracker(0, { showStatusIndicator: true, moduleId: 'agenda' });
+    const pending = actions.generateTracker(0, { moduleId: 'agenda' });
     await flushAsyncWork();
 
     expect(document.querySelector('.default-regenerate')?.classList.contains('spinning')).toBe(false);
@@ -175,7 +175,7 @@ describe('createTrackerActions full generation indicator', () => {
       importMetaUrl: TEST_IMPORT_META_URL,
     });
 
-    const pending = actions.generateTracker(0, { showStatusIndicator: true });
+    const pending = actions.generateTracker(0);
     await flushAsyncWork();
 
     expect(document.querySelector('.ztracker-full-tracker-status')?.textContent).toContain('Updating tracker');
@@ -186,37 +186,168 @@ describe('createTrackerActions full generation indicator', () => {
     expect(document.querySelector('.ztracker-full-tracker-status')).toBeNull();
   });
 
-  test('does not show the manual full-tracker badge for silent generation', async () => {
-    document.body.innerHTML = buildMessage(0);
-
-    let finishRequest: (() => void) | undefined;
-    const generateRequest = jest.fn((_request: unknown, hooks: GeneratorHooks) => {
-      hooks.onStart('request-1');
-      finishRequest = () => hooks.onFinish('request-1', { content: { time: '10:00:00' } }, null);
-    });
-
+  /** Builds actions over one message with the given settings, returning handles to drive the request. */
+  function setup(settings = makeSettings(), generateRequestImpl?: (request: unknown, hooks: GeneratorHooks) => void) {
+    const finishers: Array<() => void> = [];
+    const aborters = new Map<string, () => void>();
+    const generateRequest = jest.fn(
+      generateRequestImpl ??
+        ((_request: unknown, hooks: GeneratorHooks) => {
+          const id = `request-${finishers.length + 1}`;
+          hooks.onStart(id);
+          finishers.push(() => hooks.onFinish(id, { content: { time: '10:00:00' } }, null));
+          // Like the real generator: an aborted request finishes without data.
+          aborters.set(id, () => hooks.onFinish(id, undefined, null));
+        }),
+    );
+    const abortRequest = jest.fn((id: string) => aborters.get(id)?.());
     const actions = createTrackerActions({
       globalContext: {
-        chat: [{ original_avatar: 'avatar.png', extra: {} }],
+        chat: [
+          { original_avatar: 'avatar.png', extra: {} },
+          { original_avatar: 'avatar.png', extra: {} },
+        ],
         saveChat: async () => undefined,
         extensionSettings: { connectionManager: { profiles: [makeProfile()] } },
         CONNECT_API_MAP: { openai: { selected: 'openai' } },
       },
-      settingsManager: { getSettings: () => makeSettings() } as any,
-      generator: { generateRequest, abortRequest: jest.fn() } as any,
+      settingsManager: { getSettings: () => settings } as any,
+      generator: { generateRequest, abortRequest } as any,
       pendingRequests: new Map(),
       renderTrackerWithDeps: renderTrackerWithDepsMock,
       importMetaUrl: TEST_IMPORT_META_URL,
     });
+    return { actions, finishers, generateRequest, abortRequest };
+  }
+
+  const badgeText = (field: 'phase' | 'step') =>
+    document.querySelector(`.ztracker-full-tracker-status .ztracker-message-status-${field}`)?.textContent;
+
+  test('shows the badge for a silent (auto-mode) run and removes it on success', async () => {
+    document.body.innerHTML = buildMessage(0);
+    const { actions, finishers } = setup();
 
     const pending = actions.generateTracker(0, { silent: true });
     await flushAsyncWork();
 
-    expect(document.querySelector('.ztracker-full-tracker-status')).toBeNull();
-    expect(document.querySelector('.mes_ztracker_button')?.classList.contains('spinning')).toBe(true);
+    expect(document.querySelector('.ztracker-full-tracker-status')).not.toBeNull();
+    expect(document.querySelector('.ztracker-message-status-timer')).not.toBeNull();
 
-    finishRequest?.();
+    finishers[0]();
     await pending;
+    expect(document.querySelector('.ztracker-full-tracker-status')).toBeNull();
+  });
+
+  test('removes the badge when a silent run fails', async () => {
+    document.body.innerHTML = buildMessage(0);
+    const { actions } = setup(makeSettings(), (_request, hooks) => {
+      hooks.onStart('request-1');
+      hooks.onFinish('request-1', undefined, new Error('boom'));
+    });
+
+    await expect(actions.generateTracker(0, { silent: true })).resolves.toBe(false);
+    expect(document.querySelector('.ztracker-full-tracker-status')).toBeNull();
+  });
+
+  test('removes the badge when a run is cancelled from the badge', async () => {
+    document.body.innerHTML = buildMessage(0);
+    const { actions, abortRequest } = setup();
+
+    const pending = actions.generateTracker(0, { silent: true });
+    await flushAsyncWork();
+    (document.querySelector('.ztracker-message-status-cancel') as HTMLElement).click();
+
+    await expect(pending).resolves.toBe(false);
+    expect(abortRequest).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('.ztracker-full-tracker-status')).toBeNull();
+  });
+
+  test('shows no tracker badge when the outgoing hold owns the run', async () => {
+    document.body.innerHTML = buildMessage(0);
+    const { actions, finishers } = setup();
+
+    const pending = actions.generateTracker(0, { silent: true, ownedByHold: true });
+    await flushAsyncWork();
+
+    expect(document.querySelector('.ztracker-message-status')).toBeNull();
+
+    finishers[0]();
+    await pending;
+  });
+
+  test('reports preparing, then waiting for the model, without resetting the timer', async () => {
+    document.body.innerHTML = buildMessage(0);
+    let resolvePrompt: (value: ReturnType<typeof makeBuiltPromptResult>) => void = () => undefined;
+    buildPromptMock.mockImplementation(
+      () => new Promise<ReturnType<typeof makeBuiltPromptResult>>((resolve) => (resolvePrompt = resolve)) as any,
+    );
+    const { actions, finishers } = setup();
+
+    const pending = actions.generateTracker(0);
+    await flushAsyncWork();
+    expect(badgeText('phase')).toBe('preparing');
+    const badge = document.querySelector('.ztracker-full-tracker-status');
+
+    resolvePrompt(makeBuiltPromptResult());
+    await flushAsyncWork();
+    expect(badgeText('phase')).toBe('waiting for the model');
+    expect(document.querySelector('.ztracker-full-tracker-status')).toBe(badge);
+    expect(badgeText('step')).toBe('');
+
+    finishers[0]();
+    await pending;
+  });
+
+  test('sequential generation reports part N/M in order', async () => {
+    document.body.innerHTML = buildMessage(0);
+    const { actions, finishers } = setup(makeSettings({ sequentialPartGeneration: true }));
+
+    const pending = actions.generateTracker(0);
+    await flushAsyncWork();
+    const seen: Array<string | null | undefined> = [badgeText('step')];
+    while (finishers.length > seen.length - 1 && seen.length < 20) {
+      finishers[seen.length - 1]();
+      await flushAsyncWork();
+      if (!document.querySelector('.ztracker-full-tracker-status')) break;
+      seen.push(badgeText('step'));
+    }
+    await pending;
+
+    expect(seen[0]).toMatch(/^part 1\/\d+$/);
+    seen.forEach((step, index) => expect(step).toBe(`part ${index + 1}/${seen[0]!.split('/')[1]}`));
+  });
+
+  test('cancelling module 2 of 3 stops module 3 and leaves another message unaffected', async () => {
+    document.body.innerHTML = `${buildMessage(0)}${buildMessage(1)}`.replace('<div id="extensionsMenu"></div>', '');
+    const base = makeSettings();
+    const modules = ['m1', 'm2', 'm3'].map((id, order) =>
+      createTrackerModuleFromLegacySettings(base, { id, name: id.toUpperCase(), order }),
+    );
+    const { actions, finishers, generateRequest } = setup(makeSettings({ modules }));
+
+    const pending = actions.generateTrackersForMessage(0, { silent: true });
+    await flushAsyncWork();
+    expect(badgeText('step')).toBe('module 1/3');
+
+    finishers[0]();
+    await flushAsyncWork();
+    expect(badgeText('step')).toBe('module 2/3');
+
+    // A run on another message must survive the cancel.
+    const other = actions.generateTracker(1, { silent: true, moduleId: 'm1' });
+    await flushAsyncWork();
+    expect(document.querySelectorAll('.ztracker-full-tracker-status')).toHaveLength(2);
+
+    (document.querySelector('.mes[mesid="0"] .ztracker-message-status-cancel') as HTMLElement).click();
+    await expect(pending).resolves.toBe(false);
+
+    // Module 3 never started: only module 1, module 2 and the other message's run sent requests.
+    expect(generateRequest).toHaveBeenCalledTimes(3);
+    expect(document.querySelector('.mes[mesid="0"] .ztracker-full-tracker-status')).toBeNull();
+    expect(document.querySelector('.mes[mesid="1"] .ztracker-full-tracker-status')).not.toBeNull();
+
+    finishers[2]();
+    await expect(other).resolves.toBe(true);
   });
 
   test('rolls back a rendered tracker update when saving the chat fails', async () => {
@@ -246,7 +377,7 @@ describe('createTrackerActions full generation indicator', () => {
       importMetaUrl: TEST_IMPORT_META_URL,
     });
 
-    await expect(actions.generateTracker(0, { showStatusIndicator: true })).resolves.toBe(false);
+    await expect(actions.generateTracker(0)).resolves.toBe(false);
 
     expect(rollback).toHaveBeenCalledTimes(1);
     expect(renderTrackerWithDepsMock).toHaveBeenCalledTimes(1);
