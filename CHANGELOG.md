@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.23.1] - 2026-11-03
+
+### Fixed
+
+- The committed `dist/` was stale and shipped without the 2.23.0 slash commands; it is rebuilt now.
+- The build no longer bakes the absolute build path into `import.meta.url`, so the extension resolves its real `third-party/<folder>` install location at runtime instead of always using the default folder name.
+
+### Changed
+
+- Pushing a `v*` tag now publishes a GitHub Release with the matching changelog section as notes, and fails if the committed `dist/` is out of date.
+
 ## [2.23.0] - 2026-11-03
 
 ### Added
