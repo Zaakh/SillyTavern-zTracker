@@ -16,7 +16,8 @@ repomix-output.xml
 test-output/
 .playwright-mcp/
 openspec/
-.github/
+.github/*
+!.github/workflows/
 docs/**
 .claude/
 CLAUDE.md

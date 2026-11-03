@@ -44,5 +44,13 @@ For GitHub Copilot or other coding agents:
 - `npm run sync-version` updates derived files; it runs automatically before dev/build/test and during `npm version`.
 - CI can run `npm run check-version` (strict mode) to fail fast on drift without rewriting files.
 - Bump versions with `npm version <patch|minor|major>` to keep SemVer tags and changelog aligned.
-- When bumping versions, stage changes under the `Unreleased` section in `CHANGELOG.md`, then move them into a dated release section (e.g., `1.0.0 - YYYY-MM-DD`).
+- Follow the [release checklist](#release-checklist) below when bumping versions.
 - See [../CHANGELOG.md](../CHANGELOG.md) for release history.
+
+## Release checklist
+
+1. Move the `Unreleased` entries in `CHANGELOG.md` into a `## [X.Y.Z] - YYYY-MM-DD` section. The Release notes are taken from that heading.
+2. Run `npm run build` and commit the rebuilt `dist/`. SillyTavern installs straight from the repo, so a stale `dist/` ships a stale extension.
+3. Run `npm version <patch|minor|major>` (bumps `package.json`, syncs `manifest.json`, tags `vX.Y.Z`).
+4. Run `git push --follow-tags`.
+5. The `Release` workflow (`.github/workflows/release.yml`) rebuilds, fails if `dist/` or `manifest.json` differ from the committed files, and publishes the GitHub Release with the changelog section as notes. Re-run it for an existing tag via the workflow's manual dispatch; delete an existing Release first to republish.

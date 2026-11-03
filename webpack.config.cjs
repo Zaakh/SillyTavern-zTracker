@@ -35,6 +35,11 @@ module.exports = {
     },
     devtool: process.env.NODE_ENV === 'production' ? false : 'source-map',
     module: {
+        parser: {
+            // Keep import.meta.url live: webpack would otherwise bake in the absolute build path
+            // (breaking third-party folder detection and making builds machine-dependent).
+            javascript: { importMeta: false },
+        },
         rules: [
             {
                 test: /\.(ts|tsx|js|jsx)$/,

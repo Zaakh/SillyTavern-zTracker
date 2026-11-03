@@ -1,0 +1,67 @@
+# Publishes a GitHub Release for a pushed v* tag (or a manual re-run for an existing tag).
+# Fails if the committed dist/ is stale, since SillyTavern installs straight from the repo.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing v* tag to release (e.g. v2.23.1)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - name: Validate tag name
+        run: |
+          case "$TAG" in
+            v[0-9]*) ;;
+            *) echo "::error::'$TAG' is not a v<version> tag"; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Fail if committed dist/ or manifest.json is stale
+        run: |
+          if [ -n "$(git status --porcelain -- dist manifest.json)" ]; then
+            git status --porcelain -- dist manifest.json
+            echo "::error::dist/ or manifest.json differs from a fresh build. Run 'npm run build', commit, and re-tag."
+            exit 1
+          fi
+
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          awk -v h="## [${TAG#v}]" 'index($0, h) == 1 { f = 1; next } /^## \[/ { f = 0 } f' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::No CHANGELOG.md section found for ${TAG#v}"
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::Release $TAG already exists. Delete it first to republish."
+            exit 1
+          fi
+          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file notes.md
