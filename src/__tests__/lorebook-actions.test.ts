@@ -214,7 +214,7 @@ describe('export dialog', () => {
 
     await f.actions.exportToLorebook(0, 'scene');
 
-    expect(f.persisted.Characters.entries[0]).toMatchObject({ comment: 'Bob', key: ['Bob'], content: '[Topic: Bob\nspecies: Elf\n]' });
+    expect(f.persisted.Characters.entries[0]).toMatchObject({ comment: 'Bob', key: ['Bob'], content: '[Bob\nspecies: Elf\n]' });
     expect(f.record.lorebookLink).toEqual({ book: 'Characters', uid: 0, title: 'Bob' });
     expect(f.globalContext.saveChat).toHaveBeenCalled();
     expect(f.renderTrackerWithDeps).toHaveBeenCalledWith(0, 'scene');
@@ -523,7 +523,7 @@ describe('Replace linked entry', () => {
     const f = makeFixture({ link: true, books: { Characters: { entries: { 0: { ...hostEntry(0), key: ['kept'], content: 'old' } } } } });
     await f.actions.replaceLorebookEntry(0, 'scene');
 
-    expect(f.persisted.Characters.entries[0]).toMatchObject({ content: '[Topic: Bob\nspecies: Elf\n]', key: ['kept'] });
+    expect(f.persisted.Characters.entries[0]).toMatchObject({ content: '[Bob\nspecies: Elf\n]', key: ['kept'] });
     expect(f.globalContext.callGenericPopup).not.toHaveBeenCalled();
     expect(f.request).not.toHaveBeenCalled();
     // Replace changes nothing in the chat, so it must not save or re-render it.

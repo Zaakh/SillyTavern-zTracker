@@ -217,7 +217,7 @@ Each tracker block has a book icon in its top-right controls row. It opens a sma
 - **Export to lorebook...** opens a dialog: pick a lorebook, enter the entry **title** (required) and the **keys** (they default to the title and follow it until you edit them; clear them and the entry is created without keys and will not trigger until you add some). **Suggest title** and **Suggest keys** (wand buttons) send the tracker text to your live SillyTavern connection and fill the field; the keys request also carries the current title. Each has its own short system prompt. **Advanced...** opens a dialog where you can edit that prompt, generate, edit the result and press **Apply**; nothing is written before Apply. An edited prompt is kept across sessions (**Reset to default** restores the shipped one) and is used by the wand button too. Nothing runs unless you press a button, one suggestion runs at a time (the running wand button turns into a stop button with the elapsed time; click it to cancel and leave the field unchanged), and applied keys stop following the title. Export always creates a new entry and never touches an existing one; the entry is saved and re-read from the lorebook before zTracker reports success.
 - **Replace linked entry** (a row of the same menu) overwrites the content of the entry created by the last export from this message. The row is visible but disabled until an export exists, and its label names the target book and entry. It changes only the entry's content (and its comment only if you have not renamed it), so keys, order, position and enabled state you edited in the lorebook are kept. If the book or entry is gone, nothing is written and you are offered **Export to lorebook...** instead. It never calls the model.
 
-The entry text is the same snapshot the Module injects into chat. With the **Flat** preset (the default for new Modules), it is a `[Topic: <title>` ... `]` block of `key: value` lines, using the title you entered. Deleting the tracker from the message also removes the link.
+The entry text is the same snapshot the Module injects into chat. With the **Flat** preset (the default for new Modules), it is a `[<title>` ... `]` block of `key: value` lines, using the title you entered. Deleting the tracker from the message also removes the link.
 
 ## Embedding tracker snapshots into normal generations
 
@@ -237,7 +237,7 @@ The **Injection preview** below the preset editor shows the snapshot block a nor
 
 You can customize (or remove) the embedded snapshot header via **Embed snapshot header**.
 
-- **Flat (key: value lines)** (default for new Modules and the shipped templates): embeds `[Topic: <Module name>`, one `key: value` line per field (nested objects and arrays on one line, empty values left out), then `]`. Never wrapped in a code fence.
+- **Flat (key: value lines)** (default for new Modules and the shipped templates): embeds `[<Module name>`, one `key: value` line per field (nested objects and arrays on one line, empty values left out), then `]`. Never wrapped in a code fence.
 - **Default (JSON)**: embeds pretty-printed JSON (no changes).
 - **Minimal (top-level properties)**: embeds one line per top-level property (newline-separated).
 - **TOON (compact)**: embeds tracker snapshots as tab-delimited TOON for lower-token structured context while preserving arrays and nested objects.

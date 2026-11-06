@@ -50,7 +50,7 @@ export interface EmbedSnapshotRegexTransformPreset {
    * - pretty_json: JSON.stringify(data, null, 2)
    * - top_level_lines: one line per top-level property (values are JSON-stringified)
   * - toon: tab-delimited TOON encoded with @toon-format/toon
-   * - flat_lines: `[Topic: <title>` + one `key: value` line per field + `]` (never fenced)
+   * - flat_lines: `[<title>` + one `key: value` line per field + `]` (never fenced)
    */
   input: EmbedSnapshotTransformInput;
   /** JavaScript regex source (without leading/trailing slashes). Empty disables transform. */

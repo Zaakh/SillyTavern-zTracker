@@ -134,8 +134,8 @@ describe('applyTrackerModuleIncludeList', () => {
     const result = applyTrackerModuleIncludeList(messages as any, agenda, agendaSettings, { chat: chat as any, messageId: 0 }) as any[];
     const injected = result.map((message) => message.content as string);
 
-    expect(injected.some((text) => text.includes('[Topic: Scene Tracker\nplace: Bridge\n]'))).toBe(true);
-    expect(injected.some((text) => text.includes('[Topic: Agenda\ngoal: Find exit\n]'))).toBe(true);
+    expect(injected.some((text) => text.includes('[Scene Tracker\nplace: Bridge\n]'))).toBe(true);
+    expect(injected.some((text) => text.includes('[Agenda\ngoal: Find exit\n]'))).toBe(true);
   });
 
   test('self entry count is independent of injection.includeLastXMessages', () => {
