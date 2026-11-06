@@ -175,7 +175,7 @@ function formatToonSnapshot(value: unknown): string {
   return encode(normalizeToPlainJsonValue(value ?? {}), { delimiter: '\t' });
 }
 
-/** Caller-supplied names for the Flat `[Topic: ...` wrapper; other presets ignore them. */
+/** Caller-supplied names for the Flat `[...` wrapper; other presets ignore them. */
 export interface SnapshotFormatOptions {
   title?: string;
   moduleName?: string;
@@ -230,7 +230,7 @@ function formatFlatSnapshot(value: unknown, options: SnapshotFormatOptions): str
     : isEmptyFlatValue(value)
       ? []
       : [formatFlatValue(value)];
-  return [`[Topic: ${title}`, ...lines, ']'].join('\n');
+  return [`[${title}`, ...lines, ']'].join('\n');
 }
 
 function buildBaseSnapshotText(

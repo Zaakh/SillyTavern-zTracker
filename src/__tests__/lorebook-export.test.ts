@@ -18,7 +18,7 @@ const settings = {
   embedZTrackerSnapshotTransformPresets: createDefaultEmbedSnapshotTransformPresets(),
 };
 const trackerValue = { species: 'Elf', notes: '' };
-const FLAT_BOB = '[Topic: Bob\nspecies: Elf\n]';
+const FLAT_BOB = '[Bob\nspecies: Elf\n]';
 
 // Every field the stub "host" defines for a new entry, so completeness is checkable.
 const hostEntry = (uid: number) => ({

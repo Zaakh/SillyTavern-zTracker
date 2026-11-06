@@ -340,7 +340,7 @@ describe('shipped templates use the Flat preset', () => {
       embedZTrackerSnapshotTransformPreset: 'flat',
       embedZTrackerSnapshotTransformPresets: defaultSettings.transformPresets,
     }, { moduleName: module.name });
-    expect(text.startsWith(`[Topic: ${module.name}\n`)).toBe(true);
+    expect(text.startsWith(`[${module.name}\n`)).toBe(true);
     expect(text.endsWith('\n]')).toBe(true);
   });
 });

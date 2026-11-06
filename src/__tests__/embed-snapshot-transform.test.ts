@@ -181,7 +181,7 @@ describe('formatEmbeddedTrackerSnapshot (flat)', () => {
     );
     expect(wrapInCodeFence).toBe(false);
     expect(text).toBe(
-      '[Topic: Bob\n' +
+      '[Bob\n' +
         'species: Elf\n' +
         'personality: Shy, curious\n' +
         'clothing: top: red cloak; bottom: brown trousers\n' +
@@ -204,12 +204,13 @@ describe('formatEmbeddedTrackerSnapshot (flat)', () => {
       flatSettings,
       { title: 'T' },
     );
-    expect(text).toBe('[Topic: T\nbio: line1 line2\n]');
+    expect(text).toBe('[T\nbio: line1 line2\n]');
+    expect(text).not.toContain('Topic:');
   });
 
   it('uses the module name unless a title is supplied', () => {
-    expect(formatEmbeddedTrackerSnapshot({ a: 1 }, flatSettings, { moduleName: 'Plot Steer' }).text).toMatch(/^\[Topic: Plot Steer\n/);
-    expect(formatEmbeddedTrackerSnapshot({ a: 1 }, flatSettings, { moduleName: 'Plot Steer', title: 'Bob' }).text).toMatch(/^\[Topic: Bob\n/);
+    expect(formatEmbeddedTrackerSnapshot({ a: 1 }, flatSettings, { moduleName: 'Plot Steer' }).text).toMatch(/^\[Plot Steer\n/);
+    expect(formatEmbeddedTrackerSnapshot({ a: 1 }, flatSettings, { moduleName: 'Plot Steer', title: 'Bob' }).text).toMatch(/^\[Bob\n/);
   });
 
   it('leaves minimal output unchanged when options are passed', () => {

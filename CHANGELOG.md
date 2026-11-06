@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- The **Flat** snapshot header is now `[<title>` instead of `[Topic: <title>`, so the fixed word no longer leaks into chat injection, chaining, or lorebook entries. Lorebook entries exported earlier keep `Topic:` until re-exported.
+
 ## [2.23.1] - 2026-11-03
 
 ### Fixed
