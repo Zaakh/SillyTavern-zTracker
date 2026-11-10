@@ -128,8 +128,8 @@ jest.unstable_mockModule('sillytavern-utils-lib/config', () => ({
 }));
 
 jest.unstable_mockModule('sillytavern-utils-lib/types/popup', () => ({
-  POPUP_RESULT: { AFFIRMATIVE: 'affirmative' },
-  POPUP_TYPE: { CONFIRM: 'confirm' },
+  POPUP_RESULT: { AFFIRMATIVE: 'affirmative', CANCELLED: 'cancelled' },
+  POPUP_TYPE: { CONFIRM: 'confirm', TEXT: 'text' },
 }));
 
 jest.unstable_mockModule('../parser.js', () => ({

@@ -58,6 +58,34 @@ export const WORLD_INFO_REPORT_BOOK_CAP = 20;
 export const WORLD_INFO_REPORT_MATCHED_KEYS_CAP = 10;
 export const WORLD_INFO_REPORT_TEXT_CAP = 100;
 
+/** Applied entries of a stored record (listed plus capped-off); `lowerBound` when omitted books may hold more. 0 without a record. */
+export function appliedCount(report: TrackerWorldInfoReport | undefined): { count: number; lowerBound: boolean } {
+  let count = 0;
+  for (const book of report?.books ?? []) count += book.applied.length + (book.moreApplied ?? 0);
+  return { count, lowerBound: !!report?.moreBooks };
+}
+
+export interface AppliedReasonSummary {
+  scan: number;
+  recursion: number;
+  minActivations: number;
+  allowlist: number;
+}
+
+/** Counts applied entries by how they got in. "scan" covers constant, keyword and other reasons. The cap-dropped `moreApplied` entries have no stored reason, so they are not counted. */
+export function summarizeAppliedReasons(report: TrackerWorldInfoReport | undefined): AppliedReasonSummary {
+  const summary: AppliedReasonSummary = { scan: 0, recursion: 0, minActivations: 0, allowlist: 0 };
+  for (const book of report?.books ?? []) {
+    for (const entry of book.applied) {
+      if (entry.via === 'allowlist') summary.allowlist++;
+      else if (entry.reason === 'recursion') summary.recursion++;
+      else if (entry.reason === 'min-activations') summary.minActivations++;
+      else summary.scan++;
+    }
+  }
+  return summary;
+}
+
 /** Shortens user-authored text (titles, keys, book names) for storage. */
 export function capReportText(text: string): string {
   return text.length > WORLD_INFO_REPORT_TEXT_CAP ? `${text.slice(0, WORLD_INFO_REPORT_TEXT_CAP)}…` : text;

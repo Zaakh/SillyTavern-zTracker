@@ -10,6 +10,8 @@ import {
   formatEmbeddedTrackerSnapshot,
 } from './embed-snapshot-transform.js';
 import { getLorebookLink } from './lorebook-export.js';
+import { appliedCount } from './world-info-policy.js';
+import type { TrackerWorldInfoOutcome, TrackerWorldInfoReport } from './world-info-policy.js';
 import { toShortTrackerLabel } from './tracker-helpers.js';
 import {
   buildArrayItemCleanupTarget,
@@ -123,6 +125,25 @@ export function getTrackerModuleRecord(
     message.extra = {};
   }
   return getTrackerModuleRecordFromExtra(message.extra, moduleId, createIfMissing);
+}
+
+const WORLD_INFO_OUTCOME_HINT: Record<TrackerWorldInfoOutcome, string> = {
+  applied: 'World Info used',
+  'none-matched': 'No World Info matched',
+  excluded: 'World Info excluded for this tracker',
+  'scan-unavailable': 'World Info scan unavailable',
+};
+
+/** Extra class, attributes and tooltip for the "World Info used" button: applied-count badge, inactive look, accessible name. */
+function worldInfoButtonAttrs(report: TrackerWorldInfoReport | undefined): { className: string; attrs: string } {
+  const { count, lowerBound } = appliedCount(report);
+  const hint = !report
+    ? 'World Info used: not recorded'
+    : count > 0
+      ? `${count}${lowerBound ? ' or more' : ''} World Info ${count === 1 && !lowerBound ? 'entry was' : 'entries were'} used`
+      : (WORLD_INFO_OUTCOME_HINT[report.outcome] ?? WORLD_INFO_OUTCOME_HINT['scan-unavailable']);
+  const badge = count > 0 ? ` data-ztracker-count="${count}${lowerBound ? '+' : ''}"` : '';
+  return { className: count > 0 ? '' : ' is-empty', attrs: ` role="button" tabindex="0" title="${hint}" aria-label="${hint}"${badge}` };
 }
 
 function escapeHtmlAttr(value: string): string {
@@ -360,6 +381,7 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
     : '';
   const regenerateHint =
     'Regenerate this tracker from scratch using the schema preset selected for this chat and its template. Existing data is replaced, not migrated.';
+  const wiButton = worldInfoButtonAttrs(extra?.worldInfo);
   controls.innerHTML = `
     <div class="ztracker-regenerate-button fa-solid fa-arrows-rotate" title="${regenerateHint}" aria-label="${regenerateHint}"></div>
     <details class="ztracker-parts-details" title="Regenerate individual parts">
@@ -367,7 +389,7 @@ export function renderTracker(messageId: number, options: RenderTrackerOptions):
       <div class="ztracker-parts-list">${partsButtons}</div>
     </details>
     <div class="ztracker-cleanup-button fa-solid fa-eraser" title="Clear or recreate selected tracker targets"></div>
-    <div class="ztracker-world-info-button fa-solid fa-book-atlas" title="World Info used"></div>
+    <div class="ztracker-world-info-button fa-solid fa-book-atlas${wiButton.className}"${wiButton.attrs}></div>
     <div class="ztracker-lorebook-button fa-solid fa-book" title="Lorebook actions"${lorebookLinkAttrs}></div>
     <div class="ztracker-edit-button fa-solid fa-code" title="Edit Tracker Data"></div>
     <div class="ztracker-delete-button fa-solid fa-trash-can" title="Delete Tracker"></div>

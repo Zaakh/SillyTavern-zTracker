@@ -234,17 +234,32 @@ describe('createTrackerActions deleteTracker', () => {
 });
 
 describe('createTrackerActions showWorldInfoReport', () => {
-  function setup(extra: Record<string, unknown>) {
+  const instances: Array<{ content: HTMLElement; complete: jest.Mock }> = [];
+  class FakePopup {
+    content: HTMLElement;
+    complete = jest.fn(async (..._args: unknown[]) => undefined);
+    constructor(content: HTMLElement) {
+      this.content = content;
+      instances.push(this);
+    }
+    show = jest.fn(async () => undefined);
+  }
+
+  function setup(extra: Record<string, unknown>, host: Record<string, unknown> = {}) {
     resetTrackerActionTestState();
     installSillyTavernContext(makeContext({ includeSavedPromptPreset: true }));
-    const callGenericPopup = jest.fn(async (..._args: unknown[]) => undefined);
+    instances.length = 0;
     const actions = createTrackerActions({
       globalContext: {
         chat: [{ extra }],
         saveChat: jest.fn(async () => undefined),
-        callGenericPopup,
+        Popup: FakePopup,
+        getWorldInfoNames: () => ['Lore'],
+        loadWorldInfo: async () => ({ entries: { '1': {} } }),
+        reloadWorldInfoEditor: jest.fn(),
         extensionSettings: { connectionManager: { profiles: [makeProfile()] } },
         CONNECT_API_MAP: { openai: { selected: 'openai' } },
+        ...host,
       },
       settingsManager: { getSettings: () => makeSettings() } as any,
       generator: { generateRequest: jest.fn(), abortRequest: jest.fn() } as any,
@@ -252,13 +267,13 @@ describe('createTrackerActions showWorldInfoReport', () => {
       renderTrackerWithDeps: renderTrackerWithDepsMock,
       importMetaUrl: TEST_IMPORT_META_URL,
     });
-    return { actions, callGenericPopup };
+    return { actions };
   }
 
-  const popupText = (callGenericPopup: jest.Mock) => ((callGenericPopup.mock.calls[0][0] as HTMLElement).textContent ?? '');
+  const popupText = () => instances[0].content.textContent ?? '';
 
   test('opens the popup with the record of the clicked Module, not another Module', async () => {
-    const { actions, callGenericPopup } = setup({
+    const { actions } = setup({
       zTracker: {
         byId: {
           default: { schemaValue: {}, worldInfo: { outcome: 'excluded', books: [] } },
@@ -272,16 +287,81 @@ describe('createTrackerActions showWorldInfoReport', () => {
 
     await actions.showWorldInfoReport(0, 'agenda');
 
-    expect(callGenericPopup).toHaveBeenCalledTimes(1);
-    expect(popupText(callGenericPopup as jest.Mock)).toContain('Agenda Book');
-    expect(popupText(callGenericPopup as jest.Mock)).not.toContain('excluded for this tracker');
+    expect(instances).toHaveLength(1);
+    expect(popupText()).toContain('Agenda Book');
+    expect(popupText()).not.toContain('excluded for this tracker');
   });
 
   test('says the World Info was not recorded for a tracker without a record', async () => {
-    const { actions, callGenericPopup } = setup({ zTracker: { byId: { default: { schemaValue: { time: 'x' } } } } });
+    const { actions } = setup({ zTracker: { byId: { default: { schemaValue: { time: 'x' } } } } });
 
     await actions.showWorldInfoReport(0);
 
-    expect(popupText(callGenericPopup as jest.Mock)).toContain('not recorded');
+    expect(popupText()).toContain('not recorded');
+  });
+
+  describe('clicking an entry', () => {
+    const extra = { zTracker: { byId: { default: { schemaValue: {}, worldInfo: { outcome: 'applied', books: [{ book: 'Lore', applied: [{ uid: 1, title: 'Dragon', via: 'allowlist' }], skipped: [] }] } } } } };
+    const row = () => instances[0].content.querySelector('li.ztracker-wi-entry') as HTMLElement;
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+    // A fake editor that shows entry #1 as soon as the book is selected, so a navigation finishes instead of timing out.
+    const editorShowingEntry = () =>
+      jest.fn(() => {
+        document.body.innerHTML = '<div id="world_popup_entries_list"><div class="world_entry" uid="1"></div></div>';
+      });
+
+    test('closes the popup, then opens the book in the editor', async () => {
+      const reloadWorldInfoEditor = editorShowingEntry();
+      const { actions } = setup(extra, { reloadWorldInfoEditor });
+      await actions.showWorldInfoReport(0);
+
+      row().click();
+      await settle();
+
+      expect(instances[0].complete).toHaveBeenCalledWith('cancelled');
+      expect(reloadWorldInfoEditor).toHaveBeenCalledWith('Lore', true);
+      expect(instances[0].complete.mock.invocationCallOrder[0]).toBeLessThan(reloadWorldInfoEditor.mock.invocationCallOrder[0]);
+    });
+
+    test('a second click while one is opening is ignored without a warning', async () => {
+      const reloadWorldInfoEditor = editorShowingEntry();
+      const { actions } = setup(extra, { reloadWorldInfoEditor });
+      await actions.showWorldInfoReport(0);
+
+      row().click();
+      row().click();
+      await settle();
+
+      expect(instances[0].complete).toHaveBeenCalledTimes(1);
+      expect(stEchoMock).not.toHaveBeenCalledWith('warning', expect.stringContaining('still opening'));
+    });
+
+    test('a throwing host warns instead of failing silently', async () => {
+      const { actions } = setup(extra, {
+        getWorldInfoNames: () => {
+          throw new Error('host gone');
+        },
+      });
+      await actions.showWorldInfoReport(0);
+
+      row().click();
+      await settle();
+
+      expect(stEchoMock).toHaveBeenCalledWith('warning', expect.stringContaining('host gone'));
+      expect(instances[0].complete).not.toHaveBeenCalled();
+    });
+
+    test('a deleted entry warns and keeps the popup open and the editor closed', async () => {
+      const reloadWorldInfoEditor = jest.fn();
+      const { actions } = setup(extra, { reloadWorldInfoEditor, loadWorldInfo: async () => ({ entries: {} }) });
+      await actions.showWorldInfoReport(0);
+
+      row().click();
+      await settle();
+
+      expect(stEchoMock).toHaveBeenCalledWith('warning', expect.stringContaining('no longer exists'));
+      expect(instances[0].complete).not.toHaveBeenCalled();
+      expect(reloadWorldInfoEditor).not.toHaveBeenCalled();
+    });
   });
 });

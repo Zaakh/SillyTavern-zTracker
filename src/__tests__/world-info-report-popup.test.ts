@@ -2,6 +2,7 @@
  * @jest-environment jsdom
  */
 
+import { jest } from '@jest/globals';
 import { buildWorldInfoReportElement } from '../ui/world-info-report-popup.js';
 import type { TrackerWorldInfoReport } from '../world-info-policy.js';
 
@@ -81,6 +82,72 @@ describe('buildWorldInfoReportElement', () => {
     ['scan-unavailable', 'could not report its entries'],
   ] as const)('outcome %s has its own message', (outcome, expected) => {
     expect(buildWorldInfoReportElement({ outcome, books: [] }).textContent).toContain(expected);
+  });
+
+  test('summary line counts applied entries by activation path and omits empty groups', () => {
+    const summary = buildWorldInfoReportElement(report).querySelector('.ztracker-wi-report-summary')?.textContent;
+    expect(summary).toBe('Scan: 3 | Recursion: 1 | Allowlist: 1 | Not itemized: 7');
+  });
+
+  test('no summary line when nothing was applied', () => {
+    expect(buildWorldInfoReportElement({ outcome: 'none-matched', books: [] }).querySelector('.ztracker-wi-report-summary')).toBeNull();
+    expect(buildWorldInfoReportElement(undefined).querySelector('.ztracker-wi-report-summary')).toBeNull();
+  });
+
+  describe('opening entries', () => {
+    const rows = (root: HTMLElement) => Array.from(root.querySelectorAll<HTMLElement>('li.ztracker-wi-entry'));
+
+    test('applied and not-applied entries with a uid open with their book and uid on click', () => {
+      const onOpen = jest.fn();
+      const root = buildWorldInfoReportElement(report, onOpen);
+
+      const dragon = rows(root).find((r) => r.textContent?.startsWith('Dragon'))!;
+      expect(dragon.getAttribute('role')).toBe('button');
+      expect(dragon.tabIndex).toBe(0);
+      dragon.click();
+      expect(onOpen).toHaveBeenLastCalledWith({ book: 'Lore', uid: 1 });
+
+      rows(root).find((r) => r.textContent?.startsWith('Off'))!.click();
+      expect(onOpen).toHaveBeenLastCalledWith({ book: 'Always Book', uid: 10 });
+    });
+
+    test('Enter and Space open the entry, other keys do not', () => {
+      const onOpen = jest.fn();
+      const row = rows(buildWorldInfoReportElement(report, onOpen))[0];
+
+      row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+      row.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+      row.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+
+      expect(onOpen).toHaveBeenCalledTimes(2);
+    });
+
+    test('a held key does not open the entry repeatedly', () => {
+      const onOpen = jest.fn();
+      const row = rows(buildWorldInfoReportElement(report, onOpen))[0];
+
+      row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+      row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', repeat: true }));
+
+      expect(onOpen).toHaveBeenCalledTimes(1);
+    });
+
+    test('uid-less skips, "+N more" rows and handler-less popups are plain text', () => {
+      const root = buildWorldInfoReportElement(report, jest.fn());
+      const plain = Array.from(root.querySelectorAll('li:not(.ztracker-wi-entry)')).map((li) => li.textContent);
+      expect(plain).toEqual(expect.arrayContaining(['scope not satisfied', '+7 more', '+3 more']));
+
+      expect(buildWorldInfoReportElement(report).querySelector('.ztracker-wi-entry')).toBeNull();
+    });
+
+    test('clickable rows still show HTML titles as text', () => {
+      const root = buildWorldInfoReportElement(
+        { outcome: 'applied', books: [{ book: 'B', applied: [{ uid: 1, title: '<b>x</b>', via: 'scan', reason: 'constant' }], skipped: [] }] },
+        jest.fn(),
+      );
+      expect(root.querySelector('b')).toBeNull();
+      expect(rows(root)[0].textContent).toContain('<b>x</b>');
+    });
   });
 
   test('titles, books and keys containing HTML are shown as text, never interpreted', () => {

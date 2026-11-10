@@ -324,6 +324,30 @@ describe('initializeGlobalUI parts menu portal cleanup', () => {
     expect(actions.showWorldInfoReport).toHaveBeenCalledWith(4);
   });
 
+  test('Enter (keydown, not repeated) and Space (keyup) on the focused World Info button open the report; other keys do not', async () => {
+    const { actions } = await initializeTrackerActionHarness();
+    installChatMessageDom(4, {
+      innerHtml: `
+        <div class="mes_text">Message 4</div>
+        <div class="mes_ztracker">
+          <div class="ztracker-world-info-button" role="button" tabindex="0"></div>
+        </div>
+      `,
+    });
+    const button = document.querySelector('.ztracker-world-info-button')!;
+
+    button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, repeat: true }));
+    button.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    expect(actions.showWorldInfoReport).toHaveBeenCalledTimes(1);
+    button.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
+    button.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+    button.dispatchEvent(new KeyboardEvent('keyup', { key: 'a', bubbles: true }));
+
+    expect(actions.showWorldInfoReport).toHaveBeenCalledTimes(2);
+    expect(actions.showWorldInfoReport).toHaveBeenCalledWith(4);
+  });
+
   test('delegates the tracker delete button to deleteTracker for the owning message', async () => {
     const { actions } = await initializeTrackerActionHarness();
 

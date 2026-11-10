@@ -197,11 +197,14 @@ How World Info reaches the tracker prompt:
 
 ### Seeing which World Info was used
 
-Tracker scans are dry runs, so SillyTavern's own World Info inspector shows nothing for them. Click the book icon (**World Info used**) in a tracker's control row to see what the model was shown for that tracker:
+Tracker scans are dry runs, so SillyTavern's own World Info inspector shows nothing for them. Click the book icon (**World Info used**) in a tracker's control row to see what the model was shown for that tracker. The icon carries a badge with the number of applied entries (`7+` when some books were left out of the record) and is dimmed when nothing was applied or nothing was recorded; it stays clickable either way and can be focused and opened with Enter or Space.
 
 - **Outcome:** applied, none matched, excluded by your policy, or scan unavailable (SillyTavern did not report which entries it activated, so none are listed from the scan).
+- **Summary line** counting applied entries by how they got in (scan, recursion, minimum activations, allowlist; "not itemized" for entries cut off by the 50-per-list cap, whose reason is not stored).
 - **Applied entries**, grouped by book, each with how it got in: constant, matched keywords, activated by recursion, activated to reach the minimum activations, added by the allowlist (Always inject all), or other (for example a character card field, a macro, or per-entry settings).
 - **Not applied** (collapsed): allowlisted books and entries that were not injected, and why (scope not satisfied, book not found or empty, entry disabled, not in the allowed entries, empty content). For Engine rules books only structural causes are listed; entries that simply did not activate are not.
+
+**Click an entry** (applied or not applied) to close the popup and open it in SillyTavern's World Info editor: the book opens, the editor moves to the right page, and the entry is expanded, scrolled into view and highlighted. If the book or entry was deleted since the generation you get a warning and the popup stays open.
 
 Two things to know:
 

@@ -722,6 +722,84 @@
 	opacity: 1;
 }
 
+// "World Info used" report popup: entries that can be opened in the lorebook editor.
+.ztracker-wi-report {
+	h4 {
+		overflow-wrap: anywhere;
+	}
+
+	.ztracker-wi-report-summary {
+		font-weight: 600;
+	}
+
+	li.ztracker-wi-entry {
+		cursor: pointer;
+		min-height: 32px;
+		display: flex;
+		align-items: center;
+		border-radius: 4px;
+
+		&:hover,
+		&:focus-visible {
+			text-decoration: underline;
+			background: color-mix(in srgb, var(--SmartThemeQuoteColor, #e18a24) 14%, transparent);
+		}
+	}
+}
+
+// Highlight for the entry zTracker scrolled to in the host's lorebook editor (the host's own flash is not exposed).
+@keyframes ztracker-wi-entry-flash {
+	0%,
+	60% {
+		box-shadow: 0 0 0 3px var(--SmartThemeQuoteColor, #e18a24);
+	}
+	100% {
+		box-shadow: 0 0 0 3px transparent;
+	}
+}
+
+.world_entry.ztracker-wi-entry-flash {
+	animation: ztracker-wi-entry-flash 2s ease-out;
+}
+
+// World Info button: applied-count badge on the icon, and a dimmer look when nothing was applied.
+.mes_ztracker .ztracker-controls .ztracker-world-info-button {
+	position: relative;
+
+	&[data-ztracker-count]::after {
+		content: attr(data-ztracker-count);
+		position: absolute;
+		top: -0.45em;
+		right: -0.6em;
+		min-width: 1.2em;
+		padding: 0 0.25em;
+		border-radius: 999px;
+		font-family: sans-serif;
+		font-size: 0.6em;
+		font-weight: 700;
+		line-height: 1.5;
+		text-align: center;
+		color: var(--SmartThemeBlurTintColor, #171717);
+		background: var(--SmartThemeQuoteColor, #e18a24);
+		pointer-events: none;
+	}
+
+	&.is-empty {
+		opacity: 0.18;
+
+		&:hover,
+		&:focus-visible {
+			opacity: 0.6;
+		}
+	}
+
+	&:focus-visible {
+		opacity: 1;
+		outline: 1px solid var(--SmartThemeQuoteColor, #e18a24);
+		outline-offset: 2px;
+	}
+}
+
 .mes_ztracker {
 	position: relative;
 	z-index: 50;

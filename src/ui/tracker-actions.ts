@@ -84,6 +84,7 @@ import {
 } from './message-status-indicator.js';
 import { createContextMenuTrackerActions } from './tracker-context-menu-actions.js';
 import { buildWorldInfoReportElement } from './world-info-report-popup.js';
+import { checkWorldInfoEntry, openWorldInfoEntry } from '../world-info-open-entry.js';
 import {
   bindCleanupPopupSummary,
   buildCleanupPopupContent,
@@ -1628,10 +1629,34 @@ export function createTrackerActions(options: {
   /** Opens the "World Info used" popup for one Module's stored record ("not recorded" when there is none). */
   async function showWorldInfoReport(messageId: number, moduleId = DEFAULT_MODULE_ID) {
     const record = getTrackerModuleRecord(globalContext.chat[messageId], moduleId);
-    await globalContext.callGenericPopup(buildWorldInfoReportElement(record?.[WORLD_INFO_RECORD_KEY]), POPUP_TYPE.TEXT, '', {
+    const openHost = {
+      getWorldInfoNames: () => globalContext.getWorldInfoNames(),
+      loadWorldInfo: (name: string) => globalContext.loadWorldInfo(name),
+      reloadWorldInfoEditor: (file: string, loadIfNotSelected?: boolean) => globalContext.reloadWorldInfoEditor(file, loadIfNotSelected),
+      doc: document,
+    };
+    // The popup is modal, so it closes (only once the entry is known to exist) before the editor is opened behind it.
+    let opening = false; // a repeated click while one is in flight is ignored silently
+    const openEntry = async (target: { book: string; uid: number }) => {
+      if (opening) return;
+      opening = true;
+      try {
+        const checked = await checkWorldInfoEntry(openHost, target);
+        if (!checked.ok) return st_echo('warning', checked.error);
+        await popup.complete(POPUP_RESULT.CANCELLED);
+        const opened = await openWorldInfoEntry(openHost, target);
+        if (!opened.ok) st_echo('warning', opened.error);
+      } catch (error) {
+        st_echo('warning', `World Info entry could not be opened: ${error instanceof Error ? error.message : String(error)}`);
+      } finally {
+        opening = false;
+      }
+    };
+    const popup = new globalContext.Popup(buildWorldInfoReportElement(record?.[WORLD_INFO_RECORD_KEY], (t) => void openEntry(t)), POPUP_TYPE.TEXT, '', {
       okButton: 'Close',
       wide: true,
     });
+    await popup.show();
   }
 
   async function editTracker(messageId: number, moduleId = DEFAULT_MODULE_ID) {
