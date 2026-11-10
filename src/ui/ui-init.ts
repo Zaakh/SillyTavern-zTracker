@@ -389,6 +389,18 @@ function installTrackerActionClickHandler(): void {
     if (event.key === 'Escape') {
       closeManualModuleMenu();
     }
+    // The World Info button is a focusable role=button div: like a native button, Enter clicks on keydown
+    // (not when held) and Space on keyup, so the popup cannot take focus between the two.
+    const target = event.target as HTMLElement | null;
+    if (target?.classList?.contains('ztracker-world-info-button') && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      if (event.key === 'Enter' && !event.repeat) target.click();
+    }
+  }, true);
+
+  document.addEventListener('keyup', (event) => {
+    const target = event.target as HTMLElement | null;
+    if (event.key === ' ' && target?.classList?.contains('ztracker-world-info-button')) target.click();
   }, true);
 
   trackerActionClickHandlerInstalled = true;

@@ -56,6 +56,55 @@ describe('renderTracker', () => {
     expect(button?.getAttribute('aria-label')).toBe(title);
   });
 
+  describe('World Info button', () => {
+    const render = (worldInfo?: unknown) => {
+      const context = createContext();
+      const record = { [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { time: '10:00' }, [CHAT_MESSAGE_SCHEMA_HTML_KEY]: template, ...(worldInfo ? { worldInfo } : {}) };
+      (context.chat[0].extra as any)[EXTENSION_KEY] = { [CHAT_MESSAGE_MODULES_KEY]: { [DEFAULT_MODULE_ID]: record } };
+      renderTracker(0, { context, document, handlebars: Handlebars });
+      return document.querySelector('.ztracker-world-info-button') as HTMLElement;
+    };
+    const entry = (uid: number) => ({ uid, title: 't', via: 'allowlist' as const });
+
+    it('shows the applied count as a badge with a matching tooltip and accessible name', () => {
+      const button = render({ outcome: 'applied', books: [{ book: 'B', applied: [entry(1), entry(2)], skipped: [], moreApplied: 5 }] });
+
+      expect(button.dataset.ztrackerCount).toBe('7');
+      expect(button.classList.contains('is-empty')).toBe(false);
+      expect(button.title).toBe('7 World Info entries were used');
+      expect(button.getAttribute('aria-label')).toBe(button.title);
+      expect(button.getAttribute('role')).toBe('button');
+      expect(button.tabIndex).toBe(0);
+    });
+
+    it('reads as a lower bound when books were omitted', () => {
+      const button = render({ outcome: 'applied', books: [{ book: 'B', applied: [entry(1)], skipped: [] }], moreBooks: 3 });
+
+      expect(button.dataset.ztrackerCount).toBe('1+');
+      expect(button.title).toBe('1 or more World Info entries were used');
+    });
+
+    it.each([
+      ['none-matched', 'No World Info matched'],
+      ['excluded', 'World Info excluded for this tracker'],
+      ['scan-unavailable', 'World Info scan unavailable'],
+    ])('looks inactive without a badge for %s but stays a usable button', (outcome, hint) => {
+      const button = render({ outcome, books: [] });
+
+      expect(button.classList.contains('is-empty')).toBe(true);
+      expect(button.hasAttribute('data-ztracker-count')).toBe(false);
+      expect(button.title).toBe(hint);
+      expect(button.tabIndex).toBe(0);
+    });
+
+    it('looks inactive and says not recorded without a stored record', () => {
+      const button = render();
+
+      expect(button.classList.contains('is-empty')).toBe(true);
+      expect(button.title).toBe('World Info used: not recorded');
+    });
+  });
+
   it('renders one labeled tracker block per module in module order', () => {
     const agendaModule = createDefaultTrackerModule({ id: 'agenda', name: 'Agenda', order: 0 });
     const defaultModule = createDefaultTrackerModule({ id: DEFAULT_MODULE_ID, name: 'Scene', order: 1 });

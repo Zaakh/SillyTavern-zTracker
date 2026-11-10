@@ -1,8 +1,10 @@
 import {
+  appliedCount,
   capReportText,
   finalizeReportBooks,
   formatAllowlistedWorldInfo,
   normalizeWorldInfoName,
+  summarizeAppliedReasons,
   WORLD_INFO_REPORT_BOOK_CAP,
   WORLD_INFO_REPORT_LIST_CAP,
   WORLD_INFO_REPORT_TEXT_CAP,
@@ -102,5 +104,42 @@ describe('world info policy', () => {
     expect(result.books).toHaveLength(WORLD_INFO_REPORT_BOOK_CAP);
     expect(result.moreBooks).toBe(4);
     expect(finalizeReportBooks(groups.slice(0, 2)).moreBooks).toBeUndefined();
+  });
+});
+
+describe('applied report helpers', () => {
+  const book = (applied: any[], extra = {}) => ({ book: 'B', applied, skipped: [], ...extra });
+  const report = {
+    outcome: 'applied' as const,
+    books: [
+      book(
+        [
+          { uid: 1, title: 'a', via: 'scan' as const, reason: 'keyword' as const },
+          { uid: 2, title: 'b', via: 'scan' as const, reason: 'recursion' as const },
+          { uid: 3, title: 'c', via: 'scan' as const, reason: 'min-activations' as const },
+          { uid: 4, title: 'd', via: 'scan' as const, reason: 'constant' as const },
+        ],
+        { moreApplied: 5 },
+      ),
+      book([{ uid: 9, title: 'z', via: 'allowlist' as const }]),
+    ],
+  };
+
+  test('appliedCount adds capped-off entries and is exact without omitted books', () => {
+    expect(appliedCount(report)).toEqual({ count: 10, lowerBound: false });
+  });
+
+  test('appliedCount is a lower bound when books were omitted', () => {
+    expect(appliedCount({ ...report, moreBooks: 2 })).toEqual({ count: 10, lowerBound: true });
+  });
+
+  test('appliedCount is 0 for no record or an empty record', () => {
+    expect(appliedCount(undefined)).toEqual({ count: 0, lowerBound: false });
+    expect(appliedCount({ outcome: 'none-matched', books: [] })).toEqual({ count: 0, lowerBound: false });
+  });
+
+  test('summarizeAppliedReasons groups by activation path', () => {
+    expect(summarizeAppliedReasons(report)).toEqual({ scan: 2, recursion: 1, minActivations: 1, allowlist: 1 });
+    expect(summarizeAppliedReasons(undefined)).toEqual({ scan: 0, recursion: 0, minActivations: 0, allowlist: 0 });
   });
 });

@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.25.0] - 2026-11-10
+
+### Added
+
+- **World Info used** popup: click an applied or not-applied entry to open it in SillyTavern's World Info editor (book opened, paged to, entry highlighted; a warning if the book or entry no longer exists), and a one-line summary of how the applied entries activated (scan, recursion, minimum activations, allowlist).
+- The **World Info used** button shows the applied-entry count as a badge (`N+` when books were left out of the record), is dimmed when nothing was applied or recorded, and can be opened with Enter or Space.
+
 ## [2.24.0] - 2026-11-06
 
 ### Changed
