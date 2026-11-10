@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.25.0] - 2026-11-10
+
 ### Added
 
 - **World Info used** popup: click an applied or not-applied entry to open it in SillyTavern's World Info editor (book opened, paged to, entry highlighted; a warning if the book or entry no longer exists), and a one-line summary of how the applied entries activated (scan, recursion, minimum activations, allowlist).
