@@ -760,6 +760,57 @@ describe('includeZTrackerMessages', () => {
     expect(result[1]).not.toHaveProperty('name');
   });
 
+  it('preserves Symbol-keyed properties on messages and extra when injecting snapshots', () => {
+    const ignoreMark = Symbol('ignore');
+    const messageMark = Symbol('messageMark');
+    const trackedMessage = buildMessageWithTracker({ id: 1 });
+    const messages = [
+      {
+        ...trackedMessage,
+        [messageMark]: true,
+        extra: {
+          ...trackedMessage.extra,
+          [ignoreMark]: true,
+        },
+      },
+      { content: 'current', role: 'user' },
+    ];
+
+    const result = includeZTrackerMessages(messages as any, makeSettings(1)) as any[];
+
+    expect(result).toHaveLength(3);
+    expect(result[1].content).toContain('Tracker:');
+    expect(result[0][messageMark]).toBe(true);
+    expect(result[0].extra[ignoreMark]).toBe(true);
+  });
+
+  it('preserves Symbol-keyed properties on source.extra', () => {
+    const ignoreMark = Symbol('ignore');
+    const messageMark = Symbol('messageMark');
+    const messages = [
+      {
+        role: 'assistant',
+        content: 'base',
+        [messageMark]: true,
+        source: {
+          extra: {
+            [EXTENSION_KEY]: {
+              [CHAT_MESSAGE_SCHEMA_VALUE_KEY]: { id: 1 },
+            },
+            [ignoreMark]: true,
+          },
+        },
+      },
+      { content: 'current', role: 'user' },
+    ];
+
+    const result = includeZTrackerMessages(messages as any, makeSettings(1)) as any[];
+
+    expect(result).toHaveLength(3);
+    expect(result[0][messageMark]).toBe(true);
+    expect(result[0].source.extra[ignoreMark]).toBe(true);
+  });
+
   it('leaves messages untouched when no trackers are found', () => {
     const messages = [
       { content: 'first', role: 'user' },
