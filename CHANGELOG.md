@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Symbol-keyed marks such as `message.extra[context.symbols.ignore]` set by other interceptors (for example Summarize) are now preserved when zTracker clones the chat, so messages those extensions excluded no longer return to the prompt.
+
 ## [2.26.0] - 2026-11-11
 
 ### Added

@@ -43,6 +43,35 @@ function isRecord(value: unknown): value is Record<string, any> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+function copyOwnSymbolProperties(source: object, target: object): void {
+  for (const symbol of Object.getOwnPropertySymbols(source)) {
+    const descriptor = Object.getOwnPropertyDescriptor(source, symbol);
+    if (descriptor) {
+      Object.defineProperty(target, symbol, descriptor);
+    }
+  }
+}
+
+// structuredClone drops Symbol-keyed properties, which host extensions use as per-generation marks
+// (e.g. extra[context.symbols.ignore] from Summarize). Restore them on the cloned message.
+function restoreSymbolProperties(original: unknown, clone: unknown): void {
+  if (!isRecord(original) || !isRecord(clone)) {
+    return;
+  }
+
+  copyOwnSymbolProperties(original, clone);
+
+  if (isRecord(original.extra) && isRecord(clone.extra)) {
+    copyOwnSymbolProperties(original.extra, clone.extra);
+  }
+
+  const originalSourceExtra = isRecord(original.source) ? original.source.extra : undefined;
+  const cloneSourceExtra = isRecord(clone.source) ? clone.source.extra : undefined;
+  if (isRecord(originalSourceExtra) && isRecord(cloneSourceExtra)) {
+    copyOwnSymbolProperties(originalSourceExtra, cloneSourceExtra);
+  }
+}
+
 function hasOwnRecordKey(record: Record<string, any>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(record, key);
 }
@@ -557,7 +586,8 @@ export function includeZTrackerMessages<T extends Message | ChatMessage>(
   const moduleId = options.moduleId ?? DEFAULT_MODULE_ID;
   // SillyTavern sometimes keeps speaker attribution only on source.name.
   // Promote it onto cloned chat turns so instruct-mode prompt assembly can still emit named dialogue.
-  const copyMessages = structuredClone(messages).map((message: T) => {
+  const copyMessages = structuredClone(messages).map((message: T, index: number) => {
+    restoreSymbolProperties(messages[index], message);
     const existingName = normalizePromptSpeakerName((message as any).name);
     const sourceName = normalizePromptSpeakerName((message as any).source?.name);
     const speakerName = existingName ?? sourceName;
