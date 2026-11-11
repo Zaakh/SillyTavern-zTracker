@@ -17,7 +17,7 @@ import { ensureModuleSystemPromptPresetInstalled } from './system-prompt.js';
 // eligibility requires the target Module's generation order to be strictly earlier (see
 // tracker-module-chaining.ts) - createImportedTrackerModule assigns order from array position, so
 // this order must be preserved.
-const STARTER_TEMPLATE_NAMES = ['scene-tracker', 'plot-log', 'plot-steer'] as const;
+const STARTER_TEMPLATE_NAMES = ['scene-tracker', 'plot-log', 'plot-steer', 'subject-appearance'] as const;
 const ENABLED_BY_DEFAULT_TEMPLATE = 'scene-tracker';
 
 type SillyTavernContextLike = {

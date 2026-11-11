@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Subject Appearance** pre-made Module template: describes one non-user character at a time from {{user}}'s point of view, split into `permanent` and `current` sections, with an LLM-written image prompt for MOSS-Image-SFT (see `docs/MOSS_PROMPTING.md`). Seeded disabled on a fresh install, manual by default, never injected into normal generation. Existing installs import `subject-appearance.json` manually.
+- Generic copy action for tracker HTML templates: a `<button type="button" data-ztracker-copy="id">` copies the text of the element marked `data-ztracker-copy-source="id"` in the same tracker block, with a brief success/failure state on the button.
+
 ## [2.25.0] - 2026-11-10
 
 ### Added

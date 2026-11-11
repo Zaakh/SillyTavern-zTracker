@@ -39,8 +39,8 @@ describe('shipped schemas are dialect-clean (openspec: add-schema-dialect-lint)'
   // Sanity check that the dynamic template discovery actually found the shipped files, so a
   // future refactor that breaks the glob/readdir silently produces an empty (vacuously passing)
   // test.each instead of a real regression guard.
-  test('discovers at least the three shipped starter templates plus the two built-in defaults', () => {
-    expect(shippedSchemas.length).toBeGreaterThanOrEqual(5);
+  test('discovers at least the four shipped starter templates plus the two built-in defaults', () => {
+    expect(shippedSchemas.length).toBeGreaterThanOrEqual(6);
   });
 
   // Stricter than the spec's "no errors or warnings": shipped schemas must also be fully described,

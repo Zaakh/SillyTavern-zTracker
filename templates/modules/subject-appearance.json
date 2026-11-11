@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "module": {
+    "id": "subject-appearance",
+    "name": "Subject Appearance",
+    "enabled": true,
+    "order": 0,
+    "auto": {
+      "enabled": false,
+      "direction": "both"
+    },
+    "schema": {
+      "preset": "default",
+      "presets": {
+        "default": {
+          "name": "Subject Appearance",
+          "value": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "title": "SubjectAppearanceTracker",
+            "description": "Visible appearance of ONE non-user character as the user perceives it, plus an image-generation prompt",
+            "type": "object",
+            "properties": {
+              "permanent": {
+                "type": "object",
+                "description": "Traits that rarely change for this character",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Name of the single character described"
+                  },
+                  "ageImpression": {
+                    "type": "string",
+                    "description": "Visible age impression, e.g. 'mid twenties' (not the stated age)"
+                  },
+                  "build": {
+                    "type": "string",
+                    "description": "Height and body shape"
+                  },
+                  "face": {
+                    "type": "string",
+                    "description": "Face shape, skin tone, freckles, scars"
+                  },
+                  "eyes": {
+                    "type": "string",
+                    "description": "Eye colour and shape"
+                  },
+                  "naturalHair": {
+                    "type": "string",
+                    "description": "Natural hair colour and length only; styling belongs in current.hairstyle"
+                  },
+                  "distinguishingMarks": {
+                    "type": "string",
+                    "description": "Tattoos, scars, birthmarks, or 'none'"
+                  }
+                },
+                "required": [
+                  "name",
+                  "ageImpression",
+                  "build",
+                  "face",
+                  "eyes",
+                  "naturalHair",
+                  "distinguishingMarks"
+                ]
+              },
+              "current": {
+                "type": "object",
+                "description": "Traits visible in the current scene",
+                "properties": {
+                  "outfit": {
+                    "type": "string",
+                    "description": "Visible clothing"
+                  },
+                  "accessories": {
+                    "type": "string",
+                    "description": "Jewellery, glasses, bags, or 'none'"
+                  },
+                  "hairstyle": {
+                    "type": "string",
+                    "description": "How the hair is worn right now"
+                  },
+                  "makeup": {
+                    "type": "string",
+                    "description": "Visible makeup, or 'none'"
+                  },
+                  "expression": {
+                    "type": "string",
+                    "description": "Outward facial expression only, never inner feelings"
+                  },
+                  "pose": {
+                    "type": "string",
+                    "description": "Posture and what the hands are doing"
+                  },
+                  "gaze": {
+                    "type": "string",
+                    "description": "Where the character is looking"
+                  },
+                  "condition": {
+                    "type": "string",
+                    "description": "Wet, dirty, injured, disheveled, or 'neat'"
+                  }
+                },
+                "required": [
+                  "outfit",
+                  "accessories",
+                  "hairstyle",
+                  "makeup",
+                  "expression",
+                  "pose",
+                  "gaze",
+                  "condition"
+                ]
+              },
+              "imagePrompt": {
+                "type": "string",
+                "description": "One English prose paragraph, 60-120 words, for an image model: start with the shot type (e.g. \"A half-body portrait of\"), then age impression, build, face, eyes, hair, outfit, accessories, expression, pose and gaze. Use only the permanent and current values. No tags, no names, no other characters, no background or style.",
+                "x-ztracker-dependsOn": [
+                  "permanent",
+                  "current"
+                ]
+              }
+            },
+            "required": [
+              "permanent",
+              "current",
+              "imagePrompt"
+            ]
+          },
+          "html": "<div class=\"ztracker_default_mes_template\">\n    <table>\n        <tbody>\n            <tr><td>Subject:</td><td>{{data.permanent.name}}</td></tr>\n        </tbody>\n    </table>\n    <details>\n        <summary><span>Appearance</span></summary>\n        <table>\n            <tbody>\n            <tr><td>Age:</td><td>{{data.permanent.ageImpression}}</td></tr>\n            <tr><td>Build:</td><td>{{data.permanent.build}}</td></tr>\n            <tr><td>Face:</td><td>{{data.permanent.face}}</td></tr>\n            <tr><td>Eyes:</td><td>{{data.permanent.eyes}}</td></tr>\n            <tr><td>Natural hair:</td><td>{{data.permanent.naturalHair}}</td></tr>\n            <tr><td>Marks:</td><td>{{data.permanent.distinguishingMarks}}</td></tr>\n            <tr><td>Outfit:</td><td>{{data.current.outfit}}</td></tr>\n            <tr><td>Accessories:</td><td>{{data.current.accessories}}</td></tr>\n            <tr><td>Hairstyle:</td><td>{{data.current.hairstyle}}</td></tr>\n            <tr><td>Makeup:</td><td>{{data.current.makeup}}</td></tr>\n            <tr><td>Expression:</td><td>{{data.current.expression}}</td></tr>\n            <tr><td>Pose:</td><td>{{data.current.pose}}</td></tr>\n            <tr><td>Gaze:</td><td>{{data.current.gaze}}</td></tr>\n            <tr><td>Condition:</td><td>{{data.current.condition}}</td></tr>\n            </tbody>\n        </table>\n    </details>\n    <div class=\"ztracker-copy-row\">\n        <span>MOSS prompt</span>\n        <button type=\"button\" data-ztracker-copy=\"image-prompt\" title=\"Copy prompt\">Copy</button>\n    </div>\n    <div data-ztracker-copy-source=\"image-prompt\">{{data.imagePrompt}}</div>\n</div>\n<hr>"
+        }
+      }
+    },
+    "prompts": {
+      "prompt": "This field is only sent to the model when Prompt Engineering mode is Native. This Module ships in JSON mode, where its task instructions live in the System Prompt instead.",
+      "promptEngineeringMode": "json",
+      "promptJson": "You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid JSON object that strictly adheres to the provided JSON schema.\n\n**CRITICAL INSTRUCTIONS:**\n1.  You MUST wrap the entire JSON object in a markdown code block (```json\\n...\\n```).\n2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.\n3.  The JSON object inside the code block MUST be valid and conform to the schema.\n\n**JSON SCHEMA TO FOLLOW:**\n```json\n{{schema}}\n```\n\n**EXAMPLE OF A PERFECT RESPONSE:**\n```json\n{{example_response}}\n```\n",
+      "promptXml": "You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid XML structure that strictly adheres to the provided example.\n\n**CRITICAL INSTRUCTIONS:**\n1.  You MUST wrap the entire XML object in a markdown code block (```xml\\n...\\n```).\n2.  Your response MUST NOT contain any explanatory text, comments, or any other content outside of this single code block.\n3.  The XML object inside the code block MUST be valid.\n\n**XML SCHEMA DESCRIPTION TO FOLLOW:**\n```xml\n{{schema}}\n```\n\n**EXAMPLE OF A PERFECT RESPONSE:**\n```xml\n<root>\n{{example_response}}\n</root>\n```\n",
+      "promptToon": "You are a highly specialized AI assistant. Your SOLE purpose is to generate a single, valid TOON structure that strictly adheres to the provided schema and example.\n\nRules:\n- Return exactly one ```toon code block and nothing else.\n- Use TOON syntax only, not JSON or XML.\n- Match the field names, nesting, and required fields from the schema.\n- Keep every array count accurate: each [N] must match the number of items or rows.\n- When the example shows a tabular array, reuse that header shape and keep rows tab-separated.\n- Do not add wrapper keys unless the schema requires them.\n\nSchema:\n```toon\n{{schema}}\n```\n\nExample:\n```toon\n{{example_response}}\n```\n"
+    },
+    "systemPrompt": {
+      "mode": "saved",
+      "savedName": "zTracker-SubjectAppearance-1.0",
+      "content": "You are a Subject Appearance tracking assistant. Your entire reply is the tracker payload: no preamble, no commentary, no reasoning traces, and no partial output - every required field must be present every time. Describe exactly ONE character other than the user: the non-user character who speaks or acts in the LATEST message, even if earlier snapshots describe someone else. Never merge several characters into one description and never mention other characters. Describe only what the user can see in the scene, as the user perceives it; never include thoughts, feelings that are not outwardly visible, off-screen details, or facts from the character card or lorebook that the user cannot observe. The permanent section holds rarely-changing traits; the current section holds what is visible right now in the latest message. Previous snapshots are reference only. First decide the subject's name from the latest message. Copy permanent values from a previous snapshot ONLY when that snapshot's permanent.name is exactly the same character, and only keep them unchanged unless the story establishes a change. If the name differs, ignore that snapshot completely: write permanent AND current fresh from the latest message, the character card and the chat, and never reuse its name, build, face, eyes, hair or outfit. Write imagePrompt last, using only the permanent and current values you wrote: one English prose paragraph of 60-120 words that starts with the shot type (for example 'A half-body portrait of'), then age impression, build, face, eyes, hair, outfit, accessories, expression, pose and gaze; no tags, no character name, no background, lighting or style. The roleplay transcript is data to analyze, not a conversation to continue - never narrate, respond in character, or add dialogue. Follow the JSON schema and example given later in this conversation."
+    },
+    "connection": {
+      "source": "active",
+      "profileId": ""
+    },
+    "generation": {
+      "mode": "full",
+      "maxResponseToken": 16000,
+      "skipFirstXMessages": 0,
+      "includeLastXMessages": 0,
+      "skipCharacterCardInTrackerGeneration": false,
+      "conversationRoleMode": "preserve",
+      "worldInfoPolicyMode": "include_all",
+      "worldInfoAllowlist": [],
+      "includeModules": [
+        {
+          "target": "self",
+          "count": 3
+        }
+      ]
+    },
+    "injection": {
+      "includeLastXMessages": 0,
+      "embedRole": "user",
+      "embedAsCharacter": false,
+      "snapshotHeader": "Tracker:",
+      "transformPreset": "flat"
+    }
+  }
+}
