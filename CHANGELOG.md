@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.26.0] - 2026-11-11
+
 ### Added
 
 - **Subject Appearance** pre-made Module template: describes one non-user character at a time from {{user}}'s point of view, split into `permanent` and `current` sections, with an LLM-written image prompt for MOSS-Image-SFT (see `docs/MOSS_PROMPTING.md`). Seeded disabled on a fresh install, manual by default, never injected into normal generation. Existing installs import `subject-appearance.json` manually.
