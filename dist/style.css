@@ -704,6 +704,34 @@
   position: relative;
   z-index: 50;
 }
+.mes_ztracker [data-ztracker-copy] {
+  cursor: pointer;
+  padding: 0.35em 0.8em;
+  min-height: 2.25em;
+  color: var(--SmartThemeBodyColor, var(--text_color, #dcdcd2));
+  background: transparent;
+  border: 1px solid var(--SmartThemeBorderColor, currentColor);
+  border-radius: 4px;
+  opacity: 0.6;
+  transition: opacity 0.2s ease-in-out;
+}
+.mes_ztracker [data-ztracker-copy]:hover, .mes_ztracker [data-ztracker-copy]:focus-visible {
+  opacity: 1;
+}
+.mes_ztracker [data-ztracker-copy].is-copied {
+  opacity: 1;
+  border-color: var(--SmartThemeQuoteColor, #e18a24);
+}
+.mes_ztracker [data-ztracker-copy].is-copy-failed {
+  opacity: 1;
+  border-color: var(--fullred, #c0392b);
+}
+.mes_ztracker [data-ztracker-copy-source] {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  overflow-x: auto;
+}
 .mes_ztracker .ztracker-controls {
   position: absolute;
   top: 8px;

@@ -26,6 +26,7 @@ import {
 import { defaultSettings, type TrackerModule } from '../config.js';
 import { formatEmbeddedTrackerSnapshot } from '../embed-snapshot-transform.js';
 import { resolveTrackerModuleIncludeEntries } from '../tracker-module-chaining.js';
+import { resolveTopLevelPartsOrder } from '../tracker-parts.js';
 import {
   applyTrackerUpdateAndRenderMock,
   buildPromptMock,
@@ -165,9 +166,10 @@ describe('pre-made Module templates (templates/modules/*.json)', () => {
     'zTracker-SceneTracker-1.1': 'ebc81431619a',
     'zTracker-PlotLog-1.1': 'd7dfb1871836',
     'zTracker-PlotSteer-1.1': '7f63cdc92ddd',
+    'zTracker-SubjectAppearance-1.0': '7dde711757d6',
   };
 
-  test.each(['scene-tracker.json', 'plot-log.json', 'plot-steer.json'])(
+  test.each(['scene-tracker.json', 'plot-log.json', 'plot-steer.json', 'subject-appearance.json'])(
     '%s system-prompt content hash matches its declared preset version',
     (fileName) => {
       const { systemPrompt } = loadTemplate(fileName);
@@ -194,6 +196,50 @@ describe('pre-made Module templates (templates/modules/*.json)', () => {
     expect(chainedEntry?.entry).toEqual({ target: 'plot-log', count: 3 });
   });
 
+  const SUBJECT_APPEARANCE_SAMPLE = {
+    permanent: {
+      name: 'Mira',
+      ageImpression: 'mid twenties',
+      build: 'slim',
+      face: 'oval face, freckles',
+      eyes: 'green',
+      naturalHair: 'long auburn',
+      distinguishingMarks: 'none',
+    },
+    current: {
+      outfit: 'navy coat',
+      accessories: 'silver necklace',
+      hairstyle: 'braided over one shoulder',
+      makeup: 'none',
+      expression: 'neutral',
+      pose: 'arms crossed',
+      gaze: 'at the viewer',
+      condition: 'neat',
+    },
+    imagePrompt: 'A half-body portrait of a slim woman with <green> eyes & freckles.',
+  };
+
+  test('subject-appearance.json parses, imports, and renders with a copyable prompt', () => {
+    const module = createImportedTrackerModule(loadTemplate('subject-appearance.json'), []);
+    const schema = module.schema.presets[module.schema.preset].value;
+
+    expect(module.id).toBe('subject-appearance');
+    expect(module.auto.enabled).toBe(false);
+    expect(module.injection.includeLastXMessages).toBe(0);
+    expect(module.injection.transformPreset).toBe('flat');
+    expect(module.connection.source).toBe('active');
+    expect(module.generation.includeModules).toEqual([{ target: 'self', count: 3 }]);
+    expect(module.generation.worldInfoPolicyMode).toBe('include_all');
+    expect(resolveTopLevelPartsOrder(schema)).toEqual(['permanent', 'current', 'imagePrompt']);
+
+    const html = renderModuleHtml(module, SUBJECT_APPEARANCE_SAMPLE);
+    expect(html).toContain('Mira');
+    expect(html).toContain('data-ztracker-copy="image-prompt"');
+    expect(html).toContain('data-ztracker-copy-source="image-prompt"');
+    // Values are HTML-escaped, so markup characters cannot be injected through the copy source.
+    expect(html).toContain('&lt;green&gt; eyes &amp; freckles');
+  });
+
   // Each shipped template's connection must resolve against SillyTavern's active connection
   // without requiring the user to select a saved profile first (see the
   // "Shipped templates are generation-ready without extra required setup" requirement).
@@ -214,6 +260,7 @@ describe('pre-made Module templates (templates/modules/*.json)', () => {
     'plot-steer.json': {
       content: '```json\n{"nextBeat":"Do X","pacing":"hold"}\n```',
     },
+    'subject-appearance.json': { content: '```json\n{}\n```' },
   };
 
   // plot-log.json and plot-steer.json ship in JSON Prompt Engineering mode, so their requests go
@@ -224,6 +271,7 @@ describe('pre-made Module templates (templates/modules/*.json)', () => {
   const PARSED_RESPONSE_BY_FILE: Record<string, unknown> = {
     'plot-log.json': { arc: 'a', openThreads: [], recentEvents: [], stakes: 's' },
     'plot-steer.json': { nextBeat: 'Do X', pacing: 'hold' },
+    'subject-appearance.json': SUBJECT_APPEARANCE_SAMPLE,
   };
 
   describe('shipped templates resolve a generation-ready connection without extra setup', () => {
@@ -239,7 +287,7 @@ describe('pre-made Module templates (templates/modules/*.json)', () => {
       globalThis.structuredClone = originalStructuredClone;
     });
 
-    test.each(['scene-tracker.json', 'plot-log.json', 'plot-steer.json'])(
+    test.each(['scene-tracker.json', 'plot-log.json', 'plot-steer.json', 'subject-appearance.json'])(
       '%s generates without the "select a connection profile" error when SillyTavern has an active connection',
       async (fileName) => {
         const context = makeContext({
@@ -313,7 +361,7 @@ describe('shipped templates reference transform presets by key only', () => {
     return key && builtInKeys.includes(key) ? null : `selects non-built-in preset "${key}"`;
   }
 
-  test.each(['scene-tracker.json', 'plot-log.json', 'plot-steer.json'])('%s selects a built-in key and embeds no list', (fileName) => {
+  test.each(['scene-tracker.json', 'plot-log.json', 'plot-steer.json', 'subject-appearance.json'])('%s selects a built-in key and embeds no list', (fileName) => {
     expect(presetProblem(loadTemplate(fileName))).toBeNull();
   });
 
@@ -331,7 +379,7 @@ describe('shipped templates reference transform presets by key only', () => {
 });
 
 describe('shipped templates use the Flat preset', () => {
-  test.each(['scene-tracker.json', 'plot-log.json', 'plot-steer.json'])('%s selects flat and formats a bracket block', (fileName) => {
+  test.each(['scene-tracker.json', 'plot-log.json', 'plot-steer.json', 'subject-appearance.json'])('%s selects flat and formats a bracket block', (fileName) => {
     const template = loadTemplate(fileName);
     expect(template.injection?.transformPreset).toBe('flat');
     const module = createImportedTrackerModule(template, [], JSON.parse(JSON.stringify(defaultSettings.transformPresets)));

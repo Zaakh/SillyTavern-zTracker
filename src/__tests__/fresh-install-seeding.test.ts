@@ -74,7 +74,7 @@ describe('seedStarterTrackerModules', () => {
     };
   });
 
-  test('seeds all three templates with correct ids, order, and enabled flags, without a warning toast', async () => {
+  test('seeds all four templates with correct ids, order, and enabled flags, without a warning toast', async () => {
     const settingsManager = makeSettingsManager(structuredClone(defaultSettings));
     const fetchImpl = makeFetchImpl({
       'scene-tracker': makeStarterTemplate('scene-tracker', 'Scene Tracker'),
@@ -83,6 +83,7 @@ describe('seedStarterTrackerModules', () => {
         { target: 'self', count: 1 },
         { target: 'plot-log', count: 3 },
       ]),
+      'subject-appearance': makeStarterTemplate('subject-appearance', 'Subject Appearance'),
     });
     const stEcho = jest.fn(async () => undefined);
 
@@ -94,9 +95,9 @@ describe('seedStarterTrackerModules', () => {
       stEcho,
     });
 
-    expect(seeded.map((module) => module.id)).toEqual(['scene-tracker', 'plot-log', 'plot-steer']);
-    expect(seeded.map((module) => module.order)).toEqual([0, 1, 2]);
-    expect(seeded.map((module) => module.enabled)).toEqual([true, false, false]);
+    expect(seeded.map((module) => module.id)).toEqual(['scene-tracker', 'plot-log', 'plot-steer', 'subject-appearance']);
+    expect(seeded.map((module) => module.order)).toEqual([0, 1, 2, 3]);
+    expect(seeded.map((module) => module.enabled)).toEqual([true, false, false, false]);
     expect(settingsManager.getSettings().modules).toBe(seeded);
     expect(settingsManager.saveSettings).toHaveBeenCalledTimes(1);
     // A fully-successful seed is not degraded, so it must stay silent - no toast noise on the happy path.
@@ -156,7 +157,7 @@ describe('seedStarterTrackerModules', () => {
     const fetchImpl = makeFetchImpl({
       'scene-tracker': makeStarterTemplate('scene-tracker', 'Scene Tracker'),
     });
-    // Only one of three templates is served here (a partial failure), which now triggers a
+    // Only one of the four templates is served here (a partial failure), which now triggers a
     // warning toast - pass a stub so this test doesn't depend on the real st_echo's behavior.
     const stEcho = jest.fn(async () => undefined);
 

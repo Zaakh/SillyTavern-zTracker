@@ -1,4 +1,5 @@
 import type { ExtensionSettings } from '../config.js';
+import { findCopyControl, handleCopyControlClick } from './tracker-copy-action.js';
 import { DEFAULT_MODULE_ID, EXTENSION_KEY, getOrderedTrackerModules, getSettingsForTrackerModule } from '../config.js';
 import { AutoModeOptions } from 'sillytavern-utils-lib/types/translate';
 import type { ChatMessage } from 'sillytavern-utils-lib/types';
@@ -294,6 +295,13 @@ function installTrackerActionClickHandler(): void {
     }
 
     const target = event.target as HTMLElement;
+
+    const copyControl = findCopyControl(target);
+    if (copyControl) {
+      void handleCopyControlClick(copyControl);
+      return;
+    }
+
     const messageId = resolveMessageIdFromTarget(target, runtime.getPortaledPartsMessageId);
     if (messageId === null) {
       return;
